@@ -40,6 +40,7 @@ import (
 // and a more abstracted method set.
 type Controller interface {
 	SetBalancer(name string, srvRo *v1.Service, eps k8s.EpsOrSlices) types.SyncState
+	MarkSynced()
 }
 
 type metalLBController struct {
@@ -74,4 +75,8 @@ func newMetalLBController(ctx context.Context) (Controller, error) {
 
 func (c *metalLBController) SetBalancer(name string, srvRo *v1.Service, eps k8s.EpsOrSlices) types.SyncState {
 	return c.c.SetBalancer(c.logger, name, srvRo, eps)
+}
+
+func (c *metalLBController) MarkSynced() {
+	c.c.MarkSynced(c.logger)
 }
