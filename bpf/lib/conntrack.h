@@ -663,7 +663,20 @@ ct_is_reply4(const void *map, struct __ctx_buff *ctx, int off,
 	return 0;
 }
 
-/* Offset must point to IPv4 header */
+/* Offset must point to IPv4 header 
+ * The provided tuple's layer 3 addresses will be
+ * in the response direction once this function
+ * terminates.
+ * 
+ * If any layer 4 addresses are present they will
+ * be in the forward traffic direction once this function
+ * terminates.
+ *
+ * The reason for this mismatch is legacy. 
+ *
+ * If this tuple is describing ICMP traffic both layer 4
+ * addresses will be 0.
+ */
 static __always_inline int ct_lookup4(const void *map,
 				      struct ipv4_ct_tuple *tuple,
 				      struct __ctx_buff *ctx, int off, int dir,
@@ -674,13 +687,8 @@ static __always_inline int ct_lookup4(const void *map,
 	     has_l4_header = true;
 	union tcp_flags tcp_flags = { .value = 0 };
 
-	/* The tuple is created in reverse order initially to find a
-	 * potential reverse flow. This is required because the RELATED
-	 * or REPLY state takes precedence over ESTABLISHED due to
-	 * policy requirements.
-	 *
-	 * tuple->flags separates entries that could otherwise be overlapping.
-	 */
+	// tuple->flags separates entries utilize the direction enum
+    // that could otherwise be overlapping.
 	if (dir == CT_INGRESS)
 		tuple->flags = TUPLE_F_OUT;
 	else if (dir == CT_EGRESS)
@@ -727,6 +735,11 @@ static __always_inline int ct_lookup4(const void *map,
 		break;
 
 	case IPPROTO_TCP:
+        /* this function will perform a memory copy from the layer 4 addresses
+         * in the transport header to the layer 4 addresses in our tuple.
+         * the tuple's layer 4 addresses will be in the reverse order          
+         * of the provided transport header.
+         */
 		err = ipv4_ct_extract_l4_ports(ctx, off, dir, tuple, &has_l4_header);
 		if (err < 0)
 			return err;
@@ -755,9 +768,9 @@ static __always_inline int ct_lookup4(const void *map,
 		return DROP_CT_UNKNOWN_PROTO;
 	}
 
-	/* Lookup the reverse direction
+	/* Lookup the forward direction
 	 *
-	 * This will find an existing flow in the reverse direction.
+	 * This will find an existing flow in the forward direction.
 	 */
 #ifndef QUIET_CT
 	cilium_dbg3(ctx, DBG_CT_LOOKUP4_1, tuple->saddr, tuple->daddr,
@@ -778,7 +791,12 @@ static __always_inline int ct_lookup4(const void *map,
 
 	relax_verifier();
 
-	/* Lookup entry in forward direction */
+	/* Flip tuple and lookup entry in reverse direction 
+     * when ipv4_ct_tuple_reverse returns the layer 3
+     * addresses will be in the reverse order they were
+     * provided, and the layer 4 addresses will be in the
+     * same order as the provided trasnport header.
+    */
 	if (dir != CT_SERVICE) {
 		ipv4_ct_tuple_reverse(tuple);
 		ret = __ct_lookup(map, ctx, tuple, action, dir, ct_state,

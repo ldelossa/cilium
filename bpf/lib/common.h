@@ -662,14 +662,22 @@ struct ipv6_ct_tuple {
 } __packed;
 
 struct ipv4_ct_tuple {
-	/* Address fields are reversed, i.e.,
-	 * these field names are correct for reply direction traffic.
-	 */
+    /* These fields will container the layer 3
+     * addresses in either for forward or response
+     * directions. 
+     * 
+     * Conntrack performs a lookup of the initial tuple,
+     * flips these fields. and then performs a lookup with
+     * these fields reversed.
+     * 
+     * The code calling a conntrack function which takes
+     * this tuple must document the tuple's fields original
+     * order and the tuple field's order after the function
+     * terminates.
+     */
 	__be32		daddr;
 	__be32		saddr;
-	/* The order of dport+sport must not be changed!
-	 * These field names are correct for original direction traffic.
-	 */
+    // Same comments as above however for layer 4 addresses.
 	__be16		dport;
 	__be16		sport;
 	__u8		nexthdr;

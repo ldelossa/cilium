@@ -507,7 +507,21 @@ int tail_handle_ipv6(struct __ctx_buff *ctx)
 static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx,
 						__u32 *dst_id)
 {
+    // this tuple will be used to query
+    // the conn-tracking subsystem. 
+    //
+    // we will first pack this tuple 
+    // to with the foward direction
+    // layer 3 addresses but the 
+    // layer 4 addresses will be in the response direction.
+    // this mismatch is due to legacy.
+    //
+    // when this tuple is returned by the
+    // conn-track subsystem it's layer 3
+    // addresses will be in the response 
+    // direction and its layer 4
 	struct ipv4_ct_tuple tuple = {};
+
 #ifdef ENABLE_ROUTING
 	union macaddr router_mac = NODE_MAC;
 #endif
@@ -547,6 +561,8 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx,
 	if (unlikely(!is_valid_lxc_src_ipv4(ip4)))
 		return DROP_INVALID_SIP;
 
+    // pack tuple's layer 3 addresses
+    // in the foward direction.
 	tuple.daddr = ip4->daddr;
 	tuple.saddr = ip4->saddr;
 
@@ -591,10 +607,19 @@ skip_service_lookup:
 
 	/* WARNING: ip4 offset check invalidated, revalidate before use */
 
-	/* Pass all outgoing packets through conntrack. This will create an
-	 * entry to allow reverse packets and return set cb[CB_POLICY] to
-	 * POLICY_SKIP if the packet is a reply packet to an existing incoming
-	 * connection.
+	/* Pass all outgoing packets through conntrack using the tuple described above. 
+     * This will create an * entry to allow reverse packets and return set cb[CB_POLICY] to
+     * POLICY_SKIP if the packet is a reply packet to an existing incoming
+     * connection.
+     * 
+     * This method is being passed to ct_lookup4 with it's layer 3 fields 
+     * in forward direction and no layer 4 addresses present.
+     *
+     * When this method returns the tuple's layer 3 addresses will be in the
+     * response direction and it's layer 4 addresses in the foward direction. 
+     * If the traffic is ICMP both layer 4 addresses will be set to 0.
+     *
+     * This is the direction we will store in the CT map if deemed necessary.
 	 */
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_EGRESS,
 			 &ct_state, &monitor);
