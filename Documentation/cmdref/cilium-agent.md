@@ -120,6 +120,7 @@ cilium-agent [flags]
       --enable-remote-node-identity                          Enable use of remote node identity
       --enable-service-topology                              Enable support for service topology aware hints
       --enable-session-affinity                              Enable support for service session affinity
+      --enable-srv6                                          Enable SRv6 support (beta)
       --enable-svc-source-range-check                        Enable check of service source ranges (currently, only for LoadBalancer) (default true)
       --enable-tracing                                       Enable tracing while determining policy (debugging)
       --enable-unreachable-routes                            Add unreachable routes on pod deletion
