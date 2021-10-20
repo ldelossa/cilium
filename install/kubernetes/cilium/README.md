@@ -452,6 +452,8 @@ contributors across the globe, there is almost always someone available to help.
 | socketLB | object | `{"enabled":false}` | Configure socket LB |
 | socketLB.enabled | bool | `false` | Enable socket LB |
 | sockops | object | `{"enabled":false}` | Configure BPF socket operations configuration |
+| srv6 | object | `{"enabled":false}` | Configure SRv6 support. |
+| srv6.enabled | bool | `false` | Enable SRv6 encapsulation support. |
 | startupProbe.failureThreshold | int | `105` | failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s) |
 | startupProbe.periodSeconds | int | `2` | interval between checks of the startup probe |
 | svcSourceRangeCheck | bool | `true` | Enable check of service source ranges (currently, only for LoadBalancer). |
