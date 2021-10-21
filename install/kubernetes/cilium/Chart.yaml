@@ -125,3 +125,17 @@ annotations:
       description: |
         Defining a Cilium BGP Load Balancer IP Pool instructs Cilium to assign and
         advertise LoadBalancer Services to BGP peers defined by Cilium BGP Peering Policies.
+    - kind: CiliumSRv6EgressPolicy 
+      version: v2alpha1
+      name: ciliumsrv6egresspolicies.cilium.io
+      displayName: Cilium SRv6 Egress Policy
+      description: |
+        Defining a Cilium SRv6 Egress Policy instructs the datapath to associate
+        a particular pod's egress traffic with a particular VRF and SID.
+    - kind: CiliumSRv6VRF
+      version: v2alpha1
+      name: ciliumsrv6vrfs.cilium.io
+      displayName: Cilium SRv6 VRF
+      description: |
+        Defining a Cilium SRv6 VRF determines whether a particular pod's egress
+        traffic belongs to a particular VRF.
