@@ -12,3 +12,7 @@ type CiliumBGPPeeringPolicyExpansion interface{}
 type CiliumEgressNATPolicyExpansion interface{}
 
 type CiliumEndpointSliceExpansion interface{}
+
+type CiliumSRv6EgressPolicyExpansion interface{}
+
+type CiliumSRv6VRFExpansion interface{}

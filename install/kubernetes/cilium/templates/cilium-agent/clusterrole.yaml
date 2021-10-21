@@ -79,6 +79,8 @@ rules:
   - ciliumlocalredirectpolicies
   - ciliumnetworkpolicies
   - ciliumnodes
+  - ciliumsrv6egresspolicies
+  - ciliumsrv6vrfs
   verbs:
   - list
   - watch
@@ -88,6 +90,7 @@ rules:
   - ciliumidentities
   - ciliumendpoints
   - ciliumnodes
+  - ciliumsrv6egresspolicies
   verbs:
   - create
 - apiGroups:
