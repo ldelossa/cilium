@@ -64,6 +64,12 @@ const (
 	// CESCRDName is the full name of the CES CRD.
 	CESCRDName = k8sconstv2alpha1.CESKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
 
+	// CSREPCRDName is the full name of the CSREP CRD.
+	CSREPCRDName = k8sconstv2alpha1.CSREPKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
+	// CSRVRFCRDName is the full name of the CSRVRF CRD.
+	CSRVRFCRDName = k8sconstv2alpha1.CSRVRFKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
 	// CCECCRDName is the full name of the CCEC CRD.
 	CCECCRDName = k8sconstv2.CCECKindDefinition + "/" + k8sconstv2.CustomResourceDefinitionVersion
 
@@ -102,6 +108,8 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv2.CEGPName):          createCEGPCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.CENPName):    createCENPCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.CESName):     createCESCRD,
+		synced.CRDResourceName(k8sconstv2alpha1.CSREPName):   createCSREPCRD,
+		synced.CRDResourceName(k8sconstv2alpha1.CSRVRFName):  createCSRVRFCRD,
 		synced.CRDResourceName(k8sconstv2.CCECName):          createCCECCRD,
 		synced.CRDResourceName(k8sconstv2.CECName):           createCECCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.BGPPName):    createBGPPCRD,
@@ -157,6 +165,12 @@ var (
 	//go:embed crds/v2/ciliumenvoyconfigs.yaml
 	crdsv2Ciliumenvoyconfigs []byte
 
+	//go:embed crds/v2alpha1/ciliumsrv6egresspolicies.yaml
+	crdsv2Alpha1Ciliumsrv6egresspolicies []byte
+
+	//go:embed crds/v2alpha1/ciliumsrv6vrfs.yaml
+	crdsv2Alpha1Ciliumsrv6vrfs []byte
+
 	//go:embed crds/v2alpha1/ciliumbgppeeringpolicies.yaml
 	crdsv2Alpha1Ciliumbgppeeringpolicies []byte
 
@@ -197,6 +211,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv2Alpha1Ciliumegressnatpolicies
 	case CESCRDName:
 		crdBytes = crdsv2Alpha1Ciliumendpointslices
+	case CSREPCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6egresspolicies
+	case CSRVRFCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6vrfs
 	case CCECCRDName:
 		crdBytes = crdsv2Ciliumclusterwideenvoyconfigs
 	case CECCRDName:
@@ -338,6 +356,28 @@ func createCESCRD(clientset apiextensionsclient.Interface) error {
 		clientset,
 		CESCRDName,
 		constructV1CRD(k8sconstv2alpha1.CESName, ciliumCRD),
+		newDefaultPoller(),
+	)
+}
+
+func createCSREPCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(CSREPCRDName)
+
+	return createUpdateCRD(
+		clientset,
+		CSREPCRDName,
+		constructV1CRD(k8sconstv2alpha1.CSREPName, ciliumCRD),
+		newDefaultPoller(),
+	)
+}
+
+func createCSRVRFCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(CSRVRFCRDName)
+
+	return createUpdateCRD(
+		clientset,
+		CSRVRFCRDName,
+		constructV1CRD(k8sconstv2alpha1.CSRVRFName, ciliumCRD),
 		newDefaultPoller(),
 	)
 }
