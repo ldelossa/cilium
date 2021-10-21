@@ -66,6 +66,7 @@ const (
 	k8sAPIGroupCiliumEndpointV2                     = "cilium/v2::CiliumEndpoint"
 	k8sAPIGroupCiliumLocalRedirectPolicyV2          = "cilium/v2::CiliumLocalRedirectPolicy"
 	k8sAPIGroupCiliumEgressNATPolicyV2              = "cilium/v2::CiliumEgressNATPolicy"
+	k8sAPIGroupCiliumSRv6EgressPolicyV2             = "cilium/v2::CiliumSRv6EgressPolicy"
 	k8sAPIGroupCiliumEndpointSliceV2Alpha1          = "cilium/v2alpha1::CiliumEndpointSlice"
 	k8sAPIGroupCiliumClusterwideEnvoyConfigV2Alpha1 = "cilium/v2alpha1::CiliumClusterwideEnvoyConfig"
 	k8sAPIGroupCiliumEnvoyConfigV2Alpha1            = "cilium/v2alpha1::CiliumEnvoyConfig"
@@ -82,6 +83,7 @@ const (
 	metricCiliumEndpoint = "CiliumEndpoint"
 	metricCLRP           = "CiliumLocalRedirectPolicy"
 	metricCENP           = "CiliumEgressNATPolicy"
+	metricCSREP          = "CiliumSRv6EgressPolicy"
 	metricCCEC           = "CiliumClusterwideEnvoyConfig"
 	metricCEC            = "CiliumEnvoyConfig"
 	metricPod            = "Pod"
@@ -381,6 +383,7 @@ func (k *K8sWatcher) resourceGroups() []string {
 		synced.CRDResourceName(v2.CEWName):           "SKIP", // Handled in clustermesh-apiserver/
 		synced.CRDResourceName(v2alpha1.CENPName):    k8sAPIGroupCiliumEgressNATPolicyV2,
 		synced.CRDResourceName(v2alpha1.CESName):     k8sAPIGroupCiliumEndpointSliceV2Alpha1,
+		synced.CRDResourceName(v2alpha1.CSREPName):   "SKIP", // TODO
 		synced.CRDResourceName(v2alpha1.CCECName):    k8sAPIGroupCiliumClusterwideEnvoyConfigV2Alpha1,
 		synced.CRDResourceName(v2alpha1.CECName):     k8sAPIGroupCiliumEnvoyConfigV2Alpha1,
 		synced.CRDResourceName(v2alpha1.BGPPName):    "SKIP", // Handled in BGP control plane

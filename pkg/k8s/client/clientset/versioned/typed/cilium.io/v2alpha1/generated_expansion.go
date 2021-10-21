@@ -16,3 +16,5 @@ type CiliumEgressNATPolicyExpansion interface{}
 type CiliumEndpointSliceExpansion interface{}
 
 type CiliumEnvoyConfigExpansion interface{}
+
+type CiliumSRv6EgressPolicyExpansion interface{}

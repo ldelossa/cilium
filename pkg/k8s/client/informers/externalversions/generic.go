@@ -69,6 +69,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Cilium().V2alpha1().CiliumEndpointSlices().Informer()}, nil
 	case v2alpha1.SchemeGroupVersion.WithResource("ciliumenvoyconfigs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Cilium().V2alpha1().CiliumEnvoyConfigs().Informer()}, nil
+	case v2alpha1.SchemeGroupVersion.WithResource("ciliumsrv6egresspolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Cilium().V2alpha1().CiliumSRv6EgressPolicies().Informer()}, nil
 
 	}
 

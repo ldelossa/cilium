@@ -32,3 +32,7 @@ type CiliumEnvoyConfigListerExpansion interface{}
 // CiliumEnvoyConfigNamespaceListerExpansion allows custom methods to be added to
 // CiliumEnvoyConfigNamespaceLister.
 type CiliumEnvoyConfigNamespaceListerExpansion interface{}
+
+// CiliumSRv6EgressPolicyListerExpansion allows custom methods to be added to
+// CiliumSRv6EgressPolicyLister.
+type CiliumSRv6EgressPolicyListerExpansion interface{}

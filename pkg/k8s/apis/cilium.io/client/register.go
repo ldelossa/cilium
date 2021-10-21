@@ -61,6 +61,9 @@ const (
 	// CESCRDName is the full name of the CES CRD.
 	CESCRDName = k8sconstv2alpha1.CESKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
 
+	// CSREPCRDName is the full name of the CSREP CRD.
+	CSREPCRDName = k8sconstv2alpha1.CSREPKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
 	// CCECCRDName is the full name of the CCEC CRD.
 	CCECCRDName = k8sconstv2alpha1.CCECKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
 
@@ -98,6 +101,7 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv2.CLRPName):          createCLRPCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.CENPName):    createCENPCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.CESName):     createCESCRD,
+		synced.CRDResourceName(k8sconstv2alpha1.CSREPName):   createCSREPCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.CCECName):    createCCECCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.CECName):     createCECCRD,
 		synced.CRDResourceName(k8sconstv2alpha1.BGPPName):    createBGPPCRD,
@@ -144,6 +148,9 @@ var (
 	//go:embed crds/v2alpha1/ciliumendpointslices.yaml
 	crdsv2Alpha1Ciliumendpointslices []byte
 
+	//go:embed crds/v2alpha1/ciliumsrv6egresspolicies.yaml
+	crdsv2Alpha1Ciliumsrv6egresspolicies []byte
+
 	//go:embed crds/v2alpha1/ciliumclusterwideenvoyconfigs.yaml
 	crdsv2Alpha1Ciliumclusterwideenvoyconfigs []byte
 
@@ -188,6 +195,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv2Alpha1Ciliumegressnatpolicies
 	case CESCRDName:
 		crdBytes = crdsv2Alpha1Ciliumendpointslices
+	case CSREPCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6egresspolicies
 	case CCECCRDName:
 		crdBytes = crdsv2Alpha1Ciliumclusterwideenvoyconfigs
 	case CECCRDName:
@@ -318,6 +327,17 @@ func createCESCRD(clientset apiextensionsclient.Interface) error {
 		clientset,
 		CESCRDName,
 		constructV1CRD(k8sconstv2alpha1.CESName, ciliumCRD),
+		newDefaultPoller(),
+	)
+}
+
+func createCSREPCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(CSREPCRDName)
+
+	return createUpdateCRD(
+		clientset,
+		CSREPCRDName,
+		constructV1CRD(k8sconstv2alpha1.CSREPName, ciliumCRD),
 		newDefaultPoller(),
 	)
 }

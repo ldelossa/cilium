@@ -21,6 +21,7 @@ type CiliumV2alpha1Interface interface {
 	CiliumEgressNATPoliciesGetter
 	CiliumEndpointSlicesGetter
 	CiliumEnvoyConfigsGetter
+	CiliumSRv6EgressPoliciesGetter
 }
 
 // CiliumV2alpha1Client is used to interact with features provided by the cilium.io group.
@@ -50,6 +51,10 @@ func (c *CiliumV2alpha1Client) CiliumEndpointSlices() CiliumEndpointSliceInterfa
 
 func (c *CiliumV2alpha1Client) CiliumEnvoyConfigs(namespace string) CiliumEnvoyConfigInterface {
 	return newCiliumEnvoyConfigs(c, namespace)
+}
+
+func (c *CiliumV2alpha1Client) CiliumSRv6EgressPolicies() CiliumSRv6EgressPolicyInterface {
+	return newCiliumSRv6EgressPolicies(c)
 }
 
 // NewForConfig creates a new CiliumV2alpha1Client for the given config.
