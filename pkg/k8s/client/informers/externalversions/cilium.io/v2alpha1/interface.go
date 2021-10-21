@@ -21,6 +21,10 @@ type Interface interface {
 	CiliumLoadBalancerIPPools() CiliumLoadBalancerIPPoolInformer
 	// CiliumNodeConfigs returns a CiliumNodeConfigInformer.
 	CiliumNodeConfigs() CiliumNodeConfigInformer
+	// CiliumSRv6EgressPolicies returns a CiliumSRv6EgressPolicyInformer.
+	CiliumSRv6EgressPolicies() CiliumSRv6EgressPolicyInformer
+	// CiliumSRv6VRFs returns a CiliumSRv6VRFInformer.
+	CiliumSRv6VRFs() CiliumSRv6VRFInformer
 }
 
 type version struct {
@@ -57,4 +61,14 @@ func (v *version) CiliumLoadBalancerIPPools() CiliumLoadBalancerIPPoolInformer {
 // CiliumNodeConfigs returns a CiliumNodeConfigInformer.
 func (v *version) CiliumNodeConfigs() CiliumNodeConfigInformer {
 	return &ciliumNodeConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// CiliumSRv6EgressPolicies returns a CiliumSRv6EgressPolicyInformer.
+func (v *version) CiliumSRv6EgressPolicies() CiliumSRv6EgressPolicyInformer {
+	return &ciliumSRv6EgressPolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// CiliumSRv6VRFs returns a CiliumSRv6VRFInformer.
+func (v *version) CiliumSRv6VRFs() CiliumSRv6VRFInformer {
+	return &ciliumSRv6VRFInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

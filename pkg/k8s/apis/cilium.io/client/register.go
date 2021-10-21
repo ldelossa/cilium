@@ -61,6 +61,12 @@ const (
 	// CESCRDName is the full name of the CES CRD.
 	CESCRDName = k8sconstv2alpha1.CESKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
 
+	// CSREPCRDName is the full name of the CSREP CRD.
+	CSREPCRDName = k8sconstv2alpha1.CSREPKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
+	// CSRVRFCRDName is the full name of the CSRVRF CRD.
+	CSRVRFCRDName = k8sconstv2alpha1.CSRVRFKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
 	// CCECCRDName is the full name of the CCEC CRD.
 	CCECCRDName = k8sconstv2.CCECKindDefinition + "/" + k8sconstv2.CustomResourceDefinitionVersion
 
@@ -104,6 +110,8 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv2.CLRPName):           createCRD(CLRPCRDName, k8sconstv2.CLRPName),
 		synced.CRDResourceName(k8sconstv2.CEGPName):           createCRD(CEGPCRDName, k8sconstv2.CEGPName),
 		synced.CRDResourceName(k8sconstv2alpha1.CESName):      createCRD(CESCRDName, k8sconstv2alpha1.CESName),
+		synced.CRDResourceName(k8sconstv2alpha1.CSREPName):    createCRD(CSREPCRDName, k8sconstv2alpha1.CSREPName),
+		synced.CRDResourceName(k8sconstv2alpha1.CSRVRFName):   createCRD(CSRVRFCRDName, k8sconstv2alpha1.CSRVRFName),
 		synced.CRDResourceName(k8sconstv2.CCECName):           createCRD(CCECCRDName, k8sconstv2.CCECName),
 		synced.CRDResourceName(k8sconstv2.CECName):            createCRD(CECCRDName, k8sconstv2.CECName),
 		synced.CRDResourceName(k8sconstv2alpha1.BGPPName):     createCRD(BGPPCRDName, k8sconstv2alpha1.BGPPName),
@@ -158,6 +166,12 @@ var (
 	//go:embed crds/v2/ciliumenvoyconfigs.yaml
 	crdsv2Ciliumenvoyconfigs []byte
 
+	//go:embed crds/v2alpha1/ciliumsrv6egresspolicies.yaml
+	crdsv2Alpha1Ciliumsrv6egresspolicies []byte
+
+	//go:embed crds/v2alpha1/ciliumsrv6vrfs.yaml
+	crdsv2Alpha1Ciliumsrv6vrfs []byte
+
 	//go:embed crds/v2alpha1/ciliumbgppeeringpolicies.yaml
 	crdsv2Alpha1Ciliumbgppeeringpolicies []byte
 
@@ -202,6 +216,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv2Ciliumegressgatewaypolicies
 	case CESCRDName:
 		crdBytes = crdsv2Alpha1Ciliumendpointslices
+	case CSREPCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6egresspolicies
+	case CSRVRFCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6vrfs
 	case CCECCRDName:
 		crdBytes = crdsv2Ciliumclusterwideenvoyconfigs
 	case CECCRDName:

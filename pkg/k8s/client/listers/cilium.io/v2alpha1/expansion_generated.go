@@ -28,3 +28,11 @@ type CiliumNodeConfigListerExpansion interface{}
 // CiliumNodeConfigNamespaceListerExpansion allows custom methods to be added to
 // CiliumNodeConfigNamespaceLister.
 type CiliumNodeConfigNamespaceListerExpansion interface{}
+
+// CiliumSRv6EgressPolicyListerExpansion allows custom methods to be added to
+// CiliumSRv6EgressPolicyLister.
+type CiliumSRv6EgressPolicyListerExpansion interface{}
+
+// CiliumSRv6VRFListerExpansion allows custom methods to be added to
+// CiliumSRv6VRFLister.
+type CiliumSRv6VRFListerExpansion interface{}
