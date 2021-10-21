@@ -310,6 +310,40 @@ struct egress_gw_policy_entry {
 	__be32 gateway_ips[EGRESS_MAX_GATEWAY_NODES];
 };
 
+struct srv6_vrf_key4 {
+	struct bpf_lpm_trie_key lpm;
+	__u32 src_ip;
+	__u32 dst_cidr;
+};
+
+struct srv6_vrf_key6 {
+	struct bpf_lpm_trie_key lpm;
+	union v6addr src_ip;
+	union v6addr dst_cidr;
+};
+
+struct srv6_policy_key4 {
+	struct bpf_lpm_trie_key lpm;
+	__u32 vrf_id;
+	__u32 dst_cidr;
+};
+
+struct srv6_policy_key6 {
+	struct bpf_lpm_trie_key lpm;
+	__u32 vrf_id;
+	union v6addr dst_cidr;
+};
+
+struct srv6_ipv4_2tuple {
+	__u32 src;
+	__u32 dst;
+};
+
+struct srv6_ipv6_2tuple {
+	union v6addr src;
+	union v6addr dst;
+};
+
 struct vtep_key {
 	__u32 vtep_ip;
 };
