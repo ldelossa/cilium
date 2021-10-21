@@ -83,6 +83,15 @@ func OpenSIDMap() error {
 	return initSIDMap(false)
 }
 
+func (m *srv6SIDMap) Update(key SIDKey, vrfID uint32) error {
+	val := SIDValue{VRFID: vrfID}
+	return m.Map.Update(key, val, 0)
+}
+
+func (m *srv6SIDMap) Delete(key SIDKey) error {
+	return m.Map.Delete(key)
+}
+
 // SRv6SIDIterateCallback represents the signature of the callback function
 // expected by the IterateWithCallback method, which in turn is used to iterate
 // all the keys/values of an SRv6 SID map.

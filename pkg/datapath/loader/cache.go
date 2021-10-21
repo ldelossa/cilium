@@ -67,6 +67,13 @@ var ignoredELFPrefixes = []string{
 	"cilium_vtep_map",            // Global
 	"cilium_per_cluster_ct",      // Global
 	"cilium_world_cidrs4",        // Global
+	"cilium_srv6_policy_v4",      // Global
+	"cilium_srv6_policy_v6",      // Global
+	"cilium_srv6_vrf_v4",         // Global
+	"cilium_srv6_vrf_v6",         // Global
+	"cilium_srv6_state_v4",       // Global
+	"cilium_srv6_state_v6",       // Global
+	"cilium_srv6_sid",            // Global
 	"from-container",             // Prog name
 	"to-container",               // Prog name
 	"from-netdev",                // Prog name
