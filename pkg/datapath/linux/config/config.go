@@ -49,6 +49,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/recorder"
 	"github.com/cilium/cilium/pkg/maps/signalmap"
 	"github.com/cilium/cilium/pkg/maps/sockmap"
+	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/maps/vtep"
 	"github.com/cilium/cilium/pkg/netns"
@@ -153,6 +154,17 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["EGRESS_CT_MAP"] = egressmap.CtMapName
 	cDefinesMap["EGRESS_CT_MAP_SIZE"] = fmt.Sprintf("%d", egressmap.MaxCtEntries)
 	cDefinesMap["EGRESS_MAX_GATEWAY_NODES"] = fmt.Sprintf("%d", egressmap.MaxGatewayNodes)
+	cDefinesMap["SRV6_VRF_MAP4"] = srv6map.VRFMapName4
+	cDefinesMap["SRV6_VRF_MAP6"] = srv6map.VRFMapName6
+	cDefinesMap["SRV6_POLICY_MAP4"] = srv6map.PolicyMapName4
+	cDefinesMap["SRV6_POLICY_MAP6"] = srv6map.PolicyMapName6
+	cDefinesMap["SRV6_SID_MAP"] = srv6map.SIDMapName
+	cDefinesMap["SRV6_STATE_MAP4"] = srv6map.StateMapName4
+	cDefinesMap["SRV6_STATE_MAP6"] = srv6map.StateMapName6
+	cDefinesMap["SRV6_VRF_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxVRFEntries)
+	cDefinesMap["SRV6_POLICY_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxPolicyEntries)
+	cDefinesMap["SRV6_SID_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxSIDEntries)
+	cDefinesMap["SRV6_STATE_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxStateEntries)
 	cDefinesMap["POLICY_PROG_MAP_SIZE"] = fmt.Sprintf("%d", policymap.PolicyCallMaxEntries)
 	cDefinesMap["SOCKOPS_MAP_SIZE"] = fmt.Sprintf("%d", sockmap.MaxEntries)
 	cDefinesMap["ENCRYPT_MAP"] = encrypt.MapName

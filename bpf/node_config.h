@@ -88,6 +88,13 @@ DEFINE_U32(SECCTX_FROM_IPCACHE, 1);
 #endif /* ENABLE_IPV6 */
 
 #define EGRESS_POLICY_MAP test_cilium_egress_gw_policy_v4
+#define SRV6_VRF_MAP4 test_cilium_srv6_vrf_v4
+#define SRV6_VRF_MAP6 test_cilium_srv6_vrf_v6
+#define SRV6_POLICY_MAP4 test_cilium_srv6_policy_v4
+#define SRV6_POLICY_MAP6 test_cilium_srv6_policy_v6
+#define SRV6_SID_MAP test_cilium_srv6_sid
+#define SRV6_STATE_MAP4 test_cilium_srv6_state4
+#define SRV6_STATE_MAP6 test_cilium_srv6_state6
 #define ENDPOINTS_MAP test_cilium_lxc
 #define EVENTS_MAP test_cilium_events
 #define SIGNAL_MAP test_cilium_signals
@@ -136,6 +143,10 @@ DEFINE_U32(SECCTX_FROM_IPCACHE, 1);
 #ifndef EGRESS_MAX_GATEWAY_NODES
 #define EGRESS_MAX_GATEWAY_NODES 64
 #endif
+#define SRV6_VRF_MAP_SIZE 16384
+#define SRV6_POLICY_MAP_SIZE 16384
+#define SRV6_SID_MAP_SIZE 16384
+#define SRV6_STATE_MAP_SIZE 16384
 #define POLICY_PROG_MAP_SIZE ENDPOINTS_MAP_SIZE
 #define IPV4_FRAG_DATAGRAMS_MAP test_cilium_ipv4_frag_datagrams
 #define CILIUM_IPV4_FRAG_MAP_MAX_ENTRIES 8192
