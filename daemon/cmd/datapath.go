@@ -38,6 +38,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/maps/signalmap"
+	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/maps/vtep"
 	"github.com/cilium/cilium/pkg/node"
@@ -330,6 +331,10 @@ func (d *Daemon) initMaps() error {
 		if err := egressmap.InitEgressMaps(); err != nil {
 			return err
 		}
+	}
+
+	if option.Config.EnableSRv6 {
+		srv6map.CreateMaps()
 	}
 
 	if option.Config.EnableVTEP {
