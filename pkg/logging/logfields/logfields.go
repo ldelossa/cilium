@@ -298,6 +298,9 @@ const (
 	// CiliumEgressNATPolicyName is the name of a CiliumEgressNATPolicy
 	CiliumEgressNATPolicyName = "ciliumEgressNATPolicyName"
 
+	// CiliumSRv6EgressPolicyName is the name of a CiliumSRv6EgressPolicy
+	CiliumSRv6EgressPolicyName = "ciliumSRv6EgressPolicyName"
+
 	// CiliumClusterwideEnvoyConfigName is the name of a CiliumClusterwideEnvoyConfig
 	CiliumClusterwideEnvoyConfigName = "ciliumClusterwideEnvoyConfigName"
 
@@ -607,4 +610,10 @@ const (
 
 	// Number of Services failed while restoration.
 	FailedSVCs = "failedServices"
+
+	// VRF is the VRF used for the SRv6 lookups.
+	VRF = "vrf"
+
+	// SID is the segment identifier used in SRv6.
+	SID = "sid"
 )
