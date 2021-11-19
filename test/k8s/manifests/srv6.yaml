@@ -1,0 +1,133 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumSRv6VRF
+metadata:
+  name: vrf
+spec:
+  vrfID: 12
+  rules:
+  - selectors:
+    - podSelector:
+        matchLabels:
+          type: client
+    - podSelector:
+        matchLabels:
+          zgroup: testDS
+    destinationCIDRs:
+    - 192.168.56.13/32
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumSRv6EgressPolicy
+metadata:
+  name: egress-policy1
+spec:
+  vrfID: 12
+  destinationCIDRs:
+  - 192.168.56.13/32
+  destinationSID: fd04::13
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumSRv6EgressPolicy
+metadata:
+  name: egress-policy2
+spec:
+  vrfID: 12
+  destinationCIDRs:
+  - 10.0.0.0/8
+  destinationSID: fd04::11
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: srv6-compiler
+spec:
+  containers:
+  - name: cilium-builder
+    image: quay.io/cilium/cilium-builder:f6f42d782ae3ada789adccfb5b497ad8e8d8413a@sha256:365934aaf7b67b606373399c8c37168e91ff1b1d16a9616762c91142306e1406
+    workingDir: /cilium
+    command: ["sleep"]
+    args:
+      - "1000h"
+    securityContext:
+      privileged: true
+    volumeMounts:
+      - mountPath: /sys/fs/bpf
+        name: bpf-maps
+      - mountPath: /cilium
+        name: cilium-src
+      - mountPath: /usr/include
+        name: usr-includes
+  volumes:
+  - hostPath:
+      path: /sys/fs/bpf
+      type: DirectoryOrCreate
+    name: bpf-maps
+  - hostPath:
+      path: /home/vagrant/go/src/github.com/cilium/cilium
+      type: Directory
+    name: cilium-src
+  - hostPath:
+      path: /usr/include
+      type: Directory
+    name: usr-includes
+  # We need the following toleration overwrite because the pod is used with
+  # Cilium uninstalled, so the network isn't ready.
+  tolerations:
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+  - key: "node.kubernetes.io/unreachable"
+    operator: "Exists"
+  - key: "prevent-scheduling"
+    operator: "Exists"
+  hostNetwork: true
+  nodeSelector:
+    "cilium.io/ci-node": k8s3
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testds
+  labels:
+    zgroup: testDS
+spec:
+  containers:
+  - name: web
+    image: docker.io/cilium/echoserver:1.10.1
+    imagePullPolicy: IfNotPresent
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+  nodeSelector:
+    "cilium.io/ci-node": k8s1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testds-host
+  labels:
+    zgroup: testDSHost
+spec:
+  containers:
+  - name: web
+    image: docker.io/cilium/echoserver:1.10.1
+    imagePullPolicy: IfNotPresent
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+  # We need the following toleration overwrite because the pod is used with
+  # Cilium uninstalled, so the network isn't ready.
+  tolerations:
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+  - key: "node.kubernetes.io/unreachable"
+    operator: "Exists"
+  - key: "prevent-scheduling"
+    operator: "Exists"
+  hostNetwork: true
+  nodeSelector:
+    "cilium.io/ci-node": k8s3
