@@ -22,10 +22,10 @@ const (
 )
 
 type egressPolicy struct {
-	SourceIP  string
-	DestCIDR  string
-	EgressIP  string
-	GatewayIP string
+	SourceIP   string
+	DestCIDR   string
+	EgressIP   string
+	GatewayIPs []string
 }
 
 var bpfEgressListCmd = &cobra.Command{
@@ -47,11 +47,16 @@ var bpfEgressListCmd = &cobra.Command{
 
 		bpfEgressList := []egressPolicy{}
 		parse := func(key *egressmap.EgressPolicyKey4, val *egressmap.EgressPolicyVal4) {
+			gatewayIPs := []string{}
+			for _, gatewayIP := range val.GetGatewayIPs() {
+				gatewayIPs = append(gatewayIPs, gatewayIP.String())
+			}
+
 			bpfEgressList = append(bpfEgressList, egressPolicy{
-				SourceIP:  key.GetSourceIP().String(),
-				DestCIDR:  key.GetDestCIDR().String(),
-				EgressIP:  val.GetEgressIP().String(),
-				GatewayIP: val.GetGatewayIP().String(),
+				SourceIP:   key.GetSourceIP().String(),
+				DestCIDR:   key.GetDestCIDR().String(),
+				EgressIP:   val.GetEgressIP().String(),
+				GatewayIPs: gatewayIPs,
 			})
 		}
 
@@ -77,9 +82,12 @@ var bpfEgressListCmd = &cobra.Command{
 func printEgressList(egressList []egressPolicy) {
 	w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
 
-	fmt.Fprintln(w, "Source IP\tDestination CIDR\tEgress IP\tGateway IP")
+	fmt.Fprintln(w, "Source IP\tDestination CIDR\tEgress IP\tGateway\t")
 	for _, ep := range egressList {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ep.SourceIP, ep.DestCIDR, ep.EgressIP, ep.GatewayIP)
+		fmt.Fprintf(w, "%s\t%s\t%s\t0 => %s\n", ep.SourceIP, ep.DestCIDR, ep.EgressIP, ep.GatewayIPs[0])
+		for i := 1; i < len(ep.GatewayIPs); i++ {
+			fmt.Fprintf(w, "\t\t\t%d => %s\n", i, ep.GatewayIPs[i])
+		}
 	}
 
 	w.Flush()

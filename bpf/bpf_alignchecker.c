@@ -86,6 +86,7 @@ int main(void)
 	DECLARE(struct edt_info);
 	DECLARE(struct egress_gw_policy_key);
 	DECLARE(struct egress_gw_policy_entry);
+	DECLARE(struct egress_ct_entry);
 	DECLARE(struct vtep_key);
 	DECLARE(struct vtep_value);
 	DECLARE(struct capture4_wcard);

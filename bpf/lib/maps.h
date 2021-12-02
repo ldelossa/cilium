@@ -209,6 +209,14 @@ struct {
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } EGRESS_POLICY_MAP __section_maps_btf;
 
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__type(key, struct ipv4_ct_tuple);
+	__type(value, struct egress_ct_entry);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+	__uint(max_entries, EGRESS_CT_MAP_SIZE);
+} EGRESS_CT_MAP __section_maps_btf;
+
 #endif /* ENABLE_EGRESS_GATEWAY */
 
 #ifdef ENABLE_VTEP

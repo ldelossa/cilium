@@ -4,7 +4,6 @@
 package egressmap
 
 import (
-	"fmt"
 	"net"
 	"unsafe"
 
@@ -29,8 +28,9 @@ type EgressPolicyKey4 struct {
 
 // EgressPolicyVal4 is the value of an egress policy map.
 type EgressPolicyVal4 struct {
-	EgressIP  types.IPv4
-	GatewayIP types.IPv4
+	Size       uint32
+	EgressIP   types.IPv4
+	GatewayIPs [MaxGatewayNodes]types.IPv4
 }
 
 // egressPolicyMap is the internal representation of an egress policy map.
@@ -85,11 +85,15 @@ func NewEgressPolicyKey4(sourceIP, destIP net.IP, destinationMask net.IPMask) Eg
 
 // NewEgressPolicyVal4 returns a new EgressPolicyVal4 object representing for
 // the given egress IP and gateway IPs
-func NewEgressPolicyVal4(egressIP, gatewayIP net.IP) EgressPolicyVal4 {
-	val := EgressPolicyVal4{}
+func NewEgressPolicyVal4(egressIP net.IP, gatewayIPs []net.IP) EgressPolicyVal4 {
+	val := EgressPolicyVal4{
+		Size: uint32(len(gatewayIPs)),
+	}
 
 	copy(val.EgressIP[:], egressIP.To4())
-	copy(val.GatewayIP[:], gatewayIP.To4())
+	for i, gw := range gatewayIPs {
+		copy(val.GatewayIPs[i][:], gw.To4())
+	}
 
 	return val
 }
@@ -114,11 +118,24 @@ func (k *EgressPolicyKey4) GetDestCIDR() *net.IPNet {
 	}
 }
 
-// Match returns true if the egressIP and gatewayIP parameters match the egress
+// Match returns true if the egressIP and gatewayIPs parameters match the egress
 // policy value.
-func (v *EgressPolicyVal4) Match(egressIP, gatewayIP net.IP) bool {
-	return v.GetEgressIP().Equal(egressIP) &&
-		v.GetGatewayIP().Equal(gatewayIP)
+func (v *EgressPolicyVal4) Match(egressIP net.IP, gatewayIPs []net.IP) bool {
+	if !v.GetEgressIP().Equal(egressIP) {
+		return false
+	}
+
+	if v.Size != uint32(len(gatewayIPs)) {
+		return false
+	}
+
+	for i, gwIP := range v.GetGatewayIPs() {
+		if !gwIP.Equal(gatewayIPs[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // GetEgressIP returns the egress policy value's egress IP.
@@ -126,14 +143,15 @@ func (v *EgressPolicyVal4) GetEgressIP() net.IP {
 	return v.EgressIP.IP()
 }
 
-// GetGatewayIP returns the egress policy value's gateway IP.
-func (v *EgressPolicyVal4) GetGatewayIP() net.IP {
-	return v.GatewayIP.IP()
-}
+// GetGatewayIPs returns the egress policy value's gateway IP.
+func (v *EgressPolicyVal4) GetGatewayIPs() []net.IP {
+	gatewayIPs := []net.IP{}
 
-// String returns the string representation of an egress policy value.
-func (v *EgressPolicyVal4) String() string {
-	return fmt.Sprintf("%s %s", v.GetGatewayIP(), v.GetEgressIP())
+	for i := uint32(0); i < v.Size; i++ {
+		gatewayIPs = append(gatewayIPs, v.GatewayIPs[i].IP())
+	}
+
+	return gatewayIPs
 }
 
 // Lookup returns the egress policy object associated with the provided (source
@@ -149,9 +167,9 @@ func (m *egressPolicyMap) Lookup(sourceIP net.IP, destCIDR net.IPNet) (*EgressPo
 
 // Update updates the (sourceIP, destCIDR) egress policy entry with the provided
 // egress and gateway IPs.
-func (m *egressPolicyMap) Update(sourceIP net.IP, destCIDR net.IPNet, egressIP, gatewayIP net.IP) error {
+func (m *egressPolicyMap) Update(sourceIP net.IP, destCIDR net.IPNet, egressIP net.IP, gatewayIPs []net.IP) error {
 	key := NewEgressPolicyKey4(sourceIP, destCIDR.IP, destCIDR.Mask)
-	val := NewEgressPolicyVal4(egressIP, gatewayIP)
+	val := NewEgressPolicyVal4(egressIP, gatewayIPs)
 
 	return m.Map.Update(key, val, 0)
 }

@@ -551,17 +551,31 @@ func assertEgressRules(c *C, rules []egressRule) {
 		c.Assert(err, IsNil)
 
 		c.Assert(policyVal.GetEgressIP().Equal(r.egressIP), Equals, true)
-		c.Assert(policyVal.GetGatewayIP().Equal(r.gatewayIP), Equals, true)
+
+		gwFound := false
+		for _, policyGatewayIP := range policyVal.GetGatewayIPs() {
+			if policyGatewayIP.Equal(r.gatewayIP) {
+				gwFound = true
+				break
+			}
+		}
+		c.Assert(gwFound, Equals, true)
 	}
 
 	egressmap.EgressPolicyMap.IterateWithCallback(
 		func(key *egressmap.EgressPolicyKey4, val *egressmap.EgressPolicyVal4) {
-			for _, r := range parsedRules {
-				if key.Match(r.sourceIP, &r.destCIDR) && val.Match(r.egressIP, r.gatewayIP) {
-					return
-				}
-			}
 
-			c.Fatal("Untracked egress policy")
+		nextPolicyGateway:
+			for _, gatewayIP := range val.GetGatewayIPs() {
+				for _, r := range parsedRules {
+					if key.Match(r.sourceIP, &r.destCIDR) {
+						if val.GetEgressIP().Equal(r.egressIP) && gatewayIP.Equal(r.gatewayIP) {
+							continue nextPolicyGateway
+						}
+					}
+				}
+
+				c.Fatal("Untracked egress policy")
+			}
 		})
 }

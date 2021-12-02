@@ -53,6 +53,10 @@
 # endif
 #endif
 
+#ifndef EGRESS_MAX_GATEWAY_NODES
+#define EGRESS_MAX_GATEWAY_NODES 64
+#endif
+
 /* XDP to SKB transferred meta data. */
 #define XFER_PKT_NO_SVC		1 /* Skip upper service handling. */
 
@@ -298,8 +302,12 @@ struct egress_gw_policy_key {
 };
 
 struct egress_gw_policy_entry {
-	__u32 egress_ip;
-	__u32 gateway_ip;
+	/* Size is the number of IPs set in the gateway_ips field (i.e. the number of
+	 * gateways configured for the policy).
+	 */
+	__u32 size;
+	__be32 egress_ip;
+	__be32 gateway_ips[EGRESS_MAX_GATEWAY_NODES];
 };
 
 struct vtep_key {
@@ -309,6 +317,10 @@ struct vtep_key {
 struct vtep_value {
 	__u64 vtep_mac;
 	__u32 tunnel_endpoint;
+};
+
+struct egress_ct_entry {
+	__be32 gateway_ip;
 };
 
 enum {

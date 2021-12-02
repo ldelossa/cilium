@@ -994,9 +994,13 @@ ct_recreate4:
 
 #ifdef ENABLE_EGRESS_GATEWAY
 	{
+		struct ipv4_ct_tuple ct_key = {};
+		struct egress_ct_entry *egress_ct;
+
 		struct egress_gw_policy_entry *egress_gw_policy;
 		struct endpoint_info *gateway_node_ep;
 		struct endpoint_key key = {};
+		__be32 gateway_ip;
 
 		/* If the packet is destined to an entity inside the cluster,
 		 * either EP or node, it should not be forwarded to an egress
@@ -1014,30 +1018,61 @@ ct_recreate4:
 		if (ct_status == CT_REPLY || ct_status == CT_RELATED)
 			goto skip_egress_gateway;
 
+		ret = fill_egress_ct_key(&ct_key, ctx, ip4, l4_off);
+		if (ret < 0)
+			return ret;
+
+		/* First, if this is not a new connection, check if it is
+		 * already in the egress CT map */
+		if (ct_status != CT_NEW) {
+			egress_ct = lookup_ip4_egress_ct(&ct_key);
+			if (egress_ct) {
+				/* If there's an entry, extract the IP of the gateway node from
+				 * the egress_ct struct and forward the packet to the gateway
+				 */
+				gateway_ip = egress_ct->gateway_ip;
+
+				goto do_egress_gateway_redirect;
+			}
+		}
+
+		/* Lookup the (src IP, dst IP) tuple in the the egress policy map */
 		egress_gw_policy = lookup_ip4_egress_gw_policy(ip4->saddr, ip4->daddr);
 		if (!egress_gw_policy)
 			goto skip_egress_gateway;
 
+		/* Otherwise encap and redirect the packet to egress gateway
+		 * node through a tunnel.
+		 */
+		gateway_ip = pick_egress_gateway(egress_gw_policy);
+
+		/* And add an egress CT entry to pin the selected gateway node
+		 * for the connection
+		 */
+		update_egress_ct_entry(&ct_key, gateway_ip);
+
+do_egress_gateway_redirect:
 		/* If the gateway node is the local node, then just let the
 		 * packet go through, as it will be SNATed later on by
 		 * handle_nat_fwd().
 		 */
-		gateway_node_ep = __lookup_ip4_endpoint(egress_gw_policy->gateway_ip);
+		gateway_node_ep = __lookup_ip4_endpoint(gateway_ip);
 		if (gateway_node_ep && (gateway_node_ep->flags & ENDPOINT_F_HOST))
 			goto skip_egress_gateway;
 
 		/* Otherwise encap and redirect the packet to egress gateway
 		 * node through a tunnel.
 		 */
-		ret = encap_and_redirect_lxc(ctx, egress_gw_policy->gateway_ip, encrypt_key,
-					     &key, SECLABEL, &trace);
+		ret = encap_and_redirect_lxc(ctx, gateway_ip, encrypt_key, &key,
+					     SECLABEL, &trace);
+
 		if (ret == IPSEC_ENDPOINT)
 			goto encrypt_to_stack;
 		else
 			return ret;
 	}
 skip_egress_gateway:
-#endif
+#endif /* ENABLE_EGRESS_GATEWAY */
 
 	/* L7 proxy result in VTEP redirection in bpf_host, but when L7 proxy disabled
 	 * We want VTEP redirection handled earlier here to avoid packets passing to
