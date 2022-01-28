@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/cilium/pkg/ebpf"
+	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/tuple"
 	"github.com/cilium/cilium/pkg/types"
 )
@@ -59,16 +60,17 @@ func initEgressCtMap(ctMapName string, create bool) error {
 	return nil
 }
 
-// removeCtEntries removes all CT entries from the egress CT map matching the
-// (source IP, destination CIDR, gateway IP) tuple.
-func removeCtEntries(sourceIP net.IP, destCIDR net.IPNet, gatewayIP net.IP) error {
+// removeExpiredCtEntries removes all CT entries from the egress CT map matching the
+// (source IP, destination CIDR) tuple whose gateway IP does not belong to the
+// list of healthy gateway IPs.
+func removeExpiredCtEntries(sourceIP net.IP, destCIDR net.IPNet, healthyGatewayIPs []net.IP) error {
 	keysToDelete := []EgressCtKey4{}
 
 	err := EgressCtMap.IterateWithCallback(
 		func(ctKey *EgressCtKey4, ctVal *EgressCtVal4) {
 			if ctKey.SourceAddr.IP().Equal(sourceIP) &&
 				destCIDR.Contains(ctKey.DestAddr.IP()) &&
-				ctVal.Gateway.IP().Equal(gatewayIP) {
+				!ip.IsExcluded(healthyGatewayIPs, ctVal.Gateway.IP()) {
 
 				// It's not safe to delete an element from a hashmap
 				// while iterating it. Store the keys and delete them

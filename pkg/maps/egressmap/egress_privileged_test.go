@@ -6,7 +6,6 @@
 package egressmap
 
 import (
-	"fmt"
 	"net"
 	"testing"
 
@@ -50,11 +49,16 @@ func (k *EgressMapTestSuite) TestEgressMap(c *C) {
 	_, destCIDR2, err := net.ParseCIDR("2.2.2.0/24")
 	c.Assert(err, IsNil)
 
+	destIP1 := net.ParseIP("2.2.1.1")
+	destIP2 := net.ParseIP("2.2.2.1")
+
 	egressIP1 := net.ParseIP("3.3.3.1")
 	egressIP2 := net.ParseIP("3.3.3.2")
 
 	gatewayIP1 := net.ParseIP("4.4.4.1")
 	gatewayIP2 := net.ParseIP("4.4.4.2")
+
+	randomIP := net.ParseIP("10.20.30.40")
 
 	// This will create 2 policies, respectively with 2 and 1 egress GWs:
 	//
@@ -63,14 +67,15 @@ func (k *EgressMapTestSuite) TestEgressMap(c *C) {
 	//                                            1 => 4.4.4.2
 	// 1.1.1.2     2.2.2.0/24         3.3.3.2     0 => 4.4.4.1
 
-	err = InsertEgressGateway(sourceIP1, *destCIDR1, egressIP1, gatewayIP1)
+	err = ApplyEgressPolicy(sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP1, gatewayIP2}, []net.IP{gatewayIP1, gatewayIP2})
 	c.Assert(err, IsNil)
 
-	err = InsertEgressGateway(sourceIP1, *destCIDR1, egressIP1, gatewayIP2)
+	defer RemoveEgressPolicy(sourceIP1, *destCIDR1)
+
+	err = ApplyEgressPolicy(sourceIP2, *destCIDR2, egressIP2, []net.IP{gatewayIP1}, []net.IP{gatewayIP1})
 	c.Assert(err, IsNil)
 
-	err = InsertEgressGateway(sourceIP2, *destCIDR2, egressIP2, gatewayIP1)
-	c.Assert(err, IsNil)
+	defer RemoveEgressPolicy(sourceIP2, *destCIDR2)
 
 	val, err := EgressPolicyMap.Lookup(sourceIP1, *destCIDR1)
 	c.Assert(err, IsNil)
@@ -87,80 +92,107 @@ func (k *EgressMapTestSuite) TestEgressMap(c *C) {
 	c.Assert(val.EgressIP.IP().Equal(egressIP2), Equals, true)
 	c.Assert(val.GatewayIPs[0].IP().Equal(gatewayIP1), Equals, true)
 
-	// Adding an already existing gateway to a policy should result in an error
-	err = InsertEgressGateway(sourceIP1, *destCIDR1, egressIP1, gatewayIP1)
+	// Addin a policy with too many gateways should result in an error
+	gatewayIPs := make([]net.IP, MaxGatewayNodes+1)
+	err = ApplyEgressPolicy(sourceIP1, *destCIDR1, egressIP1, gatewayIPs, gatewayIPs)
 	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "egress policy already exists")
+	c.Assert(err.Error(), Equals, "cannot apply egress policy: too many gateways")
 
-	// Adding a new gateway to an existing policy with a mismatching egress
-	// IP should result in an error
-	err = InsertEgressGateway(sourceIP1, *destCIDR1, egressIP2, gatewayIP1)
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "an existing egress policy for the same source and destination IPs tuple already exists with a different egress IP")
+	// Create 4 CT entries in the egress CT map
+	// ctKey1 is related to the first policy (first gateway node)
+	ctKey1 := addEgressCtEntry(c, sourceIP1, destIP1, 80, gatewayIP1)
+	// ctKey2 is related to the first policy (second gateway node)
+	ctKey2 := addEgressCtEntry(c, sourceIP1, destIP1, 81, gatewayIP2)
+	// ctKey3 is related to the second policy
+	ctKey3 := addEgressCtEntry(c, sourceIP2, destIP2, 80, gatewayIP1)
+	// ctKey4 is unrelated to any policy
+	ctKey4 := addEgressCtEntry(c, randomIP, randomIP, 1234, randomIP)
 
-	// Fill the policy with the maximum number of gateway
-	for i := 2; i < MaxGatewayNodes; i++ {
-		gatewayIP := net.ParseIP(fmt.Sprintf("5.5.5.%d", i))
-		err = InsertEgressGateway(sourceIP1, *destCIDR1, egressIP1, gatewayIP)
-		c.Assert(err, IsNil)
-	}
+	// Update the first policy:
+	//
+	// - remove gatewayIP1 from the list of active gateways (by applying a
+	//   new policy with just gatewayIP2)
+	// - remove gatewayIP1 also from the list of healthy gateways
+	err = ApplyEgressPolicy(sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP2}, []net.IP{gatewayIP2})
+	c.Assert(err, IsNil)
 
-	// Adding one extra gateway to the policy should result in a error
-	gatewayIP := net.ParseIP("6.6.6.6")
-	err = InsertEgressGateway(sourceIP1, *destCIDR1, egressIP1, gatewayIP)
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, fmt.Sprintf("maximum number of gateway nodes (%d) already reached for the egress policy", MaxGatewayNodes))
+	// The first CT entry (first policy, gatewayIP1) should get removed
+	assertCtKeyDoesntExist(c, ctKey1)
 
-	// Create 2 CT entries in the egress CT map, one related to an existing
-	// policy and one unrelated
-	ctKey1 := EgressCtKey4{
+	// While the second CT entry (first policy, gatewayIP2) should still be there
+	assertCtKeyExists(c, ctKey2)
+
+	// as well as the other (unrelated) ones
+	assertCtKeyExists(c, ctKey3)
+	assertCtKeyExists(c, ctKey4)
+
+	// Update the first policy:
+	//
+	// - change the active gateway from gatewayIP2 -> gatewayIP1
+	//-  keep gatewayIP2 in the list of healthy gateways
+	err = ApplyEgressPolicy(sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP1}, []net.IP{gatewayIP1, gatewayIP2})
+	c.Assert(err, IsNil)
+
+	// The second CT entry (first policy, gatewayIP2) should still be there
+	assertCtKeyExists(c, ctKey2)
+
+	// as well as the other (unrelated) ones
+	assertCtKeyExists(c, ctKey3)
+	assertCtKeyExists(c, ctKey4)
+
+	// Update the first policy:
+	//
+	//-  Remove gatewayIP2 from the list of healthy gateways
+	err = ApplyEgressPolicy(sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP1}, []net.IP{gatewayIP1})
+	c.Assert(err, IsNil)
+
+	// The second CT entry (first policy, gatewayIP2) should now get removed
+	assertCtKeyDoesntExist(c, ctKey2)
+
+	// while the other unrelated ones should still be there
+	assertCtKeyExists(c, ctKey3)
+	assertCtKeyExists(c, ctKey4)
+
+	// Remove the second policy
+	err = RemoveEgressPolicy(sourceIP2, *destCIDR2)
+	c.Assert(err, IsNil)
+
+	// The third CT entry (second policy) should now get removed
+	assertCtKeyDoesntExist(c, ctKey3)
+
+	//while the other unrelated one should still be there
+	assertCtKeyExists(c, ctKey4)
+}
+
+func addEgressCtEntry(c *C, sourceIP, destIP net.IP, dstPort uint16, gatewayIP net.IP) *EgressCtKey4 {
+	ctKey := EgressCtKey4{
 		tuple.TupleKey4{
 			SourcePort: 1111,
-			DestPort:   2222,
+			DestPort:   dstPort,
 			NextHeader: 6,
 		},
 	}
-	copy(ctKey1.SourceAddr[:], net.ParseIP("1.1.1.1").To4())
-	copy(ctKey1.DestAddr[:], net.ParseIP("2.2.1.1").To4())
+	copy(ctKey.SourceAddr[:], sourceIP.To4())
+	copy(ctKey.DestAddr[:], destIP.To4())
 
-	ctVal1 := EgressCtVal4{}
-	copy(ctVal1.Gateway[:], net.ParseIP("4.4.4.1").To4())
+	ctVal := EgressCtVal4{}
+	copy(ctVal.Gateway[:], gatewayIP.To4())
 
-	err = EgressCtMap.Update(&ctKey1, &ctVal1, 0)
+	err := EgressCtMap.Update(&ctKey, &ctVal, 0)
 	c.Assert(err, IsNil)
 
-	ctKey2 := EgressCtKey4{
-		tuple.TupleKey4{
-			SourcePort: 1111,
-			DestPort:   2222,
-			NextHeader: 6,
-		},
-	}
-	copy(ctKey2.SourceAddr[:], net.ParseIP("10.10.10.10").To4())
-	copy(ctKey2.DestAddr[:], net.ParseIP("20.20.20.20").To4())
+	return &ctKey
+}
 
-	ctVal2 := EgressCtVal4{}
-	copy(ctVal2.Gateway[:], net.ParseIP("40.40.40.10").To4())
-
-	err = EgressCtMap.Update(&ctKey2, &ctVal2, 0)
-	c.Assert(err, IsNil)
-
-	// Delete the first gateway from the first policy
-	err = RemoveEgressGateway(sourceIP1, *destCIDR1, gatewayIP1)
-	c.Assert(err, IsNil)
-
-	// The associated CT entry should have been deleted as well
+func assertCtKeyExists(c *C, ctKey *EgressCtKey4) {
 	ctValTmp := EgressCtVal4{}
-	err = EgressCtMap.Lookup(&ctKey1, &ctValTmp)
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "lookup failed: key does not exist")
-
-	// While the other (unrelated) CT entry should still be there
-	err = EgressCtMap.Lookup(&ctKey2, &ctValTmp)
+	err := EgressCtMap.Lookup(ctKey, &ctValTmp)
 	c.Assert(err, IsNil)
+}
 
-	// Removing the same gateway again should result in an error
-	err = RemoveEgressGateway(sourceIP1, *destCIDR1, gatewayIP1)
+func assertCtKeyDoesntExist(c *C, ctKey *EgressCtKey4) {
+	ctValTmp := EgressCtVal4{}
+	err := EgressCtMap.Lookup(ctKey, &ctValTmp)
 	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "cannot find gateway IP in egress policy")
+	c.Assert(err.Error(), Equals, "lookup: key does not exist")
 }
