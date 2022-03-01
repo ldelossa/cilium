@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
 	. "gopkg.in/check.v1"
 
-	"github.com/cilium/ebpf/rlimit"
-
+	"github.com/cilium/cilium/pkg/datapath"
 	"github.com/cilium/cilium/pkg/datapath/linux/config"
 	"github.com/cilium/cilium/pkg/datapath/loader/metrics"
 	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
@@ -165,7 +165,9 @@ func (s *LoaderTestSuite) testCompileAndLoad(c *C, ep *testutils.TestEndpoint) {
 	defer cancel()
 	stats := &metrics.SpanStat{}
 
-	l := &Loader{}
+	l := &Loader{
+		loaderStatus: &datapath.LoaderStatus{},
+	}
 	err := l.compileAndLoad(ctx, ep, dirInfo, stats)
 	c.Assert(err, IsNil)
 }

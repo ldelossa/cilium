@@ -62,12 +62,15 @@ type Loader struct {
 	templateCache *objectCache
 
 	canDisableDwarfRelocations bool
+
+	loaderStatus *datapath.LoaderStatus
 }
 
 // NewLoader returns a new loader.
 func NewLoader(canDisableDwarfRelocations bool) *Loader {
 	return &Loader{
 		canDisableDwarfRelocations: canDisableDwarfRelocations,
+		loaderStatus:               &datapath.LoaderStatus{},
 	}
 }
 
@@ -291,6 +294,10 @@ func (l *Loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs 
 		if err := l.reloadHostDatapath(ctx, ep, objPath); err != nil {
 			return err
 		}
+
+		l.loaderStatus.Lock()
+		l.loaderStatus.BpfHostLoaded = true
+		l.loaderStatus.Unlock()
 	} else if ep.HasIpvlanDataPath() {
 		if err := graftDatapath(ctx, ep.MapPath(), objPath, symbolFromEndpoint); err != nil {
 			scopedLog := ep.Logger(Subsystem).WithFields(logrus.Fields{
@@ -518,4 +525,8 @@ func (l *Loader) CallsMapPath(id uint16) string {
 // specified ID.
 func (l *Loader) CustomCallsMapPath(id uint16) string {
 	return bpf.LocalMapPath(callsmap.CustomCallsMapName, id)
+}
+
+func (l *Loader) Status() *datapath.LoaderStatus {
+	return l.loaderStatus
 }

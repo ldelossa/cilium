@@ -16,10 +16,17 @@ import (
 	flag "github.com/spf13/pflag"
 	"golang.org/x/sys/unix"
 
+	"github.com/cilium/cilium/pkg/datapath"
 	healthDefaults "github.com/cilium/cilium/pkg/health/defaults"
 	"github.com/cilium/cilium/pkg/health/probe/responder"
 	"github.com/cilium/cilium/pkg/pidfile"
 )
+
+type LoaderStatus struct{}
+
+func (d *LoaderStatus) Status() *datapath.LoaderStatus {
+	return &datapath.LoaderStatus{}
+}
 
 func main() {
 	var (
@@ -33,7 +40,7 @@ func main() {
 	// Shutdown gracefully to halt server and remove pidfile
 	ctx, cancel := signal.NotifyContext(context.Background(), unix.SIGINT, unix.SIGHUP, unix.SIGTERM, unix.SIGQUIT)
 
-	srv := responder.NewServer(listen)
+	srv := responder.NewServer(listen, &LoaderStatus{})
 	defer srv.Shutdown()
 	go func() {
 		if err := srv.Serve(); err != nil {

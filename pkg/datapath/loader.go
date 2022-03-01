@@ -22,6 +22,7 @@ type Loader interface {
 	EndpointHash(cfg EndpointConfiguration) (string, error)
 	Unload(ep Endpoint)
 	Reinitialize(ctx context.Context, o BaseProgramOwner, deviceMTU int, iptMgr IptablesManager, p Proxy) error
+	Status() *LoaderStatus
 }
 
 // BaseProgramOwner is any type for which a loader is building base programs.
@@ -76,4 +77,16 @@ type IptablesManager interface {
 
 	// See comments for InstallNoTrackRules.
 	RemoveNoTrackRules(IP string, port uint16, ipv6 bool) error
+}
+
+// LoaderStatus describes the state of the datapath.
+type LoaderStatus struct {
+	lock.RWMutex
+
+	// BpfInitialized indicates if the datapath has been initialized with
+	// the bpf/init.sh script
+	BpfInitialized bool
+
+	// BpfHostLoaded indicates if the bpf_host program has been loaded
+	BpfHostLoaded bool
 }

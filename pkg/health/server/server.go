@@ -37,6 +37,7 @@ type Config struct {
 	ProbeInterval time.Duration
 	ProbeDeadline time.Duration
 	HTTPPathPort  int
+	LoaderStatus  responder.LoaderStatus
 }
 
 // ipString is an IP address used as a more descriptive type name in maps.
@@ -421,7 +422,7 @@ func NewServer(config Config) (*Server, error) {
 	server.Client = cl
 	server.Server = *server.newServer(swaggerSpec)
 
-	server.httpPathServer = responder.NewServer(config.HTTPPathPort)
+	server.httpPathServer = responder.NewServer(config.HTTPPathPort, config.LoaderStatus)
 
 	return server, nil
 }

@@ -13,6 +13,7 @@ import (
 	ciliumPkg "github.com/cilium/cilium/pkg/client"
 	"github.com/cilium/cilium/pkg/health/client"
 	"github.com/cilium/cilium/pkg/health/defaults"
+	"github.com/cilium/cilium/pkg/health/probe/responder"
 	"github.com/cilium/cilium/pkg/health/server"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
@@ -38,7 +39,7 @@ const (
 )
 
 // Launch starts the cilium-health server and returns a handle to obtain its status
-func Launch() (*CiliumHealth, error) {
+func Launch(loaderStatus responder.LoaderStatus) (*CiliumHealth, error) {
 	var (
 		err error
 		ch  = &CiliumHealth{}
@@ -49,6 +50,7 @@ func Launch() (*CiliumHealth, error) {
 		ProbeInterval: serverProbeInterval,
 		ProbeDeadline: serverProbeDeadline,
 		HTTPPathPort:  option.Config.ClusterHealthPort,
+		LoaderStatus:  loaderStatus,
 	}
 
 	ch.server, err = server.NewServer(config)

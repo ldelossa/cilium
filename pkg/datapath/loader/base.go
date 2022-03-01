@@ -447,6 +447,10 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 		return err
 	}
 
+	l.loaderStatus.Lock()
+	l.loaderStatus.BpfInitialized = true
+	l.loaderStatus.Unlock()
+
 	if l.canDisableDwarfRelocations {
 		// Validate alignments of C and Go equivalent structs
 		if err := alignchecker.CheckStructAlignments(defaults.AlignCheckerName); err != nil {

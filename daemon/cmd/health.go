@@ -24,7 +24,7 @@ import (
 func (d *Daemon) initHealth() {
 	// Launch cilium-health in the same process (and namespace) as cilium.
 	log.Info("Launching Cilium health daemon")
-	if ch, err := health.Launch(); err != nil {
+	if ch, err := health.Launch(d.Datapath().Loader()); err != nil {
 		log.WithError(err).Fatal("Failed to launch cilium-health")
 	} else {
 		d.ciliumHealth = ch
