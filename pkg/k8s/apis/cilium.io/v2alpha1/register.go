@@ -70,6 +70,20 @@ const (
 	// CSREPName is the full name of Cilium SRv6 Egress Policy
 	CSREPName = CSREPPluralName + "." + CustomResourceDefinitionGroup
 
+	// Cilium SRv6 VRF (CSRVRF)
+
+	// CSRVRFSingularName is the singular name of Cilium SRv6 VRF
+	CSRVRFSingularName = "ciliumsrv6vrf"
+
+	// CSRVRFPluralName is the plural name of Cilium SRv6 VRF
+	CSRVRFPluralName = "ciliumsrv6vrfs"
+
+	// CSRVRFKindDefinition is the kind name of Cilium SRv6 VRF
+	CSRVRFKindDefinition = "CiliumSRv6VRF"
+
+	// CSRVRFName is the full name of Cilium SRv6 VRF
+	CSRVRFName = CSRVRFPluralName + "." + CustomResourceDefinitionGroup
+
 	// Cilium Cluster Envoy Config (CCEC)
 
 	// CCECSingularName is the singular name of Cilium Clusterwide Envoy Config
@@ -174,6 +188,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&CiliumEndpointSliceList{},
 		&CiliumSRv6EgressPolicy{},
 		&CiliumSRv6EgressPolicyList{},
+		&CiliumSRv6VRF{},
+		&CiliumSRv6VRFList{},
 		&CiliumEnvoyConfig{},
 		&CiliumEnvoyConfigList{},
 		&CiliumClusterwideEnvoyConfig{},

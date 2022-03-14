@@ -18,3 +18,5 @@ type CiliumEndpointSliceExpansion interface{}
 type CiliumEnvoyConfigExpansion interface{}
 
 type CiliumSRv6EgressPolicyExpansion interface{}
+
+type CiliumSRv6VRFExpansion interface{}

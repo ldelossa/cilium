@@ -79,6 +79,7 @@ rules:
   - ciliumnetworkpolicies
   - ciliumnodes
   - ciliumsrv6egresspolicies
+  - ciliumsrv6vrfs
   verbs:
   - list
   - watch

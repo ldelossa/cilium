@@ -175,3 +175,58 @@ type CiliumSRv6EgressPolicySpec struct {
 	// +kubebuilder:validation:Pattern=`^\s*((([0-9A-Fa-f]{1,4}:){7}(:|([0-9A-Fa-f]{1,4})))|(([0-9A-Fa-f]{1,4}:){6}:([0-9A-Fa-f]{1,4})?)|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){0,1}):([0-9A-Fa-f]{1,4})?))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){0,2}):([0-9A-Fa-f]{1,4})?))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){0,3}):([0-9A-Fa-f]{1,4})?))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){0,4}):([0-9A-Fa-f]{1,4})?))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){0,5}):([0-9A-Fa-f]{1,4})?))|(:(:|((:[0-9A-Fa-f]{1,4}){1,7}))))(%.+)?$`
 	DestinationSID string `json:"destinationSID"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:categories={cilium,ciliumpolicy},singular="ciliumsrv6vrf",path="ciliumsrv6vrfs",scope="Cluster"
+// +kubebuilder:printcolumn:JSONPath=".metadata.creationTimestamp",name="Age",type=date
+// +kubebuilder:storageversion
+
+type CiliumSRv6VRF struct {
+	// +k8s:openapi-gen=false
+	// +deepequal-gen=false
+	metav1.TypeMeta `json:",inline"`
+	// +k8s:openapi-gen=false
+	// +deepequal-gen=false
+	metav1.ObjectMeta `json:"metadata"`
+
+	Spec CiliumSRv6VRFSpec `json:"spec,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=false
+// +deepequal-gen=false
+
+// CiliumSRv6VRFList is a list of CiliumSRv6VRF objects.
+type CiliumSRv6VRFList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	// Items is a list of CiliumSRv6VRF.
+	Items []CiliumSRv6VRF `json:"items"`
+}
+
+type VRFRule struct {
+	// Selectors represents a list of rules to select pods that can use a
+	// given VRF.
+	Selectors []EgressRule `json:"selectors"`
+
+	// DestinationCIDRs is a list of destination CIDRs for destination IP addresses.
+	// If a destination IP matches any one CIDR, it will be selected.
+	DestinationCIDRs []CIDR `json:"destinationCIDRs"`
+}
+
+type CiliumSRv6VRFSpec struct {
+	// VRFID is the ID of the VRF in which the SIDs should be looked up.
+	VRFID uint32 `json:"vrfID"`
+
+	// ImportRouteTarget is the import route-target for this VRF. It is optional and,
+	// if specified, will be used by the BGP manager to know in which VRF to install
+	// received routes.
+	ImportRouteTarget string `json:"importRouteTarget,omitempty"`
+
+	// Rules describes what traffic is assigned to the VRF. Egress packets are matched
+	// against these rules to know to in which VRF the SID should be looked up.
+	Rules []VRFRule `json:"rules"`
+}
