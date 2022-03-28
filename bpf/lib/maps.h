@@ -238,6 +238,15 @@ struct {
 	__uint(max_entries, SRV6_POLICY_MAP_SIZE);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } SRV6_POLICY_MAP4 __section_maps_btf;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct srv6_ipv4_2tuple);   // inner header
+	__type(value, struct srv6_ipv6_2tuple); // outer header
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+	__uint(max_entries, SRV6_STATE_MAP_SIZE);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+} SRV6_STATE_MAP4 __section_maps_btf;
 # endif /* ENABLE_IPV4 */
 
 struct {
@@ -266,6 +275,15 @@ struct {
     __uint(max_entries, SRV6_SID_MAP_SIZE);
     __uint(map_flags, BPF_F_NO_PREALLOC);
 } SRV6_SID_MAP __section_maps_btf;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct srv6_ipv6_2tuple);   // inner header
+	__type(value, struct srv6_ipv6_2tuple); // outer header
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+	__uint(max_entries, SRV6_STATE_MAP_SIZE);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+} SRV6_STATE_MAP6 __section_maps_btf;
 #endif /* ENABLE_SRV6 */
 
 #ifdef ENABLE_VTEP
