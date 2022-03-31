@@ -63,7 +63,7 @@ func (manager *Manager) runReconciliationAfterK8sSync() {
 		manager.mutex.Lock()
 		defer manager.mutex.Unlock()
 
-		manager.reconcilePolicies()
+		manager.reconcilePoliciesAndSIDs()
 	}()
 }
 
@@ -85,7 +85,7 @@ func (manager *Manager) OnAddSRv6Policy(policy EgressPolicy) {
 
 	manager.policies[policy.id] = &policy
 
-	manager.reconcilePolicies()
+	manager.reconcilePoliciesAndSIDs()
 }
 
 // OnDeleteSRv6Policy deletes the internal state associated with the given
@@ -105,7 +105,7 @@ func (manager *Manager) OnDeleteSRv6Policy(policyID policyID) {
 
 	delete(manager.policies, policyID)
 
-	manager.reconcilePolicies()
+	manager.reconcilePoliciesAndSIDs()
 }
 
 // addMissingSRv6PolicyRules is responsible for adding any missing egress SRv6
@@ -202,13 +202,76 @@ nextPolicyKey:
 	}
 }
 
-// reconcilePolicies is responsible for reconciling the state of the
+// addMissingSRv6SIDs implements the same as addMissingSRv6PolicyRules but for
+// the SID map.
+func (manager *Manager) addMissingSRv6SIDs() {
+	srv6SIDs := map[srv6map.SIDKey]srv6map.SIDValue{}
+	srv6map.SRv6SIDMap.IterateWithCallback(
+		func(key *srv6map.SIDKey, val *srv6map.SIDValue) {
+			srv6SIDs[*key] = *val
+		})
+
+	var err error
+	for _, policy := range manager.policies {
+		sidKey := srv6map.SIDKey{
+			SID: policy.sid,
+		}
+
+		sidVal, sidPresent := srv6SIDs[sidKey]
+		if sidPresent && sidVal.VRFID == policy.vrfID {
+			continue
+		}
+
+		err = srv6map.SRv6SIDMap.Update(sidKey, policy.vrfID)
+
+		logger := log.WithFields(logrus.Fields{
+			logfields.SID: policy.sid,
+			logfields.VRF: policy.vrfID,
+		})
+		if err != nil {
+			logger.WithError(err).Error("Error adding SID")
+		} else {
+			logger.Info("SID added")
+		}
+	}
+}
+
+// removeUnusedSRv6SIDs implements the same as removeUnusedSRv6PolicyRules but
+// for the SID map.
+func (manager *Manager) removeUnusedSRv6SIDs() {
+	srv6SIDs := map[srv6map.SIDKey]srv6map.SIDValue{}
+	srv6map.SRv6SIDMap.IterateWithCallback(
+		func(key *srv6map.SIDKey, val *srv6map.SIDValue) {
+			srv6SIDs[*key] = *val
+		})
+
+nextSIDKey:
+	for sidKey := range srv6SIDs {
+		for _, policy := range manager.policies {
+			if sidKey.SID == policy.sid {
+				continue nextSIDKey
+			}
+		}
+
+		logger := log.WithFields(logrus.Fields{
+			logfields.SID: sidKey.SID,
+		})
+
+		if err := srv6map.SRv6SIDMap.Delete(sidKey); err != nil {
+			logger.WithError(err).Error("Error removing SID")
+		} else {
+			logger.Info("SID removed")
+		}
+	}
+}
+
+// reconcilePoliciesAndSIDs is responsible for reconciling the state of the
 // manager (i.e. the desired state) with the actual state of the node (SRv6
-// policy map entries).
+// policy map entries and SIDs).
 //
 // Whenever it encounters an error, it will just log it and move to the next
 // item, in order to reconcile as many states as possible.
-func (manager *Manager) reconcilePolicies() {
+func (manager *Manager) reconcilePoliciesAndSIDs() {
 	if !manager.k8sCacheSyncedChecker.K8sCacheIsSynced() {
 		return
 	}
@@ -217,4 +280,7 @@ func (manager *Manager) reconcilePolicies() {
 	// only then removing obsolete ones we make sure there will be no connectivity disruption
 	manager.addMissingSRv6PolicyRules()
 	manager.removeUnusedSRv6PolicyRules()
+	// Same note as above on the order of the next two function calls.
+	manager.addMissingSRv6SIDs()
+	manager.removeUnusedSRv6SIDs()
 }
