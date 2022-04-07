@@ -7,7 +7,11 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
+	netutils "k8s.io/utils/net"
 
+	"github.com/cilium/cilium/pkg/ip"
+	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -34,6 +38,12 @@ type Manager struct {
 
 	// policies stores egress policies indexed by policyID
 	policies map[policyID]*EgressPolicy
+
+	// vrfs stores VRFs indexed by vrfID
+	vrfs map[vrfID]*VRF
+
+	// epDataStore stores endpointId to endpoint metadata mapping
+	epDataStore map[endpointID]*endpointMetadata
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
@@ -41,6 +51,8 @@ func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker) *Manager {
 	manager := &Manager{
 		k8sCacheSyncedChecker: k8sCacheSyncedChecker,
 		policies:              make(map[policyID]*EgressPolicy),
+		vrfs:                  make(map[vrfID]*VRF),
+		epDataStore:           make(map[endpointID]*endpointMetadata),
 	}
 
 	manager.runReconciliationAfterK8sSync()
@@ -106,6 +118,89 @@ func (manager *Manager) OnDeleteSRv6Policy(policyID policyID) {
 	delete(manager.policies, policyID)
 
 	manager.reconcilePoliciesAndSIDs()
+}
+
+// OnAddSRv6VRF and updates the manager internal state with the VRF
+// config fields.
+func (manager *Manager) OnAddSRv6VRF(vrf VRF) {
+	manager.mutex.Lock()
+	defer manager.mutex.Unlock()
+
+	logger := log.WithField(logfields.CiliumSRv6VRFName, vrf.id.Name)
+
+	if _, ok := manager.vrfs[vrf.id]; !ok {
+		logger.Info("Added CiliumSRv6VRF")
+	} else {
+		logger.Info("Updated CiliumSRv6VRF")
+	}
+
+	manager.vrfs[vrf.id] = &vrf
+
+	manager.reconcileVRFMappings()
+}
+
+// OnDeleteSRv6VRF deletes the internal state associated with the given VRF.
+func (manager *Manager) OnDeleteSRv6VRF(vrfID vrfID) {
+	manager.mutex.Lock()
+	defer manager.mutex.Unlock()
+
+	logger := log.WithField(logfields.CiliumSRv6VRFName, vrfID.Name)
+
+	if manager.vrfs[vrfID] == nil {
+		logger.Warn("Can't delete CiliumSRv6VRF: policy not found")
+		return
+	}
+
+	logger.Info("Deleted CiliumSRv6VRF")
+
+	delete(manager.vrfs, vrfID)
+
+	manager.reconcileVRFMappings()
+}
+
+// OnUpdateEndpoint is the event handler for endpoint additions and updates.
+func (manager *Manager) OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
+	var epData *endpointMetadata
+	var err error
+
+	manager.mutex.Lock()
+	defer manager.mutex.Unlock()
+
+	logger := log.WithFields(logrus.Fields{
+		logfields.K8sEndpointName: endpoint.Name,
+		logfields.K8sNamespace:    endpoint.Namespace,
+	})
+
+	if len(endpoint.Networking.Addressing) == 0 {
+		logger.WithError(err).
+			Error("Failed to get valid endpoint IPs, skipping update of SRv6 maps.")
+		return
+	}
+
+	if epData, err = getEndpointMetadata(endpoint); err != nil {
+		logger.WithError(err).
+			Error("Failed to get valid endpoint metadata, skipping update of SRv6 maps.")
+		return
+	}
+
+	manager.epDataStore[epData.id] = epData
+
+	manager.reconcileVRFMappings()
+}
+
+// OnDeleteEndpoint is the event handler for endpoint deletions.
+func (manager *Manager) OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
+	manager.mutex.Lock()
+	defer manager.mutex.Unlock()
+
+	id := types.NamespacedName{
+		Name:      endpoint.GetName(),
+		Namespace: endpoint.GetNamespace(),
+	}
+
+	delete(manager.epDataStore, id)
+
+	manager.reconcileVRFMappings()
 }
 
 // addMissingSRv6PolicyRules is responsible for adding any missing egress SRv6
@@ -265,6 +360,113 @@ nextSIDKey:
 	}
 }
 
+// addMissingSRv6VRFMappings implements the same as addMissingSRv6PolicyRules but
+// for the vrf mapping map.
+func (manager *Manager) addMissingSRv6VRFMappings() {
+	srv6VRFs := map[srv6map.VRFKey]srv6map.VRFValue{}
+	srv6map.SRv6VRFMap4.IterateWithCallback4(
+		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
+			srv6VRFs[*key] = *val
+		})
+	srv6map.SRv6VRFMap6.IterateWithCallback6(
+		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
+			srv6VRFs[*key] = *val
+		})
+
+	for _, vrf := range manager.vrfs {
+		for _, vrfRule := range vrf.rules {
+			for _, endpoint := range manager.epDataStore {
+				if !vrfRule.selectsEndpoint(endpoint) {
+					continue
+				}
+
+				for _, endpointIP := range endpoint.ips {
+					for _, dstCIDR := range vrfRule.dstCIDRs {
+						if ip.IsIPv6(endpointIP) != netutils.IsIPv6CIDR(dstCIDR) {
+							// Endpoints can only connect to IPv6 destinations with
+							// their IPv6 address.
+							continue
+						}
+
+						vrfKey := srv6map.VRFKey{
+							SourceIP: &endpointIP,
+							DestCIDR: dstCIDR,
+						}
+						vrfVal, vrfPresent := srv6VRFs[vrfKey]
+
+						if vrfPresent && vrfVal.ID == vrf.vrfID {
+							continue
+						}
+
+						logger := log.WithFields(logrus.Fields{
+							logfields.SourceIP:        endpointIP,
+							logfields.DestinationCIDR: *dstCIDR,
+							logfields.VRF:             vrf.vrfID,
+						})
+
+						if err := srv6map.GetVRFMap(vrfKey).Update(vrfKey, vrf.vrfID); err != nil {
+							logger.WithError(err).Error("Error applying SRv6 VRF mapping")
+						} else {
+							logger.Info("SRv6 VRF mapping applied")
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// removeUnusedSRv6VRFMappings implements the same as
+// removeUnusedSRv6PolicyRules but for the SID map.
+func (manager *Manager) removeUnusedSRv6VRFMappings() {
+	srv6VRFs := map[srv6map.VRFKey]srv6map.VRFValue{}
+	srv6map.SRv6VRFMap4.IterateWithCallback4(
+		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
+			srv6VRFs[*key] = *val
+		})
+	srv6map.SRv6VRFMap6.IterateWithCallback6(
+		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
+			srv6VRFs[*key] = *val
+		})
+
+nextVRFKey:
+	for vrfKey := range srv6VRFs {
+		for _, vrf := range manager.vrfs {
+			for _, vrfRule := range vrf.rules {
+				for _, endpoint := range manager.epDataStore {
+					if !vrfRule.selectsEndpoint(endpoint) {
+						continue
+					}
+
+					for _, endpointIP := range endpoint.ips {
+						for _, dstCIDR := range vrfRule.dstCIDRs {
+							if ip.IsIPv6(endpointIP) != netutils.IsIPv6CIDR(dstCIDR) {
+								// Endpoints can only connect to IPv6 destinations
+								// with their IPv6 address.
+								continue
+							}
+							if vrfKey.Match(endpointIP, dstCIDR) {
+								continue nextVRFKey
+							}
+						}
+					}
+				}
+			}
+		}
+
+		logger := log.WithFields(logrus.Fields{
+			logfields.SourceIP:        vrfKey.SourceIP,
+			logfields.DestinationCIDR: vrfKey.DestCIDR,
+		})
+
+		if err := srv6map.GetVRFMap(vrfKey).Delete(vrfKey); err != nil {
+			logger.WithError(err).Error("Error removing SRv6 VRF mapping")
+		} else {
+			logger.Info("SRv6 VRF mapping removed")
+		}
+	}
+}
+
 // reconcilePoliciesAndSIDs is responsible for reconciling the state of the
 // manager (i.e. the desired state) with the actual state of the node (SRv6
 // policy map entries and SIDs).
@@ -280,7 +482,22 @@ func (manager *Manager) reconcilePoliciesAndSIDs() {
 	// only then removing obsolete ones we make sure there will be no connectivity disruption
 	manager.addMissingSRv6PolicyRules()
 	manager.removeUnusedSRv6PolicyRules()
-	// Same note as above on the order of the next two function calls.
+
 	manager.addMissingSRv6SIDs()
 	manager.removeUnusedSRv6SIDs()
+}
+
+// reconcileVRFMappings is responsible for reconciling the state of the
+// manager (i.e. the desired state) with the actual state of the node (SRv6
+// VRF mapping maps).
+//
+// Whenever it encounters an error, it will just log it and move to the next
+// item, in order to reconcile as many states as possible.
+func (manager *Manager) reconcileVRFMappings() {
+	if !manager.k8sCacheSyncedChecker.K8sCacheIsSynced() {
+		return
+	}
+
+	manager.addMissingSRv6VRFMappings()
+	manager.removeUnusedSRv6VRFMappings()
 }

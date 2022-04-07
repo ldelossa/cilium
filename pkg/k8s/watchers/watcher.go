@@ -179,6 +179,10 @@ type egressGatewayManager interface {
 type srv6Manager interface {
 	OnAddSRv6Policy(config srv6.EgressPolicy)
 	OnDeleteSRv6Policy(configID types.NamespacedName)
+	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnAddSRv6VRF(vrf srv6.VRF)
+	OnDeleteSRv6VRF(vrfID types.NamespacedName)
 }
 
 type envoyConfigManager interface {
@@ -557,6 +561,8 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			k.ciliumEgressNATPolicyInit(ciliumNPClient)
 		case k8sAPIGroupCiliumSRv6EgressPolicyV2:
 			k.ciliumSRv6EgressPolicyInit(ciliumNPClient)
+		case k8sAPIGroupCiliumSRv6VRFV2:
+			k.ciliumSRv6VRFInit(ciliumNPClient)
 		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2:
 			k.ciliumClusterwideEnvoyConfigInit(ciliumNPClient)
 		case k8sAPIGroupCiliumEnvoyConfigV2:
