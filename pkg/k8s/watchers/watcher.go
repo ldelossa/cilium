@@ -184,6 +184,10 @@ type egressGatewayManager interface {
 type srv6Manager interface {
 	OnAddSRv6Policy(config srv6.EgressPolicy)
 	OnDeleteSRv6Policy(configID types.NamespacedName)
+	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnAddSRv6VRF(vrf srv6.VRF)
+	OnDeleteSRv6VRF(vrfID types.NamespacedName)
 }
 
 type envoyConfigManager interface {
@@ -396,7 +400,7 @@ func (k *K8sWatcher) resourceGroups() []string {
 		synced.CRDResourceName(v2alpha1.CENPName):    k8sAPIGroupCiliumEgressNATPolicyV2,
 		synced.CRDResourceName(v2alpha1.CESName):     k8sAPIGroupCiliumEndpointSliceV2Alpha1,
 		synced.CRDResourceName(v2alpha1.CSREPName):   k8sAPIGroupCiliumSRv6EgressPolicyV2,
-		synced.CRDResourceName(v2alpha1.CSRVRFName):  "SKIP", // TODO
+		synced.CRDResourceName(v2alpha1.CSRVRFName):  k8sAPIGroupCiliumSRv6VRFV2,
 		synced.CRDResourceName(v2alpha1.CCECName):    k8sAPIGroupCiliumClusterwideEnvoyConfigV2Alpha1,
 		synced.CRDResourceName(v2alpha1.CECName):     k8sAPIGroupCiliumEnvoyConfigV2Alpha1,
 		synced.CRDResourceName(v2alpha1.BGPPName):    "SKIP", // Handled in BGP control plane
@@ -518,6 +522,8 @@ func (k *K8sWatcher) EnableK8sWatcher(ctx context.Context, resources []string) e
 			k.ciliumEgressNATPolicyInit(ciliumNPClient)
 		case k8sAPIGroupCiliumSRv6EgressPolicyV2:
 			k.ciliumSRv6EgressPolicyInit(ciliumNPClient)
+		case k8sAPIGroupCiliumSRv6VRFV2:
+			k.ciliumSRv6VRFInit(ciliumNPClient)
 		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2Alpha1:
 			k.ciliumClusterwideEnvoyConfigInit(ciliumNPClient)
 		case k8sAPIGroupCiliumEnvoyConfigV2Alpha1:
