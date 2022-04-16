@@ -1075,8 +1075,10 @@ handle_srv6(struct __ctx_buff *ctx)
 		if (!sid)
 			return CTX_ACT_OK;
 
-		/* TODO: Implement SRv6 encapsulation. */
-		break;
+		srv6_store_meta_sid(ctx, sid);
+		ctx_store_meta(ctx, CB_SRV6_VRF_ID, *vrf_id);
+		ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+		return DROP_MISSED_TAIL_CALL;
 # endif
 # ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
@@ -1101,7 +1103,10 @@ handle_srv6(struct __ctx_buff *ctx)
 		if (!sid)
 			return CTX_ACT_OK;
 
-		/* TODO: Implement SRv6 encapsulation. */
+		srv6_store_meta_sid(ctx, sid);
+		ctx_store_meta(ctx, CB_SRV6_VRF_ID, *vrf_id);
+		ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+		return DROP_MISSED_TAIL_CALL;
 		break;
 # endif
 	}
