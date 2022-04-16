@@ -250,6 +250,18 @@ handle_ipv6(struct __ctx_buff *ctx, __u32 secctx, const bool from_host)
 		return CTX_ACT_OK;
 
 skip_host_firewall:
+#ifdef ENABLE_SRV6
+	if (!from_host) {
+		if (srv6_lookup_sid(&ip6->daddr)) {
+			/* This packet is destined to an SID so we need to decapsulate it
+			 * and forward it.
+			 */
+			ep_tail_call(ctx, CILIUM_CALL_SRV6_DECAP);
+			return DROP_MISSED_TAIL_CALL;
+		}
+	}
+#endif /* ENABLE_SRV6 */
+
 	if (from_host) {
 		/* If we are attached to cilium_host at egress, this will
 		 * rewrite the destination MAC address to the MAC of cilium_net.
@@ -1037,6 +1049,7 @@ static __always_inline
 handle_srv6(struct __ctx_buff *ctx)
 {
 	__u32 *vrf_id, dst_id;
+	struct srv6_ipv6_2tuple *outer_ips;
 	struct remote_endpoint_info *ep;
 	void *data, *data_end;
 #ifdef ENABLE_IPV6
@@ -1056,6 +1069,12 @@ handle_srv6(struct __ctx_buff *ctx)
 	case bpf_htons(ETH_P_IPV6):
 		if (!revalidate_data(ctx, &data, &data_end, &ip6))
 			return DROP_INVALID;
+
+		outer_ips = srv6_lookup_state_entry6(ip6);
+		if (outer_ips) {
+			ep_tail_call(ctx, CILIUM_CALL_SRV6_REPLY);
+			return DROP_MISSED_TAIL_CALL;
+		}
 
 		ep = lookup_ip6_remote_endpoint((union v6addr *)&ip6->daddr);
 		if (ep) {
@@ -1084,6 +1103,12 @@ handle_srv6(struct __ctx_buff *ctx)
 	case bpf_htons(ETH_P_IP):
 		if (!revalidate_data(ctx, &data, &data_end, &ip4))
 			return DROP_INVALID;
+
+		outer_ips = srv6_lookup_state_entry4(ip4);
+		if (outer_ips) {
+			ep_tail_call(ctx, CILIUM_CALL_SRV6_REPLY);
+			return DROP_MISSED_TAIL_CALL;
+		}
 
 		ep = lookup_ip4_remote_endpoint(ip4->daddr);
 		if (ep) {

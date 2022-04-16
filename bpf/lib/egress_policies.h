@@ -162,6 +162,17 @@ srv6_lookup_policy6(__u32 vrf_id, const struct in6_addr *dip)
 	return map_lookup_elem(&SRV6_POLICY_MAP6, &key);
 }
 
+static __always_inline __u32
+srv6_lookup_sid(const struct in6_addr *sid)
+{
+	__u32 *vrf_id;
+
+	vrf_id = map_lookup_elem(&SRV6_SID_MAP, sid);
+	if (vrf_id)
+		return *vrf_id;
+	return 0;
+}
+
 # ifndef SKIP_SRV6_HANDLING
 static __always_inline __u64 ctx_adjust_hroom_flags(void)
 {
@@ -197,6 +208,103 @@ srv6_encapsulation(struct __ctx_buff *ctx, int growth, __u16 new_payload_len,
 			    sid, sizeof(struct in6_addr), 0) < 0)
 		return DROP_WRITE_ERROR;
 	return 0;
+}
+
+static __always_inline int
+srv6_decapsulation(struct __ctx_buff *ctx)
+{
+	__u16 new_proto = bpf_htons(ETH_P_IP);
+	void *data, *data_end;
+	struct ipv6hdr *ip6;
+	int shrink;
+
+	if (!revalidate_data(ctx, &data, &data_end, &ip6))
+		return DROP_INVALID;
+
+	switch (ip6->nexthdr) {
+	case IPPROTO_IPIP:
+		if (ctx_change_proto(ctx, new_proto, 0) < 0)
+			return DROP_WRITE_ERROR;
+		if (ctx_store_bytes(ctx, offsetof(struct ethhdr, h_proto),
+				    &new_proto, sizeof(new_proto), 0) < 0)
+			return DROP_WRITE_ERROR;
+		/* ctx_change_proto above shrinks the packet from IPv6 header
+		 * length to IPv4 header length. It removes that space from the
+		 * same header we will later delete.
+		 * Thus, deduce this space from the next packet shrinking.
+		 */
+		shrink = sizeof(struct iphdr);
+		break;
+	case IPPROTO_IPV6:
+		shrink = sizeof(struct ipv6hdr);
+		break;
+	default:
+		return DROP_INVALID;
+	}
+
+	/* Remove the outer IPv6 header. */
+	if (ctx_adjust_hroom(ctx, -shrink, BPF_ADJ_ROOM_MAC,
+			     ctx_adjust_hroom_flags()))
+		return DROP_INVALID;
+	return 0;
+}
+
+static __always_inline int
+srv6_create_state_entry(struct __ctx_buff *ctx)
+{
+	struct srv6_ipv6_2tuple *outer_ips;
+	void *data, *data_end;
+	struct ipv6hdr *ip6;
+
+	if (!revalidate_data(ctx, &data, &data_end, &ip6))
+		return DROP_INVALID;
+
+	outer_ips = (struct srv6_ipv6_2tuple *)&ip6->saddr;
+
+	switch (ip6->nexthdr) {
+	case IPPROTO_IPV6: {
+		struct ipv6hdr *inner = ip6 + 1;
+		struct srv6_ipv6_2tuple *inner_ips;
+
+		if ((void *)inner + sizeof(*inner) > data_end)
+			return DROP_INVALID;
+		inner_ips = (struct srv6_ipv6_2tuple *)&inner->saddr;
+
+		if (map_update_elem(&SRV6_STATE_MAP6, inner_ips, outer_ips, 0) < 0)
+			return DROP_INVALID;
+	}
+    # ifdef ENABLE_IPV4
+	case IPPROTO_IPIP: {
+		struct iphdr *inner = (struct iphdr *)(ip6 + 1);
+		struct srv6_ipv4_2tuple *inner_ips;
+
+		if ((void *)inner + sizeof(*inner) > data_end)
+			return DROP_INVALID;
+		inner_ips = (struct srv6_ipv4_2tuple *)&inner->saddr;
+
+		if (map_update_elem(&SRV6_STATE_MAP4, inner_ips, outer_ips, 0) < 0)
+			return DROP_INVALID;
+	}
+    # endif /* ENABLE_IPV4 */
+	}
+
+	return 0;
+}
+
+# ifdef ENABLE_IPV4
+static __always_inline struct srv6_ipv6_2tuple *
+srv6_lookup_state_entry4(struct iphdr *ip4)
+{
+	return map_lookup_elem(&SRV6_STATE_MAP4,
+			       (struct srv6_ipv4_2tuple *)&ip4->saddr);
+}
+# endif /* ENABLE_IPV4 */
+
+static __always_inline struct srv6_ipv6_2tuple *
+srv6_lookup_state_entry6(struct ipv6hdr *ip6)
+{
+	return map_lookup_elem(&SRV6_STATE_MAP6,
+			       (struct srv6_ipv6_2tuple *)&ip6->saddr);
 }
 
 static __always_inline int
@@ -304,6 +412,48 @@ srv6_handling(struct __ctx_buff *ctx, __u32 vrf_id, struct in6_addr *dst_sid)
 	}
 }
 
+static __always_inline int
+srv6_reply(struct __ctx_buff *ctx)
+{
+	struct srv6_ipv6_2tuple *outer_ips;
+	void *data, *data_end;
+	struct ipv6hdr *ip6;
+    # ifdef ENABLE_IPV4
+	struct iphdr *ip4;
+    # endif /* ENABLE_IPV4 */
+	__u16 proto;
+
+	if (!validate_ethertype(ctx, &proto))
+		return DROP_UNSUPPORTED_L2;
+
+	switch (proto) {
+	case bpf_htons(ETH_P_IPV6):
+		if (!revalidate_data(ctx, &data, &data_end, &ip6))
+			return DROP_INVALID;
+
+		outer_ips = srv6_lookup_state_entry6(ip6);
+		if (!outer_ips)
+			return DROP_MISSING_SRV6_STATE;
+
+		return srv6_handling6(ctx, &outer_ips->src,
+				      (struct in6_addr *)&outer_ips->dst);
+    # ifdef ENABLE_IPV4
+	case bpf_htons(ETH_P_IP):
+		if (!revalidate_data(ctx, &data, &data_end, &ip4))
+			return DROP_INVALID;
+
+		outer_ips = srv6_lookup_state_entry4(ip4);
+		if (!outer_ips)
+			return DROP_MISSING_SRV6_STATE;
+
+		return srv6_handling4(ctx, &outer_ips->src,
+				      (struct in6_addr *)&outer_ips->dst);
+    # endif /* ENABLE_IPV4 */
+	}
+
+	return CTX_ACT_OK;
+}
+
 static __always_inline void
 srv6_load_meta_sid(struct __ctx_buff *ctx, struct in6_addr *sid)
 {
@@ -339,6 +489,38 @@ int tail_srv6_encap(struct __ctx_buff *ctx)
 					      METRIC_EGRESS);
 
 	send_trace_notify(ctx, TRACE_TO_STACK, SECLABEL, 0, 0, 0, TRACE_REASON_UNKNOWN, 0);
+	return CTX_ACT_OK;
+}
+
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_SRV6_DECAP)
+int tail_srv6_decap(struct __ctx_buff *ctx)
+{
+	int ret = 0;
+
+	ret = srv6_create_state_entry(ctx);
+	if (ret < 0)
+		goto error_drop;
+
+	ret = srv6_decapsulation(ctx);
+	if (ret < 0)
+		goto error_drop;
+
+	send_trace_notify(ctx, TRACE_TO_STACK, SECLABEL, 0, 0, 0, TRACE_REASON_UNKNOWN, 0);
+	return CTX_ACT_OK;
+error_drop:
+		return send_drop_notify_error(ctx, SECLABEL, ret, CTX_ACT_DROP,
+					      METRIC_EGRESS);
+}
+
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_SRV6_REPLY)
+int tail_srv6_reply(struct __ctx_buff *ctx)
+{
+	int ret;
+
+	ret = srv6_reply(ctx);
+	if (ret < 0)
+		return send_drop_notify_error(ctx, SECLABEL, ret, CTX_ACT_DROP,
+					      METRIC_EGRESS);
 	return CTX_ACT_OK;
 }
 # endif /* SKIP_SRV6_HANDLING */
