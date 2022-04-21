@@ -134,6 +134,9 @@ func (in *CiliumBGPVirtualRouter) DeepEqual(other *CiliumBGPVirtualRouter) bool 
 	if in.ExportPodCIDR != other.ExportPodCIDR {
 		return false
 	}
+	if in.MapSRv6VRFs != other.MapSRv6VRFs {
+		return false
+	}
 	if ((in.Neighbors != nil) && (other.Neighbors != nil)) || ((in.Neighbors == nil) != (other.Neighbors == nil)) {
 		in, other := &in.Neighbors, &other.Neighbors
 		if other == nil {
