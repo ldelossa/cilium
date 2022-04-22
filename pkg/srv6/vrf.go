@@ -24,9 +24,12 @@ type VRF struct {
 	// id is the parsed config name and namespace
 	id types.NamespacedName
 
-	vrfID             uint32
-	importRouteTarget string
-	rules             []VRFRule
+	// Those two fields are exposed to the BGP manager can deduce which BGP
+	// route should be installed in which VRF.
+	VRFID             uint32
+	ImportRouteTarget string
+
+	rules []VRFRule
 }
 
 // VRFRule is the internal representation of rules from CiliumSRv6VRF.
@@ -122,8 +125,8 @@ func ParseVRF(csrvrf *v2alpha1.CiliumSRv6VRF) (*VRF, error) {
 		id: types.NamespacedName{
 			Name: name,
 		},
-		vrfID:             csrvrf.Spec.VRFID,
-		importRouteTarget: csrvrf.Spec.ImportRouteTarget,
+		VRFID:             csrvrf.Spec.VRFID,
+		ImportRouteTarget: csrvrf.Spec.ImportRouteTarget,
 		rules:             rules,
 	}, nil
 }

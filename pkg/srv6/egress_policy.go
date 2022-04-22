@@ -20,9 +20,9 @@ type EgressPolicy struct {
 	// id is the parsed policy name and namespace
 	id types.NamespacedName
 
-	vrfID    uint32
-	dstCIDRs []*net.IPNet
-	sid      ciliumTypes.IPv6
+	VRFID    uint32
+	DstCIDRs []*net.IPNet
+	SID      ciliumTypes.IPv6
 }
 
 // PolicyID includes policy name and namespace
@@ -53,9 +53,9 @@ func ParsePolicy(csrep *v2alpha1.CiliumSRv6EgressPolicy) (*EgressPolicy, error) 
 		id: types.NamespacedName{
 			Name: name,
 		},
-		vrfID:    csrep.Spec.VRFID,
-		dstCIDRs: dstCidrList,
-		sid:      sid,
+		VRFID:    csrep.Spec.VRFID,
+		DstCIDRs: dstCidrList,
+		SID:      sid,
 	}, nil
 }
 
