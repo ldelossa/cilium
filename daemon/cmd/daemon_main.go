@@ -1967,7 +1967,7 @@ func (d *Daemon) instantiateBGPControlPlane(ctx context.Context) error {
 	// goBGP is currently the only supported RouterManager, if more are
 	// implemented replace this hard-coding with a construction switch.
 	rm := gobgp.NewBGPRouterManager()
-	ctrl, err := bgpv1.NewController(d.ctx, rm)
+	ctrl, err := bgpv1.NewController(d.ctx, rm, d.srv6Manager)
 	if err != nil {
 		return fmt.Errorf("failed to instantiate BGP Control Plane: %v", err)
 	}
