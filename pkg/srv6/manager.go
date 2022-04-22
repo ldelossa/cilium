@@ -79,6 +79,37 @@ func (manager *Manager) runReconciliationAfterK8sSync() {
 	}()
 }
 
+// GetAllVRFs returns a slice with all VRFs known to the SRv6 manager.
+func (manager *Manager) GetAllVRFs() []*VRF {
+	vrfs := make([]*VRF, len(manager.vrfs))
+	for _, vrf := range manager.vrfs {
+		vrfs = append(vrfs, vrf)
+	}
+	return vrfs
+}
+
+// GetVRFs returns a slice with VRFs known to the SRv6 manager that have the
+// given import route-target.
+func (manager *Manager) GetVRFs(importRouteTarget string) []*VRF {
+	vrfs := make([]*VRF, len(manager.vrfs))
+	for _, vrf := range manager.vrfs {
+		if vrf.ImportRouteTarget == importRouteTarget {
+			vrfs = append(vrfs, vrf)
+		}
+	}
+	return vrfs
+}
+
+// GetEgressPolicies returns a slie with the SRv6 egress policies known to the
+// SRv6 manager.
+func (manager *Manager) GetEgressPolicies() []*EgressPolicy {
+	policies := make([]*EgressPolicy, len(manager.policies))
+	for _, policy := range manager.policies {
+		policies = append(policies, policy)
+	}
+	return policies
+}
+
 // Event handlers
 
 // OnAddSRv6Policy and updates the manager internal state with the policy
@@ -219,23 +250,23 @@ func (manager *Manager) addMissingSRv6PolicyRules() {
 
 	var err error
 	for _, policy := range manager.policies {
-		for _, dstCIDR := range policy.dstCIDRs {
+		for _, dstCIDR := range policy.DstCIDRs {
 			policyKey := srv6map.PolicyKey{
-				VRFID:    policy.vrfID,
+				VRFID:    policy.VRFID,
 				DestCIDR: dstCIDR,
 			}
 
 			policyVal, policyPresent := srv6Policies[policyKey]
-			if policyPresent && policyVal.SID == policy.sid {
+			if policyPresent && policyVal.SID == policy.SID {
 				continue
 			}
 
-			err = srv6map.GetPolicyMap(policyKey).Update(policyKey, policy.sid)
+			err = srv6map.GetPolicyMap(policyKey).Update(policyKey, policy.SID)
 
 			logger := log.WithFields(logrus.Fields{
-				logfields.VRF:             policy.vrfID,
+				logfields.VRF:             policy.VRFID,
 				logfields.DestinationCIDR: *dstCIDR,
-				logfields.SID:             policy.sid,
+				logfields.SID:             policy.SID,
 			})
 			if err != nil {
 				logger.WithError(err).Error("Error applying egress SRv6 policy")
@@ -277,8 +308,8 @@ func (manager *Manager) removeUnusedSRv6PolicyRules() {
 nextPolicyKey:
 	for policyKey := range srv6Policies {
 		for _, policy := range manager.policies {
-			for _, dstCIDR := range policy.dstCIDRs {
-				if policyKey.Match(policy.vrfID, dstCIDR) {
+			for _, dstCIDR := range policy.DstCIDRs {
+				if policyKey.Match(policy.VRFID, dstCIDR) {
 					continue nextPolicyKey
 				}
 			}
@@ -309,19 +340,19 @@ func (manager *Manager) addMissingSRv6SIDs() {
 	var err error
 	for _, policy := range manager.policies {
 		sidKey := srv6map.SIDKey{
-			SID: policy.sid,
+			SID: policy.SID,
 		}
 
 		sidVal, sidPresent := srv6SIDs[sidKey]
-		if sidPresent && sidVal.VRFID == policy.vrfID {
+		if sidPresent && sidVal.VRFID == policy.VRFID {
 			continue
 		}
 
-		err = srv6map.SRv6SIDMap.Update(sidKey, policy.vrfID)
+		err = srv6map.SRv6SIDMap.Update(sidKey, policy.VRFID)
 
 		logger := log.WithFields(logrus.Fields{
-			logfields.SID: policy.sid,
-			logfields.VRF: policy.vrfID,
+			logfields.SID: policy.SID,
+			logfields.VRF: policy.VRFID,
 		})
 		if err != nil {
 			logger.WithError(err).Error("Error adding SID")
@@ -343,7 +374,7 @@ func (manager *Manager) removeUnusedSRv6SIDs() {
 nextSIDKey:
 	for sidKey := range srv6SIDs {
 		for _, policy := range manager.policies {
-			if sidKey.SID == policy.sid {
+			if sidKey.SID == policy.SID {
 				continue nextSIDKey
 			}
 		}
@@ -394,17 +425,17 @@ func (manager *Manager) addMissingSRv6VRFMappings() {
 						}
 						vrfVal, vrfPresent := srv6VRFs[vrfKey]
 
-						if vrfPresent && vrfVal.ID == vrf.vrfID {
+						if vrfPresent && vrfVal.ID == vrf.VRFID {
 							continue
 						}
 
 						logger := log.WithFields(logrus.Fields{
 							logfields.SourceIP:        endpointIP,
 							logfields.DestinationCIDR: *dstCIDR,
-							logfields.VRF:             vrf.vrfID,
+							logfields.VRF:             vrf.VRFID,
 						})
 
-						if err := srv6map.GetVRFMap(vrfKey).Update(vrfKey, vrf.vrfID); err != nil {
+						if err := srv6map.GetVRFMap(vrfKey).Update(vrfKey, vrf.VRFID); err != nil {
 							logger.WithError(err).Error("Error applying SRv6 VRF mapping")
 						} else {
 							logger.Info("SRv6 VRF mapping applied")
