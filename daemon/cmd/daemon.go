@@ -649,7 +649,7 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	}
 
 	if option.Config.EnableSRv6 {
-		d.srv6Manager = srv6.NewSRv6Manager(&d)
+		d.srv6Manager = srv6.NewSRv6Manager(&d, d.identityAllocator)
 	}
 
 	d.k8sWatcher = watchers.NewK8sWatcher(

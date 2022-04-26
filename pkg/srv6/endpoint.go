@@ -27,7 +27,8 @@ type endpointMetadata struct {
 // endpointID includes endpoint name and namespace
 type endpointID = types.NamespacedName
 
-func getEndpointMetadata(endpoint *k8sTypes.CiliumEndpoint) (*endpointMetadata, error) {
+func getEndpointMetadata(endpoint *k8sTypes.CiliumEndpoint,
+	identityLabels labels.Labels) (*endpointMetadata, error) {
 	var ips []net.IP
 	id := types.NamespacedName{
 		Name:      endpoint.GetName(),
@@ -53,7 +54,7 @@ func getEndpointMetadata(endpoint *k8sTypes.CiliumEndpoint) (*endpointMetadata, 
 
 	data := &endpointMetadata{
 		ips:    ips,
-		labels: labels.NewLabelsFromModel(endpoint.Identity.Labels).K8sStringMap(),
+		labels: identityLabels.K8sStringMap(),
 		id:     id,
 	}
 

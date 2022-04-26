@@ -4,18 +4,24 @@
 package srv6
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 	netutils "k8s.io/utils/net"
 
+	"github.com/cilium/cilium/pkg/identity"
+	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 var (
@@ -44,15 +50,20 @@ type Manager struct {
 
 	// epDataStore stores endpointId to endpoint metadata mapping
 	epDataStore map[endpointID]*endpointMetadata
+
+	// identityAllocator is used to fetch identity labels for endpoint updates
+	identityAllocator identityCache.IdentityAllocator
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
-func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker) *Manager {
+func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker,
+	identityAllocator identityCache.IdentityAllocator) *Manager {
 	manager := &Manager{
 		k8sCacheSyncedChecker: k8sCacheSyncedChecker,
 		policies:              make(map[policyID]*EgressPolicy),
 		vrfs:                  make(map[vrfID]*VRF),
 		epDataStore:           make(map[endpointID]*endpointMetadata),
+		identityAllocator:     identityAllocator,
 	}
 
 	manager.runReconciliationAfterK8sSync()
@@ -191,6 +202,7 @@ func (manager *Manager) OnDeleteSRv6VRF(vrfID vrfID) {
 
 // OnUpdateEndpoint is the event handler for endpoint additions and updates.
 func (manager *Manager) OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
+	var identityLabels labels.Labels
 	var epData *endpointMetadata
 	var err error
 
@@ -208,7 +220,13 @@ func (manager *Manager) OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
 		return
 	}
 
-	if epData, err = getEndpointMetadata(endpoint); err != nil {
+	if identityLabels, err = manager.getIdentityLabels(uint32(endpoint.Identity.ID)); err != nil {
+		logger.WithError(err).
+			Error("Failed to get idenity labels for endpoint, skipping update of SRv6 maps.")
+		return
+	}
+
+	if epData, err = getEndpointMetadata(endpoint, identityLabels); err != nil {
 		logger.WithError(err).
 			Error("Failed to get valid endpoint metadata, skipping update of SRv6 maps.")
 		return
@@ -232,6 +250,22 @@ func (manager *Manager) OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
 	delete(manager.epDataStore, id)
 
 	manager.reconcileVRFMappings()
+}
+
+// getIdentityLabels waits for the global identities to be populated to the cache,
+// then looks up identity by ID from the cached identity allocator and return its labels.
+func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Labels, error) {
+	identityCtx, cancel := context.WithTimeout(context.Background(), option.Config.KVstoreConnectivityTimeout)
+	defer cancel()
+	if err := manager.identityAllocator.WaitForInitialGlobalIdentities(identityCtx); err != nil {
+		return nil, fmt.Errorf("failed to wait for initial global identities: %v", err)
+	}
+
+	identity := manager.identityAllocator.LookupIdentityByID(identityCtx, identity.NumericIdentity(securityIdentity))
+	if identity == nil {
+		return nil, fmt.Errorf("identity %d not found", securityIdentity)
+	}
+	return identity.Labels, nil
 }
 
 // addMissingSRv6PolicyRules is responsible for adding any missing egress SRv6
