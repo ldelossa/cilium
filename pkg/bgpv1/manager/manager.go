@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/srv6"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
@@ -224,6 +225,7 @@ func (m *BGPRouterManager) registerBGPServer(ctx context.Context, c *v2alpha1api
 				AdvertiseInactiveRoutes: true,
 			},
 		},
+		CState: cstate,
 	}
 
 	if s, err = NewServerWithConfig(ctx, globalConfig); err != nil {
@@ -344,6 +346,38 @@ func (m *BGPRouterManager) reconcileBGPConfig(ctx context.Context, sc *ServerWit
 	// all reconcilers succeeded so update Server's config with new peering config.
 	sc.Config = newc
 	return nil
+}
+
+// MapSRv6EgressPolicy will map any discovered VPNv4 routes which match passed in
+// VRF's route reflectors into srv6.EgressPolicy(s) and return these to the caller.
+func (m *BGPRouterManager) MapSRv6EgressPolicy(ctx context.Context, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	l := log.WithFields(
+		logrus.Fields{
+			"component": "manager.MapSRv6EgressPolicy",
+		},
+	)
+	l.Info("Mapping SRv6 VRFs to SRv6 egress policies.")
+
+	var (
+		policies []*srv6.EgressPolicy
+	)
+
+	for localASN, bgp := range m.Servers {
+		if bgp.Config.MapSRv6VRFs {
+			serverPolicies, err := bgp.Server.MapSRv6EgressPolicy(ctx, vrfs)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get SRv6 policies from router with ASN %d", localASN)
+			}
+
+			policies = append(policies, serverPolicies...)
+		}
+	}
+
+	l.WithField("count", len(policies)).Info("Mapped VPNv4 paths to egress policies")
+	return policies, nil
 }
 
 // GetPeers gets peering state from previously initialized bgp instances.

@@ -147,6 +147,7 @@ func preflightReconciler(
 				AdvertiseInactiveRoutes: true,
 			},
 		},
+		CState: cstate,
 	}
 
 	// stop the old BgpServer
@@ -290,7 +291,7 @@ func neighborReconciler(
 	// create new neighbors
 	for _, n := range toCreate {
 		l.Infof("Adding peer %v %v to local ASN %v", n.PeerAddress, n.PeerASN, newc.LocalASN)
-		if err := sc.Server.AddNeighbor(ctx, types.NeighborRequest{Neighbor: n}); err != nil {
+		if err := sc.Server.AddNeighbor(ctx, types.NeighborRequest{Neighbor: n, VR: newc}); err != nil {
 			return fmt.Errorf("failed while reconciling neighbor %v %v: %w", n.PeerAddress, n.PeerASN, err)
 		}
 	}

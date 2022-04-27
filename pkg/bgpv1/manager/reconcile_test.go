@@ -90,6 +90,7 @@ func TestPreflightReconciler(t *testing.T) {
 					RouterID:   tt.routerID,
 					ListenPort: int32(tt.localPort),
 				},
+				CState: &agent.ControlPlaneState{},
 			}
 			testSC, err := NewServerWithConfig(context.Background(), srvParams)
 			if err != nil {
@@ -213,6 +214,7 @@ func TestNeighborReconciler(t *testing.T) {
 					RouterID:   "127.0.0.1",
 					ListenPort: -1,
 				},
+				CState: &agent.ControlPlaneState{},
 			}
 			testSC, err := NewServerWithConfig(context.Background(), srvParams)
 			if err != nil {
@@ -236,6 +238,7 @@ func TestNeighborReconciler(t *testing.T) {
 						PeerAddress: n,
 						PeerASN:     64124,
 					},
+					VR: oldc,
 				})
 			}
 			testSC.Config = oldc
@@ -373,6 +376,7 @@ func TestExportPodCIDRReconciler(t *testing.T) {
 					RouterID:   "127.0.0.1",
 					ListenPort: -1,
 				},
+				CState: &agent.ControlPlaneState{},
 			}
 			oldc := &v2alpha1api.CiliumBGPVirtualRouter{
 				LocalASN:      64125,
@@ -864,6 +868,7 @@ func TestLBServiceReconciler(t *testing.T) {
 					RouterID:   "127.0.0.1",
 					ListenPort: -1,
 				},
+				CState: &agent.ControlPlaneState{},
 			}
 			oldc := &v2alpha1api.CiliumBGPVirtualRouter{
 				LocalASN:        64125,
@@ -1004,6 +1009,7 @@ func TestReconcileAfterServerReinit(t *testing.T) {
 			RouterID:   "127.0.0.1",
 			ListenPort: -1,
 		},
+		CState: &agent.ControlPlaneState{},
 	}
 
 	testSC, err := NewServerWithConfig(context.Background(), srvParams)

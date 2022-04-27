@@ -8,7 +8,9 @@ import (
 	"net/netip"
 
 	"github.com/cilium/cilium/api/v1/models"
+	"github.com/cilium/cilium/pkg/bgpv1/agent"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
+	"github.com/cilium/cilium/pkg/srv6"
 )
 
 // BGPGlobal contains high level BGP configuration for given instance.
@@ -40,6 +42,7 @@ type Advertisement struct {
 // NeighborRequest contains neighbor parameters used when enabling or disabling peer
 type NeighborRequest struct {
 	Neighbor *v2alpha1api.CiliumBGPNeighbor
+	VR       *v2alpha1api.CiliumBGPVirtualRouter
 }
 
 // PathRequest contains parameters for advertising or withdrawing routes
@@ -65,6 +68,7 @@ type GetBGPResponse struct {
 // ServerParameters contains information for underlying bgp implementation layer to initializing BGP process.
 type ServerParameters struct {
 	Global BGPGlobal
+	CState *agent.ControlPlaneState
 }
 
 // Router is vendor-agnostic cilium bgp configuration layer. Parameters of this layer
@@ -89,4 +93,7 @@ type Router interface {
 
 	// GetBGP returns configured BGP global parameters
 	GetBGP(ctx context.Context) (GetBGPResponse, error)
+
+	// Map VRFs into CiliumSRv6EgressPolicies
+	MapSRv6EgressPolicy(ctx context.Context, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error)
 }

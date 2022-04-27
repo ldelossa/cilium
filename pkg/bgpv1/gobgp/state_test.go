@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/logging"
@@ -55,6 +56,7 @@ func TestGetPeerState(t *testing.T) {
 				RouterID:   "127.0.0.1",
 				ListenPort: -1,
 			},
+			CState: &agent.ControlPlaneState{},
 		}
 		t.Run(tt.name, func(t *testing.T) {
 			testSC, err := NewGoBGPServerWithConfig(context.Background(), log, srvParams)
@@ -79,6 +81,7 @@ func TestGetPeerState(t *testing.T) {
 						PeerAddress: n.peerAddress,
 						PeerASN:     n.peerASN,
 					},
+					VR: router,
 				})
 			}
 
