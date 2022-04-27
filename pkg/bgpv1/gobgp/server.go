@@ -12,6 +12,7 @@ import (
 	"github.com/osrg/gobgp/v3/pkg/server"
 	apb "google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/cilium/cilium/pkg/bgpv1/agent"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 )
 
@@ -27,6 +28,12 @@ var (
 	GoBGPIPv4Family = &gobgp.Family{
 		Afi:  gobgp.Family_AFI_IP,
 		Safi: gobgp.Family_SAFI_UNICAST,
+	}
+	// GoBGPVPNv4Family is a read-only pointer to a gobgp.Family structure
+	// representing VPNv4 address family.
+	GoBGPVPNv4Family = &gobgp.Family{
+		Afi:  gobgp.Family_AFI_IP,
+		Safi: gobgp.Family_SAFI_MPLS_VPN,
 	}
 )
 
@@ -71,7 +78,7 @@ type ServerWithConfig struct {
 //
 // Canceling the provided context will kill the BgpServer along with calling the
 // underlying BgpServer's Stop() method.
-func NewServerWithConfig(ctx context.Context, startReq *gobgp.StartBgpRequest) (*ServerWithConfig, error) {
+func NewServerWithConfig(ctx context.Context, startReq *gobgp.StartBgpRequest, cstate *agent.ControlPlaneState) (*ServerWithConfig, error) {
 	logger := NewServerLogger(log.Logger, startReq.Global.Asn)
 
 	s := server.NewBgpServer(server.LoggerOption(logger))
@@ -82,16 +89,40 @@ func NewServerWithConfig(ctx context.Context, startReq *gobgp.StartBgpRequest) (
 	}
 
 	// will log out any peer changes.
-	watchRequest := &gobgp.WatchEventRequest{
+	watchRequestPeer := &gobgp.WatchEventRequest{
 		Peer: &gobgp.WatchEventRequest_Peer{},
 	}
-	err := s.WatchEvent(ctx, watchRequest, func(r *gobgp.WatchEventResponse) {
+	err := s.WatchEvent(ctx, watchRequestPeer, func(r *gobgp.WatchEventResponse) {
 		if p := r.GetPeer(); p != nil && p.Type == gobgp.WatchEventResponse_PeerEvent_STATE {
 			logger.l.Info(p)
 		}
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure logging for virtual router with local-asn %v: %w", startReq.Global.Asn, err)
+	}
+
+	// will call reconciliation on table updates.
+	watchRequestTable := &gobgp.WatchEventRequest{
+		Table: &gobgp.WatchEventRequest_Table{
+			Filters: []*gobgp.WatchEventRequest_Table_Filter{
+				{
+					Type: gobgp.WatchEventRequest_Table_Filter_ADJIN,
+					Init: true,
+				},
+				{
+					Type: gobgp.WatchEventRequest_Table_Filter_BEST,
+					Init: true,
+				},
+			},
+		},
+	}
+	err = s.WatchEvent(ctx, watchRequestTable, func(_ *gobgp.WatchEventResponse) {
+		if cstate.Sig != nil {
+			cstate.Sig.Event(struct{}{})
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure table watching for virtual router with local-asn %v: %w", startReq.Global.Asn, err)
 	}
 
 	return &ServerWithConfig{
@@ -103,7 +134,7 @@ func NewServerWithConfig(ctx context.Context, startReq *gobgp.StartBgpRequest) (
 
 // AddNeighbor will add the CiliumBGPNeighbor to the gobgp.BgpServer, creating
 // a BGP peering connection.
-func (sc *ServerWithConfig) AddNeighbor(ctx context.Context, n *v2alpha1api.CiliumBGPNeighbor) error {
+func (sc *ServerWithConfig) AddNeighbor(ctx context.Context, n *v2alpha1api.CiliumBGPNeighbor, vr *v2alpha1api.CiliumBGPVirtualRouter) error {
 	// cilium neighbor uses CIDR string, gobgp neighbor uses IP string, convert.
 	var ip net.IP
 	var err error
@@ -111,6 +142,44 @@ func (sc *ServerWithConfig) AddNeighbor(ctx context.Context, n *v2alpha1api.Cili
 		// unlikely, we validate this on CR write to k8s api.
 		return fmt.Errorf("failed to parse PeerAddress: %w", err)
 	}
+
+	var safis []*gobgp.AfiSafi
+
+	// if we are going to map VPNv4 adverts into SRv6 egress policies, specify
+	// the VPNv4 S/AFI
+	if vr.MapSRv6VRFs {
+		safis = []*gobgp.AfiSafi{
+			{
+				Config: &gobgp.AfiSafiConfig{
+					Family: GoBGPIPv6Family,
+				},
+			},
+			{
+				Config: &gobgp.AfiSafiConfig{
+					Family: GoBGPVPNv4Family,
+				},
+			},
+			{
+				Config: &gobgp.AfiSafiConfig{
+					Family: GoBGPIPv4Family,
+				},
+			},
+		}
+	} else {
+		safis = []*gobgp.AfiSafi{
+			{
+				Config: &gobgp.AfiSafiConfig{
+					Family: GoBGPIPv4Family,
+				},
+			},
+			{
+				Config: &gobgp.AfiSafiConfig{
+					Family: GoBGPIPv6Family,
+				},
+			},
+		}
+	}
+
 	peerReq := &gobgp.AddPeerRequest{
 		Peer: &gobgp.Peer{
 			Conf: &gobgp.PeerConf{
@@ -119,18 +188,7 @@ func (sc *ServerWithConfig) AddNeighbor(ctx context.Context, n *v2alpha1api.Cili
 			},
 			// tells the peer we are capable of unicast IPv4 and IPv6
 			// advertisements.
-			AfiSafis: []*gobgp.AfiSafi{
-				{
-					Config: &gobgp.AfiSafiConfig{
-						Family: GoBGPIPv4Family,
-					},
-				},
-				{
-					Config: &gobgp.AfiSafiConfig{
-						Family: GoBGPIPv6Family,
-					},
-				},
-			},
+			AfiSafis: safis,
 		},
 	}
 	if err = sc.Server.AddPeer(ctx, peerReq); err != nil {
