@@ -90,7 +90,7 @@ func TestPreflightReconciler(t *testing.T) {
 					ListenPort: int32(tt.localPort),
 				},
 			}
-			testSC, err := NewServerWithConfig(context.Background(), startReq)
+			testSC, err := NewServerWithConfig(context.Background(), startReq, &agent.ControlPlaneState{})
 			if err != nil {
 				t.Fatalf("failed to create test BgpServer: %v", err)
 			}
@@ -212,7 +212,7 @@ func TestNeighborReconciler(t *testing.T) {
 					ListenPort: -1,
 				},
 			}
-			testSC, err := NewServerWithConfig(context.Background(), startReq)
+			testSC, err := NewServerWithConfig(context.Background(), startReq, &agent.ControlPlaneState{})
 			if err != nil {
 				t.Fatalf("failed to create test BgpServer: %v", err)
 			}
@@ -229,10 +229,13 @@ func TestNeighborReconciler(t *testing.T) {
 					PeerAddress: n,
 					PeerASN:     64124,
 				})
-				testSC.AddNeighbor(context.Background(), &v2alpha1api.CiliumBGPNeighbor{
-					PeerAddress: n,
-					PeerASN:     64124,
-				})
+				testSC.AddNeighbor(context.Background(),
+					&v2alpha1api.CiliumBGPNeighbor{
+						PeerAddress: n,
+						PeerASN:     64124,
+					},
+					oldc,
+				)
 			}
 			testSC.Config = oldc
 
@@ -397,7 +400,7 @@ func TestExportPodCIDRReconciler(t *testing.T) {
 				ExportPodCIDR: tt.enabled,
 				Neighbors:     []v2alpha1api.CiliumBGPNeighbor{},
 			}
-			testSC, err := NewServerWithConfig(context.Background(), startReq)
+			testSC, err := NewServerWithConfig(context.Background(), startReq, &agent.ControlPlaneState{})
 			if err != nil {
 				t.Fatalf("failed to create test bgp server: %v", err)
 			}

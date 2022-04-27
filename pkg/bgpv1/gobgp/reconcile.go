@@ -159,7 +159,7 @@ func preflightReconciler(ctx context.Context, _ *BGPRouterManager, sc *ServerWit
 	sc.Server.Stop()
 
 	// create a new one via ServerWithConfig constructor
-	s, err := NewServerWithConfig(ctx, startReq)
+	s, err := NewServerWithConfig(ctx, startReq, cstate)
 	if err != nil {
 		l.WithError(err).Errorf("Failed to start BGP server for virtual router with local ASN %v", newc.LocalASN)
 		return fmt.Errorf("failed to start BGP server for virtual router with local ASN %v: %w", newc.LocalASN, err)
@@ -265,7 +265,7 @@ func neighborReconciler(ctx context.Context, _ *BGPRouterManager, sc *ServerWith
 	// create new neighbors
 	for _, n := range toCreate {
 		l.Infof("Adding peer %v %v to local ASN %v", n.PeerAddress, n.PeerASN, newc.LocalASN)
-		if err := sc.AddNeighbor(ctx, n); err != nil {
+		if err := sc.AddNeighbor(ctx, n, newc); err != nil {
 			return fmt.Errorf("failed while reconciling neighbor %v %v: %w", n.PeerAddress, n.PeerASN, err)
 		}
 	}
