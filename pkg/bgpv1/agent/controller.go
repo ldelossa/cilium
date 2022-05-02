@@ -94,6 +94,8 @@ type ControlPlaneState struct {
 	IPv4 net.IP
 	// The current IPv6 address of the agent, reachable externally.
 	IPv6 net.IP
+	// The Signaler attached to the BGP control plane used to signal reconciliation
+	Sig *Signaler
 }
 
 // Controller is the agent side BGP Control Plane controller.
@@ -417,6 +419,7 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 		Annotations: annoMap,
 		IPv4:        nodeaddr.GetIPv4(),
 		IPv6:        nodeaddr.GetIPv6(),
+		Sig:         &c.Sig,
 	}
 
 	// call bgp sub-systems required to apply this policy's BGP topology.
