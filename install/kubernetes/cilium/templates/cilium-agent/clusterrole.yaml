@@ -90,6 +90,7 @@ rules:
   - ciliumidentities
   - ciliumendpoints
   - ciliumnodes
+  - ciliumsrv6egresspolicies
   verbs:
   - create
 - apiGroups:

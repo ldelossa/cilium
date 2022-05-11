@@ -92,7 +92,7 @@ func (manager *Manager) runReconciliationAfterK8sSync() {
 
 // GetAllVRFs returns a slice with all VRFs known to the SRv6 manager.
 func (manager *Manager) GetAllVRFs() []*VRF {
-	vrfs := make([]*VRF, len(manager.vrfs))
+	vrfs := make([]*VRF, 0, len(manager.vrfs))
 	for _, vrf := range manager.vrfs {
 		vrfs = append(vrfs, vrf)
 	}
@@ -102,7 +102,7 @@ func (manager *Manager) GetAllVRFs() []*VRF {
 // GetVRFs returns a slice with VRFs known to the SRv6 manager that have the
 // given import route-target.
 func (manager *Manager) GetVRFs(importRouteTarget string) []*VRF {
-	vrfs := make([]*VRF, len(manager.vrfs))
+	vrfs := make([]*VRF, 0, len(manager.vrfs))
 	for _, vrf := range manager.vrfs {
 		if vrf.ImportRouteTarget == importRouteTarget {
 			vrfs = append(vrfs, vrf)
@@ -114,7 +114,7 @@ func (manager *Manager) GetVRFs(importRouteTarget string) []*VRF {
 // GetEgressPolicies returns a slie with the SRv6 egress policies known to the
 // SRv6 manager.
 func (manager *Manager) GetEgressPolicies() []*EgressPolicy {
-	policies := make([]*EgressPolicy, len(manager.policies))
+	policies := make([]*EgressPolicy, 0, len(manager.policies))
 	for _, policy := range manager.policies {
 		policies = append(policies, policy)
 	}
