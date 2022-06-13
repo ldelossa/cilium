@@ -247,6 +247,7 @@ cilium-agent [flags]
       --single-cluster-route                                    Use a single cluster route instead of per node routes
       --socket-path string                                      Sets daemon's socket path to listen for connections (default "/var/run/cilium/cilium.sock")
       --sockops-enable                                          Enable sockops when kernel supported
+      --srv6-mode string                                        Encapsulation mode for SRv6 (default "reduced")
       --state-dir string                                        Directory path to store runtime state (default "/var/run/cilium")
       --tofqdns-dns-reject-response-code string                 DNS response code for rejecting DNS requests, available options are '[nameError refused]' (default "refused")
       --tofqdns-enable-dns-compression                          Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present (default true)

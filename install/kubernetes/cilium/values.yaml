@@ -616,6 +616,9 @@ srv6:
   # -- Enable SRv6 encapsulation support.
   enabled: false
 
+  # -- Encapsulation mode for SRv6.
+  mode: reduced
+
 # -- Configure the host firewall.
 hostFirewall:
   # -- Enables the enforcement of host policies in the eBPF datapath.

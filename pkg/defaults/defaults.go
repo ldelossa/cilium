@@ -173,6 +173,9 @@ const (
 	// EnableSRv6 is the default value for the SRv6 support enablement.
 	EnableSRv6 = false
 
+	// SRv6Mode is the encapsulation mode for SRv6.
+	SRv6Mode = "reduced"
+
 	// EnableL7Proxy is the default value for L7 proxy enablement
 	EnableL7Proxy = true
 

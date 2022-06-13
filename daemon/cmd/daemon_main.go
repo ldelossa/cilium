@@ -328,6 +328,9 @@ func initializeFlags() {
 	flags.Bool(option.EnableSRv6Name, defaults.EnableSRv6, "Enable SRv6 support (beta)")
 	option.BindEnv(option.EnableSRv6Name)
 
+	flags.String(option.SRv6ModeName, defaults.SRv6Mode, "Encapsulation mode for SRv6")
+	option.BindEnv(option.SRv6ModeName)
+
 	flags.String(option.IPv6MCastDevice, "", "Device that joins a Solicited-Node multicast group for IPv6")
 	option.BindEnv(option.IPv6MCastDevice)
 

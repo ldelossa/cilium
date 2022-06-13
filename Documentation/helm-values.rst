@@ -1604,11 +1604,15 @@
    * - srv6
      - Configure SRv6 support.
      - object
-     - ``{"enabled":false}``
+     - ``{"enabled":false,"mode":"reduced"}``
    * - srv6.enabled
      - Enable SRv6 encapsulation support.
      - bool
      - ``false``
+   * - srv6.mode
+     - Encapsulation mode for SRv6.
+     - string
+     - ``"reduced"``
    * - startupProbe.failureThreshold
      - failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s)
      - int

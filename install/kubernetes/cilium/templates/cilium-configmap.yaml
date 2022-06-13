@@ -549,6 +549,9 @@ data:
 
 {{- if and .Values.srv6 .Values.srv6.enabled }}
   enable-srv6: {{ .Values.srv6.enabled | quote }}
+{{- if .Values.srv6.mode }}
+  srv6-mode: {{ .Values.srv6.mode | quote }}
+{{- end}}
 {{- end}}
 
 {{- if and .Values.hostFirewall .Values.hostFirewall.enabled }}
