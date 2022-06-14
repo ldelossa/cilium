@@ -32,11 +32,20 @@ type k8sCacheSyncedChecker interface {
 	K8sCacheIsSynced() bool
 }
 
+// BGPSignaler is an interface which exposes a method for notifying the BGP
+// control plane of SRv6Manager state changes.
+//
+// The BGP control plane understands how to query the SRv6Mananger so no arguments
+// are required.
+type BGPSignaler interface {
+	Signal()
+}
+
 // The SRv6 manager stores the internal data to track SRv6 policies, VRFs,
 // and SIDs. It also hooks up all the callbacks to update the BPF SRv6 maps
 // accordingly.
 type Manager struct {
-	mutex lock.Mutex
+	mutex lock.RWMutex
 
 	// k8sCacheSyncedChecker is used to check if the agent has synced its
 	// cache with the k8s API server
@@ -53,6 +62,10 @@ type Manager struct {
 
 	// identityAllocator is used to fetch identity labels for endpoint updates
 	identityAllocator identityCache.IdentityAllocator
+	// bgp is a handle to an instantiated BGPSignaler interface.
+	// this interface informs the BGP control plane that the SRv6Manager's state
+	// has changed.
+	bgp BGPSignaler
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
@@ -71,10 +84,20 @@ func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker,
 	return manager
 }
 
+func (manager *Manager) SetBGPSignaler(bgp BGPSignaler) {
+	manager.mutex.Lock()
+	manager.bgp = bgp
+	manager.mutex.Unlock()
+}
+
 // runReconciliationAfterK8sSync spawns a goroutine that waits for the agent to
 // sync with k8s and then runs the first reconciliation.
+//
+// additionally, if the BGP control plane is enabled this method waits for it to
+// be instantiated.
 func (manager *Manager) runReconciliationAfterK8sSync() {
 	go func() {
+
 		for {
 			if manager.k8sCacheSyncedChecker.K8sCacheIsSynced() {
 				break
@@ -565,4 +588,10 @@ func (manager *Manager) reconcileVRFMappings() {
 
 	manager.addMissingSRv6VRFMappings()
 	manager.removeUnusedSRv6VRFMappings()
+
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+	if manager.bgp != nil {
+		manager.bgp.Signal()
+	}
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/client/listers/cilium.io/v2alpha1"
 	slimlabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
 	slimmetav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeaddr "github.com/cilium/cilium/pkg/node"
@@ -134,6 +135,7 @@ type Controller struct {
 	// BGPMgr is an implementation of the BGPRouterManager interface
 	// and provides a declarative API for configuring BGP peers.
 	BGPMgr BGPRouterManager
+	srv6Mu lock.RWMutex
 	// SRv6 is an implementation of the expected method set for interfacing with
 	// Cilium's SRv6 control and data planes.
 	SRv6 SRv6Interface
@@ -278,24 +280,10 @@ func (c *Controller) Signal() {
 	c.Sig.Event(struct{}{})
 }
 
-// waitOnSRv6Manager determines if the SRv6 feature set is enabled and if so
-// blocks until it reads a non-nil pointer to the SRv6 manager.
-func (c *Controller) waitOnSRv6Manager(ctx context.Context) {
-	if !option.Config.EnableSRv6 {
-		return
-	}
-	var (
-		l = log.WithFields(logrus.Fields{
-			"component": "WaitOnSRv6Manager",
-		})
-	)
-	for c.SRv6 == nil {
-		if ctx.Err() != nil {
-			return
-		}
-		l.Info("Waiting for SRv6 manager to initialize...")
-		time.Sleep(1 * time.Second)
-	}
+func (c *Controller) SetSRv6Manager(srv6 SRv6Interface) {
+	c.srv6Mu.Lock()
+	c.SRv6 = srv6
+	c.srv6Mu.Unlock()
 }
 
 // Run places the Controller into its control loop.
@@ -314,10 +302,6 @@ func (c *Controller) Run(ctx context.Context, stop chan struct{}) {
 		})
 	)
 	l.Debug("Starting informers")
-
-	// determine if we need to wait on SRv6Manager, this will no-op if SRv6
-	// features are not enabled.
-	c.waitOnSRv6Manager(ctx)
 
 	// add an initial signal to kick things off
 	c.Sig.Event(struct{}{})
@@ -392,11 +376,15 @@ func (c *Controller) PolicySelection(ctx context.Context, labels map[string]stri
 	// we need to confirm we have a valid SRv6Mgr if any virtual router wants
 	// to map SRv6VRFs
 	if selected != nil {
+		// lock on reading c.SRv6 pointer.
+		c.srv6Mu.RLock()
 		for _, vr := range selected.Spec.VirtualRouters {
 			if vr.MapSRv6VRFs && (c.SRv6 == nil) {
+				c.srv6Mu.RUnlock()
 				return nil, ErrSRv6NoMgr
 			}
 		}
+		c.srv6Mu.RUnlock()
 	}
 
 	return selected, nil
@@ -484,6 +472,15 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 	for asn, attr := range annoMap {
 		if attr.SRv6Responder {
 			log.Infof("Acting as SRv6 responder for local ASN %d", asn)
+
+			// confirm we have a valid SRv6Manager pointer before reconciling.
+			c.srv6Mu.RLock()
+			if c.SRv6 == nil {
+				c.srv6Mu.RUnlock()
+				return fmt.Errorf("acting as SRv6 Responder but nil handle to SRv6 Manager")
+			}
+			c.srv6Mu.RUnlock()
+
 			err := c.reconcileSRv6(ctx)
 			if err != nil {
 				return err
