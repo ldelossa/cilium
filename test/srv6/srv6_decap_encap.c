@@ -54,44 +54,53 @@
 
 #define BPF_F_ADJ_ROOM_NO_CSUM_RESET (1ULL << 5)
 
-struct gre_hdr {
-	__be16 flags;
-	__be16 protocol;
-} __attribute__((packed));
+#ifndef NEXTHDR_ROUTING
+# define NEXTHDR_ROUTING 43
+#endif
 
-union l4hdr {
-	struct udphdr udp;
-	struct gre_hdr gre;
+struct srv6_srh {
+	struct ipv6_rt_hdr rthdr;
+	__u8 first_segment;
+	__u8 flags;
+	__u16 reserved;
+	struct in6_addr segments[0];
 };
-
-struct v4hdr {
-	struct iphdr ip;
-	union l4hdr l4hdr;
-	__u8 pad[16];			/* enough space for L2 header */
-} __attribute__((packed));
-
-struct v6hdr {
-	struct ipv6hdr ip;
-	union l4hdr l4hdr;
-	__u8 pad[16];			/* enough space for L2 header */
-} __attribute__((packed));
 
 static int decap_internal(struct __sk_buff *skb, char proto)
 {
 	__u16 new_proto = bpf_htons(ETH_P_IP);
-	int shrink;
+	int nexthdr_offset, shrink = 0;
 
 	switch (proto) {
+	case NEXTHDR_ROUTING:
+		nexthdr_offset = ETH_HLEN + sizeof(struct ipv6hdr) +
+				 offsetof(struct srv6_srh, rthdr.nexthdr);
+		if (bpf_skb_load_bytes(skb, nexthdr_offset, &proto,
+				       sizeof(proto)) < 0)
+			return TC_ACT_SHOT;
+
+		shrink = sizeof(struct srv6_srh) + sizeof(struct in6_addr);
+
+		switch (proto) {
+		case IPPROTO_IPIP:
+			goto parse_outer_ipv4;
+		case IPPROTO_IPV6:
+			goto parse_outer_ipv6;
+		default:
+			return TC_ACT_SHOT;
+		}
 	case IPPROTO_IPIP:
+parse_outer_ipv4:
 		if (bpf_skb_change_proto(skb, new_proto, 0) < 0)
 			return TC_ACT_SHOT;
 		if (bpf_skb_store_bytes(skb, offsetof(struct ethhdr, h_proto),
 					&new_proto, sizeof(new_proto), 0) < 0)
 			return TC_ACT_SHOT;
-		shrink = sizeof(struct iphdr);
+		shrink += sizeof(struct iphdr);
 		break;
 	case IPPROTO_IPV6:
-		shrink = sizeof(struct ipv6hdr);
+parse_outer_ipv6:
+		shrink += sizeof(struct ipv6hdr);
 		break;
 	default:
 		return TC_ACT_OK;
@@ -133,6 +142,13 @@ srv6_encapsulation(struct __sk_buff *skb, int growth, __u16 new_payload_len,
 		.hop_limit   = IPDEFTTL,
 	};
 
+#ifndef ENABLE_SRV6_REDUCED_ENCAP
+	/* If reduced encapsulation is disabled, the next header will be the
+	 * segment routing header.
+	 */
+	new_ip6.nexthdr = NEXTHDR_ROUTING;
+#endif /* ENABLE_SRV6_REDUCED_ENCAP */
+
 	/* Add room between Ethernet and network headers. */
 	if (bpf_skb_adjust_room(skb, growth, BPF_ADJ_ROOM_MAC,
 				BPF_F_ADJ_ROOM_NO_CSUM_RESET))
@@ -145,6 +161,32 @@ srv6_encapsulation(struct __sk_buff *skb, int growth, __u16 new_payload_len,
 	if (bpf_skb_store_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr),
 			    sid, sizeof(struct in6_addr), 0) < 0)
 		return 2;
+
+#ifndef ENABLE_SRV6_REDUCED_ENCAP
+	{
+	/* If reduced encapsulation mode is disabled, we need to add a segment
+	 * routing header.
+	 */
+	struct srv6_srh srh = {
+		.rthdr.nexthdr       = nexthdr,
+		.rthdr.hdrlen        = sizeof(struct in6_addr) / 8,
+		.rthdr.type          = IPV6_SRCRT_TYPE_4,
+		.rthdr.segments_left = 0,
+		.first_segment       = 0,
+		.flags               = 0,
+		.reserved            = 0,
+	};
+	int segment_list_offset = ETH_HLEN + sizeof(struct ipv6hdr) +
+				  offsetof(struct srv6_srh, segments);
+
+	if (bpf_skb_store_bytes(skb, ETH_HLEN + sizeof(struct ipv6hdr),
+				&srh, sizeof(struct srv6_srh), 0) < 0)
+		return 2;
+	if (bpf_skb_store_bytes(skb, segment_list_offset, sid,
+				sizeof(struct in6_addr), 0) < 0)
+		return 2;
+	}
+#endif /* ENABLE_SRV6_REDUCED_ENCAP */
 	return 0;
 }
 
@@ -194,6 +236,11 @@ int encap_f(struct __sk_buff *skb)
 		 * Thus, deduce this space from the next packet growth.
 		 */
 		growth = sizeof(struct iphdr);
+
+#ifndef ENABLE_SRV6_REDUCED_ENCAP
+		growth += sizeof(struct srv6_srh) + sizeof(struct in6_addr);
+		new_payload_len += sizeof(struct srv6_srh) + sizeof(struct in6_addr);
+#endif
 
 		ret = srv6_encapsulation(skb, growth, new_payload_len, nexthdr,
 					 &src_sid, &dst_sid);
