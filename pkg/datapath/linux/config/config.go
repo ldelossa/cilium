@@ -226,6 +226,9 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	if option.Config.EnableSRv6 {
 		cDefinesMap["ENABLE_SRV6"] = "1"
+		if option.Config.SRv6Mode == "reduced" {
+			cDefinesMap["ENABLE_SRV6_REDUCED_ENCAP"] = "1"
+		}
 	}
 
 	if option.Config.EnableIPSec {
