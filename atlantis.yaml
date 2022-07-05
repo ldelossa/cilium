@@ -23,8 +23,8 @@ plugins:
 hubble:
   remote: git@github.com:isovalent/hubble.git
   version: v0.8.0
-goModOptions:
-  tidyOptions:
-    - "-compat"
-    - "1.17"
+    #goModOptions:
+    #  tidyOptions:
+    #    - "-compat"
+    #    - "1.17"
 
