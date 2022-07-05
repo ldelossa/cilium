@@ -18,11 +18,8 @@ plugins:
     edit:
        proto: proto.AddPolicyFields
   - package: github.com/isovalent/hubble-flow-export
-    version: v1.1.2
+    version: v1.5.0
     agent: .New
-hubble:
-  remote: git@github.com:isovalent/hubble.git
-  version: v0.8.0
 goModOptions:
   tidyOptions:
     - "-compat"
