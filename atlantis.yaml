@@ -1,0 +1,30 @@
+scheme: v1alpha4
+lib:
+  package: github.com/isovalent/atlantis
+  version: v1.0.0-alpha4.4
+plugins:
+  # - package: github.com/isovalent/fqdn-proxy-plugin
+  #   version: v1.11.1
+  #   edit:
+  #     cilium: .FQDNProxy
+  - package: github.com/isovalent/hubble-flow-aggregation
+    version: v1.1.0
+    agent: .New
+    edit:
+       proto: proto.AddAggregation
+  - package: github.com/isovalent/hubble-flow-policy-metadata
+    version: 1c4d0ea
+    agent: .New
+    edit:
+       proto: proto.AddPolicyFields
+  - package: github.com/isovalent/hubble-flow-export
+    version: v1.1.2
+    agent: .New
+hubble:
+  remote: git@github.com:isovalent/hubble.git
+  version: v0.8.0
+goModOptions:
+  tidyOptions:
+    - "-compat"
+    - "1.17"
+
