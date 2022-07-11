@@ -15,6 +15,9 @@ on:
 
 permissions: read-all
 
+env:
+  ATLANTIS_VERSION: v1.0.0-alpha4.7
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.after }}
   cancel-in-progress: true
@@ -79,7 +82,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@0.0.8
         with:
           repo: "isovalent/atlantis"
-          version: "tags/v1.0.0-alpha4.4"
+          version: "tags/${{ env.ATLANTIS_VERSION }}"
           file: "atlantis-.*-linux-amd64.tar.gz"
           regex: true
           token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
@@ -88,7 +91,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@0.0.8
         with:
           repo: "isovalent/atlantis"
-          version: "tags/v1.0.0-alpha4.4"
+          version: "tags/${{ env.ATLANTIS_VERSION }}"
           file: "atlantis-.*-linux-amd64.tar.gz.sha256sum"
           regex: true
           token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
