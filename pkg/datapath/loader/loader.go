@@ -20,7 +20,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/link"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	"github.com/cilium/cilium/pkg/datapath/loader/metrics"
-	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/elf"
 	"github.com/cilium/cilium/pkg/logging"
@@ -158,8 +157,7 @@ func patchHostNetdevDatapath(ep datapath.Endpoint, objPath, dstPath, ifName stri
 		return err
 	}
 
-	if !option.Config.EnableHostLegacyRouting ||
-		option.Config.DatapathMode == datapathOption.DatapathModeIpvlan {
+	if !option.Config.EnableHostLegacyRouting {
 		opts["SECCTX_FROM_IPCACHE"] = uint32(SecctxFromIpcacheEnabled)
 	} else {
 		opts["SECCTX_FROM_IPCACHE"] = uint32(SecctxFromIpcacheDisabled)
@@ -207,20 +205,18 @@ func (l *Loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 	objPaths[0], objPaths[1] = objPath, objPath
 	interfaceNames[0], interfaceNames[1] = ep.InterfaceName(), ep.InterfaceName()
 
-	if datapathHasMultipleMasterDevices() {
-		if _, err := netlink.LinkByName(defaults.SecondHostDevice); err != nil {
-			log.WithError(err).WithField("device", defaults.SecondHostDevice).Error("Link does not exist")
+	if _, err := netlink.LinkByName(defaults.SecondHostDevice); err != nil {
+		log.WithError(err).WithField("device", defaults.SecondHostDevice).Error("Link does not exist")
+		return err
+	} else {
+		interfaceNames = append(interfaceNames, defaults.SecondHostDevice)
+		symbols = append(symbols, symbolToHostEp)
+		directions = append(directions, dirIngress)
+		secondDevObjPath := path.Join(ep.StateDir(), hostEndpointPrefix+"_"+defaults.SecondHostDevice+".o")
+		if err := patchHostNetdevDatapath(ep, objPath, secondDevObjPath, defaults.SecondHostDevice, nil); err != nil {
 			return err
-		} else {
-			interfaceNames = append(interfaceNames, defaults.SecondHostDevice)
-			symbols = append(symbols, symbolToHostEp)
-			directions = append(directions, dirIngress)
-			secondDevObjPath := path.Join(ep.StateDir(), hostEndpointPrefix+"_"+defaults.SecondHostDevice+".o")
-			if err := patchHostNetdevDatapath(ep, objPath, secondDevObjPath, defaults.SecondHostDevice, nil); err != nil {
-				return err
-			}
-			objPaths = append(objPaths, secondDevObjPath)
 		}
+		objPaths = append(objPaths, secondDevObjPath)
 	}
 
 	bpfMasqIPv4Addrs := node.GetMasqIPv4AddrsWithDevices()
@@ -279,12 +275,6 @@ func (l *Loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 	return nil
 }
 
-func datapathHasMultipleMasterDevices() bool {
-	// When using ipvlan, HOST_DEV2 is equal to HOST_DEV1 in init.sh and we
-	// have a single master device.
-	return option.Config.DatapathMode != datapathOption.DatapathModeIpvlan
-}
-
 func (l *Loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs *directoryInfo) error {
 	// Replace the current program
 	objPath := path.Join(dirs.Output, endpointObj)
@@ -298,19 +288,6 @@ func (l *Loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs 
 		l.loaderStatus.Lock()
 		l.loaderStatus.BpfHostLoaded = true
 		l.loaderStatus.Unlock()
-	} else if ep.HasIpvlanDataPath() {
-		if err := graftDatapath(ctx, ep.MapPath(), objPath, symbolFromEndpoint); err != nil {
-			scopedLog := ep.Logger(Subsystem).WithFields(logrus.Fields{
-				logfields.Path: objPath,
-			})
-			// Don't log an error here if the context was canceled or timed out;
-			// this log message should only represent failures with respect to
-			// loading the program.
-			if ctx.Err() == nil {
-				scopedLog.WithError(err).Warn("JoinEP: Failed to load program")
-			}
-			return err
-		}
 	} else {
 		finalize, err := replaceDatapath(ctx, ep.InterfaceName(), objPath, symbolFromEndpoint, dirIngress, false, "")
 		if err != nil {
