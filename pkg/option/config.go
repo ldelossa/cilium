@@ -369,6 +369,9 @@ const (
 	// InstallEgressGatewayRoutes installs IP rules and routes required to steer traffic to the correct network interface
 	InstallEgressGatewayRoutes = "install-egress-gateway-routes"
 
+	// EgressGatewayHealthcheckTimeout defines the Healthcheck timeout after which an egress gateway is marked not healthy
+	EgressGatewayHealthcheckTimeout = "egress-gateway-healthcheck-timeout"
+
 	// EnableIngressController enables Ingress Controller
 	EnableIngressController = "enable-ingress-controller"
 
@@ -1620,31 +1623,32 @@ type DaemonConfig struct {
 
 	// Masquerade specifies whether or not to masquerade packets from endpoints
 	// leaving the host.
-	EnableIPv4Masquerade       bool
-	EnableIPv6Masquerade       bool
-	EnableBPFMasquerade        bool
-	DeriveMasqIPAddrFromDevice string
-	EnableBPFClockProbe        bool
-	EnableIPMasqAgent          bool
-	EnableIPv4EgressGateway    bool
-	InstallEgressGatewayRoutes bool
-	EnableEnvoyConfig          bool
-	EnableIngressController    bool
-	EnvoyConfigTimeout         time.Duration
-	IPMasqAgentConfigPath      string
-	InstallIptRules            bool
-	MonitorAggregation         string
-	PreAllocateMaps            bool
-	IPv6NodeAddr               string
-	IPv4NodeAddr               string
-	SidecarIstioProxyImage     string
-	SocketPath                 string
-	TracePayloadlen            int
-	Version                    string
-	PProf                      bool
-	PProfPort                  int
-	PrometheusServeAddr        string
-	ToFQDNsMinTTL              int
+	EnableIPv4Masquerade            bool
+	EnableIPv6Masquerade            bool
+	EnableBPFMasquerade             bool
+	DeriveMasqIPAddrFromDevice      string
+	EnableBPFClockProbe             bool
+	EnableIPMasqAgent               bool
+	EnableIPv4EgressGateway         bool
+	InstallEgressGatewayRoutes      bool
+	EgressGatewayHealthcheckTimeout time.Duration
+	EnableEnvoyConfig               bool
+	EnableIngressController         bool
+	EnvoyConfigTimeout              time.Duration
+	IPMasqAgentConfigPath           string
+	InstallIptRules                 bool
+	MonitorAggregation              string
+	PreAllocateMaps                 bool
+	IPv6NodeAddr                    string
+	IPv4NodeAddr                    string
+	SidecarIstioProxyImage          string
+	SocketPath                      string
+	TracePayloadlen                 int
+	Version                         string
+	PProf                           bool
+	PProfPort                       int
+	PrometheusServeAddr             string
+	ToFQDNsMinTTL                   int
 
 	// DNSMaxIPsPerRestoredRule defines the maximum number of IPs to maintain
 	// for each FQDN selector in endpoint's restored DNS rules
@@ -2880,6 +2884,7 @@ func (c *DaemonConfig) Populate() {
 	c.EnableIPMasqAgent = viper.GetBool(EnableIPMasqAgent)
 	c.EnableIPv4EgressGateway = viper.GetBool(EnableIPv4EgressGateway)
 	c.InstallEgressGatewayRoutes = viper.GetBool(InstallEgressGatewayRoutes)
+	c.EgressGatewayHealthcheckTimeout = viper.GetDuration(EgressGatewayHealthcheckTimeout)
 	c.EnableEnvoyConfig = viper.GetBool(EnableEnvoyConfig)
 	c.EnableIngressController = viper.GetBool(EnableIngressController)
 	c.EnvoyConfigTimeout = viper.GetDuration(EnvoyConfigTimeout)

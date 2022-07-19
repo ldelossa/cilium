@@ -1231,9 +1231,15 @@ enableIPv6Masquerade: true
 # cluster.
 egressGateway:
   enabled: false
+
   # -- Install egress gateway IP rules and routes in order to properly steer
   # egress gateway traffic to the correct ENI interface
   installRoutes: false
+
+  # -- Healthcheck timeout after which an egress gateway is marked not healthy.
+  # This also configures the frequency of probes to a value of
+  # healthcheckTimeout / 2
+  healthcheckTimeout: 2s
 
 vtep:
 # -- Enables VXLAN Tunnel Endpoint (VTEP) Integration (beta) to allow

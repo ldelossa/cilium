@@ -735,6 +735,9 @@ func initializeFlags() {
 	flags.Bool(option.InstallEgressGatewayRoutes, false, "Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface")
 	option.BindEnv(option.InstallEgressGatewayRoutes)
 
+	flags.Duration(option.EgressGatewayHealthcheckTimeout, 2*time.Second, "Healthcheck timeout after which an egress gateway is marked not healthy")
+	option.BindEnv(option.EgressGatewayHealthcheckTimeout)
+
 	flags.Bool(option.EnableEnvoyConfig, false, "Enable Envoy Config CRDs")
 	option.BindEnv(option.EnableEnvoyConfig)
 

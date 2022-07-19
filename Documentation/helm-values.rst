@@ -416,7 +416,11 @@
    * - egressGateway
      - Enables egress gateway to redirect and SNAT the traffic that leaves the cluster.
      - object
-     - ``{"enabled":false,"installRoutes":false}``
+     - ``{"enabled":false,"healthcheckTimeout":"2s","installRoutes":false}``
+   * - egressGateway.healthcheckTimeout
+     - Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2
+     - string
+     - ``"2s"``
    * - egressGateway.installRoutes
      - Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface
      - bool

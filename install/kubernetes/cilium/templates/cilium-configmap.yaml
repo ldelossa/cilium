@@ -800,6 +800,9 @@ data:
 {{- if .Values.egressGateway.installRoutes }}
   install-egress-gateway-routes: "true"
 {{- end }}
+{{- if hasKey .Values.egressGateway "healthcheckTimeout" }}
+  egress-gateway-healhcheck-timeout: {{ .Values.egressGateway.healthcheckTimeout | quote }}
+{{- end }}
 
 {{- if hasKey .Values "vtep" }}
   enable-vtep: {{ .Values.vtep.enabled | quote }}
