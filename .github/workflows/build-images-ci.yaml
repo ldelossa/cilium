@@ -7,7 +7,6 @@ on:
       - opened
       - synchronize
       - reopened
-  pull_request: {}
   push:
     branches:
       - v1.12-ce
