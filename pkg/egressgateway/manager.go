@@ -14,8 +14,10 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/cilium/cilium/pkg/egressgateway/healthcheck"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
+	"github.com/cilium/cilium/pkg/ip"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
@@ -47,6 +49,9 @@ type Manager struct {
 	// nodeDataStore stores node name to node mapping
 	nodeDataStore map[string]nodeTypes.Node
 
+	// gatewayNodeDatatStore stores all nodes that are acting as a gateway
+	gatewayNodeDataStore map[string]nodeTypes.Node
+
 	// nodes stores nodes sorted by their name
 	nodes []nodeTypes.Node
 
@@ -58,19 +63,25 @@ type Manager struct {
 
 	// identityAllocator is used to fetch identity labels for endpoint updates
 	identityAllocator identityCache.IdentityAllocator
+
+	healthchecker healthcheck.Healthchecker
 }
 
 // NewEgressGatewayManager returns a new Egress Gateway Manager.
-func NewEgressGatewayManager(k8sCacheSyncedChecker k8sCacheSyncedChecker, identityAlocator identityCache.IdentityAllocator) *Manager {
+func NewEgressGatewayManager(k8sCacheSyncedChecker k8sCacheSyncedChecker, identityAlocator identityCache.IdentityAllocator,
+	healthchecker healthcheck.Healthchecker) *Manager {
 	manager := &Manager{
 		k8sCacheSyncedChecker: k8sCacheSyncedChecker,
 		nodeDataStore:         make(map[string]nodeTypes.Node),
+		gatewayNodeDataStore:  make(map[string]nodeTypes.Node),
 		policyConfigs:         make(map[policyID]*PolicyConfig),
 		epDataStore:           make(map[endpointID]*endpointMetadata),
 		identityAllocator:     identityAlocator,
+		healthchecker:         healthchecker,
 	}
 
 	manager.runReconciliationAfterK8sSync()
+	manager.startHealthcheckingLoop()
 
 	return manager
 }
@@ -106,6 +117,19 @@ func (manager *Manager) runReconciliationAfterK8sSync() {
 		manager.Lock()
 		manager.reconcile()
 		manager.Unlock()
+	}()
+}
+
+// startHealthcheckingLoop spawns a goroutine that periodically checks if the
+// health status of any node has changed, and when that's the case, it re runs
+// the reconciliation.
+func (manager *Manager) startHealthcheckingLoop() {
+	go func() {
+		for range manager.healthchecker.Events() {
+			manager.Lock()
+			manager.reconcile()
+			manager.Unlock()
+		}
 	}()
 }
 
@@ -206,6 +230,7 @@ func (manager *Manager) OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
 func (manager *Manager) OnUpdateNode(node nodeTypes.Node) {
 	manager.Lock()
 	defer manager.Unlock()
+
 	manager.nodeDataStore[node.Name] = node
 	manager.onChangeNodeLocked()
 }
@@ -214,6 +239,7 @@ func (manager *Manager) OnUpdateNode(node nodeTypes.Node) {
 func (manager *Manager) OnDeleteNode(node nodeTypes.Node) {
 	manager.Lock()
 	defer manager.Unlock()
+
 	delete(manager.nodeDataStore, node.Name)
 	manager.onChangeNodeLocked()
 }
@@ -227,6 +253,26 @@ func (manager *Manager) onChangeNodeLocked() {
 		return manager.nodes[i].Name < manager.nodes[j].Name
 	})
 	manager.reconcile()
+}
+
+func (manager *Manager) nodeIsHealthy(nodeName string) bool {
+	return manager.healthchecker.NodeIsHealthy(nodeName)
+}
+
+func (manager *Manager) regenerateGatewayNodesList() {
+	nodes := map[string]nodeTypes.Node{}
+
+	for _, policyConfig := range manager.policyConfigs {
+		for _, gc := range policyConfig.groupConfigs {
+			for _, n := range manager.nodes {
+				if gc.selectsNodeAsGateway(n) {
+					nodes[n.Name] = n
+				}
+			}
+		}
+	}
+
+	manager.gatewayNodeDataStore = nodes
 }
 
 func (manager *Manager) regenerateGatewayConfigs() {
@@ -336,7 +382,7 @@ func (manager *Manager) addMissingEgressRules() {
 		policyKey := egressmap.NewEgressPolicyKey4(endpointIP, dstCIDR.IP, dstCIDR.Mask)
 		policyVal, policyPresent := egressPolicies[policyKey]
 
-		if policyPresent && policyVal.Match(gwc.egressIP.IP, []net.IP{gwc.gatewayIP}) {
+		if policyPresent && policyVal.Match(gwc.egressIP.IP, gwc.activeGatewayIPs) {
 			return
 		}
 
@@ -344,10 +390,10 @@ func (manager *Manager) addMissingEgressRules() {
 			logfields.SourceIP:        endpointIP,
 			logfields.DestinationCIDR: dstCIDR.String(),
 			logfields.EgressIP:        gwc.egressIP.IP,
-			logfields.GatewayIP:       []net.IP{gwc.gatewayIP},
+			logfields.GatewayIPs:      ip.IPSliceToString(gwc.activeGatewayIPs, ","),
 		})
 
-		if err := egressmap.EgressPolicyMap.Update(endpointIP, *dstCIDR, gwc.egressIP.IP, []net.IP{gwc.gatewayIP}); err != nil {
+		if err := egressmap.ApplyEgressPolicy(endpointIP, *dstCIDR, gwc.egressIP.IP, gwc.activeGatewayIPs, gwc.healthyGatewayIPs); err != nil {
 			logger.WithError(err).Error("Error applying egress gateway policy")
 		} else {
 			logger.Info("Egress gateway policy applied")
@@ -371,7 +417,7 @@ func (manager *Manager) removeUnusedEgressRules() {
 nextPolicyKey:
 	for policyKey, policyVal := range egressPolicies {
 		matchPolicy := func(endpointIP net.IP, dstCIDR *net.IPNet, gwc *gatewayConfig) bool {
-			return policyKey.Match(endpointIP, dstCIDR) && policyVal.Match(gwc.egressIP.IP, []net.IP{gwc.gatewayIP})
+			return policyKey.Match(endpointIP, dstCIDR) && policyVal.Match(gwc.egressIP.IP, gwc.activeGatewayIPs)
 		}
 
 		for _, policyConfig := range manager.policyConfigs {
@@ -384,10 +430,10 @@ nextPolicyKey:
 			logfields.SourceIP:        policyKey.GetSourceIP(),
 			logfields.DestinationCIDR: policyKey.GetDestCIDR().String(),
 			logfields.EgressIP:        policyVal.GetEgressIP(),
-			logfields.GatewayIP:       policyVal.GetGatewayIPs(),
+			logfields.GatewayIPs:      ip.IPSliceToString(policyVal.GetGatewayIPs(), ","),
 		})
 
-		if err := egressmap.EgressPolicyMap.Delete(policyKey.GetSourceIP(), *policyKey.GetDestCIDR()); err != nil {
+		if err := egressmap.RemoveEgressPolicy(policyKey.GetSourceIP(), *policyKey.GetDestCIDR()); err != nil {
 			logger.WithError(err).Error("Error removing egress gateway policy")
 		} else {
 			logger.Info("Egress gateway policy removed")
@@ -404,6 +450,9 @@ func (manager *Manager) reconcile() {
 	if !manager.k8sCacheSyncedChecker.K8sCacheIsSynced() {
 		return
 	}
+
+	manager.regenerateGatewayNodesList()
+	manager.healthchecker.UpdateNodeList(manager.gatewayNodeDataStore)
 
 	manager.regenerateGatewayConfigs()
 

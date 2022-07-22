@@ -22,12 +22,13 @@ import (
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
-// policyGatewayConfig is the internal representation of an egress gateway,
-// describing which node should act as egress gateway for a given policy.
-type policyGatewayConfig struct {
-	nodeSelector api.EndpointSelector
-	iface        string
-	egressIP     net.IP
+// groupConfig is the internal representation of an egress group, describing
+// which nodes should act as egress gateway for a given policy
+type groupConfig struct {
+	nodeSelector    api.EndpointSelector
+	iface           string
+	egressIP        net.IP
+	maxGatewayNodes int
 }
 
 // gatewayConfig is the gateway configuration derived at runtime from a policy.
@@ -43,11 +44,19 @@ type gatewayConfig struct {
 	ifaceIndex int
 	// egressIP is the IP used to SNAT traffic
 	egressIP net.IPNet
-	// gatewayIP is the node internal IP of the gateway
-	gatewayIP net.IP
 
-	// localNodeConfiguredAsGateway tells if the local node is configured to
-	// act as an egress gateway node for this config.
+	// activeGatewayIPs is a slice of node IPs that are actively working as
+	// egress gateways
+	activeGatewayIPs []net.IP
+
+	// healthyGatewayIPs is the entire pool of healthy nodes that can act as
+	// egress gateway for the given policy.
+	// Not all of them may be actively acting as gateway since with the
+	// maxGatewayNodes policy directive we can select a subset of them
+	healthyGatewayIPs []net.IP
+
+	// localNodeConfiguredAsGateway tells if the local node belongs to the
+	// pool of egress gateway node for this config.
 	// This information is used to decide if it is necessary to install ENI
 	// IP rules/routes
 	localNodeConfiguredAsGateway bool
@@ -61,8 +70,7 @@ type PolicyConfig struct {
 	endpointSelectors []api.EndpointSelector
 	dstCIDRs          []*net.IPNet
 	egressIP          net.IP
-
-	policyGwConfig *policyGatewayConfig
+	groupConfigs      []groupConfig
 
 	gatewayConfig gatewayConfig
 }
@@ -82,15 +90,16 @@ func (config *PolicyConfig) selectsEndpoint(endpointInfo *endpointMetadata) bool
 	return false
 }
 
-func (config *policyGatewayConfig) selectsNodeAsGateway(node nodeTypes.Node) bool {
+func (config *groupConfig) selectsNodeAsGateway(node nodeTypes.Node) bool {
 	return config.nodeSelector.Matches(k8sLabels.Set(node.Labels))
 }
 
 func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 	if config.egressIP != nil {
 		config.gatewayConfig = gatewayConfig{
-			gatewayIP: config.egressIP,
-			egressIP:  net.IPNet{IP: config.egressIP, Mask: net.CIDRMask(32, 32)},
+			activeGatewayIPs:  []net.IP{config.egressIP},
+			healthyGatewayIPs: []net.IP{config.egressIP},
+			egressIP:          net.IPNet{IP: config.egressIP, Mask: net.CIDRMask(32, 32)},
 		}
 
 		return
@@ -100,49 +109,61 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 		egressIP: net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 0)},
 	}
 
-	policyGwc := config.policyGwConfig
+	for _, gc := range config.groupConfigs {
+		// we need a per-group slice to properly honor the maxGatewayNodes
+		// directive
+		groupGatewayIPs := []net.IP{}
 
-	for _, node := range manager.nodes {
-		if !policyGwc.selectsNodeAsGateway(node) {
-			continue
-		}
+		for _, node := range manager.nodes {
+			if !gc.selectsNodeAsGateway(node) {
+				continue
+			}
 
-		gwc.gatewayIP = node.GetK8sNodeIP()
+			if manager.nodeIsHealthy(node.Name) {
+				gwc.healthyGatewayIPs = append(gwc.healthyGatewayIPs, node.GetK8sNodeIP())
 
-		if node.IsLocal() {
-			err := gwc.deriveFromPolicyGatewayConfig(policyGwc)
-			if err != nil {
-				logger := log.WithFields(logrus.Fields{
-					logfields.CiliumEgressNATPolicyName: config.id,
-					logfields.Interface:                 policyGwc.iface,
-					logfields.EgressIP:                  policyGwc.egressIP,
-				})
+				if gc.maxGatewayNodes == 0 || len(groupGatewayIPs) < gc.maxGatewayNodes {
+					groupGatewayIPs = append(groupGatewayIPs, node.GetK8sNodeIP())
+				}
+			}
 
-				logger.WithError(err).Error("Failed to derive policy gateway configuration")
+			if node.IsLocal() {
+				err := gwc.deriveFromGroupConfig(&gc)
+				if err != nil {
+					logger := log.WithFields(logrus.Fields{
+						logfields.CiliumEgressGatewayPolicyName: config.id,
+						logfields.Interface:                     gc.iface,
+						logfields.EgressIP:                      gc.egressIP,
+					})
+
+					logger.WithError(err).Error("Failed to derive policy gateway configuration")
+				}
 			}
 		}
+
+		gwc.activeGatewayIPs = append(gwc.activeGatewayIPs, groupGatewayIPs...)
 	}
 
 	config.gatewayConfig = gwc
 }
 
-// deriveFromPolicyGatewayConfig retrieves all the missing gateway configuration
-// data (such as egress IP or interface) given a policy egress gateway config
-func (gwc *gatewayConfig) deriveFromPolicyGatewayConfig(gc *policyGatewayConfig) error {
+// deriveFromGroupConfig retrieves all the missing gateway configuration data
+// (such as egress IP or interface) given a policy group config
+func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 	var err error
 
 	gwc.localNodeConfiguredAsGateway = false
 
 	switch {
 	case gc.iface != "":
-		// If the gateway config specifies an interface, use the first IPv4 assigned to that
+		// If the group config specifies an interface, use the first IPv4 assigned to that
 		// interface as egress IP
 		gwc.egressIP, gwc.ifaceIndex, err = getIfaceFirstIPv4Address(gc.iface)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
 	case gc.egressIP != nil && !gc.egressIP.Equal(net.IPv4zero):
-		// If the gateway config specifies an egress IP, use the interface with that IP as egress
+		// If the group config specifies an egress IP, use the interface with that IP as egress
 		// interface
 		gwc.egressIP.IP = gc.egressIP
 		gwc.ifaceName, gwc.ifaceIndex, gwc.egressIP.Mask, err = getIfaceWithIPv4Address(gc.egressIP)
@@ -150,8 +171,8 @@ func (gwc *gatewayConfig) deriveFromPolicyGatewayConfig(gc *policyGatewayConfig)
 			return fmt.Errorf("failed to retrieve interface with egress IP: %w", err)
 		}
 	default:
-		// If the gateway config doesn't specify any egress IP or interface, use the
-		// interface with the IPv4 default route
+		// If the group config doesn't specify any egress IP or interface, us
+		// the interface with the IPv4 default route
 		iface, err := route.NodeDeviceWithDefaultRoute(true, false)
 		if err != nil {
 			return fmt.Errorf("failed to find interface with default route: %w", err)
@@ -205,8 +226,8 @@ func (config *PolicyConfig) matches(epDataStore map[endpointID]*endpointMetadata
 	return false
 }
 
-// ParseCENP takes a CiliumEgressNATPolicy CR and converts to PolicyConfig,
-// the internal representation of the egress nat policy
+// ParseCENP takes a CiliumEgressNATPolicy CR and converts to PolicyConfig, the
+// internal representation of the egress nat policy
 func ParseCENP(cenp *v2alpha1.CiliumEgressNATPolicy) (*PolicyConfig, error) {
 	var endpointSelectorList []api.EndpointSelector
 	var dstCidrList []*net.IPNet
@@ -215,13 +236,36 @@ func ParseCENP(cenp *v2alpha1.CiliumEgressNATPolicy) (*PolicyConfig, error) {
 		Key:      k8sConst.PodNamespaceLabel,
 		Operator: slim_metav1.LabelSelectorOpExists,
 	}
-
 	name := cenp.ObjectMeta.Name
+
 	if name == "" {
 		return nil, fmt.Errorf("CiliumEgressNATPolicy must have a name")
 	}
 
-	log.WithFields(logrus.Fields{logfields.CiliumEgressNATPolicyName: name}).Warn("CiliumEgressNATPolicy is deprecated and will be removed in version 1.13. Use CiliumEgressGatewayPolicy instead.")
+	egressIP := net.ParseIP(cenp.Spec.EgressSourceIP).To4()
+
+	gc := []groupConfig{}
+	for _, gcSpec := range cenp.Spec.EgressGroups {
+		if gcSpec.Interface != "" && gcSpec.EgressIP != "" {
+			return nil, fmt.Errorf("CiliumEgressNATPolicy's group configuration can't specify both an interface and an egress IP")
+		}
+
+		egressIP := net.ParseIP(gcSpec.EgressIP)
+
+		gc = append(gc, groupConfig{
+			nodeSelector:    api.NewESFromK8sLabelSelector("", gcSpec.NodeSelector),
+			iface:           gcSpec.Interface,
+			egressIP:        egressIP,
+			maxGatewayNodes: gcSpec.MaxGatewayNodes,
+		})
+	}
+
+	switch {
+	case egressIP != nil && len(gc) != 0:
+		return nil, fmt.Errorf("CiliumEgressNATPolicy cannot have both EgressSourceIP and EgressGroups set")
+	case egressIP == nil && len(gc) == 0:
+		return nil, fmt.Errorf("CiliumEgressNATPolicy needs either EgressSourceIP or EgressGroups set")
+	}
 
 	for _, cidrString := range cenp.Spec.DestinationCIDRs {
 		_, cidr, err := net.ParseCIDR(string(cidrString))
@@ -272,8 +316,8 @@ func ParseCENP(cenp *v2alpha1.CiliumEgressNATPolicy) (*PolicyConfig, error) {
 	return &PolicyConfig{
 		endpointSelectors: endpointSelectorList,
 		dstCIDRs:          dstCidrList,
-		egressIP:          net.ParseIP(cenp.Spec.EgressSourceIP).To4(),
-		policyGwConfig:    nil,
+		egressIP:          egressIP,
+		groupConfigs:      gc,
 		id: types.NamespacedName{
 			Name: name,
 		},
@@ -303,15 +347,20 @@ func ParseCEGP(cegp *v2.CiliumEgressGatewayPolicy) (*PolicyConfig, error) {
 		return nil, fmt.Errorf("CiliumEgressGatewayPolicy must have a name")
 	}
 
-	egressGateway := cegp.Spec.EgressGateway
-	if egressGateway.Interface != "" && egressGateway.EgressIP != "" {
-		return nil, fmt.Errorf("CiliumEgressGatewayPolicy's gateway configuration can't specify both an interface and an egress IP")
-	}
+	gc := []groupConfig{}
+	for _, gcSpec := range cegp.Spec.EgressGroups {
+		if gcSpec.Interface != "" && gcSpec.EgressIP != "" {
+			return nil, fmt.Errorf("CiliumEgressGatewayPolicy's group configuration can't specify both an interface and an egress IP")
+		}
 
-	policyGwc := &policyGatewayConfig{
-		nodeSelector: api.NewESFromK8sLabelSelector("", egressGateway.NodeSelector),
-		iface:        egressGateway.Interface,
-		egressIP:     net.ParseIP(egressGateway.EgressIP),
+		egressIP := net.ParseIP(gcSpec.EgressIP)
+
+		gc = append(gc, groupConfig{
+			nodeSelector:    api.NewESFromK8sLabelSelector("", gcSpec.NodeSelector),
+			iface:           gcSpec.Interface,
+			egressIP:        egressIP,
+			maxGatewayNodes: gcSpec.MaxGatewayNodes,
+		})
 	}
 
 	for _, cidrString := range cegp.Spec.DestinationCIDRs {
@@ -363,8 +412,7 @@ func ParseCEGP(cegp *v2.CiliumEgressGatewayPolicy) (*PolicyConfig, error) {
 	return &PolicyConfig{
 		endpointSelectors: endpointSelectorList,
 		dstCIDRs:          dstCidrList,
-		egressIP:          nil,
-		policyGwConfig:    policyGwc,
+		groupConfigs:      gc,
 		id: types.NamespacedName{
 			Name: name,
 		},

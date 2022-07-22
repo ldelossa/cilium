@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net"
 	"sort"
+	"strings"
 )
 
 const (
@@ -918,4 +919,16 @@ func GetIPFromListByFamily(ipList []net.IP, v4Family bool) net.IP {
 	}
 
 	return nil
+}
+
+// IPSliceToString formats a slice of IPs into a string of IPs separated by the
+// `sep` parameter.
+func IPSliceToString(ipList []net.IP, sep string) string {
+	ipStr := []string{}
+	for _, ip := range ipList {
+		ipStr = append(ipStr, ip.String())
+	}
+
+	return strings.Join(ipStr, sep)
+
 }

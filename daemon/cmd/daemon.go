@@ -39,6 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/debug"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/egressgateway"
+	egressgw_healthcheck "github.com/cilium/cilium/pkg/egressgateway/healthcheck"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/endpointmanager"
@@ -641,7 +642,7 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	}
 
 	if option.Config.EnableIPv4EgressGateway {
-		d.egressGatewayManager = egressgateway.NewEgressGatewayManager(&d, d.identityAllocator)
+		d.egressGatewayManager = egressgateway.NewEgressGatewayManager(&d, d.identityAllocator, egressgw_healthcheck.NewHealthchecker())
 	}
 
 	d.k8sWatcher = watchers.NewK8sWatcher(

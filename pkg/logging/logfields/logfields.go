@@ -617,6 +617,9 @@ const (
 	// GatewayIP is the gateway IP used in a given egress policy
 	GatewayIP = "gatewayIP"
 
+	// GatewayIPs is a list of gateway IPs belonging to a given egress policy
+	GatewayIPs = "gatewayIPs"
+
 	// Number of Backends failed while restoration.
 	RestoredBackends = "restoredBackends"
 

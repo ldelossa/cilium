@@ -9,6 +9,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	. "gopkg.in/check.v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
+	"github.com/cilium/cilium/pkg/egressgateway/healthcheck"
 	"github.com/cilium/cilium/pkg/identity"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
@@ -54,6 +56,12 @@ const (
 	egressIP2   = "192.168.102.1"
 	egressCIDR2 = "192.168.102.1/24"
 
+	egressIP3   = "192.168.103.1"
+	egressCIDR3 = "192.168.103.1/24"
+
+	egressIP4   = "192.168.104.1"
+	egressCIDR4 = "192.168.104.1/24"
+
 	zeroIP4 = "0.0.0.0"
 )
 
@@ -63,11 +71,16 @@ var (
 
 	identityAllocator = testidentity.NewMockIdentityAllocator(nil)
 
-	nodeGroup1Labels = map[string]string{"label1": "1"}
-	nodeGroup2Labels = map[string]string{"label2": "2"}
+	noNodeGroup       = map[string]string{}
+	nodeGroup1Labels  = map[string]string{"label1": "1"}
+	nodeGroup2Labels  = map[string]string{"label2": "2"}
+	nodeGroup12Labels = map[string]string{"label1": "1", "label2": "2"}
 
 	nodeGroup1Selector = &slimv1.LabelSelector{MatchLabels: nodeGroup1Labels}
 	nodeGroup2Selector = &slimv1.LabelSelector{MatchLabels: nodeGroup2Labels}
+
+	node1RenewTimeOverride = time.Time{}
+	node2RenewTimeOverride = time.Time{}
 )
 
 type ipRule struct {
@@ -106,6 +119,30 @@ func (k *k8sCacheSyncedCheckerMock) K8sCacheIsSynced() bool {
 	return k.synced
 }
 
+type healthcheckerMock struct {
+	nodes  map[string]struct{}
+	events chan healthcheck.Event
+}
+
+func (h *healthcheckerMock) UpdateNodeList(nodes map[string]nodeTypes.Node) {
+}
+
+func (h *healthcheckerMock) NodeIsHealthy(nodeName string) bool {
+	_, ok := h.nodes[nodeName]
+	return ok
+}
+
+func (h *healthcheckerMock) Events() chan healthcheck.Event {
+	return h.events
+}
+
+func newHealthcheckerMock() *healthcheckerMock {
+	return &healthcheckerMock{
+		nodes:  make(map[string]struct{}),
+		events: make(chan healthcheck.Event),
+	}
+}
+
 // Hook up gocheck into the "go test" runner.
 type EgressGatewayTestSuite struct{}
 
@@ -137,9 +174,14 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 
 	k8sCacheSyncedChecker := &k8sCacheSyncedCheckerMock{}
 
-	egressGatewayManager := NewEgressGatewayManager(k8sCacheSyncedChecker, identityAllocator)
+	healthcheckerMock := newHealthcheckerMock()
+	egressGatewayManager := NewEgressGatewayManager(k8sCacheSyncedChecker, identityAllocator, healthcheckerMock)
 	c.Assert(egressGatewayManager, NotNil)
-	assertIPRules(c, []ipRule{})
+
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
 
 	k8sCacheSyncedChecker.synced = true
 
@@ -229,7 +271,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	assertIPRules(c, []ipRule{})
 
 	// Create a new policy
-	policy3 := newEgressPolicyConfigWithNodeSelector("policy-3", ep1Labels, destCIDR, nodeGroup1Selector, testInterface1)
+	policy3 := newEgressGroupConfigWithNodeSelector("policy-3", ep1Labels, destCIDR, nodeGroup1Selector, testInterface1)
 	egressGatewayManager.OnAddEgressPolicy(policy3)
 
 	assertEgressRules(c, []egressRule{})
@@ -264,7 +306,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Create a new policy
-	policy4 := newEgressPolicyConfigWithNodeSelector("policy-4", ep2Labels, destCIDR, nodeGroup2Selector, testInterface1)
+	policy4 := newEgressGroupConfigWithNodeSelector("policy-4", ep2Labels, destCIDR, nodeGroup2Selector, testInterface1)
 	egressGatewayManager.OnAddEgressPolicy(policy4)
 
 	assertEgressRules(c, []egressRule{
@@ -293,6 +335,348 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 		{ep2IP, destCIDR, zeroIP4, node2IP},
 	})
 	assertIPRules(c, []ipRule{})
+}
+
+func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
+	testInterface1Idx := createTestInterface(testInterface1, egressCIDR1)
+	testInterface2Idx := createTestInterface(testInterface2, egressCIDR2)
+	defer destroyTestInterface(testInterface1)
+	defer destroyTestInterface(testInterface2)
+
+	defer cleanupPolicies()
+
+	k8sCacheSyncedChecker := &k8sCacheSyncedCheckerMock{}
+
+	healthcheckerMock := newHealthcheckerMock()
+	egressGatewayManager := NewEgressGatewayManager(k8sCacheSyncedChecker, identityAllocator, healthcheckerMock)
+	c.Assert(egressGatewayManager, NotNil)
+
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
+
+	k8sCacheSyncedChecker.synced = true
+
+	node1 := newCiliumNode(node1, node1IP, nodeGroup1Labels)
+	egressGatewayManager.OnUpdateNode(node1)
+
+	node2 := newCiliumNode(node2, node2IP, nodeGroup1Labels)
+	egressGatewayManager.OnUpdateNode(node2)
+
+	assertEgressRules(c, []egressRule{})
+	assertIPRules(c, []ipRule{})
+
+	// Create a new HA policy based on a group config
+	policy1 := newEgressGroupConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, nodeGroup1Selector, testInterface1)
+	egressGatewayManager.OnAddEgressPolicy(policy1)
+
+	assertEgressRules(c, []egressRule{})
+	assertIPRules(c, []ipRule{})
+
+	// Add a new endpoint which matches policy-1
+	ep1, id1 := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
+	egressGatewayManager.OnUpdateEndpoint(&ep1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Make k8s1 unhealthy
+	node1RenewTimeOverride = time.Now().Add(-60 * time.Second)
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s2": {},
+	}
+	egressGatewayManager.reconcile()
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Remove k8s1 from node-group-1
+	node1.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{})
+
+	// Add back node1
+	node1.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// And make it healthy
+	node1RenewTimeOverride = time.Time{}
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
+	egressGatewayManager.reconcile()
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Make k8s2 unhealthy
+	node2RenewTimeOverride = time.Now().Add(-60 * time.Second)
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+	}
+	egressGatewayManager.reconcile()
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Remove k8s2 from node-group-1
+	node2.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node2)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Add back k8s2
+	node2.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node2)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// And make it healthy
+	node1RenewTimeOverride = time.Time{}
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
+	egressGatewayManager.reconcile()
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Update the EP labels in order for it to not be a match
+	id1 = updateEndpointAndIdentity(&ep1, id1, map[string]string{})
+	egressGatewayManager.OnUpdateEndpoint(&ep1)
+
+	assertEgressRules(c, []egressRule{})
+	assertIPRules(c, []ipRule{})
+
+	// Add back the endpoint
+	id1 = updateEndpointAndIdentity(&ep1, id1, ep1Labels)
+	egressGatewayManager.OnUpdateEndpoint(&ep1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Update the policy group config
+	policy1.groupConfigs[0].nodeSelector = api.NewESFromK8sLabelSelector("", nodeGroup2Selector)
+	egressGatewayManager.OnAddEgressPolicy(policy1)
+
+	assertEgressRules(c, []egressRule{})
+	assertIPRules(c, []ipRule{})
+
+	// Enable it back
+	policy1.groupConfigs[0].nodeSelector = api.NewESFromK8sLabelSelector("", nodeGroup1Selector)
+	egressGatewayManager.OnAddEgressPolicy(policy1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Update the policy group config to allow at most 1 gateway at a time
+	policy1.groupConfigs[0].maxGatewayNodes = 1
+	egressGatewayManager.OnAddEgressPolicy(policy1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Make k8s1 unhealthy
+	node1RenewTimeOverride = time.Now().Add(-60 * time.Second)
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s2": {},
+	}
+	egressGatewayManager.reconcile()
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Remove k8s1 from node-group-1
+	node1.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{})
+
+	// Add back node1
+	node1.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node1)
+
+	// And make it healthy
+	node1RenewTimeOverride = time.Time{}
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
+	egressGatewayManager.reconcile()
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Clear the maxGatewayNodes policy property
+	policy1.groupConfigs[0].maxGatewayNodes = 0
+	egressGatewayManager.OnAddEgressPolicy(policy1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Create a new HA policy
+	policy2 := newEgressGroupConfigWithNodeSelector("policy-2", ep2Labels, destCIDR, nodeGroup2Selector, testInterface2)
+	egressGatewayManager.OnAddEgressPolicy(policy2)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Add k8s1 to node-group-2 egress group
+	node1.Labels = nodeGroup12Labels
+	egressGatewayManager.OnUpdateNode(node1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Add a new endpoint that matches policy-2
+	ep2, _ := newEndpointAndIdentity("ep-2", ep2IP, ep2Labels)
+	egressGatewayManager.OnUpdateEndpoint(&ep2)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
+
+	// Add also k8s2 to node-group-2 egress group
+	node2.Labels = nodeGroup12Labels
+	egressGatewayManager.OnUpdateNode(node2)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
+
+	// Remove k8s1 from node-group-1 (but keep it in node-group-2)
+	node1.Labels = nodeGroup2Labels
+	egressGatewayManager.OnUpdateNode(node1)
+
+	assertEgressRules(c, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
 }
 
 func createTestInterface(iface string, addr string) int {
@@ -371,7 +755,7 @@ func newEgressPolicyConfig(policyName string, labels map[string]string, destinat
 	}
 }
 
-func newEgressPolicyConfigWithNodeSelector(policyName string, labels map[string]string, destinationCIDR string, selector *v1.LabelSelector, iface string) PolicyConfig {
+func newEgressGroupConfigWithNodeSelector(policyName string, labels map[string]string, destinationCIDR string, selector *v1.LabelSelector, iface string) PolicyConfig {
 	_, destCIDR, _ := net.ParseCIDR(destinationCIDR)
 
 	return PolicyConfig{
@@ -386,9 +770,11 @@ func newEgressPolicyConfigWithNodeSelector(policyName string, labels map[string]
 			},
 		},
 		dstCIDRs: []*net.IPNet{destCIDR},
-		policyGwConfig: &policyGatewayConfig{
-			nodeSelector: api.NewESFromK8sLabelSelector("", selector),
-			iface:        iface,
+		groupConfigs: []groupConfig{
+			{
+				nodeSelector: api.NewESFromK8sLabelSelector("", selector),
+				iface:        iface,
+			},
 		},
 	}
 }

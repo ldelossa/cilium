@@ -84,7 +84,12 @@ func printEgressList(egressList []egressPolicy) {
 
 	fmt.Fprintln(w, "Source IP\tDestination CIDR\tEgress IP\tGateway\t")
 	for _, ep := range egressList {
-		fmt.Fprintf(w, "%s\t%s\t%s\t0 => %s\n", ep.SourceIP, ep.DestCIDR, ep.EgressIP, ep.GatewayIPs[0])
+		gwZero := ""
+		if len(ep.GatewayIPs) > 0 {
+			gwZero = fmt.Sprintf("0 => %s", ep.GatewayIPs[0])
+		}
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ep.SourceIP, ep.DestCIDR, ep.EgressIP, gwZero)
 		for i := 1; i < len(ep.GatewayIPs); i++ {
 			fmt.Fprintf(w, "\t\t\t%d => %s\n", i, ep.GatewayIPs[i])
 		}

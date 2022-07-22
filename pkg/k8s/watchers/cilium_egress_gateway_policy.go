@@ -87,7 +87,7 @@ func (k *K8sWatcher) addCiliumEgressGatewayPolicy(cegp *cilium_v2.CiliumEgressGa
 	}
 	k.egressGatewayManager.OnAddEgressPolicy(*ep)
 
-	return err
+	return nil
 }
 
 func (k *K8sWatcher) deleteCiliumEgressGatewayPolicy(cegp *cilium_v2.CiliumEgressGatewayPolicy) {
@@ -164,7 +164,7 @@ func (k *K8sWatcher) addCiliumEgressNATPolicy(cenp *cilium_v2alpha1.CiliumEgress
 	}
 	k.egressGatewayManager.OnAddEgressPolicy(*ep)
 
-	return err
+	return nil
 }
 
 func (k *K8sWatcher) deleteCiliumEgressNATPolicy(cenp *cilium_v2alpha1.CiliumEgressNATPolicy) {
