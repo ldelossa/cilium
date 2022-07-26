@@ -89,8 +89,8 @@ rollOutCiliumPods: false
 # -- Agent container image.
 image:
   override: ~
-  repository: "quay.io/cilium/cilium"
-  tag: "v1.12.0"
+  repository: "quay.io/isovalent/cilium"
+  tag: "v1.12.0-cee.beta1"
   pullPolicy: "IfNotPresent"
   # cilium-digest
   digest: ""
@@ -785,8 +785,8 @@ hubble:
     # -- Hubble-relay container image.
     image:
       override: ~
-      repository: "quay.io/cilium/hubble-relay"
-      tag: "v1.12.0"
+      repository: "quay.io/isovalent/hubble-relay"
+      tag: "v1.12.0-cee.beta1"
        # hubble-relay-digest
       digest: ""
       useDigest: false
@@ -1231,11 +1231,9 @@ enableIPv6Masquerade: true
 # cluster.
 egressGateway:
   enabled: false
-
   # -- Install egress gateway IP rules and routes in order to properly steer
   # egress gateway traffic to the correct ENI interface
   installRoutes: false
-
   # -- Healthcheck timeout after which an egress gateway is marked not healthy.
   # This also configures the frequency of probes to a value of
   # healthcheckTimeout / 2
@@ -1537,8 +1535,8 @@ operator:
   # -- cilium-operator image.
   image:
     override: ~
-    repository: "quay.io/cilium/operator"
-    tag: "v1.12.0"
+    repository: "quay.io/isovalent/operator"
+    tag: "v1.12.0-cee.beta1"
     # operator-generic-digest
     genericDigest: ""
     # operator-azure-digest
@@ -1770,8 +1768,8 @@ preflight:
   # -- Cilium pre-flight image.
   image:
     override: ~
-    repository: "quay.io/cilium/cilium"
-    tag: "v1.12.0"
+    repository: "quay.io/isovalent/cilium"
+    tag: "v1.12.0-cee.beta1"
     # cilium-digest
     digest: ""
     useDigest: false
@@ -1907,8 +1905,8 @@ clustermesh:
     # -- Clustermesh API server image.
     image:
       override: ~
-      repository: "quay.io/cilium/clustermesh-apiserver"
-      tag: "v1.12.0"
+      repository: "quay.io/isovalent/clustermesh-apiserver"
+      tag: "v1.12.0-cee.beta1"
       # clustermesh-apiserver-digest
       digest: ""
       useDigest: false
