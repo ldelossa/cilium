@@ -12,8 +12,8 @@ spec:
         ns: cilium-test
   destinationCIDRs:
   - INPUT_OUTSIDE_NODE_IP/32
-  egressGateway:
-    nodeSelector:
+  egressGroups:
+  - nodeSelector:
       matchLabels:
         cilium.io/ci-node: k8s2
     egressIP: INPUT_EGRESS_IP
@@ -32,8 +32,8 @@ spec:
         ns: cilium-test
   destinationCIDRs:
   - INPUT_OUTSIDE_NODE_IP/32
-  egressGateway:
-    nodeSelector:
+  egressGroups:
+  - nodeSelector:
       matchLabels:
         cilium.io/ci-node: k8s2
     egressIP: INPUT_EGRESS_IP
@@ -71,8 +71,8 @@ spec:
   # It shouldn't affect in-cluster traffic.
   destinationCIDRs:
   - 0.0.0.0/0
-  egressGateway:
-    nodeSelector:
+  egressGroups:
+  - nodeSelector:
       matchLabels:
         cilium.io/ci-node: k8s2
     egressIP: 192.0.2.13 # It's a black hole, https://datatracker.ietf.org/doc/html/rfc5737#section-3
@@ -94,8 +94,8 @@ spec:
         zgroup: testDS
   destinationCIDRs:
   - 0.0.0.0/0
-  egressGateway:
-    nodeSelector:
+  egressGroups:
+  - nodeSelector:
       matchLabels:
         cilium.io/ci-node: k8s2
     egressIP: INPUT_EGRESS_IP
