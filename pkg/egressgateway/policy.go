@@ -242,6 +242,8 @@ func ParseCENP(cenp *v2alpha1.CiliumEgressNATPolicy) (*PolicyConfig, error) {
 		return nil, fmt.Errorf("CiliumEgressNATPolicy must have a name")
 	}
 
+	log.WithFields(logrus.Fields{logfields.CiliumEgressNATPolicyName: name}).Warn("CiliumEgressNATPolicy is deprecated and will be removed in version 1.13. Use CiliumEgressGatewayPolicy instead.")
+
 	egressIP := net.ParseIP(cenp.Spec.EgressSourceIP).To4()
 
 	gc := []groupConfig{}
