@@ -5,6 +5,7 @@ package srv6map
 
 import (
 	"fmt"
+	"net"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -34,6 +35,15 @@ func NewSIDKey(sid types.IPv6) SIDKey {
 	result := SIDKey{}
 	result.SID = sid
 	return result
+}
+
+func NewSIDKeyFromIP(ip *net.IP) (*SIDKey, error) {
+	if ip.To4() != nil {
+		return nil, fmt.Errorf("ip must be an IPv6 address")
+	}
+	result := &SIDKey{}
+	copy(result.SID[:], []byte(*ip))
+	return result, nil
 }
 
 type SIDValue struct {
