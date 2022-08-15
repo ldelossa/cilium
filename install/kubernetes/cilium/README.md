@@ -1,6 +1,6 @@
 # cilium
 
-![Version: 1.12.0-cee.beta2](https://img.shields.io/badge/Version-1.12.0--cee.beta2-informational?style=flat-square) ![AppVersion: 1.12.0-cee.beta2](https://img.shields.io/badge/AppVersion-1.12.0--cee.beta2-informational?style=flat-square)
+![Version: 1.12.1-cee.beta1](https://img.shields.io/badge/Version-1.12.1--cee.beta1-informational?style=flat-square) ![AppVersion: 1.12.1-cee.beta1](https://img.shields.io/badge/AppVersion-1.12.1--cee.beta1-informational?style=flat-square)
 
 Cilium is open source software for providing and transparently securing
 network connectivity and loadbalancing between application workloads such as
@@ -93,7 +93,7 @@ contributors across the globe, there is almost always someone available to help.
 | clustermesh.apiserver.affinity | object | `{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"clustermesh-apiserver"}},"topologyKey":"kubernetes.io/hostname"}]}}` | Affinity for clustermesh.apiserver |
 | clustermesh.apiserver.etcd.image | object | `{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/coreos/etcd","tag":"v3.5.4@sha256:795d8660c48c439a7c3764c2330ed9222ab5db5bb524d8d0607cac76f7ba82a3"}` | Clustermesh API server etcd image. |
 | clustermesh.apiserver.extraEnv | list | `[]` | Additional clustermesh-apiserver environment variables. |
-| clustermesh.apiserver.image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/clustermesh-apiserver","tag":"v1.12.0-cee.beta2","useDigest":false}` | Clustermesh API server image. |
+| clustermesh.apiserver.image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/clustermesh-apiserver","tag":"v1.12.1-cee.beta1","useDigest":false}` | Clustermesh API server image. |
 | clustermesh.apiserver.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/ |
 | clustermesh.apiserver.podAnnotations | object | `{}` | Annotations to be added to clustermesh-apiserver pods |
 | clustermesh.apiserver.podDisruptionBudget.enabled | bool | `false` | enable PodDisruptionBudget ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/ |
@@ -240,7 +240,7 @@ contributors across the globe, there is almost always someone available to help.
 | hubble.relay.dialTimeout | string | `nil` | Dial timeout to connect to the local hubble instance to receive peer information (e.g. "30s"). |
 | hubble.relay.enabled | bool | `false` | Enable Hubble Relay (requires hubble.enabled=true) |
 | hubble.relay.extraEnv | list | `[]` | Additional hubble-relay environment variables. |
-| hubble.relay.image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/hubble-relay","tag":"v1.12.0-cee.beta2","useDigest":false}` | Hubble-relay container image. |
+| hubble.relay.image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/hubble-relay","tag":"v1.12.1-cee.beta1","useDigest":false}` | Hubble-relay container image. |
 | hubble.relay.listenHost | string | `""` | Host to listen to. Specify an empty string to bind to all the interfaces. |
 | hubble.relay.listenPort | string | `"4245"` | Port to listen to. |
 | hubble.relay.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/ |
@@ -290,11 +290,11 @@ contributors across the globe, there is almost always someone available to help.
 | hubble.tls.server.extraIpAddresses | list | `[]` | Extra IP addresses added to certificate when it's auto generated |
 | hubble.ui.affinity | object | `{}` | Affinity for hubble-ui |
 | hubble.ui.backend.extraEnv | list | `[]` | Additional hubble-ui backend environment variables. |
-| hubble.ui.backend.image | object | `{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.9.1@sha256:c4b86e0d7a38d52c6ea3d9d7b17809e5212efd97494e8bd37c8466ddd68d42d0"}` | Hubble-ui backend image. |
+| hubble.ui.backend.image | object | `{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.9.0@sha256:000df6b76719f607a9edefb9af94dfd1811a6f1b6a8a9c537cba90bf12df474b"}` | Hubble-ui backend image. |
 | hubble.ui.backend.resources | object | `{}` | Resource requests and limits for the 'backend' container of the 'hubble-ui' deployment. |
 | hubble.ui.enabled | bool | `false` | Whether to enable the Hubble UI. |
 | hubble.ui.frontend.extraEnv | list | `[]` | Additional hubble-ui frontend environment variables. |
-| hubble.ui.frontend.image | object | `{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui","tag":"v0.9.1@sha256:baff611b975cb12307a163c0e547e648da211384eabdafd327707ff2ec31cc24"}` | Hubble-ui frontend image. |
+| hubble.ui.frontend.image | object | `{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui","tag":"v0.9.0@sha256:0ef04e9a29212925da6bdfd0ba5b581765e41a01f1cc30563cef9b30b457fea0"}` | Hubble-ui frontend image. |
 | hubble.ui.frontend.resources | object | `{}` | Resource requests and limits for the 'frontend' container of the 'hubble-ui' deployment. |
 | hubble.ui.ingress | object | `{"annotations":{},"className":"","enabled":false,"hosts":["chart-example.local"],"tls":[]}` | hubble-ui ingress configuration. |
 | hubble.ui.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/ |
@@ -317,7 +317,7 @@ contributors across the globe, there is almost always someone available to help.
 | hubble.ui.tolerations | list | `[]` | Node tolerations for pod assignment on nodes with taints ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/ |
 | hubble.ui.updateStrategy | object | `{"rollingUpdate":{"maxUnavailable":1},"type":"RollingUpdate"}` | hubble-ui update strategy. |
 | identityAllocationMode | string | `"crd"` | Method to use for identity allocation (`crd` or `kvstore`). |
-| image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.0-cee.beta2","useDigest":false}` | Agent container image. |
+| image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.1-cee.beta1","useDigest":false}` | Agent container image. |
 | imagePullSecrets | string | `nil` | Configure image pull secrets for pulling container images |
 | ingressController.enabled | bool | `false` | Enable cilium ingress controller This will automatically set enable-envoy-config as well. |
 | ingressController.enforceHttps | bool | `true` | Enforce https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. |
@@ -382,7 +382,7 @@ contributors across the globe, there is almost always someone available to help.
 | operator.extraVolumes | list | `[]` | Additional cilium-operator volumes. |
 | operator.identityGCInterval | string | `"15m0s"` | Interval for identity garbage collection. |
 | operator.identityHeartbeatTimeout | string | `"30m0s"` | Timeout for identity heartbeats. |
-| operator.image | object | `{"alibabacloudDigest":"","awsDigest":"","azureDigest":"","genericDigest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/operator","suffix":"","tag":"v1.12.0-cee.beta2","useDigest":false}` | cilium-operator image. |
+| operator.image | object | `{"alibabacloudDigest":"","awsDigest":"","azureDigest":"","genericDigest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/operator","suffix":"","tag":"v1.12.1-cee.beta1","useDigest":false}` | cilium-operator image. |
 | operator.nodeGCInterval | string | `"5m0s"` | Interval for cilium node garbage collection. |
 | operator.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for cilium-operator pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/ |
 | operator.podAnnotations | object | `{}` | Annotations to be added to cilium-operator pods |
@@ -413,7 +413,7 @@ contributors across the globe, there is almost always someone available to help.
 | preflight.affinity | object | `{"podAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"cilium"}},"topologyKey":"kubernetes.io/hostname"}]}}` | Affinity for cilium-preflight |
 | preflight.enabled | bool | `false` | Enable Cilium pre-flight resources (required for upgrade) |
 | preflight.extraEnv | list | `[]` | Additional preflight environment variables. |
-| preflight.image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.0-cee.beta2","useDigest":false}` | Cilium pre-flight image. |
+| preflight.image | object | `{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.1-cee.beta1","useDigest":false}` | Cilium pre-flight image. |
 | preflight.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for preflight pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/ |
 | preflight.podAnnotations | object | `{}` | Annotations to be added to preflight pods |
 | preflight.podDisruptionBudget.enabled | bool | `false` | enable PodDisruptionBudget ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/ |

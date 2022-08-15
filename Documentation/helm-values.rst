@@ -172,7 +172,7 @@
    * - clustermesh.apiserver.image
      - Clustermesh API server image.
      - object
-     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/clustermesh-apiserver","tag":"v1.12.0-cee.beta2","useDigest":false}``
+     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/clustermesh-apiserver","tag":"v1.12.1-cee.beta1","useDigest":false}``
    * - clustermesh.apiserver.nodeSelector
      - Node labels for pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/
      - object
@@ -760,7 +760,7 @@
    * - hubble.relay.image
      - Hubble-relay container image.
      - object
-     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/hubble-relay","tag":"v1.12.0-cee.beta2","useDigest":false}``
+     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/hubble-relay","tag":"v1.12.1-cee.beta1","useDigest":false}``
    * - hubble.relay.listenHost
      - Host to listen to. Specify an empty string to bind to all the interfaces.
      - string
@@ -960,7 +960,7 @@
    * - hubble.ui.backend.image
      - Hubble-ui backend image.
      - object
-     - ``{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.9.1@sha256:c4b86e0d7a38d52c6ea3d9d7b17809e5212efd97494e8bd37c8466ddd68d42d0"}``
+     - ``{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.9.0@sha256:000df6b76719f607a9edefb9af94dfd1811a6f1b6a8a9c537cba90bf12df474b"}``
    * - hubble.ui.backend.resources
      - Resource requests and limits for the 'backend' container of the 'hubble-ui' deployment.
      - object
@@ -976,7 +976,7 @@
    * - hubble.ui.frontend.image
      - Hubble-ui frontend image.
      - object
-     - ``{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui","tag":"v0.9.1@sha256:baff611b975cb12307a163c0e547e648da211384eabdafd327707ff2ec31cc24"}``
+     - ``{"override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/cilium/hubble-ui","tag":"v0.9.0@sha256:0ef04e9a29212925da6bdfd0ba5b581765e41a01f1cc30563cef9b30b457fea0"}``
    * - hubble.ui.frontend.resources
      - Resource requests and limits for the 'frontend' container of the 'hubble-ui' deployment.
      - object
@@ -1068,7 +1068,7 @@
    * - image
      - Agent container image.
      - object
-     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.0-cee.beta2","useDigest":false}``
+     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.1-cee.beta1","useDigest":false}``
    * - imagePullSecrets
      - Configure image pull secrets for pulling container images
      - string
@@ -1328,7 +1328,7 @@
    * - operator.image
      - cilium-operator image.
      - object
-     - ``{"alibabacloudDigest":"","awsDigest":"","azureDigest":"","genericDigest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/operator","suffix":"","tag":"v1.12.0-cee.beta2","useDigest":false}``
+     - ``{"alibabacloudDigest":"","awsDigest":"","azureDigest":"","genericDigest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/operator","suffix":"","tag":"v1.12.1-cee.beta1","useDigest":false}``
    * - operator.nodeGCInterval
      - Interval for cilium node garbage collection.
      - string
@@ -1452,7 +1452,7 @@
    * - preflight.image
      - Cilium pre-flight image.
      - object
-     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.0-cee.beta2","useDigest":false}``
+     - ``{"digest":"","override":null,"pullPolicy":"IfNotPresent","repository":"quay.io/isovalent/cilium","tag":"v1.12.1-cee.beta1","useDigest":false}``
    * - preflight.nodeSelector
      - Node labels for preflight pod assignment ref: https://kubernetes.io/docs/user-guide/node-selection/
      - object
