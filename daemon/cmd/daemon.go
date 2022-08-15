@@ -86,6 +86,7 @@ import (
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 	"github.com/cilium/cilium/pkg/sockops"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/srv6"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/trigger"
 	wg "github.com/cilium/cilium/pkg/wireguard/agent"
@@ -183,6 +184,8 @@ type Daemon struct {
 	bgpSpeaker *speaker.MetalLBSpeaker
 
 	egressGatewayManager *egressgateway.Manager
+
+	srv6Manager *srv6.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -650,6 +653,10 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 		d.egressGatewayManager = egressgateway.NewEgressGatewayManager(&d, d.identityAllocator, egressgw_healthcheck.NewHealthchecker())
 	}
 
+	if option.Config.EnableSRv6 {
+		d.srv6Manager = srv6.NewSRv6Manager(&d, d.identityAllocator)
+	}
+
 	d.k8sWatcher = watchers.NewK8sWatcher(
 		d.endpointManager,
 		d.nodeDiscovery,
@@ -660,6 +667,7 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 		d.redirectPolicyManager,
 		d.bgpSpeaker,
 		d.egressGatewayManager,
+		d.srv6Manager,
 		d.l7Proxy,
 		option.Config,
 		d.ipcache,
@@ -1082,6 +1090,12 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	}
 	if option.Config.EnableIPv6 {
 		d.restoreCiliumHostIPs(true, router6FromK8s)
+		// if SRv6 is enabled the mananger will use the IPv6 allocator to allocate
+		// VRF SIDs
+		if option.Config.EnableSRv6 {
+			log.Info("IPv6 and SRv6 is enabled, setting SRv6 Manager's SID Allocator")
+			d.srv6Manager.SetSIDAllocator(d.ipam.IPv6Allocator)
+		}
 	}
 
 	// restore endpoints before any IPs are allocated to avoid eventual IP

@@ -809,10 +809,58 @@ func ConvertToCiliumEgressNATPolicy(obj interface{}) interface{} {
 	}
 }
 
-// ConvertToCiliumClusterwideEnvoyConfig converts a *cilium_v2.CiliumClusterwideEnvoyConfig into a
-// *cilium_v2.CiliumClusterwideEnvoyConfig or a cache.DeletedFinalStateUnknown into
-// a cache.DeletedFinalStateUnknown with a *cilium_v2.CiliumClusterwideEnvoyConfig in its Obj.
-// If the given obj can't be cast into either *cilium_v2.CiliumClusterwideEnvoyConfig
+// ConvertToCiliumSRv6EgressPolicy converts a *cilium_v2.CiliumSRv6EgressPolicy into a
+// *cilium_v2.CiliumSRv6EgressPolicy or a cache.DeletedFinalStateUnknown into
+// a cache.DeletedFinalStateUnknown with a *cilium_v2.CiliumSRv6EgressPolicy in its Obj.
+// If the given obj can't be cast into either *cilium_v2.CiliumSRv6EgressPolicy
+// nor cache.DeletedFinalStateUnknown, the original obj is returned.
+func ConvertToCiliumSRv6EgressPolicy(obj interface{}) interface{} {
+	// TODO create a slim type of the CiliumSRv6EgressPolicy
+	switch concreteObj := obj.(type) {
+	case *cilium_v2alpha1.CiliumSRv6EgressPolicy:
+		return concreteObj
+	case cache.DeletedFinalStateUnknown:
+		ciliumSRv6EgressPolicy, ok := concreteObj.Obj.(*cilium_v2alpha1.CiliumSRv6EgressPolicy)
+		if !ok {
+			return obj
+		}
+		return cache.DeletedFinalStateUnknown{
+			Key: concreteObj.Key,
+			Obj: ciliumSRv6EgressPolicy,
+		}
+	default:
+		return obj
+	}
+}
+
+// ConvertToCiliumSRv6VRF converts a *cilium_v2.CiliumSRv6VRF into a
+// *cilium_v2.CiliumSRv6VRF or a cache.DeletedFinalStateUnknown into
+// a cache.DeletedFinalStateUnknown with a *cilium_v2.CiliumSRv6VRF in its Obj.
+// If the given obj can't be cast into either *cilium_v2.CiliumSRv6VRF
+// nor cache.DeletedFinalStateUnknown, the original obj is returned.
+func ConvertToCiliumSRv6VRF(obj interface{}) interface{} {
+	// TODO create a slim type of the CiliumSRv6VRF
+	switch concreteObj := obj.(type) {
+	case *cilium_v2alpha1.CiliumSRv6VRF:
+		return concreteObj
+	case cache.DeletedFinalStateUnknown:
+		ciliumSRv6VRF, ok := concreteObj.Obj.(*cilium_v2alpha1.CiliumSRv6VRF)
+		if !ok {
+			return obj
+		}
+		return cache.DeletedFinalStateUnknown{
+			Key: concreteObj.Key,
+			Obj: ciliumSRv6VRF,
+		}
+	default:
+		return obj
+	}
+}
+
+// ConvertToCiliumClusterwideEnvoyConfig converts a *cilium_v2alpha1.CiliumClusterwideEnvoyConfig into a
+// *cilium_v2alpha1.CiliumClusterwideEnvoyConfig or a cache.DeletedFinalStateUnknown into
+// a cache.DeletedFinalStateUnknown with a *cilium_v2alpha1.CiliumClusterwideEnvoyConfig in its Obj.
+// If the given obj can't be cast into either *cilium_v2alpha1.CiliumClusterwideEnvoyConfig
 // nor cache.DeletedFinalStateUnknown, the original obj is returned.
 func ConvertToCiliumClusterwideEnvoyConfig(obj interface{}) interface{} {
 	switch concreteObj := obj.(type) {
@@ -1098,6 +1146,50 @@ func ConvertCoreCiliumEndpointToTypesCiliumEndpoint(ccep *cilium_v2alpha1.CoreCi
 		Networking: ccep.Networking,
 		NamedPorts: ccep.NamedPorts,
 	}
+}
+
+// ObjToCSREP attempts to cast object to a CSREP object and
+// returns a deep copy if the casting succeeds. Otherwise, nil is returned.
+func ObjToCSREP(obj interface{}) *cilium_v2alpha1.CiliumSRv6EgressPolicy {
+	csrep, ok := obj.(*cilium_v2alpha1.CiliumSRv6EgressPolicy)
+	if ok {
+		return csrep
+	}
+	deletedObj, ok := obj.(cache.DeletedFinalStateUnknown)
+	if ok {
+		// Delete was not observed by the watcher but is
+		// removed from kube-apiserver. This is the last
+		// known state and the object no longer exists.
+		csrep, ok := deletedObj.Obj.(*cilium_v2alpha1.CiliumSRv6EgressPolicy)
+		if ok {
+			return csrep
+		}
+	}
+	log.WithField(logfields.Object, logfields.Repr(obj)).
+		Warn("Ignoring invalid v2 CiliumSRv6EgressPolicy")
+	return nil
+}
+
+// ObjToCSRVRF attempts to cast object to a CSRVRF object and
+// returns a deep copy if the casting succeeds. Otherwise, nil is returned.
+func ObjToCSRVRF(obj interface{}) *cilium_v2alpha1.CiliumSRv6VRF {
+	csrvrf, ok := obj.(*cilium_v2alpha1.CiliumSRv6VRF)
+	if ok {
+		return csrvrf
+	}
+	deletedObj, ok := obj.(cache.DeletedFinalStateUnknown)
+	if ok {
+		// Delete was not observed by the watcher but is
+		// removed from kube-apiserver. This is the last
+		// known state and the object no longer exists.
+		csrvrf, ok := deletedObj.Obj.(*cilium_v2alpha1.CiliumSRv6VRF)
+		if ok {
+			return csrvrf
+		}
+	}
+	log.WithField(logfields.Object, logfields.Repr(obj)).
+		Warn("Ignoring invalid v2 CiliumSRv6VRF")
+	return nil
 }
 
 // ObjToCCEC attempts to cast object to a CCEC object and

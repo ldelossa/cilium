@@ -52,6 +52,7 @@ import (
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
+	"github.com/cilium/cilium/pkg/srv6"
 )
 
 const (
@@ -165,6 +166,7 @@ type bgpSpeakerManager interface {
 	OnUpdateEndpointSliceV1(eps *slim_discover_v1.EndpointSlice) error
 	OnUpdateEndpointSliceV1Beta1(eps *slim_discover_v1beta1.EndpointSlice) error
 }
+
 type egressGatewayManager interface {
 	OnAddEgressPolicy(config egressgateway.PolicyConfig)
 	OnDeleteEgressPolicy(configID types.NamespacedName)
@@ -172,6 +174,15 @@ type egressGatewayManager interface {
 	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
 	OnUpdateNode(node nodeTypes.Node)
 	OnDeleteNode(node nodeTypes.Node)
+}
+
+type srv6Manager interface {
+	OnAddSRv6Policy(config srv6.EgressPolicy)
+	OnDeleteSRv6Policy(configID types.NamespacedName)
+	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnAddSRv6VRF(vrf srv6.VRF)
+	OnDeleteSRv6VRF(vrfID types.NamespacedName)
 }
 
 type envoyConfigManager interface {
@@ -219,6 +230,7 @@ type K8sWatcher struct {
 	redirectPolicyManager redirectPolicyManager
 	bgpSpeakerManager     bgpSpeakerManager
 	egressGatewayManager  egressGatewayManager
+	srv6Manager           srv6Manager
 	ipcache               *ipcache.IPCache
 	envoyConfigManager    envoyConfigManager
 
@@ -258,6 +270,7 @@ func NewK8sWatcher(
 	redirectPolicyManager redirectPolicyManager,
 	bgpSpeakerManager bgpSpeakerManager,
 	egressGatewayManager egressGatewayManager,
+	srv6Manager srv6Manager,
 	envoyConfigManager envoyConfigManager,
 	cfg WatcherConfiguration,
 	ipcache *ipcache.IPCache,
@@ -277,6 +290,7 @@ func NewK8sWatcher(
 		redirectPolicyManager: redirectPolicyManager,
 		bgpSpeakerManager:     bgpSpeakerManager,
 		egressGatewayManager:  egressGatewayManager,
+		srv6Manager:           srv6Manager,
 		NodeChain:             subscriber.NewNodeChain(),
 		CiliumNodeChain:       subscriber.NewCiliumNodeChain(),
 		envoyConfigManager:    envoyConfigManager,
@@ -545,6 +559,10 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			k.ciliumEgressGatewayPolicyInit(ciliumNPClient)
 		case k8sAPIGroupCiliumEgressNATPolicyV2:
 			k.ciliumEgressNATPolicyInit(ciliumNPClient)
+		case k8sAPIGroupCiliumSRv6EgressPolicyV2:
+			k.ciliumSRv6EgressPolicyInit(ciliumNPClient)
+		case k8sAPIGroupCiliumSRv6VRFV2:
+			k.ciliumSRv6VRFInit(ciliumNPClient)
 		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2:
 			k.ciliumClusterwideEnvoyConfigInit(ciliumNPClient)
 		case k8sAPIGroupCiliumEnvoyConfigV2:
