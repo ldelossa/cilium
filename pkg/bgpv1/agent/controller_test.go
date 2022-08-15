@@ -384,8 +384,11 @@ func TestPolicySelection(t *testing.T) {
 					want = policy
 				}
 			}
+
+			ctrl := agent.Controller{}
+
 			// call function under test
-			policy, err := agent.PolicySelection(context.Background(), tt.nodeLabels, policies)
+			policy, err := ctrl.PolicySelection(context.Background(), tt.nodeLabels, policies)
 			if (tt.err == nil) != (err == nil) {
 				t.Fatalf("expected err: %v", (tt.err == nil))
 			}

@@ -4,9 +4,13 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -23,11 +27,13 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/client/listers/cilium.io/v2alpha1"
 	slimlabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
 	slimmetav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeaddr "github.com/cilium/cilium/pkg/node"
 	nodetypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
+	srv6 "github.com/cilium/cilium/pkg/srv6"
 )
 
 var (
@@ -38,6 +44,7 @@ var (
 	// ErrMultiplePolicies is a static error typed when the controller encounters
 	// multiple policies which apply to its host.
 	ErrMultiplePolicies = fmt.Errorf("more then one CiliumBGPPeeringPolicy applies to this node, please ensure only a single Policy matches this node's labels")
+	ErrSRv6NoMgr        = fmt.Errorf("a virtual router requests the mapping of SRv6 VRFs but no SRv6 Manager exists")
 )
 
 // Signaler multiplexes multiple event sources into a single level-triggered
@@ -94,8 +101,18 @@ type ControlPlaneState struct {
 	IPv4 net.IP
 	// The current IPv6 address of the agent, reachable externally.
 	IPv6 net.IP
+	// The VRFs present at the time of BGP control plane reconciliation.
+	VRFs []srv6.VRF
 	// The Signaler attached to the BGP control plane used to signal reconciliation
 	Sig *Signaler
+}
+
+// SRv6Interface is the expected method set for interfacing with Cilium's
+// SRv6 control and data planes.
+type SRv6Interface interface {
+	GetAllVRFs() []*srv6.VRF
+	GetVRFs(importRouteTarget string) []*srv6.VRF
+	GetEgressPolicies() []*srv6.EgressPolicy
 }
 
 // Controller is the agent side BGP Control Plane controller.
@@ -118,6 +135,10 @@ type Controller struct {
 	// BGPMgr is an implementation of the BGPRouterManager interface
 	// and provides a declarative API for configuring BGP peers.
 	BGPMgr BGPRouterManager
+	srv6Mu lock.RWMutex
+	// SRv6 is an implementation of the expected method set for interfacing with
+	// Cilium's SRv6 control and data planes.
+	SRv6 SRv6Interface
 }
 
 // ControllerOpt is a signature for defining configurable options for a
@@ -259,6 +280,12 @@ func (c *Controller) Signal() {
 	c.Sig.Event(struct{}{})
 }
 
+func (c *Controller) SetSRv6Manager(srv6 SRv6Interface) {
+	c.srv6Mu.Lock()
+	c.SRv6 = srv6
+	c.srv6Mu.Unlock()
+}
+
 // Run places the Controller into its control loop.
 //
 // Kubernetes shared informers are started just before entering the long running
@@ -311,12 +338,13 @@ func (c *Controller) Run(ctx context.Context, stop chan struct{}) {
 // - If (N > 1) policies match the provided *corev1.Node an error is returned.
 //   only a single policy may apply to a node to avoid ambiguity at this stage
 //   of development.
-func PolicySelection(ctx context.Context, labels map[string]string, policies []*v2alpha1api.CiliumBGPPeeringPolicy) (*v2alpha1api.CiliumBGPPeeringPolicy, error) {
+func (c *Controller) PolicySelection(ctx context.Context, labels map[string]string, policies []*v2alpha1api.CiliumBGPPeeringPolicy) (*v2alpha1api.CiliumBGPPeeringPolicy, error) {
 	var (
 		l = log.WithFields(logrus.Fields{
 			"component": "PolicySelection",
 		})
 	)
+
 	// determine which policies match our node's labels.
 	var (
 		selected   *v2alpha1api.CiliumBGPPeeringPolicy
@@ -345,8 +373,20 @@ func PolicySelection(ctx context.Context, labels map[string]string, policies []*
 		}
 	}
 
-	// no policy was discovered, tell router manager to withdrawal peers if they
-	// are configured.
+	// we need to confirm we have a valid SRv6Mgr if any virtual router wants
+	// to map SRv6VRFs
+	if selected != nil {
+		// lock on reading c.SRv6 pointer.
+		c.srv6Mu.RLock()
+		for _, vr := range selected.Spec.VirtualRouters {
+			if vr.MapSRv6VRFs && (c.SRv6 == nil) {
+				c.srv6Mu.RUnlock()
+				return nil, ErrSRv6NoMgr
+			}
+		}
+		c.srv6Mu.RUnlock()
+	}
+
 	return selected, nil
 }
 
@@ -379,7 +419,7 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve labels for Node: %w", err)
 	}
-	policy, err := PolicySelection(ctx, labels, policies)
+	policy, err := c.PolicySelection(ctx, labels, policies)
 	if err != nil {
 		l.WithError(err).Error("Policy selection failed")
 		c.FullWithdrawal(ctx)
@@ -426,6 +466,174 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 	l.Debug("Asking configured BGPRouterManager to configure peering")
 	if err := c.BGPMgr.ConfigurePeers(ctx, policy, state); err != nil {
 		return fmt.Errorf("failed to configure BGP peers, cannot apply BGP peering policy: %w", err)
+	}
+
+	// if we are the SRv6 responder handle this
+	for asn, attr := range annoMap {
+		if attr.SRv6Responder {
+			log.Infof("Acting as SRv6 responder for local ASN %d", asn)
+
+			// confirm we have a valid SRv6Manager pointer before reconciling.
+			c.srv6Mu.RLock()
+			if c.SRv6 == nil {
+				c.srv6Mu.RUnlock()
+				return fmt.Errorf("acting as SRv6 Responder but nil handle to SRv6 Manager")
+			}
+			c.srv6Mu.RUnlock()
+
+			err := c.reconcileSRv6(ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// keyifySRv6Policy creates a string key for a SRv6PolicyConfig.
+func keyifySRv6Policy(p *srv6.EgressPolicy) string {
+	b := &bytes.Buffer{}
+
+	id := strconv.FormatUint(uint64(p.VRFID), 10)
+	b.Write([]byte(id))
+
+	for _, cidr := range p.DstCIDRs {
+		b.Write([]byte(cidr.String()))
+	}
+
+	h := sha256.New()
+	io.Copy(h, b)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (c *Controller) reconcileSRv6(ctx context.Context) error {
+	var (
+		l = log.WithFields(
+			logrus.Fields{
+				"component": "Controller.reconcileSRv6",
+			},
+		)
+		toCreate []*srv6.EgressPolicy
+		toRemove []*srv6.EgressPolicy
+	)
+	l.Debug("Starting SRv6 egress policy reconciliation.")
+
+	vrfs := c.SRv6.GetAllVRFs()
+	l.WithField("count", len(vrfs)).Debug("Discovered configured VRFs")
+
+	curPolicies := c.SRv6.GetEgressPolicies()
+	l.WithField("count", len(curPolicies)).Debug("Discovered current egress policies")
+
+	newPolicies, err := c.BGPMgr.MapSRv6EgressPolicy(ctx, vrfs)
+	if err != nil {
+		return fmt.Errorf("failed to map VRFs into SRv6 egress policies: %w", err)
+	}
+
+	// an nset member which book keeps which universe it exists in.
+	type member struct {
+		// present in new policies universe
+		a bool
+		// present in current policies universe
+		b bool
+		p *srv6.EgressPolicy
+	}
+
+	// set of unique policies
+	pset := map[string]*member{}
+
+	// evaluate new policies
+	for i, p := range newPolicies {
+		var (
+			key = keyifySRv6Policy(p)
+			h   *member
+			ok  bool
+		)
+		if h, ok = pset[key]; !ok {
+			pset[key] = &member{
+				a: true,
+				p: newPolicies[i],
+			}
+			continue
+		}
+		h.a = true
+	}
+	// evaluate current policies
+	for i, p := range curPolicies {
+		var (
+			key = keyifySRv6Policy(p)
+			h   *member
+			ok  bool
+		)
+		if h, ok = pset[key]; !ok {
+			pset[key] = &member{
+				b: true,
+				p: curPolicies[i],
+			}
+			continue
+		}
+		h.b = true
+	}
+
+	for _, m := range pset {
+		// present in new policies but not in current, create
+		if m.a && !m.b {
+			toCreate = append(toCreate, m.p)
+		}
+		// present in current policies but not new, remove.
+		if m.b && !m.a {
+			toRemove = append(toRemove, m.p)
+		}
+	}
+	l.WithField("count", len(toCreate)).Info("Number of SRv6 egress policies to create.")
+	l.WithField("count", len(toRemove)).Info("Number of SRv6 egress policies to remove.")
+
+	clientSet := k8s.
+		CiliumClient().
+		CiliumV2alpha1().
+		CiliumSRv6EgressPolicies()
+
+	mkName := func(p *srv6.EgressPolicy) string {
+		const (
+			prefix = "bgp-control-plane"
+		)
+		return fmt.Sprintf("%s-%s", prefix, keyifySRv6Policy(p))
+	}
+
+	for _, p := range toCreate {
+		destCIDRs := []v2alpha1api.CIDR{}
+		for _, c := range p.DstCIDRs {
+			destCIDRs = append(destCIDRs, v2alpha1api.CIDR(c.String()))
+		}
+
+		egressPol := &v2alpha1api.CiliumSRv6EgressPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mkName(p),
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "cilium.io/v2alpha1",
+				Kind:       "CiliumSRv6EgressPolicy",
+			},
+			Spec: v2alpha1api.CiliumSRv6EgressPolicySpec{
+				VRFID:            p.VRFID,
+				DestinationCIDRs: []v2alpha1api.CIDR(destCIDRs),
+				DestinationSID:   p.SID.IP().String(),
+			},
+		}
+		l.WithField("policy", egressPol).Debug("Writing egress policy to Kubernetes")
+		res, err := clientSet.Create(ctx, egressPol, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to write egress policy to Kubernetes: %w", err)
+		}
+		l.WithField("policy", res).Debug("Resulting egress policy")
+	}
+
+	for _, p := range toRemove {
+		l.WithField("policy", p).Debug("Removing egress policy from Kubernetes")
+		err := clientSet.Delete(ctx, mkName(p), metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to remove egress policy: %w", err)
+		}
 	}
 
 	return nil
