@@ -335,6 +335,12 @@ const (
 	// CiliumEgressGatewayPolicyName is the name of a CiliumEgressGatewayPolicy
 	CiliumEgressGatewayPolicyName = "ciliumEgressGatewayPolicyName"
 
+	// CiliumSRv6EgressPolicyName is the name of a CiliumSRv6EgressPolicy
+	CiliumSRv6EgressPolicyName = "ciliumSRv6EgressPolicyName"
+
+	// CiliumSRv6VRFName is the name of a CiliumSRv6VRF
+	CiliumSRv6VRFName = "ciliumSRv6VRFName"
+
 	// CiliumClusterwideEnvoyConfigName is the name of a CiliumClusterwideEnvoyConfig
 	CiliumClusterwideEnvoyConfigName = "ciliumClusterwideEnvoyConfigName"
 
@@ -690,6 +696,12 @@ const (
 
 	// CGroupId is the numerical cgroup id
 	CGroupID = "cgroupID"
+
+	// VRF is the VRF used for the SRv6 lookups.
+	VRF = "vrf"
+
+	// SID is the segment identifier used in SRv6.
+	SID = "sid"
 
 	// Expected is an expected value
 	Expected = "expected"
