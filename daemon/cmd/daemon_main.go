@@ -1864,6 +1864,16 @@ func runDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daem
 		}
 	}
 
+	// Assign the BGP Control to the struct field so non-modularized components can interact with the BGP Controller
+	// like they are used to.
+	d.bgpControlPlaneController = params.BGPController
+	if d.srv6Manager != nil && d.bgpControlPlaneController != nil {
+		log.Info("Both SRv6 and BGP CP enabled, providing handles to both.")
+		d.bgpControlPlaneController.SetSRv6Manager(d.srv6Manager)
+		d.srv6Manager.SetBGPSignaler(d.bgpControlPlaneController)
+		d.bgpControlPlaneController.Signal()
+	}
+
 	log.WithField("bootstrapTime", time.Since(bootstrapTimestamp)).
 		Info("Daemon initialization completed")
 
