@@ -310,6 +310,12 @@ const (
 	// CiliumEgressNATPolicyName is the name of a CiliumEgressNATPolicy
 	CiliumEgressNATPolicyName = "ciliumEgressNATPolicyName"
 
+	// CiliumSRv6EgressPolicyName is the name of a CiliumSRv6EgressPolicy
+	CiliumSRv6EgressPolicyName = "ciliumSRv6EgressPolicyName"
+
+	// CiliumSRv6VRFName is the name of a CiliumSRv6VRF
+	CiliumSRv6VRFName = "ciliumSRv6VRFName"
+
 	// CiliumClusterwideEnvoyConfigName is the name of a CiliumClusterwideEnvoyConfig
 	CiliumClusterwideEnvoyConfigName = "ciliumClusterwideEnvoyConfigName"
 
@@ -634,4 +640,10 @@ const (
 
 	// IPSec old SPI
 	OldSPI = "oldSPI"
+
+	// VRF is the VRF used for the SRv6 lookups.
+	VRF = "vrf"
+
+	// SID is the segment identifier used in SRv6.
+	SID = "sid"
 )
