@@ -20,8 +20,9 @@ import (
 	netutils "k8s.io/utils/net"
 )
 
+// Equal compares two PolicyKey objects
 func (a *PolicyKey) Equal(b *PolicyKey) bool {
-	if (a != nil) != (b != nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return a.VRFID == b.VRFID &&
@@ -34,8 +35,9 @@ func (k *PolicyKey) IsIPv6() bool {
 	return netutils.IsIPv6CIDR(k.DestCIDR)
 }
 
+// Equal compares two PolicyValue objects
 func (a *PolicyValue) Equal(b *PolicyValue) bool {
-	if (a != nil) != (b != nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return a.SID.IP().Equal(b.SID.IP())
@@ -98,15 +100,17 @@ func GetPolicyMap(key PolicyKey) *srv6PolicyMap {
 	return SRv6PolicyMap4
 }
 
+// Equal compares two SIDKey objects
 func (a *SIDKey) Equal(b *SIDKey) bool {
-	if (a != nil) != (b != nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return a.SID.IP().Equal(b.SID.IP())
 }
 
+// Equal compares two SIDValue objects
 func (a *SIDValue) Equal(b *SIDValue) bool {
-	if (a != nil) != (b != nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return a.VRFID == b.VRFID
@@ -134,8 +138,9 @@ func (k *StateKey) IsIPv6() bool {
 	return ip.IsIPv6(*k.InnerSrc) && ip.IsIPv6(*k.InnerDst)
 }
 
+// Equal compares two VRFKey objects
 func (a *VRFKey) Equal(b *VRFKey) bool {
-	if (a != nil) != (b != nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return a.SourceIP.Equal(*b.SourceIP) &&
@@ -148,8 +153,9 @@ func (k *VRFKey) IsIPv6() bool {
 	return ip.IsIPv6(*k.SourceIP)
 }
 
+// Equal compares two VRFValue objects
 func (a *VRFValue) Equal(b *VRFValue) bool {
-	if (a != nil) != (b != nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return a.ID == b.ID

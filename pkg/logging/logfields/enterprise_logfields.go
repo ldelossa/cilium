@@ -19,4 +19,16 @@ const (
 
 	// K8sGeneration is the metadata.generation of a k8s resource.
 	K8sGeneration = "k8sGeneration"
+
+	// IsovalentSRv6EgressPolicyName is the name of a IsovalentSRv6EgressPolicy
+	IsovalentSRv6EgressPolicyName = "isovalentSRv6EgressPolicyName"
+
+	// IsovalentVRFName is the name of a IsovalentVRF
+	IsovalentVRFName = "isovalentVRFName"
+
+	// VRF is the VRF used for the SRv6 lookups.
+	VRF = "vrf"
+
+	// SID is the segment identifier used in SRv6.
+	SID = "sid"
 )

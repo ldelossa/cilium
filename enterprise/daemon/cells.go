@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
+	"github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
 	"github.com/cilium/cilium/pkg/hive/cell"
 
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
@@ -39,6 +40,7 @@ var (
 
 		cecm.Cell,
 		sidmanager.SIDManagerCell,
+		srv6manager.Cell,
 		egressmapha.Cell,
 		egressgatewayha.Cell,
 		egressgatewayha.PolicyCell,
