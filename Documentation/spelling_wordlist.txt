@@ -112,6 +112,7 @@ Redis
 RuleParser
 SIG
 SR-IOV
+SRv
 Sharma
 Shirokov
 Shortnames
@@ -853,6 +854,7 @@ setupiptables
 sfc
 sg
 sha
+sid
 sidecarImageRegex
 sig
 skb
@@ -868,6 +870,7 @@ sortBufferDrainTimeout
 sortBufferLenMax
 sourceContext
 src
+srv
 ssl
 stacktrace
 stap
@@ -989,6 +992,7 @@ virtualization
 vlan
 vmlinux
 volumeMounts
+vrf
 vtep
 vxlan
 waitForKubeProxy
