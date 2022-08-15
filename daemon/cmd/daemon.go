@@ -89,6 +89,7 @@ import (
 	"github.com/cilium/cilium/pkg/service"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/srv6"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/trigger"
 	cnitypes "github.com/cilium/cilium/plugins/cilium-cni/types"
@@ -191,6 +192,8 @@ type Daemon struct {
 	egressGatewayManager *egressgateway.Manager
 
 	cgroupManager *manager.CgroupManager
+
+	srv6Manager *srv6.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -663,6 +666,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		egressGatewayWatcher = d.egressGatewayManager
 	}
 
+	if option.Config.EnableSRv6 {
+		d.srv6Manager = srv6.NewSRv6Manager(params.CacheStatus, d.identityAllocator)
+	}
+
 	d.k8sWatcher = watchers.NewK8sWatcher(
 		params.Clientset,
 		d.endpointManager,
@@ -674,6 +681,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.redirectPolicyManager,
 		d.bgpSpeaker,
 		egressGatewayWatcher,
+		d.srv6Manager,
 		d.l7Proxy,
 		option.Config,
 		d.ipcache,

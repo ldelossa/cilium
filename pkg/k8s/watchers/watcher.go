@@ -58,6 +58,7 @@ import (
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/srv6"
 )
 
 const (
@@ -179,6 +180,15 @@ type EgressGatewayManager interface {
 	OnDeleteNode(node nodeTypes.Node)
 }
 
+type srv6Manager interface {
+	OnAddSRv6Policy(config srv6.EgressPolicy)
+	OnDeleteSRv6Policy(configID types.NamespacedName)
+	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnAddSRv6VRF(vrf srv6.VRF)
+	OnDeleteSRv6VRF(vrfID types.NamespacedName)
+}
+
 type envoyConfigManager interface {
 	UpsertEnvoyResources(context.Context, envoy.Resources, envoy.PortAllocator) error
 	UpdateEnvoyResources(ctx context.Context, old, new envoy.Resources, portAllocator envoy.PortAllocator) error
@@ -246,6 +256,7 @@ type K8sWatcher struct {
 	redirectPolicyManager redirectPolicyManager
 	bgpSpeakerManager     bgpSpeakerManager
 	egressGatewayManager  EgressGatewayManager
+	srv6Manager           srv6Manager
 	ipcache               ipcacheManager
 	envoyConfigManager    envoyConfigManager
 	cgroupManager         cgroupManager
@@ -296,6 +307,7 @@ func NewK8sWatcher(
 	redirectPolicyManager redirectPolicyManager,
 	bgpSpeakerManager bgpSpeakerManager,
 	egressGatewayManager EgressGatewayManager,
+	srv6Manager srv6Manager,
 	envoyConfigManager envoyConfigManager,
 	cfg WatcherConfiguration,
 	ipcache ipcacheManager,
@@ -319,6 +331,7 @@ func NewK8sWatcher(
 		bgpSpeakerManager:     bgpSpeakerManager,
 		egressGatewayManager:  egressGatewayManager,
 		cgroupManager:         cgroupManager,
+		srv6Manager:           srv6Manager,
 		NodeChain:             subscriber.NewNodeChain(),
 		CiliumNodeChain:       subscriber.NewCiliumNodeChain(),
 		envoyConfigManager:    envoyConfigManager,
@@ -589,6 +602,10 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			k.ciliumLocalRedirectPolicyInit(k.clientset)
 		case k8sAPIGroupCiliumEgressGatewayPolicyV2:
 			k.ciliumEgressGatewayPolicyInit(k.clientset)
+		case k8sAPIGroupCiliumSRv6EgressPolicyV2:
+			k.ciliumSRv6EgressPolicyInit(k.clientset)
+		case k8sAPIGroupCiliumSRv6VRFV2:
+			k.ciliumSRv6VRFInit(k.clientset)
 		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2:
 			k.ciliumClusterwideEnvoyConfigInit(ctx, k.clientset)
 		case k8sAPIGroupCiliumEnvoyConfigV2:
