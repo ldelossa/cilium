@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	v2alpha1listers "github.com/cilium/cilium/pkg/k8s/client/listers/cilium.io/v2alpha1"
+	"github.com/cilium/cilium/pkg/srv6"
 )
 
 var _ v1listers.NodeLister = (*MockNodeLister)(nil)
@@ -50,9 +51,14 @@ func (m *MockCiliumBGPPeeringPolicyLister) Get(name string) (*v2alpha1.CiliumBGP
 var _ agent.BGPRouterManager = (*MockBGPRouterManager)(nil)
 
 type MockBGPRouterManager struct {
-	ConfigurePeers_ func(ctx context.Context, policy *v2alpha1.CiliumBGPPeeringPolicy, cstate *agent.ControlPlaneState) error
+	ConfigurePeers_      func(ctx context.Context, policy *v2alpha1.CiliumBGPPeeringPolicy, cstate *agent.ControlPlaneState) error
+	MapSRv6EgressPolicy_ func(ctx context.Context, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error)
 }
 
 func (m *MockBGPRouterManager) ConfigurePeers(ctx context.Context, policy *v2alpha1.CiliumBGPPeeringPolicy, cstate *agent.ControlPlaneState) error {
 	return m.ConfigurePeers_(ctx, policy, cstate)
+}
+
+func (m *MockBGPRouterManager) MapSRv6EgressPolicy(ctx context.Context, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error) {
+	return m.MapSRv6EgressPolicy_(ctx, vrfs)
 }

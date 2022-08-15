@@ -1847,6 +1847,15 @@ func runDaemon() {
 		log.Info("Initializing BGP Control Plane")
 		if err := d.instantiateBGPControlPlane(d.ctx); err != nil {
 			log.WithError(err).Fatal("Error returned when instantiating BGP control plane")
+		} else {
+			// srv6Manager is instantiated earlier, if its enabled and so is BGP control plane,
+			// they need handles to each other.
+			if d.srv6Manager != nil {
+				log.Info("Both SRv6 and BGP CP enabled, providing handles to both.")
+				d.bgpControlPlaneController.SetSRv6Manager(d.srv6Manager)
+				d.srv6Manager.SetBGPSignaler(d.bgpControlPlaneController)
+				d.bgpControlPlaneController.Signal()
+			}
 		}
 	}
 
