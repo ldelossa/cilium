@@ -2432,6 +2432,18 @@
      - Enable socket LB
      - bool
      - ``false``
+   * - srv6
+     - Configure SRv6 support.
+     - object
+     - ``{"enabled":false,"encapMode":"reduced"}``
+   * - srv6.enabled
+     - Enable SRv6 encapsulation support.
+     - bool
+     - ``false``
+   * - srv6.encapMode
+     - Specify SRv6 SID encapsulation.
+     - string
+     - ``"reduced"``
    * - startupProbe.failureThreshold
      - failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s)
      - int
