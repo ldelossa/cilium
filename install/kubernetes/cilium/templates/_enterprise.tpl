@@ -7,8 +7,11 @@ Enterprise-only cilium-config entries
 {{- /* We additionally fallback to the specific setting used in v1.13-ce for backward compatibility */}}
 enable-cluster-aware-addressing: {{ .Values.enterprise.clustermesh.enableOverlappingPodCIDRSupport | default .Values.clustermesh.enableOverlappingPodCIDRSupport | default "false" | quote }}
 enable-inter-cluster-snat: {{ .Values.enterprise.clustermesh.enableOverlappingPodCIDRSupport | default .Values.clustermesh.enableOverlappingPodCIDRSupport | default "false" | quote }}
-# SRv6 Locator Pool support
-srv6-locator-pool-enabled:  {{ .Values.enterprise.srv6.locatorPoolEnabled | default .Values.enterprise.srv6.locatorPoolEnabled | default "false" | quote }}
+
+# Configuration options to enable SRv6 support
+enable-srv6:               {{ .Values.enterprise.srv6.enabled            | default "false"   | quote }}
+srv6-encap-mode:           {{ .Values.enterprise.srv6.encapMode          | default "reduced" | quote }}
+srv6-locator-pool-enabled: {{ .Values.enterprise.srv6.locatorPoolEnabled | default "false"   | quote }}
 
 {{- if .Values.enterprise.egressGatewayHA.enabled }}
 enable-ipv4-egress-gateway-ha: "true"

@@ -40,6 +40,12 @@ const (
 
 	// SRv6LocatorPoolName is the full name of the SRv6LocatorPool CRD.
 	SRv6LocatorPoolName = k8sconstv1alpha1.SRv6LocatorPoolKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// SRv6EgressPolicyName is the full name of the IsovalentSRv6EgressPolicy CRD.
+	SRv6EgressPolicyName = k8sconstv1alpha1.SRv6EgressPolicyKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// VRFName is the full name of the IsovalentSRv6EgressPolicy CRD.
+	VRFName = k8sconstv1alpha1.VRFKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -53,10 +59,12 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv1alpha1.IFGName):             createIFGCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):  createSRv6SIDManagerCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName): createSRv6LocatorPoolCRD,
-		synced.CRDResourceName(k8sconstv1.IEGPName):                  createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IFGName):              createIFGCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):   createSRv6SIDManagerCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):  createSRv6LocatorPoolCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName): createSRv6EgressPolicyCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.VRFName):              createVRFCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):                   createIEGPCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -81,6 +89,12 @@ var (
 	//go:embed crds/v1alpha1/isovalentsrv6locatorpools.yaml
 	crdsv1Alpha1IsovalentSRv6LocatorPools []byte
 
+	//go:embed crds/v1alpha1/isovalentsrv6egresspolicies.yaml
+	crdsv1Alpha1IsovalentSRv6EgressPolicies []byte
+
+	//go:embed crds/v1alpha1/isovalentvrfs.yaml
+	crdsv1Alpha1IsovalentVRFs []byte
+
 	//go:embed crds/v1/isovalentegressgatewaypolicies.yaml
 	crdsv1IsovalentEgressGatewayPolicies []byte
 )
@@ -104,6 +118,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentSRv6SIDManagers
 	case SRv6LocatorPoolName:
 		crdBytes = crdsv1Alpha1IsovalentSRv6LocatorPools
+	case SRv6EgressPolicyName:
+		crdBytes = crdsv1Alpha1IsovalentSRv6EgressPolicies
+	case VRFName:
+		crdBytes = crdsv1Alpha1IsovalentVRFs
 	case IEGPCRDName:
 		crdBytes = crdsv1IsovalentEgressGatewayPolicies
 	default:
@@ -165,6 +183,32 @@ func createSRv6LocatorPoolCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.SRv6LocatorPoolName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createSRv6EgressPolicyCRD creates and updates the IsovalentSRv6EgressPolicy CRD.
+func createSRv6EgressPolicyCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(SRv6EgressPolicyName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.SRv6EgressPolicyName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createVRFCRD creates and updates the IsovalentVRF CRD.
+func createVRFCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(VRFName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.VRFName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

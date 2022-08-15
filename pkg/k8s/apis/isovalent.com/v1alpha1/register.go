@@ -32,6 +32,16 @@ const (
 	SRv6LocatorPoolPluralName     = "isovalentsrv6locatorpools"
 	SRv6LocatorPoolKindDefinition = "IsovalentSRv6LocatorPool"
 	SRv6LocatorPoolName           = SRv6LocatorPoolPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentSRv6EgressPolicy
+	SRv6EgressPolicyPluralName     = "isovalentsrv6egresspolicies"
+	SRv6EgressPolicyKindDefinition = "IsovalentSRv6EgressPolicy"
+	SRv6EgressPolicyName           = SRv6EgressPolicyPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentVRF
+	VRFPluralName     = "isovalentvrfs"
+	VRFKindDefinition = "IsovalentVRF"
+	VRFName           = VRFPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -81,6 +91,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentSRv6LocatorPool{},
 		&IsovalentSRv6LocatorPoolList{},
 		&IsovalentSRv6SIDManagerList{},
+		&IsovalentVRF{},
+		&IsovalentVRFList{},
+		&IsovalentSRv6EgressPolicy{},
+		&IsovalentSRv6EgressPolicyList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

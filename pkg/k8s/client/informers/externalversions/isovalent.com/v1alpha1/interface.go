@@ -13,10 +13,14 @@ import (
 type Interface interface {
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
+	// IsovalentSRv6EgressPolicies returns a IsovalentSRv6EgressPolicyInformer.
+	IsovalentSRv6EgressPolicies() IsovalentSRv6EgressPolicyInformer
 	// IsovalentSRv6LocatorPools returns a IsovalentSRv6LocatorPoolInformer.
 	IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInformer
 	// IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.
 	IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInformer
+	// IsovalentVRFs returns a IsovalentVRFInformer.
+	IsovalentVRFs() IsovalentVRFInformer
 }
 
 type version struct {
@@ -35,6 +39,11 @@ func (v *version) IsovalentFQDNGroups() IsovalentFQDNGroupInformer {
 	return &isovalentFQDNGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// IsovalentSRv6EgressPolicies returns a IsovalentSRv6EgressPolicyInformer.
+func (v *version) IsovalentSRv6EgressPolicies() IsovalentSRv6EgressPolicyInformer {
+	return &isovalentSRv6EgressPolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // IsovalentSRv6LocatorPools returns a IsovalentSRv6LocatorPoolInformer.
 func (v *version) IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInformer {
 	return &isovalentSRv6LocatorPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
@@ -43,4 +52,9 @@ func (v *version) IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInformer {
 // IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.
 func (v *version) IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInformer {
 	return &isovalentSRv6SIDManagerInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentVRFs returns a IsovalentVRFInformer.
+func (v *version) IsovalentVRFs() IsovalentVRFInformer {
+	return &isovalentVRFInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

@@ -16,8 +16,10 @@ import (
 type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	IsovalentFQDNGroupsGetter
+	IsovalentSRv6EgressPoliciesGetter
 	IsovalentSRv6LocatorPoolsGetter
 	IsovalentSRv6SIDManagersGetter
+	IsovalentVRFsGetter
 }
 
 // IsovalentV1alpha1Client is used to interact with features provided by the isovalent.com group.
@@ -29,12 +31,20 @@ func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterf
 	return newIsovalentFQDNGroups(c)
 }
 
+func (c *IsovalentV1alpha1Client) IsovalentSRv6EgressPolicies() IsovalentSRv6EgressPolicyInterface {
+	return newIsovalentSRv6EgressPolicies(c)
+}
+
 func (c *IsovalentV1alpha1Client) IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInterface {
 	return newIsovalentSRv6LocatorPools(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInterface {
 	return newIsovalentSRv6SIDManagers(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentVRFs() IsovalentVRFInterface {
+	return newIsovalentVRFs(c)
 }
 
 // NewForConfig creates a new IsovalentV1alpha1Client for the given config.

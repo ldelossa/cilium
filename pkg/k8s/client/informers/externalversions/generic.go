@@ -97,10 +97,14 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=isovalent.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentfqdngroups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentFQDNGroups().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentsrv6egresspolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentSRv6EgressPolicies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentsrv6locatorpools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentSRv6LocatorPools().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentsrv6sidmanagers"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentSRv6SIDManagers().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentvrfs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentVRFs().Informer()}, nil
 
 	}
 

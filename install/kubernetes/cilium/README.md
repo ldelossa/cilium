@@ -325,6 +325,8 @@ contributors across the globe, there is almost always someone available to help.
 | enterprise.egressGatewayHA | object | `{"enabled":false,"installRoutes":false,"reconciliationTriggerInterval":"1s"}` | Enables egress gateway HA |
 | enterprise.egressGatewayHA.installRoutes | bool | `false` | Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface |
 | enterprise.egressGatewayHA.reconciliationTriggerInterval | string | `"1s"` | Time between triggers of egress gateway state reconciliations |
+| enterprise.srv6.enabled | bool | `false` | Enable SRv6 encapsulation support. |
+| enterprise.srv6.encapMode | string | `"reduced"` | Specify SRv6 SID encapsulation. |
 | enterprise.srv6.locatorPoolEnabled | bool | `false` | Enables custom SRv6 SID locator pool operator support. |
 | envoy.affinity | object | `{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"cilium-envoy"}},"topologyKey":"kubernetes.io/hostname"}]}}` | Affinity for cilium-envoy. |
 | envoy.annotations | object | `{}` | Annotations to be added to all top-level cilium-envoy objects (resources under templates/cilium-envoy) |

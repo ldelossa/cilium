@@ -1100,6 +1100,14 @@
      - Time between triggers of egress gateway state reconciliations
      - string
      - ``"1s"``
+   * - :spelling:ignore:`enterprise.srv6.enabled`
+     - Enable SRv6 encapsulation support.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`enterprise.srv6.encapMode`
+     - Specify SRv6 SID encapsulation.
+     - string
+     - ``"reduced"``
    * - :spelling:ignore:`enterprise.srv6.locatorPoolEnabled`
      - Enables custom SRv6 SID locator pool operator support.
      - bool

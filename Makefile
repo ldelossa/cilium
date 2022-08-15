@@ -246,7 +246,9 @@ CRDS_CILIUM_V2ALPHA1 := ciliumendpointslices \
                         ciliumpodippools
 CRDS_ISOVALENT_V1ALPHA1 := isovalentfqdngroups \
                            isovalentsrv6sidmanagers \
-                           isovalentsrv6locatorpools
+                           isovalentsrv6locatorpools \
+                           isovalentsrv6egresspolicies \
+                           isovalentvrfs
 CRDS_ISOVALENT_V1 := isovalentegressgatewaypolicies
 manifests: ## Generate K8s manifests e.g. CRD, RBAC etc.
 	$(eval TMPDIR := $(shell mktemp -d -t cilium.tmpXXXXXXXX))
