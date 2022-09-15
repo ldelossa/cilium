@@ -317,6 +317,9 @@ func (in *CiliumSRv6VRFSpec) DeepEqual(other *CiliumSRv6VRFSpec) bool {
 	if in.ImportRouteTarget != other.ImportRouteTarget {
 		return false
 	}
+	if in.ExportRouteTarget != other.ExportRouteTarget {
+		return false
+	}
 	if ((in.Rules != nil) && (other.Rules != nil)) || ((in.Rules == nil) != (other.Rules == nil)) {
 		in, other := &in.Rules, &other.Rules
 		if other == nil {

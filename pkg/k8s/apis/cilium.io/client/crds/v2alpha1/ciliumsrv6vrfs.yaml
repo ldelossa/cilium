@@ -41,6 +41,12 @@ spec:
             type: object
           spec:
             properties:
+              exportRouteTarget:
+                description: ExportRouteTarget is the export route-target for this
+                  VRF. It is optional and, if specified, will instruct the SRv6 Manager
+                  to allocate a SID for this VRF and signal the BGP manager to create
+                  VPNv4 advertisements over applicable speakers.
+                type: string
               importRouteTarget:
                 description: ImportRouteTarget is the import route-target for this
                   VRF. It is optional and, if specified, will be used by the BGP manager

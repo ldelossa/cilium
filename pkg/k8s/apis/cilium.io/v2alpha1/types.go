@@ -175,6 +175,12 @@ type CiliumSRv6VRFSpec struct {
 	// received routes.
 	ImportRouteTarget string `json:"importRouteTarget,omitempty"`
 
+	// ExportRouteTarget is the export route-target for this VRF. It is optional and,
+	// if specified, will instruct the SRv6 Manager to allocate a SID for this VRF
+	// and signal the BGP manager to create VPNv4 advertisements over applicable
+	// speakers.
+	ExportRouteTarget string `json:"exportRouteTarget,omitempty"`
+
 	// Rules describes what traffic is assigned to the VRF. Egress packets are matched
 	// against these rules to know to in which VRF the SID should be looked up.
 	Rules []VRFRule `json:"rules"`
