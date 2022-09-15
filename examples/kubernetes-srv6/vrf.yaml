@@ -5,6 +5,7 @@ metadata:
 spec:
   vrfID: 42
   importRouteTarget: 64500:1
+  exportRouteTarget: 64500:1
   rules:
   - selectors:
     - podSelector:
