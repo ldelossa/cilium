@@ -1090,6 +1090,12 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	}
 	if option.Config.EnableIPv6 {
 		d.restoreCiliumHostIPs(true, router6FromK8s)
+		// if SRv6 is enabled the mananger will use the IPv6 allocator to allocate
+		// VRF SIDs
+		if option.Config.EnableSRv6 {
+			log.Info("IPv6 and SRv6 is enabled, setting SRv6 Manager's SID Allocator")
+			d.srv6Manager.SetSIDAllocator(d.ipam.IPv6Allocator)
+		}
 	}
 
 	// restore endpoints before any IPs are allocated to avoid eventual IP
