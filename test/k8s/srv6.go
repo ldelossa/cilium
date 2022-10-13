@@ -43,6 +43,7 @@ var _ = SkipDescribeIf(helpers.DoesNotExistNodeWithoutCilium, "K8sSRv6", func() 
 		ciliumFilename = helpers.TimestampFilename("cilium.yaml")
 		DeployCiliumOptionsAndDNS(k, ciliumFilename, map[string]string{
 			"srv6.enabled":           "true",
+			"srv6.mode":              "srh",
 			"bpf.monitorAggregation": "none",
 		})
 	})
