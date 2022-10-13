@@ -76,7 +76,7 @@ spec:
     operator: "Exists"
   - key: "node.kubernetes.io/unreachable"
     operator: "Exists"
-  - key: "key"
+  - key: "prevent-scheduling"
     operator: "Exists"
   hostNetwork: true
   nodeSelector:
@@ -126,7 +126,7 @@ spec:
     operator: "Exists"
   - key: "node.kubernetes.io/unreachable"
     operator: "Exists"
-  - key: "key"
+  - key: "prevent-scheduling"
     operator: "Exists"
   hostNetwork: true
   nodeSelector:
