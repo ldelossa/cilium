@@ -76,8 +76,8 @@ var _ = SkipDescribeIf(helpers.DoesNotExistNodeWithoutCilium, "K8sSRv6", func() 
 		cmds := []string{
 			"clang -O2 -Wall -target bpf -c test/srv6/srv6_decap_encap.c -o test/srv6/srv6_decap_encap.o",
 			"tc qdisc add dev enp0s8 clsact",
-			"tc filter replace dev enp0s8 ingress pref 1 handle 1 bpf da obj tc_reply_srv6.o sec decap",
-			"tc filter replace dev enp0s8 egress pref 1 handle 1 bpf da obj tc_reply_srv6.o sec encap",
+			"tc filter replace dev enp0s8 ingress pref 1 handle 1 bpf da obj test/srv6/srv6_decap_encap.o sec decap",
+			"tc filter replace dev enp0s8 egress pref 1 handle 1 bpf da obj test/srv6/srv6_decap_encap.o sec encap",
 		}
 		for _, cmd := range cmds {
 			k.ExecPodCmd(helpers.DefaultNamespace, compilerPodName, cmd).ExpectSuccess("Failed to run command %s", cmd)
