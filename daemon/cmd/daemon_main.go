@@ -1432,6 +1432,10 @@ func initEnv(cmd *cobra.Command) {
 		}
 	}
 
+	if option.Config.EnableSRv6 && !option.Config.EnableIPv6 {
+		log.Fatal("SRv6 requires IPv6 to be enabled.")
+	}
+
 	if option.Config.EnableBandwidthManager && option.Config.EnableIPSec {
 		log.Warning("The bandwidth manager cannot be used with IPSec. Disabling the bandwidth manager.")
 		option.Config.EnableBandwidthManager = false
