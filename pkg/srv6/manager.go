@@ -45,7 +45,7 @@ type BGPSignaler interface {
 // and SIDs. It also hooks up all the callbacks to update the BPF SRv6 maps
 // accordingly.
 type Manager struct {
-	mutex lock.Mutex
+	mutex lock.RWMutex
 
 	// k8sCacheSyncedChecker is used to check if the agent has synced its
 	// cache with the k8s API server
@@ -86,9 +86,9 @@ func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker,
 }
 
 func (manager *Manager) SetBGPSignaler(bgp BGPSignaler) {
-	manager.mutex.Lock()
+	manager.bgpMu.Lock()
 	manager.bgp = bgp
-	manager.mutex.Unlock()
+	manager.bgpMu.Unlock()
 }
 
 // runReconciliationAfterK8sSync spawns a goroutine that waits for the agent to
@@ -116,6 +116,9 @@ func (manager *Manager) runReconciliationAfterK8sSync() {
 
 // GetAllVRFs returns a slice with all VRFs known to the SRv6 manager.
 func (manager *Manager) GetAllVRFs() []*VRF {
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+
 	vrfs := make([]*VRF, 0, len(manager.vrfs))
 	for _, vrf := range manager.vrfs {
 		vrfs = append(vrfs, vrf)
@@ -126,6 +129,9 @@ func (manager *Manager) GetAllVRFs() []*VRF {
 // GetVRFs returns a slice with VRFs known to the SRv6 manager that have the
 // given import route-target.
 func (manager *Manager) GetVRFs(importRouteTarget string) []*VRF {
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+
 	vrfs := make([]*VRF, 0, len(manager.vrfs))
 	for _, vrf := range manager.vrfs {
 		if vrf.ImportRouteTarget == importRouteTarget {
@@ -138,6 +144,9 @@ func (manager *Manager) GetVRFs(importRouteTarget string) []*VRF {
 // GetEgressPolicies returns a slie with the SRv6 egress policies known to the
 // SRv6 manager.
 func (manager *Manager) GetEgressPolicies() []*EgressPolicy {
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+
 	policies := make([]*EgressPolicy, 0, len(manager.policies))
 	for _, policy := range manager.policies {
 		policies = append(policies, policy)
