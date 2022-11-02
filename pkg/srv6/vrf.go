@@ -15,6 +15,7 @@ import (
 	k8sLabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
@@ -28,8 +29,35 @@ type VRF struct {
 	// route should be installed in which VRF.
 	VRFID             uint32
 	ImportRouteTarget string
+	ExportRouteTarget string
+	AllocatedSID      net.IP
 
 	rules []VRFRule
+}
+
+// getVRFKeysFromMatchingEndpoint will iterate over this VRF's rule set, searching for
+// any matching endpoints within the `endpoints` argument.
+//
+// if a provided endpoint matches a rule a srv6map.VRFKey will be created for
+// each of the endpoint's IPv6 addresses and appended to the returned slice.
+func (v *VRF) getVRFKeysFromMatchingEndpoint(endpoints map[endpointID]*endpointMetadata) []srv6map.VRFKey {
+	keys := []srv6map.VRFKey{}
+	for _, rule := range v.rules {
+		for _, endpoint := range endpoints {
+			if !rule.selectsEndpoint(endpoint) {
+				continue
+			}
+			for i := range endpoint.ips {
+				for _, dstCIDR := range rule.dstCIDRs {
+					keys = append(keys, srv6map.VRFKey{
+						SourceIP: &(endpoint.ips[i]),
+						DestCIDR: dstCIDR,
+					})
+				}
+			}
+		}
+	}
+	return keys
 }
 
 // VRFRule is the internal representation of rules from CiliumSRv6VRF.
