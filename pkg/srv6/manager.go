@@ -5,16 +5,18 @@ package srv6
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"time"
 
+	"github.com/cilium/ebpf"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
-	netutils "k8s.io/utils/net"
 
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
-	"github.com/cilium/cilium/pkg/ip"
+	"github.com/cilium/cilium/pkg/ipam"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
@@ -24,9 +26,30 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 )
 
-var (
-	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "srv6")
+const (
+	subsys = "srv6"
 )
+
+var (
+	log = logging.DefaultLogger.WithField(logfields.LogSubsys, subsys)
+)
+
+// ErrSIDAlloc indicates an issue allocating a SID from the Manager's SID
+// allocator.
+//
+// ErrSIDAlloc is capable of wrapping any errors exported by the implementation
+// of a SID Allocator.
+type ErrSIDAlloc struct {
+	e error
+}
+
+func (e *ErrSIDAlloc) Error() string {
+	return "failed to allocate SID: " + e.e.Error()
+}
+
+func (e *ErrSIDAlloc) Unwrap() error {
+	return e.e
+}
 
 type k8sCacheSyncedChecker interface {
 	K8sCacheIsSynced() bool
@@ -41,9 +64,20 @@ type BGPSignaler interface {
 	Signal()
 }
 
+// SIDAllocation is a bookkeeping structure for locally allocated SIDs.
+// These SID allocations serve as SRV6 VRF locators.
+type SIDAllocation struct {
+	VRFID             uint32
+	ExportRouteTarget string
+	SID               net.IP
+}
+
 // The SRv6 manager stores the internal data to track SRv6 policies, VRFs,
 // and SIDs. It also hooks up all the callbacks to update the BPF SRv6 maps
 // accordingly.
+//
+// The SRv6 manager is capable of notifying the BGP Control Plane when changes
+// to its internal databases occur.
 type Manager struct {
 	mutex lock.RWMutex
 
@@ -62,11 +96,25 @@ type Manager struct {
 
 	// identityAllocator is used to fetch identity labels for endpoint updates
 	identityAllocator identityCache.IdentityAllocator
+
+	// allocatedSIDs map VRF IDs to their allocated SID if the VRF has an
+	// ExportRouteTarget defined.
+	//
+	// When we encounter VRFs with a defined ExportRouteTarget field a SID is
+	// allocated locally and stored in this map. The map is then referenced to
+	// determine if SID allocation/deallocation is necessary on VRF reconciliation.
+	allocatedSIDs map[uint32]*SIDAllocation
+
 	// bgp is a handle to an instantiated BGPSignaler interface.
 	// this interface informs the BGP control plane that the SRv6Manager's state
 	// has changed.
 	bgpMu lock.RWMutex
 	bgp   BGPSignaler
+
+	// sidAlloc is an IPv6Allocator used to allocate L3VPN service SID's on VRF
+	// creation.
+	sidMu    lock.RWMutex
+	sidAlloc ipam.Allocator
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
@@ -78,6 +126,7 @@ func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker,
 		vrfs:                  make(map[vrfID]*VRF),
 		epDataStore:           make(map[endpointID]*endpointMetadata),
 		identityAllocator:     identityAllocator,
+		allocatedSIDs:         make(map[uint32]*SIDAllocation),
 	}
 
 	manager.runReconciliationAfterK8sSync()
@@ -89,6 +138,12 @@ func (manager *Manager) SetBGPSignaler(bgp BGPSignaler) {
 	manager.bgpMu.Lock()
 	manager.bgp = bgp
 	manager.bgpMu.Unlock()
+}
+
+func (manager *Manager) SetSIDAllocator(a ipam.Allocator) {
+	manager.sidMu.Lock()
+	manager.sidAlloc = a
+	manager.sidMu.Unlock()
 }
 
 // runReconciliationAfterK8sSync spawns a goroutine that waits for the agent to
@@ -540,53 +595,185 @@ nextVRFKey:
 	}
 }
 
-// removeUnusedSRv6VRFMappings implements the same as
-// removeUnusedSRv6PolicyRules but for the SID map.
-func (manager *Manager) removeUnusedSRv6VRFMappings() {
-	srv6VRFs := map[srv6map.VRFKey]srv6map.VRFValue{}
-	srv6map.SRv6VRFMap4.IterateWithCallback4(
-		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
-			srv6VRFs[*key] = *val
-		})
-	srv6map.SRv6VRFMap6.IterateWithCallback6(
-		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
-			srv6VRFs[*key] = *val
-		})
+// When a VRF has a defined "ExportRouteTarget" we must configure both the Manager
+// and the eBPF datapath to process ingress traffic destined to the VRF being
+// exported.
+//
+// This function will organize the Manager's VRFs and SID allocations and then
+// create or remove both according to the Manager's state.
+func (m *Manager) reconcileVRFIngressPath() {
+	var (
+		l = log.WithFields(
+			logrus.Fields{
+				"component": "srv6.Manager.reconcileVRFIngressPath",
+			},
+		)
+		toCreate = []*VRF{}
+		toRemove = []*SIDAllocation{}
+	)
 
-nextVRFKey:
-	for vrfKey := range srv6VRFs {
-		for _, vrf := range manager.vrfs {
-			for _, vrfRule := range vrf.rules {
-				for _, endpoint := range manager.epDataStore {
-					if !vrfRule.selectsEndpoint(endpoint) {
-						continue
-					}
+	// By the time we are in this method, the VRF event has been indexed into
+	// the manager's VRF field.
+	//
+	// ATTENTION: A subtlety exists here in that VRF updates from Kubernetes know nothing
+	// about locally allocated SIDs and an update event can overwrite the a VRF's
+	// locally allocated SID. Therefore, this method must also repopulate the
+	// SID's Allocated VRF field.
+	for _, v := range m.vrfs {
+		alloc, hasSID := m.allocatedSIDs[v.VRFID]
 
-					for _, endpointIP := range endpoint.ips {
-						for _, dstCIDR := range vrfRule.dstCIDRs {
-							if ip.IsIPv6(endpointIP) != netutils.IsIPv6CIDR(dstCIDR) {
-								// Endpoints can only connect to IPv6 destinations
-								// with their IPv6 address.
-								continue
-							}
-							if vrfKey.Match(endpointIP, dstCIDR) {
-								continue nextVRFKey
-							}
-						}
-					}
-				}
-			}
+		// does this vrf have an ExportRouteTarget and no SID allocation?
+		if v.ExportRouteTarget != "" && !hasSID {
+			toCreate = append(toCreate, v)
+			continue
 		}
 
-		logger := log.WithFields(logrus.Fields{
-			logfields.SourceIP:        vrfKey.SourceIP,
-			logfields.DestinationCIDR: vrfKey.DestCIDR,
-		})
+		// does this VRF have an existing SID allocation?
+		if hasSID {
+			// ExportRouteTarget undefined, remove this allocation.
+			if v.ExportRouteTarget == "" {
+				toRemove = append(toRemove, alloc)
+				continue
+			}
 
-		if err := srv6map.GetVRFMap(vrfKey).Delete(vrfKey); err != nil {
-			logger.WithError(err).Error("Error removing SRv6 VRF mapping")
-		} else {
-			logger.Info("SRv6 VRF mapping removed")
+			// SID allocation exists, does ExportRouteTarget match it?
+			if v.ExportRouteTarget != alloc.ExportRouteTarget {
+				// NOTE: it is possible the ExportRouteTarget may have been changed
+				// by the user.
+				// in this case, we will update the SID allocation, and the BGP
+				// control plane with re-advertise the SID with the updated
+				// ExportRouteTarget on it's next reconciliation loop.
+				alloc.ExportRouteTarget = v.ExportRouteTarget
+			}
+
+			// SID allocation exists and ExportRouteTarget is the same, re-write
+			// allocated SID incase an update overwritten it. See: ATTENTION:
+			v.AllocatedSID = alloc.SID
+		}
+	}
+	// if we have any allocated SIDs which do not have associated VRF definitions
+	// remove them.
+	for vrfID := range m.allocatedSIDs {
+		for _, vrf := range m.vrfs {
+			if vrf.VRFID == vrfID {
+				continue
+			}
+		}
+		toRemove = append(toRemove, m.allocatedSIDs[vrfID])
+	}
+	l.WithFields(logrus.Fields{
+		"toCreate": len(toCreate),
+		"toRemove": len(toRemove),
+	}).Debug("Reconciling ingress VRF mappings for decapsulation.")
+	m.createIngressPathVRFs(toCreate)
+	m.removeIngressPathVRFs(toRemove)
+}
+
+// createIngressPathVRFs will range over the provided VRFs and configure
+// the datapath for ingressing VPN traffic destined for this node's VRF.
+//
+// The ingress path configuration consists of the following for newly exported VRFs.
+// 1. Allocating a SID for the VRF if necessary
+// 2. Writing this SID and its associated VRF ID to the SRv6SIDMap //TODO: checking spelling
+// 3. Store the allocated SID wihin the Manager's memory.
+func (m *Manager) createIngressPathVRFs(vrfs []*VRF) {
+	l := log.WithFields(
+		logrus.Fields{
+			"component": "srv6.Manager.createIngressPathVRFs",
+		},
+	)
+	for _, vrf := range vrfs {
+		func(vrf *VRF) {
+			// ATTENTION: variables declared here so cleanup function can close
+			// over them, do not redeclare these vars.
+			var (
+				err error
+				res *ipam.AllocationResult
+				key *srv6map.SIDKey
+			)
+
+			// allocate a SID and defer possible cleanup.
+			res, err = m.sidAlloc.AllocateNext(subsys)
+			if err != nil {
+				l.WithField("vrfID", vrf.VRFID).WithError(err).Error("Failed to allocate SID for VRF")
+				return
+			}
+			vrf.AllocatedSID = res.IP
+			defer func() {
+				if err != nil {
+					if err := m.sidAlloc.Release(res.IP); err != nil {
+						l.WithError(err).Errorf("failed to cleanup SID Allocation %s", res.IP.String())
+					}
+				}
+			}()
+
+			// populate SID map
+			key, err = srv6map.NewSIDKeyFromIP(&vrf.AllocatedSID)
+			if err != nil {
+				l.WithField("vrfID", vrf.VRFID).WithError(err).Error("Failed to create SID map key for VRF")
+				return
+			}
+
+			err = srv6map.SRv6SIDMap.Update(*key, vrf.VRFID)
+			if err != nil {
+				l.WithFields(logrus.Fields{
+					"vrfID": vrf.VRFID,
+					"SID":   vrf.AllocatedSID,
+				}).WithError(err).Error("Failed to update SID map")
+				return
+			}
+
+			// store SID allocation in Manager.
+			m.allocatedSIDs[vrf.VRFID] = &SIDAllocation{
+				VRFID:             vrf.VRFID,
+				ExportRouteTarget: vrf.ExportRouteTarget,
+				SID:               vrf.AllocatedSID,
+			}
+			l.WithFields(logrus.Fields{
+				"vrfID":             vrf.VRFID,
+				"SID":               vrf.AllocatedSID.String(),
+				"ExportRouteTarget": vrf.ExportRouteTarget,
+			}).Info("Allocated SID for VRF with export route target.")
+		}(vrf)
+	}
+}
+
+// removeIngressPathVRFs ranges over the provided SIDAllocation(s) and
+// removes their existence from the data path.
+//
+// this is essentially the opposite of createIngressPathVRF.
+//
+// if an error occurs in any of the operations involved with removing a SID
+// allocation the removal will be tried again on next reconciliation.
+func (m *Manager) removeIngressPathVRFs(allocs []*SIDAllocation) {
+	l := log.WithFields(
+		logrus.Fields{
+			"component": "srv6.Manager.removeIngressPaths",
+		},
+	)
+	for _, alloc := range allocs {
+		l := l.WithFields(
+			logrus.Fields{
+				"SID":               alloc.SID,
+				"exportRouteTarget": alloc.ExportRouteTarget,
+				"vrfID":             alloc.VRFID,
+			},
+		)
+		var shouldDelete = true
+		key, err := srv6map.NewSIDKeyFromIP(&alloc.SID)
+		if err != nil {
+			l.WithError(err).Error("failed creating SIDMap key")
+			shouldDelete = false
+		}
+		err = srv6map.SRv6SIDMap.Delete(*key)
+		if err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+			l.WithError(err).Error("failed deleting SIDMap entry for allocation")
+			shouldDelete = false
+		}
+
+		if shouldDelete {
+			delete(m.allocatedSIDs, alloc.VRFID)
+			l.Info("Deleted SID allocation for VRF")
 		}
 	}
 }
@@ -626,6 +813,16 @@ func (manager *Manager) reconcileVRF() {
 
 	if !manager.k8sCacheSyncedChecker.K8sCacheIsSynced() {
 		return
+	}
+
+	// only reconcile ingress path if Manager is configured with a SIDAllocator.
+	manager.sidMu.RLock()
+	if manager.sidAlloc != nil {
+		manager.sidMu.RUnlock()
+		manager.reconcileVRFIngressPath()
+	} else {
+		l.Error("SRv6 Manager not configured with SID Allocator, won't export VRFs.")
+		manager.sidMu.RUnlock()
 	}
 
 	manager.reconcileVRFEgressPath()
