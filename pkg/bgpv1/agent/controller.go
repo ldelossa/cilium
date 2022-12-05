@@ -101,7 +101,7 @@ type ControlPlaneState struct {
 	// The current IPv6 address of the agent, reachable externally.
 	IPv6 netip.Addr
 	// The VRFs present at the time of BGP control plane reconciliation.
-	VRFs []srv6.VRF
+	VRFs []*srv6.VRF
 	// The Signaler attached to the BGP control plane used to signal reconciliation
 	Sig *Signaler
 }
@@ -287,6 +287,12 @@ func (c *Controller) SetSRv6Manager(srv6 SRv6Interface) {
 	c.srv6Mu.Unlock()
 }
 
+func (c *Controller) SRv6ManagerIsSet() bool {
+	c.srv6Mu.RLock()
+	defer c.srv6Mu.RUnlock()
+	return (c.SRv6 != nil)
+}
+
 // Run places the Controller into its control loop.
 //
 // Kubernetes shared informers are started just before entering the long running
@@ -376,15 +382,12 @@ func (c *Controller) PolicySelection(ctx context.Context, labels map[string]stri
 	// we need to confirm we have a valid SRv6Mgr if any virtual router wants
 	// to map SRv6VRFs
 	if selected != nil {
-		// lock on reading c.SRv6 pointer.
-		c.srv6Mu.RLock()
+		isSet := c.SRv6ManagerIsSet()
 		for _, vr := range selected.Spec.VirtualRouters {
-			if vr.MapSRv6VRFs && (c.SRv6 == nil) {
-				c.srv6Mu.RUnlock()
+			if vr.MapSRv6VRFs && !isSet {
 				return nil, ErrSRv6NoMgr
 			}
 		}
-		c.srv6Mu.RUnlock()
 	}
 
 	return selected, nil
@@ -465,6 +468,13 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 		Sig:         &c.Sig,
 	}
 
+	// if we have an SRv6 Manager then gather any known VRFs into our
+	// ControlPlaneState.
+	if c.SRv6ManagerIsSet() {
+		state.VRFs = c.SRv6.GetAllVRFs()
+		l.WithField("VRFs", len(state.VRFs)).Debug("Discovered VRFs from SRv6Manager")
+	}
+
 	// call bgp sub-systems required to apply this policy's BGP topology.
 	l.Debug("Asking configured BGPRouterManager to configure peering")
 	if err := c.BGPMgr.ConfigurePeers(ctx, policy, state); err != nil {
@@ -484,9 +494,9 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 			}
 			c.srv6Mu.RUnlock()
 
-			err := c.reconcileSRv6(ctx)
+			err := c.reconcileSRv6(ctx, state.VRFs)
 			if err != nil {
-				return err
+				return fmt.Errorf("SRv6 reconciliation failed; %w", err)
 			}
 		}
 	}
@@ -495,22 +505,29 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 }
 
 // keyifySRv6Policy creates a string key for a SRv6PolicyConfig.
-func keyifySRv6Policy(p *srv6.EgressPolicy) string {
+func keyifySRv6Policy(p *srv6.EgressPolicy) (string, error) {
 	b := &bytes.Buffer{}
 
 	id := strconv.FormatUint(uint64(p.VRFID), 10)
-	b.Write([]byte(id))
+	if _, err := b.Write([]byte(id)); err != nil {
+		return "", err
+	}
 
 	for _, cidr := range p.DstCIDRs {
-		b.Write([]byte(cidr.String()))
+		if _, err := b.Write([]byte(cidr.String())); err != nil {
+			return "", err
+		}
 	}
 
 	h := sha256.New()
-	io.Copy(h, b)
-	return fmt.Sprintf("%x", h.Sum(nil))
+	if _, err := io.Copy(h, b); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-func (c *Controller) reconcileSRv6(ctx context.Context) error {
+func (c *Controller) reconcileSRv6(ctx context.Context, vrfs []*srv6.VRF) error {
 	var (
 		l = log.WithFields(
 			logrus.Fields{
@@ -522,7 +539,6 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 	)
 	l.Debug("Starting SRv6 egress policy reconciliation.")
 
-	vrfs := c.SRv6.GetAllVRFs()
 	l.WithField("count", len(vrfs)).Debug("Discovered configured VRFs")
 
 	curPolicies := c.SRv6.GetEgressPolicies()
@@ -547,11 +563,17 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 
 	// evaluate new policies
 	for i, p := range newPolicies {
+
 		var (
-			key = keyifySRv6Policy(p)
-			h   *member
-			ok  bool
+			h  *member
+			ok bool
 		)
+
+		key, err := keyifySRv6Policy(p)
+		if err != nil {
+			return fmt.Errorf("%s %w", "failed to create key from EgressPolicy", err)
+		}
+
 		if h, ok = pset[key]; !ok {
 			pset[key] = &member{
 				a: true,
@@ -564,10 +586,15 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 	// evaluate current policies
 	for i, p := range curPolicies {
 		var (
-			key = keyifySRv6Policy(p)
-			h   *member
-			ok  bool
+			h  *member
+			ok bool
 		)
+
+		key, err := keyifySRv6Policy(p)
+		if err != nil {
+			return fmt.Errorf("%s %w", "failed to create key from EgressPolicy", err)
+		}
+
 		if h, ok = pset[key]; !ok {
 			pset[key] = &member{
 				b: true,
@@ -593,12 +620,18 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 
 	clientSet := c.Clientset.CiliumV2alpha1().CiliumSRv6EgressPolicies()
 
-	mkName := func(p *srv6.EgressPolicy) string {
-		const (
-			prefix = "bgp-control-plane"
-		)
-		return fmt.Sprintf("%s-%s", prefix, keyifySRv6Policy(p))
+	mkName := func(p *srv6.EgressPolicy) (string, error) {
+		const prefix = "bgp-control-plane"
+
+		key, err := keyifySRv6Policy(p)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%s-%s", prefix, key), nil
 	}
+
+	var name string
 
 	for _, p := range toCreate {
 		destCIDRs := []v2alpha1api.CIDR{}
@@ -606,9 +639,14 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 			destCIDRs = append(destCIDRs, v2alpha1api.CIDR(c.String()))
 		}
 
+		name, err = mkName(p)
+		if err != nil {
+			return fmt.Errorf("failed to create EgressPolicy name: %w", err)
+		}
+
 		egressPol := &v2alpha1api.CiliumSRv6EgressPolicy{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: mkName(p),
+				Name: name,
 			},
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "cilium.io/v2alpha1",
@@ -629,8 +667,13 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 	}
 
 	for _, p := range toRemove {
+		name, err = mkName(p)
+		if err != nil {
+			return fmt.Errorf("failed to create EgressPolicy name: %w", err)
+		}
+
 		l.WithField("policy", p).Debug("Removing egress policy from Kubernetes")
-		err := clientSet.Delete(ctx, mkName(p), metav1.DeleteOptions{})
+		err := clientSet.Delete(ctx, name, metav1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to remove egress policy: %w", err)
 		}

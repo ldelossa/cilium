@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/netip"
 
 	"github.com/cilium/cilium/pkg/bgpv1/agent"
@@ -20,6 +21,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+
+	srv6 "github.com/cilium/cilium/pkg/srv6"
 )
 
 type ReconcileParams struct {
@@ -44,6 +47,7 @@ var ConfigReconcilers = cell.ProvidePrivate(
 	NewNeighborReconciler,
 	NewExportPodCIDRReconciler,
 	NewLBServiceReconciler,
+	NewExportVRFReconciler,
 )
 
 type PreflightReconcilerOut struct {
@@ -625,4 +629,109 @@ func serviceLabelSet(svc *slim_corev1.Service) labels.Labels {
 	svcLabels["io.kubernetes.service.name"] = svc.Name
 	svcLabels["io.kubernetes.service.namespace"] = svc.Namespace
 	return labels.Set(svcLabels)
+}
+
+type exportVRFReconcilerOut struct {
+	cell.Out
+
+	Reconciler ConfigReconciler `group:"bgp-config-reconciler"`
+}
+
+type ExportVRFReconciler struct{}
+
+func NewExportVRFReconciler() exportVRFReconcilerOut {
+	return exportVRFReconcilerOut{
+		Reconciler: &ExportVRFReconciler{},
+	}
+}
+
+func (r *ExportVRFReconciler) Priority() int {
+	return 50
+}
+
+func (r *ExportVRFReconciler) Reconcile(ctx context.Context, params ReconcileParams) error {
+	return exportVRFReconciler(ctx, params)
+}
+
+func exportVRFReconciler(ctx context.Context, params ReconcileParams) error {
+	var (
+		toCreate []*srv6.VRF
+		toRemove []*types.VPNv4Advertisement
+		ipv4Nets []*net.IPNet
+		l        = log.WithFields(
+			logrus.Fields{
+				"component": "gobgp.reconcileExportedVRFs",
+			},
+		)
+	)
+
+	// collect PodCIDR IPv4 addresses to export.
+	for _, podCIDR := range params.CState.PodCIDRs {
+		i, net, err := net.ParseCIDR(podCIDR)
+		if err != nil {
+			return fmt.Errorf("failed to parse provided podCIDR string into IPNet")
+		}
+		if i.To4() == nil {
+			continue
+		}
+		ipv4Nets = append(ipv4Nets, net)
+	}
+
+	// record which Advertisements we need to remove since their VRF Export Route
+	// target has changed, or they do not exist.
+	for _, advert := range params.Server.SRv6L3VPNAnnouncements {
+		shouldRemove := true
+		for _, v := range params.CState.VRFs {
+			if (advert.VRF.VRFID == v.VRFID) && (advert.VRF.ExportRouteTarget == v.ExportRouteTarget) {
+				shouldRemove = false
+				break
+			}
+		}
+		if shouldRemove {
+			toRemove = append(toRemove, &advert)
+		}
+	}
+
+	for _, v := range params.CState.VRFs {
+		// determine if this sc has an advertisement for the provided VRF.
+		advert := params.Server.GetSRv6L3VPNAnnouncement(v.VRFID)
+		if advert != nil {
+			// if we have an advert, but the incoming VRF has a different
+			// ExportRouteTarget, mark it as create.
+			if v.ExportRouteTarget != advert.VRF.ExportRouteTarget {
+				toCreate = append(toCreate, v)
+			}
+			continue
+		}
+		toCreate = append(toCreate, v)
+	}
+
+	l.WithFields(logrus.Fields{
+		"toRemove": len(toRemove),
+		"toCreate": len(toCreate),
+	}).Info("Reconciling VPNv4 Advertisements")
+
+	// remove no longer exists advertisements
+	for _, advert := range toRemove {
+		if err := params.Server.WithdrawVPNv4Path(ctx, *advert); err != nil {
+			l.WithField("vrfID", advert.VRF.VRFID).WithError(err).
+				Error("Failed remove advertised VRF VPNv4 route.")
+		}
+	}
+
+	// create necessary advertisement.
+	for _, v := range toCreate {
+		if err := params.Server.AddVPNv4Path(ctx, types.VPNv4Advertisement{
+			VRF:      v,
+			IPv4Nets: ipv4Nets,
+		}); err != nil {
+			l.WithField("vrfID", v.VRFID).WithError(err).
+				Error("Failed advertise VRF VPNv4 route.")
+			continue
+		}
+
+		l.WithField("vrfID", v.VRFID).Info("Advertised VRF VPNv4 route.")
+	}
+
+	return nil
 }

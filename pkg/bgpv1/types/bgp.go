@@ -5,6 +5,7 @@ package types
 
 import (
 	"context"
+	"net"
 	"net/netip"
 
 	"github.com/cilium/cilium/api/v1/models"
@@ -94,6 +95,34 @@ type Router interface {
 	// GetBGP returns configured BGP global parameters
 	GetBGP(ctx context.Context) (GetBGPResponse, error)
 
-	// Map VRFs into CiliumSRv6EgressPolicies
+	// SRv6 related methods
+
+	// MapSRv6EgressPolicy translates local VPN routes to SRv6 policies
 	MapSRv6EgressPolicy(ctx context.Context, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error)
+
+	// AdvertiseVPNv4Path advertise VPNv4 route to peers
+	AdvertiseVPNv4Path(ctx context.Context, p VPNv4PathRequest) (VPNv4PathResponse, error)
+
+	// WithdrawVPNv4Path removes VPNv4 route from peers
+	WithdrawVPNv4Path(ctx context.Context, p VPNv4PathRequest) error
+}
+
+// VPNv4Advertisement is a container object which associates a VRF information and VPNv4 Prefixes
+//
+// The `PathUuid` field is a gobgp.PathUuid object which can be forwarded to gobgp's
+// WithdrawPath method, making withdrawing an advertised route simple.
+type VPNv4Advertisement struct {
+	VRF           *srv6.VRF
+	IPv4Nets      []*net.IPNet
+	GoBGPPathUUID []byte // path identifier in underlying implementation
+}
+
+// VPNv4PathRequest contains parameters for advertising or withdrawing vpn v4 routes
+type VPNv4PathRequest struct {
+	Advert VPNv4Advertisement
+}
+
+// VPNv4PathResponse contains response after advertising the route, underlying implementation will set UUID
+type VPNv4PathResponse struct {
+	Advert VPNv4Advertisement
 }

@@ -10,8 +10,42 @@ import (
 	gobgpb "github.com/osrg/gobgp/v3/pkg/packet/bgp"
 	"github.com/sirupsen/logrus"
 
+	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/srv6"
 )
+
+// AdvertiseVPNv4Path will advertise the VPNv4 advertisement information to any connected peers of this speaker.
+func (g *GoBGPServer) AdvertiseVPNv4Path(ctx context.Context, p types.VPNv4PathRequest) (types.VPNv4PathResponse, error) {
+	var (
+		resp      types.VPNv4PathResponse
+		gobgpResp *gobgp.AddPathResponse
+	)
+
+	vpnv4Route, err := g.mapVRFToVPNv4Route(p.Advert.IPv4Nets, p.Advert.VRF)
+	if err != nil {
+		return resp, err
+	}
+
+	gobgpResp, err = g.server.AddPath(ctx, &gobgp.AddPathRequest{
+		Path: vpnv4Route,
+	})
+	if err != nil {
+		return resp, err
+	}
+
+	resp.Advert = p.Advert
+	resp.Advert.GoBGPPathUUID = gobgpResp.Uuid
+
+	return resp, nil
+}
+
+// WithdrawVPNv4Path will remove a previously advertised VPNv4 advertisement.
+func (g *GoBGPServer) WithdrawVPNv4Path(ctx context.Context, p types.VPNv4PathRequest) error {
+	err := g.server.DeletePath(ctx, &gobgp.DeletePathRequest{
+		Uuid: p.Advert.GoBGPPathUUID,
+	})
+	return err
+}
 
 // MapSRv6EgressPolicy will map any discovered VPNv4 routes which match passed in
 // VRF's route reflectors into srv6.EgressPolicy(s) and return these to the caller.
@@ -321,7 +355,7 @@ func (g *GoBGPServer) TransposeSID(label uint32, infoTLV *gobgpb.SRv6Information
 	return sid, nil
 }
 
-func MapVRFToVPNv4Route(podCIDRs []*net.IPNet, vrf *srv6.VRF) (*gobgp.Path, error) {
+func (g *GoBGPServer) mapVRFToVPNv4Route(podCIDRs []*net.IPNet, vrf *srv6.VRF) (*gobgp.Path, error) {
 	if vrf.ExportRouteTarget == "" {
 		return nil, fmt.Errorf("cannot map VRF without an ExportRouteTarget")
 	}
