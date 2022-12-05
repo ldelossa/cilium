@@ -50,6 +50,17 @@ type Advertisement struct {
 	Path *gobgp.Path
 }
 
+// VPNv4Advertisement is a container object which associates a VRF and it's
+// ExportRouteTarget with a gobgp.Path.
+//
+// The `Path` field is a gobgp.Path object which can be forwarded to our server's
+// WithdrawPath method, making withdrawing an advertised route simple.
+type VPNv4Advertisement struct {
+	VRFID       uint32
+	RouteTarget string
+	Path        *gobgp.Path
+}
+
 // ServerWithConfig is a container for grouping a gobgp BgpServer with the
 // Cilium's BGP control plane related configuration.
 //
@@ -68,6 +79,9 @@ type ServerWithConfig struct {
 	Config *v2alpha1api.CiliumBGPVirtualRouter
 	// Holds any announced PodCIDR routes.
 	PodCIDRAnnouncements []Advertisement
+	// Holds any SRv6 L3VPN announcements created when SRv6 support is
+	// enabled.
+	SRv6L3VPNAnnouncements map[uint32]VPNv4Advertisement
 }
 
 // NewServerWithConfig will start an underlying BgpServer utilizing startReq
@@ -126,9 +140,10 @@ func NewServerWithConfig(ctx context.Context, startReq *gobgp.StartBgpRequest, c
 	}
 
 	return &ServerWithConfig{
-		Server:               s,
-		Config:               nil,
-		PodCIDRAnnouncements: []Advertisement{},
+		Server:                 s,
+		Config:                 nil,
+		PodCIDRAnnouncements:   []Advertisement{},
+		SRv6L3VPNAnnouncements: map[uint32]VPNv4Advertisement{},
 	}, nil
 }
 
@@ -301,6 +316,19 @@ func (sc *ServerWithConfig) AdvertisePath(ctx context.Context, ip *net.IPNet) (A
 	}, err
 }
 
+// AddVPNv4Path will advertisethe VPNv4 advertisement information to any
+// connected peers of this speaker.
+func (sc *ServerWithConfig) AddVPNv4Path(ctx context.Context, advert VPNv4Advertisement) error {
+	_, err := sc.Server.AddPath(ctx, &gobgp.AddPathRequest{
+		Path: advert.Path,
+	})
+	if err != nil {
+		return err
+	}
+	sc.SRv6L3VPNAnnouncements[advert.VRFID] = advert
+	return nil
+}
+
 // WithdrawPath withdraws an Advertisement produced by AdvertisePath from this
 // BgpServer.
 func (sc *ServerWithConfig) WithdrawPath(ctx context.Context, advert Advertisement) error {
@@ -309,4 +337,26 @@ func (sc *ServerWithConfig) WithdrawPath(ctx context.Context, advert Advertiseme
 		Path:   advert.Path,
 	})
 	return err
+}
+
+// WithdrawVPNv4Path will remove a previously advertised VPNv4 advertisement.
+func (sc *ServerWithConfig) WithdrawVPNv4Path(ctx context.Context, advert VPNv4Advertisement) error {
+	err := sc.Server.DeletePath(ctx, &gobgp.DeletePathRequest{
+		Family: advert.Path.Family,
+		Path:   advert.Path,
+	})
+	delete(sc.SRv6L3VPNAnnouncements, advert.VRFID)
+	return err
+}
+
+// GetSRv6L3VPNAnnouncements will retrieve a VPNv4Advertisement given a VRF ID.
+//
+// There is no lock over the list of VPNv4Advertisements thus this method is not
+// concurrency safe.
+func (sc *ServerWithConfig) GetSRv6L3VPNAnnouncement(vrfID uint32) *VPNv4Advertisement {
+	advert, ok := sc.SRv6L3VPNAnnouncements[vrfID]
+	if !ok {
+		return nil
+	}
+	return &advert
 }

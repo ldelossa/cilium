@@ -102,7 +102,7 @@ type ControlPlaneState struct {
 	// The current IPv6 address of the agent, reachable externally.
 	IPv6 net.IP
 	// The VRFs present at the time of BGP control plane reconciliation.
-	VRFs []srv6.VRF
+	VRFs []*srv6.VRF
 	// The Signaler attached to the BGP control plane used to signal reconciliation
 	Sig *Signaler
 }
@@ -333,11 +333,11 @@ func (c *Controller) Run(ctx context.Context, stop chan struct{}) {
 // *corev1.Node, enforced by a set of policy selection rules.
 //
 // Policy selection follows the following rules:
-// - A policy matches a node if said policy's "nodeSelector" field matches
-//   the node's labels
-// - If (N > 1) policies match the provided *corev1.Node an error is returned.
-//   only a single policy may apply to a node to avoid ambiguity at this stage
-//   of development.
+//   - A policy matches a node if said policy's "nodeSelector" field matches
+//     the node's labels
+//   - If (N > 1) policies match the provided *corev1.Node an error is returned.
+//     only a single policy may apply to a node to avoid ambiguity at this stage
+//     of development.
 func (c *Controller) PolicySelection(ctx context.Context, labels map[string]string, policies []*v2alpha1api.CiliumBGPPeeringPolicy) (*v2alpha1api.CiliumBGPPeeringPolicy, error) {
 	var (
 		l = log.WithFields(logrus.Fields{
@@ -462,6 +462,16 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 		Sig:         &c.Sig,
 	}
 
+	// if we have an SRv6 Manager then gather any known VRFs into our
+	// ControlPlaneState.
+	c.srv6Mu.RLock()
+	ok := (c.SRv6 != nil)
+	c.srv6Mu.RUnlock()
+	if ok {
+		state.VRFs = c.SRv6.GetAllVRFs()
+		l.WithField("VRFs", len(state.VRFs)).Debug("Discovered VRFs from SRv6Manager")
+	}
+
 	// call bgp sub-systems required to apply this policy's BGP topology.
 	l.Debug("Asking configured BGPRouterManager to configure peering")
 	if err := c.BGPMgr.ConfigurePeers(ctx, policy, state); err != nil {
@@ -481,7 +491,7 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 			}
 			c.srv6Mu.RUnlock()
 
-			err := c.reconcileSRv6(ctx)
+			err := c.reconcileSRv6(ctx, state.VRFs)
 			if err != nil {
 				return err
 			}
@@ -507,7 +517,7 @@ func keyifySRv6Policy(p *srv6.EgressPolicy) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func (c *Controller) reconcileSRv6(ctx context.Context) error {
+func (c *Controller) reconcileSRv6(ctx context.Context, vrfs []*srv6.VRF) error {
 	var (
 		l = log.WithFields(
 			logrus.Fields{
@@ -519,7 +529,6 @@ func (c *Controller) reconcileSRv6(ctx context.Context) error {
 	)
 	l.Debug("Starting SRv6 egress policy reconciliation.")
 
-	vrfs := c.SRv6.GetAllVRFs()
 	l.WithField("count", len(vrfs)).Debug("Discovered configured VRFs")
 
 	curPolicies := c.SRv6.GetEgressPolicies()
