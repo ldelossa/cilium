@@ -155,6 +155,7 @@ func ParseVRF(csrvrf *v2alpha1.CiliumSRv6VRF) (*VRF, error) {
 		},
 		VRFID:             csrvrf.Spec.VRFID,
 		ImportRouteTarget: csrvrf.Spec.ImportRouteTarget,
+		ExportRouteTarget: csrvrf.Spec.ExportRouteTarget,
 		rules:             rules,
 	}, nil
 }

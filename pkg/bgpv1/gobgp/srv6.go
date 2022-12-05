@@ -320,3 +320,105 @@ func (g *GoBGPServer) TransposeSID(label uint32, infoTLV *gobgpb.SRv6Information
 	l.Debugf("Transposed SID %x", sid)
 	return sid, nil
 }
+
+func MapVRFToVPNv4Route(podCIDRs []*net.IPNet, vrf *srv6.VRF) (*gobgp.Path, error) {
+	if vrf.ExportRouteTarget == "" {
+		return nil, fmt.Errorf("cannot map VRF without an ExportRouteTarget")
+	}
+
+	extComms, err := gobgpb.ParseRouteTarget(vrf.ExportRouteTarget)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ExportRouteTarget %v into Extended Community: %w", vrf.ExportRouteTarget, err)
+	}
+
+	RD, err := gobgpb.ParseRouteDistinguisher(vrf.ExportRouteTarget)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ExportRouteTarget %v into Route Distinguisher: %w", vrf.ExportRouteTarget, err)
+	}
+
+	// Pack ExportRouteTarget into extCommunities attribute
+	extCommsAttr := &gobgpb.PathAttributeExtendedCommunities{
+		Value: []gobgpb.ExtendedCommunityInterface{
+			extComms,
+		},
+	}
+
+	medAttr := gobgpb.NewPathAttributeMultiExitDisc(0)
+
+	// The SRv6 SID and endpoint behavior is encoded as a set of nested
+	// TLVs.
+	//
+	// The SRv6 TLVs are encoded as a Prefix SID BGP Attribute of type
+	// See: https://www.rfc-editor.org/rfc/rfc9252.html#section-4
+
+	// Pack SRv6SIDStructureSubSubTLV details into a SRv6InformationSubTLV
+	SIDInfoTLV := &gobgpb.SRv6InformationSubTLV{
+		SID:              vrf.AllocatedSID.To16(),
+		EndpointBehavior: uint16(gobgpb.END_DT4),
+		SubSubTLVs: []gobgpb.PrefixSIDTLVInterface{
+			&gobgpb.SRv6SIDStructureSubSubTLV{
+				LocatorBlockLength: 128,
+			},
+		},
+	}
+
+	// Pack SRv6InformationSubTLV into a SRv6L3ServiceAttribute
+	L3ServTLV := &gobgpb.SRv6L3ServiceAttribute{
+		SubTLVs: []gobgpb.PrefixSIDTLVInterface{
+			SIDInfoTLV,
+		},
+	}
+
+	// Encode SRv6L3ServiceAttribute as a PathAttributePrefixSID
+	prefixSIDAttr := &gobgpb.PathAttributePrefixSID{
+		TLVs: []gobgpb.PrefixSIDTLVInterface{
+			L3ServTLV,
+		},
+	}
+
+	// Pack podCIDRs into VPNv4 MP-NLRI
+	labeledPrefixes := []gobgpb.AddrPrefixInterface{}
+	for _, podCIDR := range podCIDRs {
+		maskLen, _ := podCIDR.Mask.Size()
+		vpnv4 := gobgpb.NewLabeledVPNIPAddrPrefix(uint8(maskLen), podCIDR.IP.String(), *gobgpb.NewMPLSLabelStack(4096), RD)
+		labeledPrefixes = append(labeledPrefixes, vpnv4)
+	}
+	MpReachAttr := &gobgpb.PathAttributeMpReachNLRI{
+		AFI:     gobgpb.AFI_IP,
+		SAFI:    gobgpb.SAFI_MPLS_VPN,
+		Nexthop: net.ParseIP("0.0.0.0"),
+		Value:   labeledPrefixes,
+	}
+
+	// Mandatory Attributes, ASPATH will be set by GoBGP directly.
+	origin := gobgpb.NewPathAttributeOrigin(gobgpb.BGP_ORIGIN_ATTR_TYPE_INCOMPLETE)
+	nextHop := gobgpb.NewPathAttributeNextHop("0.0.0.0")
+
+	attrs, err := apiutil.MarshalPathAttributes([]gobgpb.PathAttributeInterface{
+		origin,
+		medAttr,
+		nextHop,
+		extCommsAttr,
+		prefixSIDAttr,
+		MpReachAttr,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal BGP path attributes: %w", err)
+	}
+
+	// Even tho the resuling UPDATE message does not include a top level NLRI
+	// structure, GoBGP wants to check that the NLRI and Path's Route Family
+	// match, presumably for internal bookkeeping.
+	nlri, err := apiutil.MarshalNLRI(labeledPrefixes[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal empty NLRI: %w", err)
+	}
+
+	p := &gobgp.Path{
+		Pattrs: attrs,
+		Family: GoBGPVPNv4Family,
+		Nlri:   nlri,
+	}
+
+	return p, nil
+}
