@@ -52,6 +52,12 @@ func (ini *localNodeSynchronizer) InitLocalNode(ctx context.Context, n *node.Loc
 	if err := ini.initFromK8s(ctx, n); err != nil {
 		return err
 	}
+
+	n.BootID = node.GetBootID()
+	if option.Config.EnableIPSec && n.BootID == "" {
+		return fmt.Errorf("IPSec requires a valid BootID")
+	}
+
 	return nil
 }
 
