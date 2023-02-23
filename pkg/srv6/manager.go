@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/sirupsen/logrus"
@@ -129,8 +128,6 @@ func NewSRv6Manager(k8sCacheSyncedChecker k8sCacheSyncedChecker,
 		allocatedSIDs:         make(map[uint32]*SIDAllocation),
 	}
 
-	manager.runReconciliationAfterK8sSync()
-
 	return manager
 }
 
@@ -138,6 +135,8 @@ func (manager *Manager) SetBGPSignaler(bgp BGPSignaler) {
 	manager.bgpMu.Lock()
 	manager.bgp = bgp
 	manager.bgpMu.Unlock()
+	manager.reconcilePoliciesAndSIDs()
+	manager.reconcileVRF()
 }
 
 func (manager *Manager) SetSIDAllocator(a ipam.Allocator) {
@@ -146,24 +145,16 @@ func (manager *Manager) SetSIDAllocator(a ipam.Allocator) {
 	manager.sidMu.Unlock()
 }
 
-// runReconciliationAfterK8sSync spawns a goroutine that waits for the agent to
-// sync with k8s and then runs the first reconciliation.
-func (manager *Manager) runReconciliationAfterK8sSync() {
-	go func() {
+func (manager *Manager) BGPSignalerIsSet() bool {
+	manager.bgpMu.RLock()
+	defer manager.bgpMu.RUnlock()
+	return manager.bgp != nil
+}
 
-		for {
-			if manager.k8sCacheSyncedChecker.Synchronized() {
-				break
-			}
-
-			time.Sleep(1 * time.Second)
-		}
-
-		manager.mutex.Lock()
-		defer manager.mutex.Unlock()
-
-		manager.reconcilePoliciesAndSIDs()
-	}()
+func (manager *Manager) SIDAllocatorIsSet() bool {
+	manager.sidMu.RLock()
+	defer manager.sidMu.RUnlock()
+	return manager.sidAlloc != nil
 }
 
 // GetAllVRFs returns a slice with all VRFs known to the SRv6 manager.
@@ -449,40 +440,6 @@ nextPolicyKey:
 	}
 }
 
-// addMissingSRv6SIDs implements the same as addMissingSRv6PolicyRules but for
-// the SID map.
-func (manager *Manager) addMissingSRv6SIDs() {
-	srv6SIDs := map[srv6map.SIDKey]srv6map.SIDValue{}
-	srv6map.SRv6SIDMap.IterateWithCallback(
-		func(key *srv6map.SIDKey, val *srv6map.SIDValue) {
-			srv6SIDs[*key] = *val
-		})
-
-	var err error
-	for _, policy := range manager.policies {
-		sidKey := srv6map.SIDKey{
-			SID: policy.SID,
-		}
-
-		sidVal, sidPresent := srv6SIDs[sidKey]
-		if sidPresent && sidVal.VRFID == policy.VRFID {
-			continue
-		}
-
-		err = srv6map.SRv6SIDMap.Update(sidKey, policy.VRFID)
-
-		logger := log.WithFields(logrus.Fields{
-			logfields.SID: policy.SID,
-			logfields.VRF: policy.VRFID,
-		})
-		if err != nil {
-			logger.WithError(err).Error("Error adding SID")
-		} else {
-			logger.Info("SID added")
-		}
-	}
-}
-
 // removeUnusedSRv6SIDs implements the same as removeUnusedSRv6PolicyRules but
 // for the SID map.
 func (manager *Manager) removeUnusedSRv6SIDs() {
@@ -494,8 +451,8 @@ func (manager *Manager) removeUnusedSRv6SIDs() {
 
 nextSIDKey:
 	for sidKey := range srv6SIDs {
-		for _, policy := range manager.policies {
-			if sidKey.SID == policy.SID {
+		for _, sid := range manager.allocatedSIDs {
+			if sidKey.SID.IP().Equal(sid.SID) {
 				continue nextSIDKey
 			}
 		}
@@ -665,6 +622,10 @@ func (m *Manager) reconcileVRFIngressPath() {
 		"toCreate": len(toCreate),
 		"toRemove": len(toRemove),
 	}).Debug("Reconciling ingress VRF mappings for decapsulation.")
+
+	// remove any SIDs in the SID map which we do not have allocations for
+	m.removeUnusedSRv6SIDs()
+
 	m.createIngressPathVRFs(toCreate)
 	m.removeIngressPathVRFs(toRemove)
 }
@@ -780,22 +741,15 @@ func (m *Manager) removeIngressPathVRFs(allocs []*SIDAllocation) {
 
 // reconcilePoliciesAndSIDs is responsible for reconciling the state of the
 // manager (i.e. the desired state) with the actual state of the node (SRv6
-// policy map entries and SIDs).
+// policy map entries).
 //
 // Whenever it encounters an error, it will just log it and move to the next
 // item, in order to reconcile as many states as possible.
 func (manager *Manager) reconcilePoliciesAndSIDs() {
-	if !manager.k8sCacheSyncedChecker.Synchronized() {
-		return
-	}
-
 	// The order of the next 2 function calls matters, as by first adding missing policies and
 	// only then removing obsolete ones we make sure there will be no connectivity disruption
 	manager.addMissingSRv6PolicyRules()
 	manager.removeUnusedSRv6PolicyRules()
-
-	manager.addMissingSRv6SIDs()
-	manager.removeUnusedSRv6SIDs()
 }
 
 // reconcileVRF is responsible for reconciling the state of the
@@ -811,27 +765,17 @@ func (manager *Manager) reconcileVRF() {
 		},
 	)
 
-	if !manager.k8sCacheSyncedChecker.Synchronized() {
-		return
-	}
-
-	// only reconcile ingress path if Manager is configured with a SIDAllocator.
-	manager.sidMu.RLock()
-	if manager.sidAlloc != nil {
-		manager.sidMu.RUnlock()
+	if manager.SIDAllocatorIsSet() {
 		manager.reconcileVRFIngressPath()
 	} else {
-		l.Error("SRv6 Manager not configured with SID Allocator, won't export VRFs.")
-		manager.sidMu.RUnlock()
+		l.Error("SRv6 Manager not configured with SID Allocator yet, won't export VRFs.")
 	}
 
 	manager.reconcileVRFEgressPath()
 
-	manager.bgpMu.RLock()
-	defer manager.bgpMu.RUnlock()
-	if manager.bgp != nil {
+	if manager.BGPSignalerIsSet() {
 		manager.bgp.Signal()
 	} else {
-		l.Debug("SRv6 Manager not configured with BGP signaler, won't signal changes to BGP Control Plane.")
+		l.Error("SRv6 Manager not configured with BGP signaler, won't signal changes to BGP Control Plane.")
 	}
 }

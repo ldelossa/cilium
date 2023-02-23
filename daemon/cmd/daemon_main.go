@@ -1870,8 +1870,8 @@ func runDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daem
 	if d.srv6Manager != nil && d.bgpControlPlaneController != nil {
 		log.Info("Both SRv6 and BGP CP enabled, providing handles to both.")
 		d.bgpControlPlaneController.SetSRv6Manager(d.srv6Manager)
+		d.srv6Manager.SetSIDAllocator(d.ipam.IPv6Allocator)
 		d.srv6Manager.SetBGPSignaler(d.bgpControlPlaneController)
-		d.bgpControlPlaneController.Signal()
 	}
 
 	log.WithField("bootstrapTime", time.Since(bootstrapTimestamp)).
