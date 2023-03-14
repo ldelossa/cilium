@@ -99,6 +99,7 @@ spec:
       httpGet:
         path: /
         port: 80
+  # If we change this, then the test also needs to be changed.
   nodeSelector:
     "cilium.io/ci-node": k8s1
 ---
