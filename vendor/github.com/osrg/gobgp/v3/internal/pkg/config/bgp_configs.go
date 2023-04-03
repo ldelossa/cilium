@@ -264,6 +264,8 @@ const (
 	AFI_SAFI_TYPE_IPV6_SRPOLICY         AfiSafiType = "ipv6-srpolicy"
 	AFI_SAFI_TYPE_OPAQUE                AfiSafiType = "opaque"
 	AFI_SAFI_TYPE_LS                    AfiSafiType = "ls"
+	AFI_SAFI_TYPE_IPV4_MUP              AfiSafiType = "ipv4-mup"
+	AFI_SAFI_TYPE_IPV6_MUP              AfiSafiType = "ipv6-mup"
 )
 
 var AfiSafiTypeToIntMap = map[AfiSafiType]int{
@@ -291,6 +293,8 @@ var AfiSafiTypeToIntMap = map[AfiSafiType]int{
 	AFI_SAFI_TYPE_IPV6_SRPOLICY:         21,
 	AFI_SAFI_TYPE_OPAQUE:                22,
 	AFI_SAFI_TYPE_LS:                    23,
+	AFI_SAFI_TYPE_IPV4_MUP:              24,
+	AFI_SAFI_TYPE_IPV6_MUP:              25,
 }
 
 var IntToAfiSafiTypeMap = map[int]AfiSafiType{
@@ -318,6 +322,8 @@ var IntToAfiSafiTypeMap = map[int]AfiSafiType{
 	21: AFI_SAFI_TYPE_IPV6_SRPOLICY,
 	22: AFI_SAFI_TYPE_OPAQUE,
 	23: AFI_SAFI_TYPE_LS,
+	24: AFI_SAFI_TYPE_IPV4_MUP,
+	25: AFI_SAFI_TYPE_IPV6_MUP,
 }
 
 func (v AfiSafiType) Validate() error {
@@ -1141,7 +1147,7 @@ type ZebraState struct {
 	MplsLabelRangeSize uint32 `mapstructure:"mpls-label-range-size" json:"mpls-label-range-size,omitempty"`
 	// original -> gobgp:software-name
 	// Configure zebra software name.
-	// frr4, cumulus, frr6, frr7, frr7.2 and frr7.3 can be used.
+	// frr4, cumulus, frr6, frr7, frr7.2, frr7.3, frr7.4, frr7.5, frr8, frr8.1 can be used.
 	SoftwareName string `mapstructure:"software-name" json:"software-name,omitempty"`
 }
 
@@ -1171,7 +1177,7 @@ type ZebraConfig struct {
 	MplsLabelRangeSize uint32 `mapstructure:"mpls-label-range-size" json:"mpls-label-range-size,omitempty"`
 	// original -> gobgp:software-name
 	// Configure zebra software name.
-	// frr4, cumulus, frr6, frr7, frr7.2 and frr7.3 can be used.
+	// frr4, cumulus, frr6, frr7, frr7.2, frr7.3, frr7.4, frr7.5, frr8, frr8.1 can be used.
 	SoftwareName string `mapstructure:"software-name" json:"software-name,omitempty"`
 }
 
@@ -3175,6 +3181,9 @@ type NeighborConfig struct {
 	NeighborInterface string `mapstructure:"neighbor-interface" json:"neighbor-interface,omitempty"`
 	// original -> gobgp:vrf
 	Vrf string `mapstructure:"vrf" json:"vrf,omitempty"`
+	// original -> gobgp:send-software-version
+	// gobgp:send-software-version's original type is boolean.
+	SendSoftwareVersion bool `mapstructure:"send-software-version" json:"send-software-version,omitempty"`
 }
 
 func (lhs *NeighborConfig) Equal(rhs *NeighborConfig) bool {
@@ -3218,6 +3227,9 @@ func (lhs *NeighborConfig) Equal(rhs *NeighborConfig) bool {
 		return false
 	}
 	if lhs.Vrf != rhs.Vrf {
+		return false
+	}
+	if lhs.SendSoftwareVersion != rhs.SendSoftwareVersion {
 		return false
 	}
 	return true
