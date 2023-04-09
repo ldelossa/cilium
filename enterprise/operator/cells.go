@@ -11,6 +11,8 @@
 package main
 
 import (
+	"github.com/cilium/cilium/enterprise/operator/dnsclient"
+	"github.com/cilium/cilium/enterprise/operator/dnsresolver"
 	"github.com/cilium/cilium/enterprise/operator/k8s"
 	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
 	"github.com/cilium/cilium/operator/cmd"
@@ -35,7 +37,11 @@ var (
 			// enterprise-only cells to be started after leader election here
 
 			k8s.EnterpriseResourcesCell,
+
 			locatorpool.Cell,
+
+			dnsclient.Cell,
+			dnsresolver.Cell,
 		),
 	)
 )
