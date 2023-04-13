@@ -100,12 +100,12 @@ var _ = Describe("K8sUpdates", func() {
 		cmd := kubectl.Exec(fmt.Sprintf("mkdir -p %s && "+
 			"cd %s && "+
 			"rm -rf * && "+
-			"wget https://github.com/cilium/cilium/archive/refs/heads/%s.tar.gz && "+
-			"tar -xf %s.tar.gz",
+			"helm repo add isovalent https://helm.isovalent.com && "+
+			"helm pull isovalent/cilium --version %s.9999-dev --untar --untardir cilium-%s/install/kubernetes",
 			versionPath,
 			versionPath,
 			helpers.CiliumStableVersion,
-			helpers.CiliumStableVersion))
+			helpers.CiliumStableHelmChartVersion))
 		ExpectWithOffset(1, cmd).To(helpers.CMDSuccess(), "Unable to download helm chart %s from GitHub", helpers.CiliumStableVersion)
 	})
 
@@ -245,7 +245,7 @@ func InstallAndValidateCiliumUpgrades(kubectl *helpers.Kubectl, oldHelmChartVers
 		cleanupCiliumState(filepath.Join(kubectl.BasePath(), helpers.HelmTemplate), newHelmChartVersion, "", newImageVersion, "")
 
 		By("Cleaning Cilium state (%s)", oldImageVersion)
-		cleanupCiliumState(stableChartPath, oldHelmChartVersion, "quay.io/cilium/cilium-ci", oldImageVersion, "")
+		cleanupCiliumState(stableChartPath, oldHelmChartVersion, "quay.io/isovalent-dev/cilium-ci", oldImageVersion, "")
 
 		By("Deploying Cilium %s", oldHelmChartVersion)
 
@@ -254,10 +254,10 @@ func InstallAndValidateCiliumUpgrades(kubectl *helpers.Kubectl, oldHelmChartVers
 			"operator.image.tag":                     oldImageVersion,
 			"hubble.relay.image.tag":                 oldImageVersion,
 			"clustermesh.apiserver.image.tag":        oldImageVersion,
-			"image.repository":                       "quay.io/cilium/cilium-ci",
-			"operator.image.repository":              "quay.io/cilium/operator",
-			"hubble.relay.image.repository":          "quay.io/cilium/hubble-relay-ci",
-			"clustermesh.apiserver.image.repository": "quay.io/cilium/clustermesh-apiserver-ci",
+			"image.repository":                       "quay.io/isovalent-dev/cilium-ci",
+			"operator.image.repository":              "quay.io/isovalent-dev/operator",
+			"hubble.relay.image.repository":          "quay.io/isovalent-dev/hubble-relay-ci",
+			"clustermesh.apiserver.image.repository": "quay.io/isovalent-dev/clustermesh-apiserver-ci",
 			"cluster.name":                           clusterName,
 			"cluster.id":                             clusterID,
 		}
