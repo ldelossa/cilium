@@ -125,6 +125,17 @@ var _ = SkipDescribeIf(helpers.DoesNotExistNodeWithoutCilium, "K8sSRv6", func() 
 			k.ExecPodCmd(helpers.DefaultNamespace, compilerPodName, cmd).ExpectSuccess("Failed to run command %s", cmd)
 		}
 
+		defer func() {
+			cmds = []string{
+				"tc filter del dev enp0s8 egress",
+				"tc filter del dev enp0s8 ingress",
+				"tc qdisc del dev enp0s8 clsact",
+			}
+			for _, cmd := range cmds {
+				k.ExecPodCmd(helpers.DefaultNamespace, compilerPodName, cmd).ExpectSuccess("Failed to run command %s", cmd)
+			}
+		}()
+
 		installK8s3Routes()
 		defer removeK8s3Routes()
 
