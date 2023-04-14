@@ -72,6 +72,21 @@ var _ = SkipDescribeIf(helpers.DoesNotExistNodeWithoutCilium, "K8sSRv6", func() 
 		Expect(res).Should(helpers.CMDSuccess(), "Error adding pod CIDR IP route for %s", k8s2NodeName)
 	}
 
+	removeK8s3Routes := func() {
+		var cn1 cilium_v2.CiliumNode
+		err := k.Get(helpers.DefaultNamespace, fmt.Sprintf("ciliumnode %s", k8s1NodeName)).Unmarshal(&cn1)
+		Expect(err).Should(BeNil(), "Can not retrieve %s CiliumNode %s", k8s1NodeName)
+
+		var cn2 cilium_v2.CiliumNode
+		err = k.Get(helpers.DefaultNamespace, fmt.Sprintf("ciliumnode %s", k8s2NodeName)).Unmarshal(&cn2)
+		Expect(err).Should(BeNil(), "Can not retrieve %s CiliumNode %s", k8s2NodeName)
+
+		res := k.DelIPRoute(outsideNodeName, cn1.Spec.IPAM.PodCIDRs[0], k8s1IP)
+		Expect(res).Should(helpers.CMDSuccess(), "Error deleting pod CIDR IP route for %s", k8s1NodeName)
+		res = k.DelIPRoute(outsideNodeName, cn2.Spec.IPAM.PodCIDRs[0], k8s2IP)
+		Expect(res).Should(helpers.CMDSuccess(), "Error deleting pod CIDR IP route for %s", k8s2NodeName)
+	}
+
 	plumbEndDTRule := func(nodeName string) {
 		privateIface, err := k.GetPrivateIface(nodeName)
 		Expect(err).Should(BeNil(), "Cannot retrieve iface of node %s", nodeName)
@@ -111,6 +126,7 @@ var _ = SkipDescribeIf(helpers.DoesNotExistNodeWithoutCilium, "K8sSRv6", func() 
 		}
 
 		installK8s3Routes()
+		defer removeK8s3Routes()
 
 		// We need to manually teach k8s1's datapath about the expected SID for
 		// End.DT{4,6} on ingress. This is because, when running SRv6 without
