@@ -14,10 +14,12 @@ rules:
   - update
   resourceNames:
   - isovalentegressgatewaypolicies.isovalent.com
+  - isovalentfqdngroups.isovalent.com
 - apiGroups:
   - isovalent.com
   resources:
   - isovalentsrv6locatorpools
+  - isovalentfqdngroups
   verbs:
   - get
   - list
@@ -36,4 +38,12 @@ rules:
   - delete
   - patch
 {{- end }}
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumcidrgroups
+  verbs:
+  - create
+  - patch
+  - delete
 {{- end }}
