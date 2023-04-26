@@ -611,12 +611,16 @@ func (m *Manager) reconcileVRFIngressPath() {
 	// if we have any allocated SIDs which do not have associated VRF definitions
 	// remove them.
 	for vrfID := range m.allocatedSIDs {
+		found := false
 		for _, vrf := range m.vrfs {
 			if vrf.VRFID == vrfID {
-				continue
+				found = true
+				break
 			}
 		}
-		toRemove = append(toRemove, m.allocatedSIDs[vrfID])
+		if !found {
+			toRemove = append(toRemove, m.allocatedSIDs[vrfID])
+		}
 	}
 	l.WithFields(logrus.Fields{
 		"toCreate": len(toCreate),
