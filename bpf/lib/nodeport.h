@@ -606,8 +606,7 @@ int tail_nodeport_ipv6_dsr(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
-	ret = fib_redirect_v6(ctx, ETH_HLEN, ip6, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v6(ctx, ETH_HLEN, ip6, true, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -1858,8 +1857,7 @@ int tail_nodeport_ipv4_dsr(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
-	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -2099,8 +2097,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -2455,8 +2452,7 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 			}
 		}
 #endif
-		return fib_redirect_v4(ctx, l3_off, ip4, true, ext_err,
-				       ctx_get_ifindex(ctx), &ifindex);
+		return fib_redirect_v4(ctx, l3_off, ip4, true, ext_err, &ifindex);
 	}
 out:
 	if (bpf_skip_recirculation(ctx))
