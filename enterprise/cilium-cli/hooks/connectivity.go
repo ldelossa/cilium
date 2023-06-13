@@ -11,6 +11,8 @@
 package hooks
 
 import (
+	"context"
+	_ "embed"
 	"fmt"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
@@ -22,8 +24,20 @@ const (
 	testNoPolicies = "no-policies"
 )
 
+//go:embed manifests/allow-all-dns-loookups-policy.yaml
+var allowAllDNSLookupsPolicyYAML string
+
 func addConnectivityTests(ct *check.ConnectivityTest) error {
 	if err := addHubbleVersionTests(ct); err != nil {
+		return err
+	}
+
+	externalCiliumDNSProxyPods, err := tests.RetrieveExternalCiliumDNSProxyPods(context.TODO(), ct)
+	if err != nil {
+		return err
+	}
+
+	if err := addExternalCiliumDNSProxyTests(ct, externalCiliumDNSProxyPods); err != nil {
 		return err
 	}
 	return nil
@@ -35,5 +49,14 @@ func addHubbleVersionTests(ct *check.ConnectivityTest) error {
 		return fmt.Errorf("failed to get test %s: %w", testNoPolicies, err)
 	}
 	test.WithScenarios(tests.HubbleCLIVersion())
+	return nil
+}
+
+func addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest, pods map[string]check.Pod) error {
+	ct.NewTest("external-cilium-dns-proxy").WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
+		WithScenarios(tests.ExternalCiliumDNSProxy(pods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
+		return check.ResultOK.ExpectMetricsIncrease(tests.ExternalCiliumDNSProxySource(pods), "isovalent_external_dns_proxy_policy_l7_total"),
+			check.ResultNone
+	})
 	return nil
 }
