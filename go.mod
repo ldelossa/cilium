@@ -124,6 +124,9 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
+// Enterprise specific deps
+require github.com/jonboulle/clockwork v0.2.2
+
 require (
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest/azure/cli v0.4.5 // indirect
