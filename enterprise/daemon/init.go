@@ -21,12 +21,14 @@ import (
 
 	"github.com/cilium/cilium/enterprise/plugins"
 	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
+	export "github.com/cilium/cilium/enterprise/plugins/hubble-flow-export"
 	"github.com/cilium/cilium/pkg/hubble/observer"
 	"github.com/cilium/cilium/pkg/option"
 )
 
 var pluginInits = []plugins.Init{
 	aggregation.New,
+	export.New,
 }
 
 // Initialize a list of plugins from their initializers.
