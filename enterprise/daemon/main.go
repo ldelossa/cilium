@@ -11,12 +11,29 @@
 package main
 
 import (
+	"log"
+
 	"github.com/cilium/cilium/daemon/cmd"
 	"github.com/cilium/cilium/pkg/hive"
 )
 
 func main() {
 	agentHive := hive.New(EnterpriseAgent)
+	vp := agentHive.Viper()
 
-	cmd.Execute(cmd.NewAgentCmd(agentHive))
+	list, err := Initialize(vp, pluginInits)
+	if err != nil {
+		log.Fatalf("failed to initialize plugins: %v", err)
+	}
+
+	agentCmd := cmd.NewAgentCmd(agentHive)
+	if err := AddFlags(vp, agentCmd, list); err != nil {
+		log.Fatalf("unable to apply cilium CLI options: %v", err)
+	}
+
+	if err := AddServerOptions(list); err != nil {
+		log.Fatalf("unable to add server options: %v", err)
+	}
+
+	cmd.Execute(agentCmd)
 }
