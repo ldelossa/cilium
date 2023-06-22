@@ -13,8 +13,12 @@ package hooks
 import (
 	_ "embed"
 	"fmt"
+
+	"github.com/blang/semver/v4"
+
 	"github.com/cilium/cilium-cli/connectivity/check"
 
+	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 )
 
@@ -33,6 +37,11 @@ func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods
 	if err := addExternalCiliumDNSProxyTests(ct, externalCiliumDNSProxyPods); err != nil {
 		return err
 	}
+
+	if err := addPhantomServiceTests(ct); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -53,4 +62,41 @@ func addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest, pods map[string]
 			check.ResultNone
 	})
 	return nil
+}
+
+func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
+	// Phantom service support has been introduced in Isovalent Enterprise for Cilium v1.13.2
+	if ct.Params().MultiCluster == "" || ct.CiliumVersion.LT(semver.MustParse("1.13.2")) {
+		return nil
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	mustGetTest(ct, "no-policies").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "allow-all-except-world").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+
+	// Traffic shall be dropped, because it is subject to the ingress/egress policy.
+	mustGetTest(ct, "all-ingress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "all-ingress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "all-egress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "all-egress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "cluster-entity-multi-cluster").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+
+	// Traffic shall be allowed, because it matches the cross-cluster policy.
+	mustGetTest(ct, "client-egress").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "client-egress-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+
+	return
+}
+
+func mustGetTest(ct *check.ConnectivityTest, name string) *check.Test {
+	test, err := ct.GetTest(name)
+	if err != nil {
+		panic(err)
+	}
+	return test
 }
