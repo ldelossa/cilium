@@ -8,41 +8,15 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package main
+package ctnat
 
 import (
-	"github.com/cilium/cilium/daemon/cmd"
-	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	"github.com/cilium/cilium/pkg/hive/cell"
-
-	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
-	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 )
 
-var (
-	EnterpriseAgent = cell.Module(
-		"enterprise-agent",
-		"Cilium Agent Enterprise",
+var Cell = cell.Module(
+	"enterprise-ct-nat-maps",
+	"Isovalent Enterprise for Cilium CT and NAT eBPF maps",
 
-		cmd.Agent,
-
-		// enterprise-only cells here
-		ControlPlane,
-		Datapath,
-	)
-
-	ControlPlane = cell.Module(
-		"enterprise-controlplane",
-		"Control Plane Enterprise",
-
-		cecm.Cell,
-		sidmanager.SIDManagerCell,
-	)
-
-	Datapath = cell.Module(
-		"enterprise-datapath",
-		"Datapath Enterprise",
-
-		cemaps.Cell,
-	)
+	cell.Provide(newPerCluster),
 )
