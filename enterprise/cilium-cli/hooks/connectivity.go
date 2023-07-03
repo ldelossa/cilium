@@ -14,7 +14,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-
 	"github.com/cilium/cilium-cli/connectivity/check"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
@@ -28,11 +27,18 @@ const (
 var allowAllDNSLookupsPolicyYAML string
 
 func addConnectivityTests(ct *check.ConnectivityTest) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := detectFeatures(ctx, ct); err != nil {
+		return err
+	}
+
 	if err := addHubbleVersionTests(ct); err != nil {
 		return err
 	}
 
-	externalCiliumDNSProxyPods, err := tests.RetrieveExternalCiliumDNSProxyPods(context.TODO(), ct)
+	externalCiliumDNSProxyPods, err := tests.RetrieveExternalCiliumDNSProxyPods(ctx, ct)
 	if err != nil {
 		return err
 	}
@@ -54,6 +60,7 @@ func addHubbleVersionTests(ct *check.ConnectivityTest) error {
 
 func addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest, pods map[string]check.Pod) error {
 	ct.NewTest("external-cilium-dns-proxy").WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
+		WithFeatureRequirements(check.RequireFeatureEnabled(FeatureCiliumDNSProxyDeployed)).
 		WithScenarios(tests.ExternalCiliumDNSProxy(pods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
 		return check.ResultOK.ExpectMetricsIncrease(tests.ExternalCiliumDNSProxySource(pods), "isovalent_external_dns_proxy_policy_l7_total"),
 			check.ResultNone
