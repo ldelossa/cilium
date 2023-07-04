@@ -11,7 +11,6 @@
 package hooks
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"github.com/cilium/cilium-cli/connectivity/check"
@@ -26,20 +25,8 @@ const (
 //go:embed manifests/allow-all-dns-loookups-policy.yaml
 var allowAllDNSLookupsPolicyYAML string
 
-func addConnectivityTests(ct *check.ConnectivityTest) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if err := detectFeatures(ctx, ct); err != nil {
-		return err
-	}
-
+func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods map[string]check.Pod) error {
 	if err := addHubbleVersionTests(ct); err != nil {
-		return err
-	}
-
-	externalCiliumDNSProxyPods, err := tests.RetrieveExternalCiliumDNSProxyPods(ctx, ct)
-	if err != nil {
 		return err
 	}
 
