@@ -1012,10 +1012,10 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
-   * - :spelling:ignore:`enterprise`
-     - 
-     - string
-     - ``nil``
+   * - :spelling:ignore:`enterprise.clustermesh.enableOverlappingPodCIDRSupport`
+     - Enable overlapping PodCIDR support
+     - bool
+     - ``false``
    * - :spelling:ignore:`envoy.affinity`
      - Affinity for cilium-envoy.
      - object

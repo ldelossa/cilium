@@ -3,6 +3,9 @@
 
 # Enterprise-only settings
 enterprise:
+  clustermesh:
+    # -- Enable overlapping PodCIDR support
+    enableOverlappingPodCIDRSupport: false
 
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
