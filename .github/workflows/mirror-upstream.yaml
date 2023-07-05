@@ -21,7 +21,7 @@ jobs:
           token: ${{ secrets.API_TOKEN }}
       - name: Update mirrored branches from upstream
         env:
-          BRANCHES: "main v1.8 v1.9 v1.10 v1.11 v1.12 v1.13"
+          BRANCHES: "main v1.8 v1.9 v1.10 v1.11 v1.12 v1.13 v1.14"
           UPSTREAM: "https://github.com/cilium/cilium"
         run: |
           git remote add upstream "$UPSTREAM"
