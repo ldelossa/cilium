@@ -207,6 +207,26 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 				return nil
 			},
 		},
+		{
+			Description: "Collecting IsovalentFQDNGroup",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				fqdnGroups := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentfqdngroups",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, fqdnGroups, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent FQDN groups: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentfqdngroups-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent FQDN groups: %w", err)
+				}
+				return nil
+			},
+		},
 	})
 
 	return nil
