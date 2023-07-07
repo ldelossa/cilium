@@ -26,7 +26,6 @@ filename `$CEE_VERSION.md` (e.g. `release-notes/v0.15.0-cee.1.md`) before you
 make a release.
 
     git checkout -b pr/prepare-${CEE_VERSION}
-    cd enterprise/cilium-cli
     git add release-notes/$CEE_VERSION.md
     git commit -s -m "Prepare for $CEE_VERSION release"
     git push origin HEAD
