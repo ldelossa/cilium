@@ -28,7 +28,7 @@ jobs:
           git config --global url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "https://github.com/"
           git config --global --add url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "git@github.com:"
           cd enterprise/cilium-cli
-          make release
+          make enterprise-release
 
       - name: Create a Release
         uses: softprops/action-gh-release@v1

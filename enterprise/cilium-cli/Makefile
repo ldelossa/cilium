@@ -90,3 +90,17 @@ check:
 endif
 
 .PHONY: $(TARGET) release local-release install clean test bench check clean-tags tags
+
+# Enterprise-specific targets
+enterprise-release:
+	# Create a volume from the top-level directory so that the top-level
+	# go.mod is available from inside the docker container.
+	cd ../.. && \
+	docker run \
+		--rm \
+		--workdir /cilium \
+		--volume `pwd`:/cilium docker.io/library/golang:1.20.2-alpine3.17 \
+		sh -c "cd enterprise/cilium-cli && pwd && apk add --no-cache setpriv make git && \
+			/usr/bin/setpriv --reuid=$(RELEASE_UID) --regid=$(RELEASE_GID) --clear-groups make GOCACHE=/tmp/gocache local-release"
+
+.PHONY: enterprise-release
