@@ -1,0 +1,42 @@
+on:
+  push:
+    tags:
+      - 'enterprise/cilium-cli/v[0-9]+.[0-9]+.[0-9]+-cee.[0-9]+'
+
+name: Create cilium-cli CEE release
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f
+
+      - name: Get image tag
+        id: tag
+        run: |
+          echo ::set-output name=tag::${GITHUB_REF##*/}
+
+      - name: Set up Go
+        uses: actions/setup-go@331ce1d993939866bb63c32c6cbbfd48fa76fc57
+        with:
+          go-version: 1.20.5
+
+      - name: Generate artifacts
+        run: |
+          git config --global url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "git@github.com:"
+          cd enterprise/cilium-cli
+          make release
+
+      - name: Create a Release
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: isovalent/cilium-cli-releases
+          # Need to use PAT with "repo" access to create a release in another repo.
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+          draft: true
+          files: |
+            enterprise/cilium-cli/release/*
+          body_path: enterprise/cilium-cli/release-notes/${{ steps.tag.outputs.tag }}.md
