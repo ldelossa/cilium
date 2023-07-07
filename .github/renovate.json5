@@ -244,7 +244,7 @@
         "docker.io/library/golang",
         "go"
       ],
-      "allowedVersions": "<1.19",
+      "allowedVersions": "<1.20",
       "matchBaseBranches": [
         "v1.12"
       ]
@@ -254,7 +254,7 @@
         "docker.io/library/golang",
         "go"
       ],
-      "allowedVersions": "<1.18",
+      "allowedVersions": "<1.20",
       "matchBaseBranches": [
         "v1.11"
       ]
