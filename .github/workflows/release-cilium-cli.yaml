@@ -34,6 +34,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           repository: isovalent/cilium-cli-releases
+          name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ steps.tag.outputs.tag }}
           # Need to use PAT with "repo" access to create a release in another repo.
           token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
           draft: true
