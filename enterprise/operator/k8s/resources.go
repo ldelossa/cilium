@@ -8,34 +8,32 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package main
+package k8s
 
 import (
-	"github.com/cilium/cilium/enterprise/operator/k8s"
-	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
-	"github.com/cilium/cilium/operator/cmd"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/k8s"
+	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
+	"github.com/cilium/cilium/pkg/k8s/resource"
 )
 
 var (
-	EnterpriseOperator = cell.Module(
-		"enterprise-operator",
-		"Cilium Operator Enterprise",
+	// EnterpriseResourcesCell provides a set of shared handles to enterprise-only
+	// Kubernetes resources used throughout the Cilium operator.
+	//
+	// See ResourcesCell for more information.
+	EnterpriseResourcesCell = cell.Module(
+		"enterprise-operator-resources",
+		"Shared Enterprise Kubernetes resources",
 
-		cmd.Operator,
-
-		// enterprise-only cells here
-
-		cell.Decorate(
-			func(lc *cmd.LeaderLifecycle) hive.Lifecycle {
-				return lc
-			},
-
-			// enterprise-only cells to be started after leader election here
-
-			k8s.EnterpriseResourcesCell,
-			locatorpool.Cell,
+		cell.Provide(
+			k8s.IsovalentFQDNGroup,
 		),
 	)
 )
+
+type EnterpriseResources struct {
+	cell.In
+
+	FQDNGroups resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup]
+}

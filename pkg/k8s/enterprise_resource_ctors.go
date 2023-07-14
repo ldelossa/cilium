@@ -8,34 +8,20 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package main
+package k8s
 
 import (
-	"github.com/cilium/cilium/enterprise/operator/k8s"
-	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
-	"github.com/cilium/cilium/operator/cmd"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
+	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
+	"github.com/cilium/cilium/pkg/k8s/client"
+	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/k8s/utils"
 )
 
-var (
-	EnterpriseOperator = cell.Module(
-		"enterprise-operator",
-		"Cilium Operator Enterprise",
-
-		cmd.Operator,
-
-		// enterprise-only cells here
-
-		cell.Decorate(
-			func(lc *cmd.LeaderLifecycle) hive.Lifecycle {
-				return lc
-			},
-
-			// enterprise-only cells to be started after leader election here
-
-			k8s.EnterpriseResourcesCell,
-			locatorpool.Cell,
-		),
-	)
-)
+func IsovalentFQDNGroup(lc hive.Lifecycle, cs client.Clientset) (resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup], error) {
+	if !cs.IsEnabled() {
+		return nil, nil
+	}
+	lw := utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentFQDNGroupList](cs.IsovalentV1alpha1().IsovalentFQDNGroups())
+	return resource.New[*isovalent_api_v1alpha1.IsovalentFQDNGroup](lc, lw), nil
+}
