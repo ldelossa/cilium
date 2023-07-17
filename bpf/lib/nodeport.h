@@ -524,6 +524,12 @@ nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
 	return 0;
 }
 
+static __always_inline struct ipv6_nat_entry *
+nodeport_dsr_lookup_v6_nat_entry(const struct ipv6_ct_tuple *nat_tuple)
+{
+	return snat_v6_lookup(nat_tuple);
+}
+
 static __always_inline int xlate_dsr_v6(struct __ctx_buff *ctx,
 					const struct ipv6_ct_tuple *tuple,
 					int l4_off)
@@ -535,7 +541,7 @@ static __always_inline int xlate_dsr_v6(struct __ctx_buff *ctx,
 	nat_tup.sport = tuple->dport;
 	nat_tup.dport = tuple->sport;
 
-	entry = snat_v6_lookup(&nat_tup);
+	entry = nodeport_dsr_lookup_v6_nat_entry(&nat_tup);
 	if (!entry)
 		return 0;
 
@@ -807,6 +813,36 @@ drop_err:
 	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP, METRIC_INGRESS);
 }
 #endif /* ENABLE_DSR */
+
+static __always_inline struct lb6_reverse_nat *
+nodeport_rev_dnat_get_info_ipv6(struct __ctx_buff *ctx,
+				struct ipv6_ct_tuple *tuple)
+{
+	struct ipv6_nat_entry *dsr_entry __maybe_unused;
+	struct ipv6_ct_tuple dsr_tuple __maybe_unused;
+	__u16 rev_nat_index = 0;
+
+	if (!ct_has_nodeport_egress_entry6(get_ct_map6(tuple), tuple,
+					   &rev_nat_index, is_defined(ENABLE_DSR)))
+		return NULL;
+
+	if (rev_nat_index)
+		return lb6_lookup_rev_nat_entry(ctx, rev_nat_index);
+
+#ifdef ENABLE_DSR
+	dsr_tuple = *tuple;
+
+	dsr_tuple.flags = NAT_DIR_EGRESS;
+	dsr_tuple.sport = tuple->dport;
+	dsr_tuple.dport = tuple->sport;
+
+	dsr_entry = nodeport_dsr_lookup_v6_nat_entry(&dsr_tuple);
+	if (dsr_entry)
+		return &dsr_entry->nat_info;
+#endif
+
+	return NULL;
+}
 
 #ifdef ENABLE_NAT_46X64_GATEWAY
 __section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV46_RFC8215)
@@ -1231,6 +1267,7 @@ redo:
 static __always_inline int
 nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace)
 {
+	struct lb6_reverse_nat *nat_info;
 	struct ipv6_ct_tuple tuple = {};
 	struct ct_state ct_state = {};
 	void *data, *data_end;
@@ -1247,8 +1284,8 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace)
 		return ret;
 	}
 
-	if (!ct_has_nodeport_egress_entry6(get_ct_map6(&tuple), &tuple,
-					   is_defined(ENABLE_DSR)))
+	nat_info = nodeport_rev_dnat_get_info_ipv6(ctx, &tuple);
+	if (!nat_info)
 		return CTX_ACT_OK;
 
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, ACTION_CREATE,
@@ -1256,20 +1293,12 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace)
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 
-		if (ct_state.node_port && ct_state.rev_nat_index) {
-			ret = lb6_rev_nat(ctx, l4_off, ct_state.rev_nat_index,
-					  &tuple, REV_NAT_F_TUPLE_SADDR);
-			if (IS_ERR(ret))
-				return ret;
+		ret = __lb6_rev_nat(ctx, l4_off, &tuple, REV_NAT_F_TUPLE_SADDR,
+				    nat_info);
+		if (IS_ERR(ret))
+			return ret;
 
-			ctx_snat_done_set(ctx);
-#ifdef ENABLE_DSR
-		} else if (ct_state.dsr) {
-			ret = xlate_dsr_v6(ctx, &tuple, l4_off);
-			if (IS_ERR(ret))
-				return ret;
-#endif
-		}
+		ctx_snat_done_set(ctx);
 	}
 
 	return CTX_ACT_OK;
@@ -1311,7 +1340,7 @@ static __always_inline int rev_nodeport_lb6(struct __ctx_buff *ctx, __s8 *ext_er
 		return ret;
 	}
 
-	if (!ct_has_nodeport_egress_entry6(get_ct_map6(&tuple), &tuple, false))
+	if (!ct_has_nodeport_egress_entry6(get_ct_map6(&tuple), &tuple, NULL, false))
 		goto out;
 
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, ACTION_CREATE,
@@ -1964,6 +1993,12 @@ nodeport_extract_dsr_v4(struct __ctx_buff *ctx,
 	return 0;
 }
 
+static __always_inline struct ipv4_nat_entry *
+nodeport_dsr_lookup_v4_nat_entry(const struct ipv4_ct_tuple *nat_tuple)
+{
+	return snat_v4_lookup(nat_tuple);
+}
+
 static __always_inline int xlate_dsr_v4(struct __ctx_buff *ctx,
 					const struct ipv4_ct_tuple *tuple,
 					int l4_off, bool has_l4_header)
@@ -1975,7 +2010,7 @@ static __always_inline int xlate_dsr_v4(struct __ctx_buff *ctx,
 	nat_tup.sport = tuple->dport;
 	nat_tup.dport = tuple->sport;
 
-	entry = snat_v4_lookup(&nat_tup);
+	entry = nodeport_dsr_lookup_v4_nat_entry(&nat_tup);
 	if (!entry)
 		return 0;
 
@@ -2253,6 +2288,36 @@ drop_err:
 	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP, METRIC_INGRESS);
 }
 #endif /* ENABLE_DSR */
+
+static __always_inline struct lb4_reverse_nat *
+nodeport_rev_dnat_get_info_ipv4(struct __ctx_buff *ctx,
+				struct ipv4_ct_tuple *tuple)
+{
+	struct ipv4_nat_entry *dsr_entry __maybe_unused;
+	struct ipv4_ct_tuple dsr_tuple __maybe_unused;
+	__u16 rev_nat_index = 0;
+
+	if (!ct_has_nodeport_egress_entry4(get_ct_map4(tuple), tuple,
+					   &rev_nat_index, is_defined(ENABLE_DSR)))
+		return NULL;
+
+	if (rev_nat_index)
+		return lb4_lookup_rev_nat_entry(ctx, rev_nat_index);
+
+#ifdef ENABLE_DSR
+	dsr_tuple = *tuple;
+
+	dsr_tuple.flags = NAT_DIR_EGRESS;
+	dsr_tuple.sport = tuple->dport;
+	dsr_tuple.dport = tuple->sport;
+
+	dsr_entry = nodeport_dsr_lookup_v4_nat_entry(&dsr_tuple);
+	if (dsr_entry)
+		return &dsr_entry->nat_info;
+#endif
+
+	return NULL;
+}
 
 declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV4_NODEPORT_NAT_INGRESS)
 int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
@@ -2638,6 +2703,7 @@ static __always_inline int
 nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace)
 {
 	int ret, l3_off = ETH_HLEN, l4_off;
+	struct lb4_reverse_nat *nat_info;
 	struct ipv4_ct_tuple tuple = {};
 	struct ct_state ct_state = {};
 	void *data, *data_end;
@@ -2657,56 +2723,49 @@ nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace)
 		return ret;
 	}
 
-	if (!ct_has_nodeport_egress_entry4(get_ct_map4(&tuple), &tuple,
-					   is_defined(ENABLE_DSR)))
+	nat_info = nodeport_rev_dnat_get_info_ipv4(ctx, &tuple);
+	if (!nat_info)
 		return CTX_ACT_OK;
 
 	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
 			      ACTION_CREATE, CT_INGRESS, SCOPE_REVERSE, &ct_state,
 			      &trace->monitor);
+
+	/* nodeport_rev_dnat_get_info_ipv4() just checked that such a
+	 * CT entry exists:
+	 */
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 
-		/* Reply by local backend: */
-		if (ct_state.node_port && ct_state.rev_nat_index) {
-			ret = lb4_rev_nat(ctx, l3_off, l4_off, &ct_state,
-					  &tuple, REV_NAT_F_TUPLE_SADDR,
-					  has_l4_header);
-			if (IS_ERR(ret))
-				return ret;
+		ret = __lb4_rev_nat(ctx, l3_off, l4_off, &tuple,
+				    REV_NAT_F_TUPLE_SADDR, nat_info,
+				    false, has_l4_header);
+		if (IS_ERR(ret))
+			return ret;
 
-			ctx_snat_done_set(ctx);
+		ctx_snat_done_set(ctx);
+
 #ifdef ENABLE_DSR
-		/* Reply by DSR backend: */
-		} else if (ct_state.dsr) {
-			ret = xlate_dsr_v4(ctx, &tuple, l4_off, has_l4_header);
-			if (IS_ERR(ret))
-				return ret;
-
  #if defined(ENABLE_HIGH_SCALE_IPCACHE) &&				\
      defined(IS_BPF_OVERLAY) &&						\
      DSR_ENCAP_MODE == DSR_ENCAP_GENEVE
-			/* For HS IPCache, we also need to revDNAT the OuterSrcIP: */
-			{
-				struct bpf_tunnel_key key;
+		/* For HS IPCache, we also need to revDNAT the OuterSrcIP: */
+		if (ct_state.dsr) {
+			struct bpf_tunnel_key key;
 
-				if (ctx_get_tunnel_key(ctx, &key, sizeof(key), 0) < 0)
-					return DROP_NO_TUNNEL_KEY;
+			if (ctx_get_tunnel_key(ctx, &key, sizeof(key), 0) < 0)
+				return DROP_NO_TUNNEL_KEY;
 
-				if (!revalidate_data(ctx, &data, &data_end, &ip4))
-					return DROP_INVALID;
+			/* kernel returns addresses in flipped locations: */
+			key.remote_ipv4 = key.local_ipv4;
+			key.local_ipv4 = bpf_ntohl(nat_info->address);
 
-				/* kernel returns addresses in flipped locations: */
-				key.remote_ipv4 = key.local_ipv4;
-				key.local_ipv4 = bpf_ntohl(ip4->saddr);
-
-				if (ctx_set_tunnel_key(ctx, &key, sizeof(key),
-						       BPF_F_ZERO_CSUM_TX) < 0)
-					return DROP_WRITE_ERROR;
-			}
+			if (ctx_set_tunnel_key(ctx, &key, sizeof(key),
+					       BPF_F_ZERO_CSUM_TX) < 0)
+				return DROP_WRITE_ERROR;
+		}
  #endif
 #endif
-		}
 	}
 
 	return CTX_ACT_OK;
@@ -2763,15 +2822,15 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 	if (!check_revdnat)
 		goto out;
 
-	if (!ct_has_nodeport_egress_entry4(get_ct_map4(&tuple), &tuple, false))
+	if (!ct_has_nodeport_egress_entry4(get_ct_map4(&tuple), &tuple, NULL, false))
 		goto out;
 
 	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
 			      ACTION_CREATE, CT_INGRESS, SCOPE_REVERSE, &ct_state, &monitor);
 	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
 		reason = TRACE_REASON_CT_REPLY;
-		ret = lb4_rev_nat(ctx, l3_off, l4_off, &ct_state, &tuple,
-				  REV_NAT_F_TUPLE_SADDR, has_l4_header);
+		ret = lb4_rev_nat(ctx, l3_off, l4_off, ct_state.rev_nat_index, false,
+				  &tuple, REV_NAT_F_TUPLE_SADDR, has_l4_header);
 		if (IS_ERR(ret))
 			return ret;
 		if (!revalidate_data(ctx, &data, &data_end, &ip4))
