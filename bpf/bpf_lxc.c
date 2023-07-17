@@ -990,7 +990,9 @@ ct_recreate4:
 
 		if (ct_state->rev_nat_index) {
 			ret = lb4_rev_nat(ctx, ETH_HLEN, l4_off,
-					  ct_state, tuple, 0, has_l4_header);
+					  ct_state->rev_nat_index,
+					  ct_state->loopback,
+					  tuple, 0, has_l4_header);
 			if (IS_ERR(ret))
 				return ret;
 		}
@@ -1523,7 +1525,7 @@ skip_policy_enforcement:
 		{
 			bool node_port =
 				ct_has_nodeport_egress_entry6(get_ct_map6(tuple),
-							      tuple, false);
+							      tuple, NULL, false);
 
 			ct_state_new.node_port = node_port;
 			if (ret == CT_REOPENED &&
@@ -1793,8 +1795,9 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 			has_l4_header = ipv4_has_l4_header(ip4);
 
 			ret2 = lb4_rev_nat(ctx, ETH_HLEN, l4_off,
-					   ct_state, tuple,
-					   REV_NAT_F_TUPLE_SADDR, has_l4_header);
+					   ct_state->rev_nat_index, false,
+					   tuple, REV_NAT_F_TUPLE_SADDR,
+					   has_l4_header);
 			if (IS_ERR(ret2))
 				return ret2;
 		}
@@ -1850,7 +1853,7 @@ skip_policy_enforcement:
 		{
 			bool node_port =
 				ct_has_nodeport_egress_entry4(get_ct_map4(tuple),
-							      tuple, false);
+							      tuple, NULL, false);
 
 			ct_state_new.node_port = node_port;
 			if (ret == CT_REOPENED &&
