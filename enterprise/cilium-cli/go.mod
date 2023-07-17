@@ -3,7 +3,7 @@ module github.com/isovalent/cilium/enterprise/cilium-cli
 go 1.20
 
 require (
-	github.com/cilium/cilium-cli v0.15.2
+	github.com/cilium/cilium-cli v0.15.3
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/stretchr/testify v1.8.4
 	k8s.io/api v0.27.2
@@ -30,7 +30,7 @@ require (
 	github.com/cilium/cilium v1.14.0-snapshot.5 // indirect
 	github.com/cilium/hubble v0.12.0 // indirect
 	github.com/cilium/proxy v0.0.0-20230717091635-46b594d97d19 // indirect
-	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230712082728-185746ca3f78 // indirect
+	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230714104840-6f694cf7371d // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
 	github.com/containerd/containerd v1.7.0 // indirect
@@ -189,7 +189,7 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.12.1 // indirect
+	helm.sh/helm/v3 v3.12.2 // indirect
 	k8s.io/apiextensions-apiserver v0.27.2 // indirect
 	k8s.io/apiserver v0.27.2 // indirect
 	k8s.io/cli-runtime v0.27.2 // indirect
