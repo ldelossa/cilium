@@ -1,0 +1,19 @@
+{{- if and .Values.agent (not .Values.preflight.enabled) }}
+{{- /*
+Keep file in sync with cilium-preflight/enterprise-clusterrole.yaml
+*/ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: enterprise-cilium
+  labels:
+    app.kubernetes.io/part-of: cilium
+rules:
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentegressgatewaypolicies
+  verbs:
+  - list
+  - watch
+{{- end }}

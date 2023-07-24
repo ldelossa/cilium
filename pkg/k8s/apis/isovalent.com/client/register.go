@@ -16,6 +16,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/k8s/apis/crdhelpers"
 	k8sconst "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com"
+	k8sconstv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	k8sconstv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/synced"
@@ -30,6 +31,9 @@ const (
 
 	// IFGCRDName is the full name of the IsovalentFQDNGroup CRD.
 	IFGCRDName = k8sconstv1alpha1.IFGKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IEGPCRDName is the full name of the IsovalentEgressGatewayPolicy CRD.
+	IEGPCRDName = k8sconstv1.IEGPKindDefinition + "/" + k8sconstv1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -44,6 +48,7 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
 		synced.CRDResourceName(k8sconstv1alpha1.IFGName): createIFGCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):      createIEGPCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -61,6 +66,9 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 var (
 	//go:embed crds/v1alpha1/isovalentfqdngroups.yaml
 	crdsv1Alpha1IsovalentFQDNGroups []byte
+
+	//go:embed crds/v1/isovalentegressgatewaypolicies.yaml
+	crdsv1IsovalentEgressGatewayPolicies []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -78,6 +86,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 	switch crdName {
 	case IFGCRDName:
 		crdBytes = crdsv1Alpha1IsovalentFQDNGroups
+	case IEGPCRDName:
+		crdBytes = crdsv1IsovalentEgressGatewayPolicies
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -98,6 +108,19 @@ func createIFGCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IFGName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createIEGPCRD creates and updates the IsovalentEgressGatewayPolicy CRD.
+func createIEGPCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IEGPCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1.IEGPName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
