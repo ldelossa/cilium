@@ -8,32 +8,18 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package main
+package sidmanager
 
-import (
-	"github.com/cilium/cilium/daemon/cmd"
-	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
-	"github.com/cilium/cilium/pkg/hive/cell"
-
-	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
-)
+import "github.com/cilium/cilium/pkg/hive/cell"
 
 var (
-	EnterpriseAgent = cell.Module(
-		"enterprise-agent",
-		"Cilium Agent Enterprise",
+	SIDManagerCell = cell.Module(
+		SRv6SIDManagerSubsys,
+		"SRv6 SID Manager",
 
-		cmd.Agent,
-
-		// enterprise-only cells here
-		ControlPlane,
-	)
-
-	ControlPlane = cell.Module(
-		"enterprise-controlplane",
-		"Control Plane Enterprise",
-
-		cecm.Cell,
-		sidmanager.SIDManagerCell,
+		cell.Provide(
+			NewLocalIsovalentSRv6SIDManagerResource,
+			NewSIDManagerPromise,
+		),
 	)
 )
