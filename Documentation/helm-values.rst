@@ -368,6 +368,10 @@
      - Specifies the resources for etcd init container in the apiserver
      - object
      - ``{}``
+   * - :spelling:ignore:`clustermesh.apiserver.etcd.lifecycle`
+     - lifecycle setting for the etcd container
+     - object
+     - ``{}``
    * - :spelling:ignore:`clustermesh.apiserver.etcd.resources`
      - Specifies the resources for etcd container in the apiserver
      - object
@@ -416,6 +420,10 @@
      - KVStoreMesh image.
      - object
      - ``{"digest":"","override":null,"pullPolicy":"Always","repository":"quay.io/isovalent-dev/kvstoremesh-ci","tag":"latest","useDigest":false}``
+   * - :spelling:ignore:`clustermesh.apiserver.kvstoremesh.lifecycle`
+     - lifecycle setting for the KVStoreMesh container
+     - object
+     - ``{}``
    * - :spelling:ignore:`clustermesh.apiserver.kvstoremesh.resources`
      - Resource requests and limits for the KVStoreMesh container
      - object
@@ -424,6 +432,10 @@
      - KVStoreMesh Security context
      - object
      - ``{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}``
+   * - :spelling:ignore:`clustermesh.apiserver.lifecycle`
+     - lifecycle setting for the apiserver container
+     - object
+     - ``{}``
    * - :spelling:ignore:`clustermesh.apiserver.metrics.enabled`
      - Enables exporting apiserver metrics in OpenMetrics format.
      - bool
@@ -564,6 +576,10 @@
      - The type of service used for apiserver access.
      - string
      - ``"NodePort"``
+   * - :spelling:ignore:`clustermesh.apiserver.terminationGracePeriodSeconds`
+     - terminationGracePeriodSeconds for the clustermesh-apiserver deployment
+     - int
+     - ``30``
    * - :spelling:ignore:`clustermesh.apiserver.tls.admin`
      - base64 encoded PEM values for the clustermesh-apiserver admin certificate and private key. Used if 'auto' is not enabled.
      - object
@@ -1035,7 +1051,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:5fd7b2af56c6c645c976323dc43f4d042628e40be172d263c6d51345556f58f3","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.26.2-46b594d97d198be594f80a83efc701de57ac5724","useDigest":true}``
+     - ``{"digest":"sha256:4332565a692b329d56a48aae6dc2c71609a491b49de08ba03a50daae6532dcfb","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.26.4-7311bd3bf1a5fcd8192de39efcde3137e0133d43","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int

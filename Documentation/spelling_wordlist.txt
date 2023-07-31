@@ -172,11 +172,13 @@ buildx
 bytecode
 cBPF
 callee
+callouts
 cancelled
 cardinality
 cass
 cassandra
 cassandraparser
+cep
 certgen
 certmanager
 cgroup
@@ -274,6 +276,7 @@ endianness
 endpointSelector
 endpointmanager
 etcd
+eth
 ethernet
 ethtool
 extTrafficPolicy
@@ -635,6 +638,7 @@ tcptop
 tcptracer
 templating
 terminatingTLS
+terminationGracePeriodSeconds
 testsuite
 tetragon
 th

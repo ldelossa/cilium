@@ -2500,6 +2500,10 @@ func init() {
           "description": "ID assigned by container runtime",
           "type": "string"
         },
+        "container-interface-name": {
+          "description": "Name of network device in container netns",
+          "type": "string"
+        },
         "container-name": {
           "description": "Name assigned to container",
           "type": "string"
@@ -2510,6 +2514,10 @@ func init() {
         "datapath-map-id": {
           "description": "ID of datapath tail call map",
           "type": "integer"
+        },
+        "disable-legacy-identifiers": {
+          "description": "Disables lookup using legacy endpoint identifiers (container name, container id, pod name) for this endpoint",
+          "type": "boolean"
         },
         "docker-endpoint-id": {
           "description": "Docker endpoint ID",
@@ -2528,11 +2536,11 @@ func init() {
           "type": "integer"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "k8s-namespace": {
@@ -2667,12 +2675,16 @@ func init() {
       "description": "Unique identifiers for this endpoint from outside cilium\n\n+deepequal-gen=true",
       "type": "object",
       "properties": {
+        "cni-attachment-id": {
+          "description": "ID assigned to this attachment by container runtime",
+          "type": "string"
+        },
         "container-id": {
-          "description": "ID assigned by container runtime",
+          "description": "ID assigned by container runtime (deprecated, may not be unique)",
           "type": "string"
         },
         "container-name": {
-          "description": "Name assigned to container",
+          "description": "Name assigned to container (deprecated, may not be unique)",
           "type": "string"
         },
         "docker-endpoint-id": {
@@ -2684,15 +2696,15 @@ func init() {
           "type": "string"
         },
         "k8s-namespace": {
-          "description": "K8s namespace for this endpoint",
+          "description": "K8s namespace for this endpoint (deprecated, may not be unique)",
           "type": "string"
         },
         "k8s-pod-name": {
-          "description": "K8s pod name for this endpoint",
+          "description": "K8s pod name for this endpoint (deprecated, may not be unique)",
           "type": "string"
         },
         "pod-name": {
-          "description": "K8s pod for this endpoint(Deprecated, use K8sPodName and K8sNamespace instead)",
+          "description": "K8s pod for this endpoint (deprecated, may not be unique)",
           "type": "string"
         }
       }
@@ -2708,6 +2720,10 @@ func init() {
             "$ref": "#/definitions/AddressPair"
           }
         },
+        "container-interface-name": {
+          "description": "Name of network device in container netns",
+          "type": "string"
+        },
         "host-addressing": {
           "$ref": "#/definitions/NodeAddressing"
         },
@@ -2716,11 +2732,11 @@ func init() {
           "type": "string"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "mac": {
@@ -4277,6 +4293,14 @@ func init() {
     "RemoteCluster": {
       "description": "Status of remote cluster\n\n+k8s:deepcopy-gen=true",
       "properties": {
+        "config": {
+          "description": "Cluster configuration exposed by the remote cluster",
+          "$ref": "#/definitions/RemoteClusterConfig"
+        },
+        "connected": {
+          "description": "Indicates whether the connection to the remote kvstore is established",
+          "type": "boolean"
+        },
         "last-failure": {
           "description": "Time of last failure that occurred while attempting to reach the cluster",
           "type": "string",
@@ -4285,6 +4309,10 @@ func init() {
         "name": {
           "description": "Name of the cluster",
           "type": "string"
+        },
+        "num-endpoints": {
+          "description": "Number of endpoints in the cluster",
+          "type": "integer"
         },
         "num-failures": {
           "description": "Number of failures reaching the cluster",
@@ -4303,12 +4331,62 @@ func init() {
           "type": "integer"
         },
         "ready": {
-          "description": "Indicates readiness of the remote cluser",
+          "description": "Indicates readiness of the remote cluster",
           "type": "boolean"
         },
         "status": {
           "description": "Status of the control plane",
           "type": "string"
+        },
+        "synced": {
+          "description": "Synchronization status about each resource type",
+          "$ref": "#/definitions/RemoteClusterSynced"
+        }
+      }
+    },
+    "RemoteClusterConfig": {
+      "description": "Cluster configuration exposed by the remote cluster\n\n+k8s:deepcopy-gen=true",
+      "properties": {
+        "cluster-id": {
+          "description": "The Cluster ID advertised by the remote cluster",
+          "type": "integer"
+        },
+        "kvstoremesh": {
+          "description": "Whether the remote cluster information is locally cached by kvstoremesh",
+          "type": "boolean"
+        },
+        "required": {
+          "description": "Whether the configuration is required to be present",
+          "type": "boolean"
+        },
+        "retrieved": {
+          "description": "Whether the configuration has been correctly retrieved",
+          "type": "boolean"
+        },
+        "sync-canaries": {
+          "description": "Whether the remote cluster supports per-prefix \"synced\" canaries",
+          "type": "boolean"
+        }
+      }
+    },
+    "RemoteClusterSynced": {
+      "description": "Status of the synchronization with the remote cluster, about each resource\ntype. A given resource is considered to be synchronized if the initial\nlist of entries has been completely received from the remote cluster, and\nnew events are currently being watched.\n\n+k8s:deepcopy-gen=true",
+      "properties": {
+        "endpoints": {
+          "description": "Endpoints synchronization status",
+          "type": "boolean"
+        },
+        "identities": {
+          "description": "Identities synchronization status",
+          "type": "boolean"
+        },
+        "nodes": {
+          "description": "Nodes synchronization status",
+          "type": "boolean"
+        },
+        "services": {
+          "description": "Services synchronization status",
+          "type": "boolean"
         }
       }
     },
@@ -4752,7 +4830,7 @@ func init() {
     },
     "endpoint-id": {
       "type": "string",
-      "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+      "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
       "name": "id",
       "in": "path",
       "required": true
@@ -5112,7 +5190,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5149,7 +5227,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5202,7 +5280,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5247,7 +5325,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5301,7 +5379,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5331,7 +5409,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5381,7 +5459,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5416,7 +5494,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5446,7 +5524,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5492,7 +5570,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -5606,7 +5684,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+            "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
             "name": "id",
             "in": "path",
             "required": true
@@ -7644,6 +7722,10 @@ func init() {
           "description": "ID assigned by container runtime",
           "type": "string"
         },
+        "container-interface-name": {
+          "description": "Name of network device in container netns",
+          "type": "string"
+        },
         "container-name": {
           "description": "Name assigned to container",
           "type": "string"
@@ -7654,6 +7736,10 @@ func init() {
         "datapath-map-id": {
           "description": "ID of datapath tail call map",
           "type": "integer"
+        },
+        "disable-legacy-identifiers": {
+          "description": "Disables lookup using legacy endpoint identifiers (container name, container id, pod name) for this endpoint",
+          "type": "boolean"
         },
         "docker-endpoint-id": {
           "description": "Docker endpoint ID",
@@ -7672,11 +7758,11 @@ func init() {
           "type": "integer"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "k8s-namespace": {
@@ -7811,12 +7897,16 @@ func init() {
       "description": "Unique identifiers for this endpoint from outside cilium\n\n+deepequal-gen=true",
       "type": "object",
       "properties": {
+        "cni-attachment-id": {
+          "description": "ID assigned to this attachment by container runtime",
+          "type": "string"
+        },
         "container-id": {
-          "description": "ID assigned by container runtime",
+          "description": "ID assigned by container runtime (deprecated, may not be unique)",
           "type": "string"
         },
         "container-name": {
-          "description": "Name assigned to container",
+          "description": "Name assigned to container (deprecated, may not be unique)",
           "type": "string"
         },
         "docker-endpoint-id": {
@@ -7828,15 +7918,15 @@ func init() {
           "type": "string"
         },
         "k8s-namespace": {
-          "description": "K8s namespace for this endpoint",
+          "description": "K8s namespace for this endpoint (deprecated, may not be unique)",
           "type": "string"
         },
         "k8s-pod-name": {
-          "description": "K8s pod name for this endpoint",
+          "description": "K8s pod name for this endpoint (deprecated, may not be unique)",
           "type": "string"
         },
         "pod-name": {
-          "description": "K8s pod for this endpoint(Deprecated, use K8sPodName and K8sNamespace instead)",
+          "description": "K8s pod for this endpoint (deprecated, may not be unique)",
           "type": "string"
         }
       }
@@ -7852,6 +7942,10 @@ func init() {
             "$ref": "#/definitions/AddressPair"
           }
         },
+        "container-interface-name": {
+          "description": "Name of network device in container netns",
+          "type": "string"
+        },
         "host-addressing": {
           "$ref": "#/definitions/NodeAddressing"
         },
@@ -7860,11 +7954,11 @@ func init() {
           "type": "string"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "mac": {
@@ -9797,6 +9891,14 @@ func init() {
     "RemoteCluster": {
       "description": "Status of remote cluster\n\n+k8s:deepcopy-gen=true",
       "properties": {
+        "config": {
+          "description": "Cluster configuration exposed by the remote cluster",
+          "$ref": "#/definitions/RemoteClusterConfig"
+        },
+        "connected": {
+          "description": "Indicates whether the connection to the remote kvstore is established",
+          "type": "boolean"
+        },
         "last-failure": {
           "description": "Time of last failure that occurred while attempting to reach the cluster",
           "type": "string",
@@ -9805,6 +9907,10 @@ func init() {
         "name": {
           "description": "Name of the cluster",
           "type": "string"
+        },
+        "num-endpoints": {
+          "description": "Number of endpoints in the cluster",
+          "type": "integer"
         },
         "num-failures": {
           "description": "Number of failures reaching the cluster",
@@ -9823,12 +9929,62 @@ func init() {
           "type": "integer"
         },
         "ready": {
-          "description": "Indicates readiness of the remote cluser",
+          "description": "Indicates readiness of the remote cluster",
           "type": "boolean"
         },
         "status": {
           "description": "Status of the control plane",
           "type": "string"
+        },
+        "synced": {
+          "description": "Synchronization status about each resource type",
+          "$ref": "#/definitions/RemoteClusterSynced"
+        }
+      }
+    },
+    "RemoteClusterConfig": {
+      "description": "Cluster configuration exposed by the remote cluster\n\n+k8s:deepcopy-gen=true",
+      "properties": {
+        "cluster-id": {
+          "description": "The Cluster ID advertised by the remote cluster",
+          "type": "integer"
+        },
+        "kvstoremesh": {
+          "description": "Whether the remote cluster information is locally cached by kvstoremesh",
+          "type": "boolean"
+        },
+        "required": {
+          "description": "Whether the configuration is required to be present",
+          "type": "boolean"
+        },
+        "retrieved": {
+          "description": "Whether the configuration has been correctly retrieved",
+          "type": "boolean"
+        },
+        "sync-canaries": {
+          "description": "Whether the remote cluster supports per-prefix \"synced\" canaries",
+          "type": "boolean"
+        }
+      }
+    },
+    "RemoteClusterSynced": {
+      "description": "Status of the synchronization with the remote cluster, about each resource\ntype. A given resource is considered to be synchronized if the initial\nlist of entries has been completely received from the remote cluster, and\nnew events are currently being watched.\n\n+k8s:deepcopy-gen=true",
+      "properties": {
+        "endpoints": {
+          "description": "Endpoints synchronization status",
+          "type": "boolean"
+        },
+        "identities": {
+          "description": "Identities synchronization status",
+          "type": "boolean"
+        },
+        "nodes": {
+          "description": "Nodes synchronization status",
+          "type": "boolean"
+        },
+        "services": {
+          "description": "Services synchronization status",
+          "type": "boolean"
         }
       }
     },
@@ -10340,7 +10496,7 @@ func init() {
     },
     "endpoint-id": {
       "type": "string",
-      "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - container-id: Container runtime ID, e.g. container-id:22222\n  - container-name: Container name, e.g. container-name:foobar\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
+      "description": "String describing an endpoint with the format ` + "`" + `` + "`" + `[prefix:]id` + "`" + `` + "`" + `. If no prefix\nis specified, a prefix of ` + "`" + `` + "`" + `cilium-local:` + "`" + `` + "`" + ` is assumed. Not all endpoints\nwill be addressable by all endpoint ID prefixes with the exception of the\nlocal Cilium UUID which is assigned to all endpoints.\n\nSupported endpoint id prefixes:\n  - cilium-local: Local Cilium endpoint UUID, e.g. cilium-local:3389595\n  - cilium-global: Global Cilium endpoint UUID, e.g. cilium-global:cluster1:nodeX:452343\n  - cni-attachment-id: CNI attachment ID, e.g. cni-attachment-id:22222:eth0\n  - container-id: Container runtime ID, e.g. container-id:22222 (deprecated, may not be unique)\n  - container-name: Container name, e.g. container-name:foobar (deprecated, may not be unique)\n  - pod-name: pod name for this container if K8s is enabled, e.g. pod-name:default:foobar (deprecated, may not be unique)\n  - cep-name: cep name for this container if K8s is enabled, e.g. pod-name:default:foobar-net1\n  - docker-endpoint: Docker libnetwork endpoint ID, e.g. docker-endpoint:4444\n",
       "name": "id",
       "in": "path",
       "required": true

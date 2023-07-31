@@ -66,12 +66,14 @@ func NewEndpointFromChangeModel(ctx context.Context, owner regeneration.Owner, p
 
 	ep := createEndpoint(owner, policyGetter, namedPortsGetter, proxy, allocator, uint16(base.ID), base.InterfaceName)
 	ep.ifIndex = int(base.InterfaceIndex)
+	ep.containerIfName = base.ContainerInterfaceName
 	ep.containerName = base.ContainerName
 	ep.containerID = base.ContainerID
 	ep.dockerNetworkID = base.DockerNetworkID
 	ep.dockerEndpointID = base.DockerEndpointID
 	ep.K8sPodName = base.K8sPodName
 	ep.K8sNamespace = base.K8sNamespace
+	ep.disableLegacyIdentifiers = base.DisableLegacyIdentifiers
 
 	if base.Mac != "" {
 		m, err := mac.ParseMAC(base.Mac)
@@ -139,15 +141,22 @@ func NewEndpointFromChangeModel(ctx context.Context, owner regeneration.Owner, p
 }
 
 func (e *Endpoint) getModelEndpointIdentitiersRLocked() *models.EndpointIdentifiers {
-	return &models.EndpointIdentifiers{
-		ContainerID:      e.containerID,
-		ContainerName:    e.containerName,
+	identifiers := &models.EndpointIdentifiers{
+		CniAttachmentID:  e.getCNIAttachmentIDLocked(),
 		DockerEndpointID: e.dockerEndpointID,
 		DockerNetworkID:  e.dockerNetworkID,
-		PodName:          e.GetK8sNamespaceAndPodName(),
-		K8sPodName:       e.K8sPodName,
-		K8sNamespace:     e.K8sNamespace,
 	}
+
+	// Use legacy endpoint identifiers only if the endpoint has not opted out
+	if !e.disableLegacyIdentifiers {
+		identifiers.ContainerID = e.containerID
+		identifiers.ContainerName = e.containerName
+		identifiers.PodName = e.GetK8sNamespaceAndPodName()
+		identifiers.K8sPodName = e.K8sPodName
+		identifiers.K8sNamespace = e.K8sNamespace
+	}
+
+	return identifiers
 }
 
 func (e *Endpoint) getModelNetworkingRLocked() *models.EndpointNetworking {
@@ -158,10 +167,11 @@ func (e *Endpoint) getModelNetworkingRLocked() *models.EndpointNetworking {
 			IPV6:         e.GetIPv6Address(),
 			IPV6PoolName: e.IPv6IPAMPool,
 		}},
-		InterfaceIndex: int64(e.ifIndex),
-		InterfaceName:  e.ifName,
-		Mac:            e.mac.String(),
-		HostMac:        e.nodeMAC.String(),
+		InterfaceIndex:         int64(e.ifIndex),
+		InterfaceName:          e.ifName,
+		ContainerInterfaceName: e.containerIfName,
+		Mac:                    e.mac.String(),
+		HostMac:                e.nodeMAC.String(),
 	}
 }
 
@@ -502,12 +512,12 @@ func (e *Endpoint) ProcessChangeRequest(newEp *Endpoint, validPatchTransitionSta
 		}
 	}
 
-	if len(newEp.mac) != 0 && bytes.Compare(e.mac, newEp.mac) != 0 {
+	if len(newEp.mac) != 0 && !bytes.Equal(e.mac, newEp.mac) {
 		e.mac = newEp.mac
 		changed = true
 	}
 
-	if len(newEp.nodeMAC) != 0 && bytes.Compare(e.GetNodeMAC(), newEp.nodeMAC) != 0 {
+	if len(newEp.nodeMAC) != 0 && !bytes.Equal(e.GetNodeMAC(), newEp.nodeMAC) {
 		e.nodeMAC = newEp.nodeMAC
 		changed = true
 	}

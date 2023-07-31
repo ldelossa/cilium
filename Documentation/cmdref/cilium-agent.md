@@ -84,7 +84,7 @@ cilium-agent [flags]
       --dnsproxy-concurrency-processing-grace-period duration     Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing
       --egress-gateway-policy-map-max int                         Maximum number of entries in egress gateway policy map (default 16384)
       --egress-gateway-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
-      --egress-masquerade-interfaces string                       Limit egress masquerading to interface selector
+      --egress-masquerade-interfaces string                       Limit iptables-based egress masquerading to interface selector
       --egress-multi-home-ip-rule-compat                          Offset routing table IDs under ENI IPAM mode to avoid collisions with reserved table IDs. If false, the offset is performed (new scheme), otherwise, the old scheme stays in-place.
       --enable-auto-protect-node-port-range                       Append NodePort range to net.ipv4.ip_local_reserved_ports if it overlaps with ephemeral port range (net.ipv4.ip_local_port_range) (default true)
       --enable-bandwidth-manager                                  Enable BPF bandwidth manager
@@ -176,6 +176,9 @@ cilium-agent [flags]
       --hubble-disable-tls                                        Allow Hubble server to run on the given listen address without TLS.
       --hubble-event-buffer-capacity int                          Capacity of Hubble events buffer. The provided value must be one less than an integer power of two and no larger than 65535 (ie: 1, 3, ..., 2047, 4095, ..., 65535) (default 4095)
       --hubble-event-queue-size int                               Buffer size of the channel to receive monitor events.
+      --hubble-export-allowlist strings                           Specify allowlist as JSON encoded FlowFilters to Hubble exporter.
+      --hubble-export-denylist strings                            Specify denylist as JSON encoded FlowFilters to Hubble exporter.
+      --hubble-export-fieldmask strings                           Specify list of fields to use for field mask in Hubble exporter.
       --hubble-export-file-compress                               Compress rotated Hubble export files.
       --hubble-export-file-max-backups int                        Number of rotated Hubble export files to keep. (default 5)
       --hubble-export-file-max-size-mb int                        Size in MB at which to rotate Hubble export file. (default 10)

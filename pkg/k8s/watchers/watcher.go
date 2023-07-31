@@ -114,9 +114,10 @@ var (
 )
 
 type endpointManager interface {
+	LookupCEPName(string) *endpoint.Endpoint
 	GetEndpoints() []*endpoint.Endpoint
 	GetHostEndpoint() *endpoint.Endpoint
-	LookupPodName(string) *endpoint.Endpoint
+	GetEndpointsByPodName(string) []*endpoint.Endpoint
 	WaitForEndpointsAtPolicyRev(ctx context.Context, rev uint64) error
 	UpdatePolicyMaps(context.Context, *sync.WaitGroup) *sync.WaitGroup
 }
@@ -985,7 +986,7 @@ func (k *K8sWatcher) addK8sSVCs(svcID k8s.ServiceID, oldSvc, svc *k8s.Service, e
 // Kubernetes event
 func (k *K8sWatcher) K8sEventProcessed(scope, action string, status bool) {
 	result := "success"
-	if status == false {
+	if !status {
 		result = "failed"
 	}
 

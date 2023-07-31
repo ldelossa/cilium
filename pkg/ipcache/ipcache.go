@@ -85,7 +85,6 @@ type Configuration struct {
 	cache.IdentityAllocator
 	ipcacheTypes.PolicyHandler
 	ipcacheTypes.DatapathHandler
-	ipcacheTypes.NodeIDHandler
 	k8s.CacheStatus
 }
 
@@ -304,7 +303,6 @@ func (ipc *IPCache) upsertLocked(
 
 	var cidrCluster cmtypes.PrefixCluster
 	var oldIdentity *Identity
-	var hostID uint16
 	callbackListeners := true
 
 	oldHostIP, oldHostKey := ipc.getHostIPCache(ip)
@@ -422,13 +420,9 @@ func (ipc *IPCache) upsertLocked(
 		namedPortsChanged = namedPortsChanged && ipc.needNamedPorts.Load()
 	}
 
-	if hostIP != nil {
-		hostID = ipc.AllocateNodeID(hostIP)
-	}
-
 	if callbackListeners && !newIdentity.shadowed {
 		for _, listener := range ipc.listeners {
-			listener.OnIPIdentityCacheChange(Upsert, cidrCluster, oldHostIP, hostIP, oldIdentity, newIdentity, hostKey, hostID, k8sMeta)
+			listener.OnIPIdentityCacheChange(Upsert, cidrCluster, oldHostIP, hostIP, oldIdentity, newIdentity, hostKey, k8sMeta)
 		}
 	}
 
@@ -553,11 +547,7 @@ func (ipc *IPCache) DumpToListenerLocked(listener IPIdentityMappingListener) {
 			addrCluster := cmtypes.MustParseAddrCluster(ip)
 			cidrCluster = addrCluster.AsPrefixCluster()
 		}
-		nodeID := uint16(0)
-		if hostIP != nil {
-			nodeID = ipc.AllocateNodeID(hostIP)
-		}
-		listener.OnIPIdentityCacheChange(Upsert, cidrCluster, nil, hostIP, nil, identity, encryptKey, nodeID, k8sMeta)
+		listener.OnIPIdentityCacheChange(Upsert, cidrCluster, nil, hostIP, nil, identity, encryptKey, k8sMeta)
 	}
 }
 
@@ -594,7 +584,6 @@ func (ipc *IPCache) deleteLocked(ip string, source source.Source) (namedPortsCha
 	var oldIdentity *Identity
 	newIdentity := cachedIdentity
 	callbackListeners := true
-	var nodeID uint16
 
 	var err error
 	if cidrCluster, err = cmtypes.ParsePrefixCluster(ip); err == nil {
@@ -653,14 +642,10 @@ func (ipc *IPCache) deleteLocked(ip string, source source.Source) (namedPortsCha
 		namedPortsChanged = namedPortsChanged && ipc.needNamedPorts.Load()
 	}
 
-	if newHostIP != nil {
-		nodeID = ipc.AllocateNodeID(newHostIP)
-	}
-
 	if callbackListeners {
 		for _, listener := range ipc.listeners {
 			listener.OnIPIdentityCacheChange(cacheModification, cidrCluster, oldHostIP, newHostIP,
-				oldIdentity, newIdentity, encryptKey, nodeID, oldK8sMeta)
+				oldIdentity, newIdentity, encryptKey, oldK8sMeta)
 		}
 	}
 

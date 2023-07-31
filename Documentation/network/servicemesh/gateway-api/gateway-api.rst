@@ -16,7 +16,7 @@ tests are passed.
 - `GatewayClass <https://gateway-api.sigs.k8s.io/api-types/gatewayclass/>`_
 - `Gateway <https://gateway-api.sigs.k8s.io/api-types/gateway/>`_
 - `HTTPRoute <https://gateway-api.sigs.k8s.io/api-types/httproute/>`_
-- `TLSRoute (experimental) <https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1alpha2.TLSRoute/>`_
+- `TLSRoute (experimental) <https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io/v1alpha2.TLSRoute>`__
 - `ReferenceGrant <https://gateway-api.sigs.k8s.io/api-types/referencegrant/>`_
 
 .. include:: installation.rst
@@ -37,3 +37,8 @@ Cilium's Gateway API features:
    header
 
 More examples can be found `upstream repository <https://github.com/kubernetes-sigs/gateway-api/tree/v0.7.0/examples/standard>`_.
+
+Troubleshooting
+###############
+
+.. include:: troubleshooting.rst

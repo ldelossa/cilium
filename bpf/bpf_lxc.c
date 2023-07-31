@@ -353,8 +353,6 @@ struct {
  * either at the socket level or by the caller.
  * In the case of the caller doing the service translation it passes in state via CB,
  * which we take in with lb6_ctx_restore_state().
- *
- * Kernel 4.9 verifier is very finicky about the order of this code, modify with caution.
  */
 static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *dst_sec_identity,
 						__s8 *ext_err)
@@ -374,7 +372,6 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	};
 	__u32 __maybe_unused tunnel_endpoint = 0;
 	__u8 __maybe_unused encrypt_key = 0;
-	__u16 __maybe_unused node_id = 0;
 	enum ct_status ct_status;
 	bool hairpin_flow = false; /* endpoint wants to access itself via service IP */
 	__u8 policy_match_type = POLICY_MATCH_NONE;
@@ -388,8 +385,7 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 
 	/* Determine the destination category for policy fallback.  Service
 	 * translation of the destination address is done before this function,
-	 * so we can do this first. Also, verifier on kernel 4.9 insisted this
-	 * be done before the CT lookup below.
+	 * so we can do this first.
 	 */
 	if (1) {
 		const union v6addr *daddr = (union v6addr *)&ip6->daddr;
@@ -400,7 +396,6 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 			*dst_sec_identity = info->sec_identity;
 			tunnel_endpoint = info->tunnel_endpoint;
 			encrypt_key = get_min_encrypt_key(info->key);
-			node_id = info->node_id;
 		} else {
 			*dst_sec_identity = WORLD_ID;
 		}
@@ -409,11 +404,6 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	}
 
 #ifdef ENABLE_PER_PACKET_LB
-#if !defined(DEBUG) && defined(TUNNEL_MODE)
-	/* verifier workaround on kernel 4.9, not needed otherwise */
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
-#endif
 	/* Restore ct_state from per packet lb handling in the previous tail call. */
 	lb6_ctx_restore_state(ctx, &ct_state_new, &proxy_port);
 	/* No hairpin/loopback support for IPv6, see lb6_local(). */
@@ -471,7 +461,7 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		auth_type = (__u8)*ext_err;
-		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, node_id, auth_type);
+		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, tunnel_endpoint, auth_type);
 	}
 
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
@@ -638,7 +628,7 @@ ct_recreate6:
 		 * (c) packet was redirected to tunnel device so return.
 		 */
 		ret = encap_and_redirect_lxc(ctx, tunnel_endpoint, 0, 0, encrypt_key,
-					     &key, node_id, SECLABEL, *dst_sec_identity,
+					     &key, SECLABEL, *dst_sec_identity,
 					     &trace);
 		if (ret == CTX_ACT_OK)
 			goto encrypt_to_stack;
@@ -681,7 +671,9 @@ pass_to_stack:
 #ifndef TUNNEL_MODE
 # ifdef ENABLE_IPSEC
 	if (encrypt_key && tunnel_endpoint) {
-		set_encrypt_key_mark(ctx, encrypt_key, node_id);
+		ret = set_ipsec_encrypt_mark(ctx, encrypt_key, tunnel_endpoint);
+		if (unlikely(ret != CTX_ACT_OK))
+			return ret;
 #  ifdef ENABLE_IDENTITY_MARK
 		set_identity_meta(ctx, SECLABEL);
 #  endif /* ENABLE_IDENTITY_MARK */
@@ -808,7 +800,6 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	};
 	__u32 __maybe_unused tunnel_endpoint = 0, zero = 0;
 	__u8 __maybe_unused encrypt_key = 0;
-	__u16 __maybe_unused node_id = 0;
 	bool hairpin_flow = false; /* endpoint wants to access itself via service IP */
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	struct ct_buffer4 *ct_buffer;
@@ -841,7 +832,6 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 			*dst_sec_identity = info->sec_identity;
 			tunnel_endpoint = info->tunnel_endpoint;
 			encrypt_key = get_min_encrypt_key(info->key);
-			node_id = info->node_id;
 		} else {
 			*dst_sec_identity = WORLD_ID;
 		}
@@ -903,7 +893,7 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		auth_type = (__u8)*ext_err;
-		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, node_id, auth_type);
+		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, tunnel_endpoint, auth_type);
 	}
 
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
@@ -1099,7 +1089,7 @@ ct_recreate4:
 			}
 			/* Send the packet to egress gateway node through a tunnel. */
 			ret = __encap_and_redirect_lxc(ctx, tunnel_endpoint, 0,
-						       node_id, SECLABEL,
+						       SECLABEL,
 						       *dst_sec_identity, &trace);
 			if (ret == CTX_ACT_OK)
 				goto encrypt_to_stack;
@@ -1160,7 +1150,7 @@ skip_vtep:
 #endif
 
 		ret = encap_and_redirect_lxc(ctx, tunnel_endpoint, ip4->saddr,
-					     ip4->daddr, encrypt_key, &key, node_id,
+					     ip4->daddr, encrypt_key, &key,
 					     SECLABEL, *dst_sec_identity, &trace);
 		if (ret == DROP_NO_TUNNEL_ENDPOINT)
 			goto pass_to_stack;
@@ -1218,7 +1208,9 @@ pass_to_stack:
 #ifndef TUNNEL_MODE
 # ifdef ENABLE_IPSEC
 	if (encrypt_key && tunnel_endpoint) {
-		set_encrypt_key_mark(ctx, encrypt_key, node_id);
+		ret = set_ipsec_encrypt_mark(ctx, encrypt_key, tunnel_endpoint);
+		if (unlikely(ret != CTX_ACT_OK))
+			return ret;
 #  ifdef ENABLE_IDENTITY_MARK
 		set_identity_meta(ctx, SECLABEL);
 #  endif
@@ -1410,8 +1402,8 @@ out:
 #ifdef ENABLE_IPV6
 static __always_inline int
 ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
-	    enum ct_status *ct_status, struct ipv6_ct_tuple *tuple_out,
-	    __s8 *ext_err, __u16 *proxy_port, bool from_host __maybe_unused)
+	    struct ipv6_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port,
+	    bool from_host __maybe_unused)
 {
 	struct ct_state *ct_state, ct_state_new = {};
 	struct ipv6_ct_tuple *tuple;
@@ -1420,9 +1412,8 @@ ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
 	bool skip_ingress_proxy = false;
-	enum trace_reason reason;
+	struct trace_ctx trace;
 	union v6addr orig_sip;
-	__u32 monitor = 0;
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
 	__u8 auth_type = 0;
@@ -1448,9 +1439,9 @@ ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 
 	tuple = (struct ipv6_ct_tuple *)&ct_buffer->tuple;
 	ct_state = (struct ct_state *)&ct_buffer->ct_state;
-	monitor = ct_buffer->monitor;
+	trace.monitor = ct_buffer->monitor;
+	trace.reason = (enum trace_reason)ct_buffer->ret;
 	ret = ct_buffer->ret;
-	*ct_status = (enum ct_status)ret;
 
 	/* Skip policy enforcement for return traffic. */
 	if (ret == CT_REPLY || ret == CT_RELATED) {
@@ -1464,7 +1455,7 @@ ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 			 * into ctx->mark and *proxy_port can be left unset.
 			 */
 			send_trace_notify6(ctx, TRACE_TO_PROXY, src_label, SECLABEL, &orig_sip,
-					   0, ifindex, (enum trace_reason)ret, monitor);
+					   0, ifindex, trace.reason, trace.monitor);
 			if (tuple_out)
 				memcpy(tuple_out, tuple, sizeof(*tuple));
 			return POLICY_ACT_PROXY_REDIRECT;
@@ -1501,7 +1492,8 @@ ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 
 		if (sep) {
 			auth_type = (__u8)*ext_err;
-			verdict = auth_lookup(ctx, SECLABEL, src_label, sep->node_id, auth_type);
+			verdict = auth_lookup(ctx, SECLABEL, src_label,
+					      sep->tunnel_endpoint, auth_type);
 		}
 	}
 
@@ -1550,17 +1542,17 @@ skip_policy_enforcement:
 			return ret;
 	}
 
-	reason = (enum trace_reason)*ct_status;
 	if (*proxy_port > 0) {
 		send_trace_notify6(ctx, TRACE_TO_PROXY, src_label, SECLABEL, &orig_sip,
-				   bpf_ntohs(*proxy_port), ifindex, reason, monitor);
+				   bpf_ntohs(*proxy_port), ifindex, trace.reason,
+				   trace.monitor);
 		if (tuple_out)
 			memcpy(tuple_out, tuple, sizeof(*tuple));
 		return POLICY_ACT_PROXY_REDIRECT;
 	}
 	/* Not redirected to host / proxy. */
 	send_trace_notify6(ctx, TRACE_TO_LXC, src_label, SECLABEL, &orig_sip,
-			   LXC_ID, ifindex, reason, monitor);
+			   LXC_ID, ifindex, trace.reason, trace.monitor);
 
 #if !defined(ENABLE_ROUTING) && defined(TUNNEL_MODE) && !defined(ENABLE_NODEPORT)
 	/* See comment in IPv4 path. */
@@ -1585,13 +1577,12 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 	bool proxy_redirect __maybe_unused = false;
 	__u16 proxy_port = 0;
 	__s8 ext_err = 0;
-	enum ct_status ct_status = 0;
 
 	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
 	ctx_store_meta(ctx, CB_FROM_HOST, 0);
 
-	ret = ipv6_policy(ctx, ifindex, src_label, &ct_status, &tuple,
-			  &ext_err, &proxy_port, from_host);
+	ret = ipv6_policy(ctx, ifindex, src_label, &tuple, &ext_err, &proxy_port,
+			  from_host);
 	if (ret == POLICY_ACT_PROXY_REDIRECT) {
 		ret = ctx_redirect_to_proxy6(ctx, &tuple, proxy_port, from_host);
 		proxy_redirect = true;
@@ -1629,7 +1620,6 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 	struct ipv6hdr *ip6;
 	__u16 proxy_port = 0;
 	__s8 ext_err = 0;
-	enum ct_status ct_status;
 	int ret;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6)) {
@@ -1675,8 +1665,8 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 #endif
 	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
 
-	ret = ipv6_policy(ctx, 0, src_sec_identity, &ct_status, NULL,
-			  &ext_err, &proxy_port, true);
+	ret = ipv6_policy(ctx, 0, src_sec_identity, NULL, &ext_err, &proxy_port,
+			  true);
 	if (ret == POLICY_ACT_PROXY_REDIRECT) {
 		ret = ctx_redirect_to_proxy_hairpin_ipv6(ctx, proxy_port);
 		proxy_redirect = true;
@@ -1715,7 +1705,7 @@ TAIL_CT_LOOKUP6(CILIUM_CALL_IPV6_CT_INGRESS, tail_ipv6_ct_ingress, CT_INGRESS,
 
 #ifdef ENABLE_IPV4
 static __always_inline int
-ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status *ct_status,
+ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 	    struct ipv4_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port,
 	    bool from_host __maybe_unused, bool from_tunnel)
 {
@@ -1726,13 +1716,13 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 	bool skip_ingress_proxy = false;
 	bool is_untracked_fragment = false;
 	struct ct_buffer4 *ct_buffer;
-	__u32 monitor = 0, zero = 0;
-	enum trace_reason reason;
+	struct trace_ctx trace;
 	int ret, verdict;
 	__be32 orig_sip;
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
 	__u8 auth_type = 0;
+	__u32 zero = 0;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -1762,9 +1752,9 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 
 	tuple = (struct ipv4_ct_tuple *)&ct_buffer->tuple;
 	ct_state = (struct ct_state *)&ct_buffer->ct_state;
-	monitor = ct_buffer->monitor;
+	trace.monitor = ct_buffer->monitor;
+	trace.reason = (enum trace_reason)ct_buffer->ret;
 	ret = ct_buffer->ret;
-	*ct_status = (enum ct_status)ret;
 
 	/* Check it this is return traffic to an egress proxy.
 	 * Do not redirect again if the packet is coming from the egress proxy.
@@ -1779,7 +1769,7 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 			 * into ctx->mark and *proxy_port can be left unset.
 			 */
 			send_trace_notify4(ctx, TRACE_TO_PROXY, src_label, SECLABEL, orig_sip,
-					   0, ifindex, (enum trace_reason)ret, monitor);
+					   0, ifindex, trace.reason, trace.monitor);
 			if (tuple_out)
 				*tuple_out = *tuple;
 			return POLICY_ACT_PROXY_REDIRECT;
@@ -1829,7 +1819,8 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 
 		if (sep) {
 			auth_type = (__u8)*ext_err;
-			verdict = auth_lookup(ctx, SECLABEL, src_label, sep->node_id, auth_type);
+			verdict = auth_lookup(ctx, SECLABEL, src_label,
+					      sep->tunnel_endpoint, auth_type);
 		}
 	}
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
@@ -1879,17 +1870,17 @@ skip_policy_enforcement:
 			return ret;
 	}
 
-	reason = (enum trace_reason)*ct_status;
 	if (*proxy_port > 0) {
 		send_trace_notify4(ctx, TRACE_TO_PROXY, src_label, SECLABEL, orig_sip,
-				   bpf_ntohs(*proxy_port), ifindex, reason, monitor);
+				   bpf_ntohs(*proxy_port), ifindex, trace.reason,
+				   trace.monitor);
 		if (tuple_out)
 			*tuple_out = *tuple;
 		return POLICY_ACT_PROXY_REDIRECT;
 	}
 	/* Not redirected to host / proxy. */
 	send_trace_notify4(ctx, TRACE_TO_LXC, src_label, SECLABEL, orig_sip,
-			   LXC_ID, ifindex, reason, monitor);
+			   LXC_ID, ifindex, trace.reason, trace.monitor);
 
 #if !defined(ENABLE_ROUTING) && defined(TUNNEL_MODE) && !defined(ENABLE_NODEPORT)
 	/* In tunneling mode, we execute this code to send the packet from
@@ -1920,7 +1911,6 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 	bool from_host = ctx_load_meta(ctx, CB_FROM_HOST);
 	bool from_tunnel = ctx_load_meta(ctx, CB_FROM_TUNNEL);
 	bool proxy_redirect __maybe_unused = false;
-	enum ct_status ct_status = 0;
 	__u16 proxy_port = 0;
 	__s8 ext_err = 0;
 
@@ -1929,8 +1919,8 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 	ctx_store_meta(ctx, CB_FROM_HOST, 0);
 	ctx_store_meta(ctx, CB_FROM_TUNNEL, 0);
 
-	ret = ipv4_policy(ctx, ifindex, src_label, &ct_status, &tuple,
-			  &ext_err, &proxy_port, from_host, from_tunnel);
+	ret = ipv4_policy(ctx, ifindex, src_label, &tuple, &ext_err, &proxy_port,
+			  from_host, from_tunnel);
 	if (ret == POLICY_ACT_PROXY_REDIRECT) {
 		ret = ctx_redirect_to_proxy4(ctx, &tuple, proxy_port, from_host);
 		proxy_redirect = true;
@@ -1968,7 +1958,6 @@ int tail_ipv4_to_endpoint(struct __ctx_buff *ctx)
 	struct iphdr *ip4;
 	__u16 proxy_port = 0;
 	__s8 ext_err = 0;
-	enum ct_status ct_status;
 	int ret;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4)) {
@@ -2008,8 +1997,8 @@ int tail_ipv4_to_endpoint(struct __ctx_buff *ctx)
 #endif
 	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
 
-	ret = ipv4_policy(ctx, 0, src_sec_identity, &ct_status, NULL,
-			  &ext_err, &proxy_port, true, false);
+	ret = ipv4_policy(ctx, 0, src_sec_identity, NULL, &ext_err, &proxy_port,
+			  true, false);
 	if (ret == POLICY_ACT_PROXY_REDIRECT) {
 		ret = ctx_redirect_to_proxy_hairpin_ipv4(ctx, proxy_port);
 		proxy_redirect = true;
