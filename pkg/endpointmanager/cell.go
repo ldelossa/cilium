@@ -42,8 +42,8 @@ type EndpointsLookup interface {
 	// LookupCiliumID looks up endpoint by endpoint ID
 	LookupCiliumID(id uint16) *endpoint.Endpoint
 
-	// LookupContainerID looks up endpoint by container ID
-	LookupContainerID(id string) *endpoint.Endpoint
+	// LookupCNIAttachmentID looks up endpoint by CNI attachment ID
+	LookupCNIAttachmentID(id string) *endpoint.Endpoint
 
 	// LookupIPv4 looks up endpoint by IPv4 address
 	LookupIPv4(ipv4 string) *endpoint.Endpoint
@@ -54,8 +54,11 @@ type EndpointsLookup interface {
 	// LookupIP looks up endpoint by IP address
 	LookupIP(ip netip.Addr) (ep *endpoint.Endpoint)
 
-	// LookupPodName looks up endpoint by namespace + pod name, e.g. "prod/pod-0"
-	LookupPodName(name string) *endpoint.Endpoint
+	// LookupCEPName looks up endpoints by namespace + cep name, e.g. "prod/cep-0"
+	LookupCEPName(name string) (ep *endpoint.Endpoint)
+
+	// GetEndpointsByPodName looks up endpoints by namespace + pod name, e.g. "prod/pod-0"
+	GetEndpointsByPodName(name string) []*endpoint.Endpoint
 
 	// GetEndpoints returns a slice of all endpoints present in endpoint manager.
 	GetEndpoints() []*endpoint.Endpoint

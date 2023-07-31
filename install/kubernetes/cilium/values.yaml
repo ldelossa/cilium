@@ -655,7 +655,7 @@ enableRuntimeDeviceDetection: false
 # -- Chains to ignore when installing feeder rules.
 # disableIptablesFeederRules: ""
 
-# -- Limit egress masquerading to interface selector.
+# -- Limit iptables-based egress masquerading to interface selector.
 # egressMasqueradeInterfaces: ""
 
 # -- Whether to enable CNP status updates.
@@ -1869,9 +1869,9 @@ envoy:
   image:
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.26.2-46b594d97d198be594f80a83efc701de57ac5724"
+    tag: "v1.26.4-7311bd3bf1a5fcd8192de39efcde3137e0133d43"
     pullPolicy: "Always"
-    digest: "sha256:5fd7b2af56c6c645c976323dc43f4d042628e40be172d263c6d51345556f58f3"
+    digest: "sha256:4332565a692b329d56a48aae6dc2c71609a491b49de08ba03a50daae6532dcfb"
     useDigest: true
 
   # -- Additional containers added to the cilium Envoy DaemonSet.
@@ -2721,6 +2721,9 @@ clustermesh:
       # -- Security context to be added to clustermesh-apiserver etcd containers
       securityContext: {}
 
+      # -- lifecycle setting for the etcd container
+      lifecycle: {}
+
       init:
         # -- Specifies the resources for etcd init container in the apiserver
         resources: {}
@@ -2771,6 +2774,9 @@ clustermesh:
           drop:
             - ALL
 
+      # -- lifecycle setting for the KVStoreMesh container
+      lifecycle: {}
+
     service:
       # -- The type of service used for apiserver access.
       type: NodePort
@@ -2800,6 +2806,12 @@ clustermesh:
 
     # -- Number of replicas run for the clustermesh-apiserver deployment.
     replicas: 1
+
+    # -- lifecycle setting for the apiserver container
+    lifecycle: {}
+
+    # -- terminationGracePeriodSeconds for the clustermesh-apiserver deployment
+    terminationGracePeriodSeconds: 30
 
     # -- Additional clustermesh-apiserver arguments.
     extraArgs: []

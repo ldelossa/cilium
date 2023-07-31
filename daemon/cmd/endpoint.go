@@ -244,25 +244,25 @@ func newEndpointCreationManager(cs client.Clientset) *endpointCreationManager {
 
 func (m *endpointCreationManager) NewCreateRequest(ep *endpoint.Endpoint, cancel context.CancelFunc) {
 	// Tracking is only performed if Kubernetes pod names are available.
-	// The endpoint create logic already ensures that IPs and containerID
+	// The endpoint create logic already ensures that IPs and CNI attachment ID
 	// are unique and thus tracking is not required outside of the
 	// Kubernetes context
 	if !ep.K8sNamespaceAndPodNameIsSet() || !m.clientset.IsEnabled() {
 		return
 	}
 
-	podName := ep.GetK8sNamespaceAndPodName()
+	cepName := ep.GetK8sNamespaceAndCEPName()
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	if req, ok := m.requests[podName]; ok {
-		ep.Logger(daemonSubsys).Warning("Cancelling obsolete endpoint creating due to new create for same pod")
+	if req, ok := m.requests[cepName]; ok {
+		ep.Logger(daemonSubsys).Warning("Cancelling obsolete endpoint creating due to new create for same cep name")
 		req.cancel()
 	}
 
 	ep.Logger(daemonSubsys).Debug("New create request")
-	m.requests[podName] = &endpointCreationRequest{
+	m.requests[cepName] = &endpointCreationRequest{
 		cancel:   cancel,
 		endpoint: ep,
 		started:  time.Now(),
@@ -274,15 +274,15 @@ func (m *endpointCreationManager) EndCreateRequest(ep *endpoint.Endpoint) bool {
 		return false
 	}
 
-	podName := ep.GetK8sNamespaceAndPodName()
+	cepName := ep.GetK8sNamespaceAndCEPName()
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	if req, ok := m.requests[podName]; ok {
+	if req, ok := m.requests[cepName]; ok {
 		if req.endpoint == ep {
 			ep.Logger(daemonSubsys).Debug("End of create request")
-			delete(m.requests, podName)
+			delete(m.requests, cepName)
 			return true
 		}
 	}
@@ -330,13 +330,14 @@ func (d *Daemon) createEndpoint(ctx context.Context, owner regeneration.Owner, e
 	}
 
 	log.WithFields(logrus.Fields{
-		"addressing":            epTemplate.Addressing,
-		logfields.ContainerID:   epTemplate.ContainerID,
-		"datapathConfiguration": epTemplate.DatapathConfiguration,
-		logfields.Interface:     epTemplate.InterfaceName,
-		logfields.K8sPodName:    epTemplate.K8sNamespace + "/" + epTemplate.K8sPodName,
-		logfields.Labels:        epTemplate.Labels,
-		"sync-build":            epTemplate.SyncBuildEndpoint,
+		"addressing":                 epTemplate.Addressing,
+		logfields.ContainerID:        epTemplate.ContainerID,
+		logfields.ContainerInterface: epTemplate.ContainerInterfaceName,
+		"datapathConfiguration":      epTemplate.DatapathConfiguration,
+		logfields.Interface:          epTemplate.InterfaceName,
+		logfields.K8sPodName:         epTemplate.K8sNamespace + "/" + epTemplate.K8sPodName,
+		logfields.Labels:             epTemplate.Labels,
+		"sync-build":                 epTemplate.SyncBuildEndpoint,
 	}).Info("Create endpoint request")
 
 	ep, err := endpoint.NewEndpointFromChangeModel(d.ctx, owner, d, d.ipcache, d.l7Proxy, d.identityAllocator, epTemplate)
@@ -349,9 +350,9 @@ func (d *Daemon) createEndpoint(ctx context.Context, owner regeneration.Owner, e
 		return invalidDataError(ep, fmt.Errorf("endpoint ID %d already exists", ep.ID))
 	}
 
-	oldEp = d.endpointManager.LookupContainerID(ep.GetContainerID())
+	oldEp = d.endpointManager.LookupCNIAttachmentID(ep.GetCNIAttachmentID())
 	if oldEp != nil {
-		return invalidDataError(ep, fmt.Errorf("endpoint for container %s already exists", ep.GetContainerID()))
+		return invalidDataError(ep, fmt.Errorf("endpoint for CNI attachment ID %s already exists", ep.GetCNIAttachmentID()))
 	}
 
 	var checkIDs []string
@@ -589,13 +590,14 @@ func patchEndpointIDHandler(d *Daemon, params PatchEndpointIDParams) middleware.
 	epTemplate := params.Endpoint
 
 	log.WithFields(logrus.Fields{
-		logfields.EndpointID:    params.ID,
-		"addressing":            epTemplate.Addressing,
-		logfields.ContainerID:   epTemplate.ContainerID,
-		"datapathConfiguration": epTemplate.DatapathConfiguration,
-		logfields.Interface:     epTemplate.InterfaceName,
-		logfields.K8sPodName:    epTemplate.K8sNamespace + "/" + epTemplate.K8sPodName,
-		logfields.Labels:        epTemplate.Labels,
+		logfields.EndpointID:         params.ID,
+		"addressing":                 epTemplate.Addressing,
+		logfields.ContainerID:        epTemplate.ContainerID,
+		logfields.ContainerInterface: epTemplate.ContainerInterfaceName,
+		"datapathConfiguration":      epTemplate.DatapathConfiguration,
+		logfields.Interface:          epTemplate.InterfaceName,
+		logfields.K8sPodName:         epTemplate.K8sNamespace + "/" + epTemplate.K8sPodName,
+		logfields.Labels:             epTemplate.Labels,
 	}).Info("Patch endpoint request")
 
 	// Validate the template. Assignment afterwards is atomic.

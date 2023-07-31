@@ -20,7 +20,6 @@ import (
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
-	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/endpointmanager"
@@ -72,7 +71,6 @@ type policyParams struct {
 	EndpointManager endpointmanager.EndpointManager
 	CertManager     certificatemanager.CertificateManager
 	SecretManager   certificatemanager.SecretManager
-	Datapath        datapath.Datapath
 	CacheStatus     k8s.CacheStatus
 }
 
@@ -121,7 +119,6 @@ func newPolicyTrifecta(params policyParams) (policyOut, error) {
 		IdentityAllocator: idAlloc,
 		PolicyHandler:     iao.policy.GetSelectorCache(),
 		DatapathHandler:   params.EndpointManager,
-		NodeIDHandler:     params.Datapath.NodeIDs(),
 		CacheStatus:       params.CacheStatus,
 	})
 	idAlloc.ipcache = ipc
@@ -393,8 +390,6 @@ func (d *Daemon) policyAdd(sourceRules policyAPI.Rules, opts *policy.AddOptions,
 	if err != nil {
 		log.WithError(err).WithField(logfields.PolicyRevision, newRev).Error("enqueue of RuleReactionEvent failed")
 	}
-
-	return
 }
 
 // PolicyReactionEvent is an event which needs to be serialized after changes
@@ -616,8 +611,6 @@ func (d *Daemon) policyDelete(labels labels.LabelArray, opts *policy.DeleteOptio
 	if err := d.SendNotification(monitorAPI.PolicyDeleteMessage(deleted, labels.GetModel(), rev)); err != nil {
 		log.WithError(err).WithField(logfields.PolicyRevision, rev).Warn("Failed to send policy update as monitor notification")
 	}
-
-	return
 }
 
 func deletePolicyHandler(d *Daemon, params DeletePolicyParams) middleware.Responder {

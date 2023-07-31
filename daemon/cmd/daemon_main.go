@@ -300,7 +300,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.DisableCiliumEndpointCRDName, false, "Disable use of CiliumEndpoint CRD")
 	option.BindEnv(vp, option.DisableCiliumEndpointCRDName)
 
-	flags.String(option.EgressMasqueradeInterfaces, "", "Limit egress masquerading to interface selector")
+	flags.String(option.EgressMasqueradeInterfaces, "", "Limit iptables-based egress masquerading to interface selector")
 	option.BindEnv(vp, option.EgressMasqueradeInterfaces)
 
 	flags.Bool(option.BPFSocketLBHostnsOnly, false, "Skip socket LB for services when inside a pod namespace, in favor of service LB at the pod interface. Socket LB is still used when in the host namespace. Required by service mesh (e.g., Istio, Linkerd).")
@@ -884,7 +884,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Duration(option.DNSProxyConcurrencyProcessingGracePeriod, 0, "Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing")
 	option.BindEnv(vp, option.DNSProxyConcurrencyProcessingGracePeriod)
 
-	flags.Int(option.DNSProxyLockCount, 128, "Array size containing mutexes which protect against parallel handling of DNS response IPs")
+	flags.Int(option.DNSProxyLockCount, 131, "Array size containing mutexes which protect against parallel handling of DNS response IPs. Preferably use prime numbers")
 	flags.MarkHidden(option.DNSProxyLockCount)
 	option.BindEnv(vp, option.DNSProxyLockCount)
 
@@ -956,6 +956,15 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.HubbleExportFileCompress, exporteroption.Default.Compress, "Compress rotated Hubble export files.")
 	option.BindEnv(vp, option.HubbleExportFileCompress)
+
+	flags.StringSlice(option.HubbleExportAllowlist, []string{}, "Specify allowlist as JSON encoded FlowFilters to Hubble exporter.")
+	option.BindEnv(vp, option.HubbleExportAllowlist)
+
+	flags.StringSlice(option.HubbleExportDenylist, []string{}, "Specify denylist as JSON encoded FlowFilters to Hubble exporter.")
+	option.BindEnv(vp, option.HubbleExportDenylist)
+
+	flags.StringSlice(option.HubbleExportFieldmask, []string{}, "Specify list of fields to use for field mask in Hubble exporter.")
+	option.BindEnv(vp, option.HubbleExportFieldmask)
 
 	flags.Bool(option.EnableHubbleRecorderAPI, true, "Enable the Hubble recorder API")
 	option.BindEnv(vp, option.EnableHubbleRecorderAPI)

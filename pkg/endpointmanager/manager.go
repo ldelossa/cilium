@@ -259,6 +259,9 @@ func (mgr *endpointManager) Lookup(id string) (*endpoint.Endpoint, error) {
 	case endpointid.CiliumGlobalIdPrefix:
 		return nil, ErrUnsupportedID
 
+	case endpointid.CNIAttachmentIdPrefix:
+		return mgr.lookupCNIAttachmentID(eid), nil
+
 	case endpointid.ContainerIdPrefix:
 		return mgr.lookupContainerID(eid), nil
 
@@ -270,6 +273,9 @@ func (mgr *endpointManager) Lookup(id string) (*endpoint.Endpoint, error) {
 
 	case endpointid.PodNamePrefix:
 		return mgr.lookupPodNameLocked(eid), nil
+
+	case endpointid.CEPNamePrefix:
+		return mgr.lookupCEPNameLocked(eid), nil
 
 	case endpointid.IPv4Prefix:
 		return mgr.lookupIPv4(eid), nil
@@ -290,10 +296,10 @@ func (mgr *endpointManager) LookupCiliumID(id uint16) *endpoint.Endpoint {
 	return ep
 }
 
-// LookupContainerID looks up endpoint by container ID
-func (mgr *endpointManager) LookupContainerID(id string) *endpoint.Endpoint {
+// LookupCNIAttachmentID looks up endpoint by CNI attachment ID
+func (mgr *endpointManager) LookupCNIAttachmentID(id string) *endpoint.Endpoint {
 	mgr.mutex.RLock()
-	ep := mgr.lookupContainerID(id)
+	ep := mgr.lookupCNIAttachmentID(id)
 	mgr.mutex.RUnlock()
 	return ep
 }
@@ -327,12 +333,26 @@ func (mgr *endpointManager) LookupIP(ip netip.Addr) (ep *endpoint.Endpoint) {
 	return ep
 }
 
-// LookupPodName looks up endpoint by namespace + pod name
-func (mgr *endpointManager) LookupPodName(name string) *endpoint.Endpoint {
+// LookupCEPName looks up an endpoint by its K8s namespace + cep name
+func (mgr *endpointManager) LookupCEPName(namespacedName string) *endpoint.Endpoint {
 	mgr.mutex.RLock()
-	ep := mgr.lookupPodNameLocked(name)
+	ep := mgr.lookupCEPNameLocked(namespacedName)
 	mgr.mutex.RUnlock()
 	return ep
+}
+
+// GetEndpointsByPodName looks up endpoints by namespace + pod name
+func (mgr *endpointManager) GetEndpointsByPodName(namespacedName string) []*endpoint.Endpoint {
+	mgr.mutex.RLock()
+	defer mgr.mutex.RUnlock()
+	eps := make([]*endpoint.Endpoint, 0, 1)
+	for _, ep := range mgr.endpoints {
+		if ep.GetK8sNamespaceAndPodName() == namespacedName {
+			eps = append(eps, ep)
+		}
+	}
+
+	return eps
 }
 
 // ReleaseID releases the ID of the specified endpoint from the endpointManager.
@@ -366,9 +386,9 @@ func (mgr *endpointManager) unexpose(ep *endpoint.Endpoint) {
 	if previousState != endpoint.StateRestoring {
 		if err = mgr.ReleaseID(ep); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
-				"state":               previousState,
-				logfields.ContainerID: identifiers[endpointid.ContainerIdPrefix],
-				logfields.K8sPodName:  identifiers[endpointid.PodNamePrefix],
+				"state":                   previousState,
+				logfields.CNIAttachmentID: identifiers[endpointid.CNIAttachmentIdPrefix],
+				logfields.CEPName:         identifiers[endpointid.CEPNamePrefix],
 			}).Warning("Unable to release endpoint ID")
 		}
 	}
@@ -428,6 +448,13 @@ func (mgr *endpointManager) lookupPodNameLocked(name string) *endpoint.Endpoint 
 	return nil
 }
 
+func (mgr *endpointManager) lookupCEPNameLocked(name string) *endpoint.Endpoint {
+	if ep, ok := mgr.endpointsAux[endpointid.NewID(endpointid.CEPNamePrefix, name)]; ok {
+		return ep
+	}
+	return nil
+}
+
 func (mgr *endpointManager) lookupDockerContainerName(name string) *endpoint.Endpoint {
 	if ep, ok := mgr.endpointsAux[endpointid.NewID(endpointid.ContainerNamePrefix, name)]; ok {
 		return ep
@@ -451,6 +478,13 @@ func (mgr *endpointManager) lookupIPv6(ipv6 string) *endpoint.Endpoint {
 
 func (mgr *endpointManager) lookupContainerID(id string) *endpoint.Endpoint {
 	if ep, ok := mgr.endpointsAux[endpointid.NewID(endpointid.ContainerIdPrefix, id)]; ok {
+		return ep
+	}
+	return nil
+}
+
+func (mgr *endpointManager) lookupCNIAttachmentID(id string) *endpoint.Endpoint {
+	if ep, ok := mgr.endpointsAux[endpointid.NewID(endpointid.CNIAttachmentIdPrefix, id)]; ok {
 		return ep
 	}
 	return nil
@@ -606,6 +640,18 @@ func (mgr *endpointManager) AddEndpoint(owner regeneration.Owner, ep *endpoint.E
 	if ep.ID != 0 {
 		return fmt.Errorf("Endpoint ID is already set to %d", ep.ID)
 	}
+
+	// Updating logger to re-populate pod fields
+	// when endpoint and its logger are created pod details are not populated
+	// and all subsequent logs have empty pod details like ip addresses, k8sPodName
+	// this update will populate pod details in logger
+	ep.UpdateLogger(map[string]interface{}{
+		logfields.ContainerID: ep.GetShortContainerID(),
+		logfields.IPv4:        ep.GetIPv4Address(),
+		logfields.IPv6:        ep.GetIPv6Address(),
+		logfields.K8sPodName:  ep.GetK8sNamespaceAndPodName(),
+	})
+
 	err = mgr.expose(ep)
 	if err != nil {
 		return err
