@@ -1,3 +1,5 @@
+/go.mod merge=union
+/go.sum merge=union
 /install/kubernetes/cilium/values.yaml.tmpl linguist-language=yml
 /install/kubernetes/cilium/values.yaml linguist-generated
 /install/kubernetes/cilium/README.md linguist-generated

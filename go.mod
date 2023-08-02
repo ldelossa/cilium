@@ -269,3 +269,13 @@ replace (
 	// as to why we are using a private fork.
 	sigs.k8s.io/controller-tools => github.com/cilium/controller-tools v0.8.0-1
 )
+
+// Enterprise dependencies.
+//
+// These must come after the OSS dependencies, since the go tooling adds
+// new dependencies to the last require block without a doc comment.
+//
+// DO NOT REMOVE THE EMPTY LINE BETWEEN THIS BLOCK AND "require"!
+
+// require (
+// )
