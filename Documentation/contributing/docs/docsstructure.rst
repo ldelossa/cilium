@@ -4,8 +4,10 @@
     Please use the official rendered version released here:
     https://docs.cilium.io
 
+.. _docs_structure_recommendations:
+
 ******************************************
-Recommendations on Documentation Structure
+Recommendations on documentation structure
 ******************************************
 
 This page contains recommendations to help contributors write better
@@ -14,7 +16,7 @@ you take only one thing away from this guide, let it be this: don't document
 your feature. Instead, **document how your feature guides users on their
 journey.**
 
-Maintaining Good Information Architecture
+Maintaining good information architecture
 -----------------------------------------
 
 When you add, update, or remove documentation, consider how the change affects
@@ -26,7 +28,7 @@ notes <current_release_required_changes>`.
 
 .. _information architecture: https://www.usability.gov/what-and-why/information-architecture.html
 
-Adding a New Page
+Adding a new page
 -----------------
 
 When you need to write completely new content, create one or more new pages as
@@ -66,7 +68,7 @@ CLI <hubble_cli>`.
   a new feature requires an explanation of its underlying ideas, add a concept
   page as well as a task page.
 
-Updating an Existing Page
+Updating an existing page
 -------------------------
 
 Consider whether you can update an existing page or whether to add a new one.
@@ -80,7 +82,7 @@ If you're moving a page and changing its URL, make sure you update every link
 to that page in the documentation. Ask on Slack (``#sig-docs``) for someone to
 set up a HTTP redirection from the old URL to the new one, if necessary.
 
-Removing Content and Entire Pages
+Removing content and entire pages
 ---------------------------------
 
 Removing stale content is a part of maintaining healthy docs.

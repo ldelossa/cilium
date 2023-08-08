@@ -50,6 +50,7 @@
 #include "lib/dbg.h"
 #include "lib/trace.h"
 #include "lib/csum.h"
+#include "lib/egress_gateway.h"
 #include "lib/egress_policies.h"
 #include "lib/encap.h"
 #include "lib/eps.h"
@@ -1064,7 +1065,7 @@ ct_recreate4:
 		}
 	}
 
-#ifdef ENABLE_EGRESS_GATEWAY
+#ifdef ENABLE_EGRESS_GATEWAY_COMMON
 	{
 		/* If the packet is destined to an entity inside the cluster,
 		 * either EP or node, it should not be forwarded to an egress
@@ -1074,15 +1075,7 @@ ct_recreate4:
 		if (identity_is_cluster(*dst_sec_identity))
 			goto skip_egress_gateway;
 
-		/* If the packet is a reply or is related, it means that outside
-		 * has initiated the connection, and so we should skip egress
-		 * gateway, since an egress policy is only matching connections
-		 * originating from a pod.
-		 */
-		if (ct_status == CT_REPLY || ct_status == CT_RELATED)
-			goto skip_egress_gateway;
-
-		if (egress_gw_request_needs_redirect(ip4, &tunnel_endpoint)) {
+		if (egress_gw_request_needs_redirect(ip4, ct_status, &tunnel_endpoint)) {
 			if (tunnel_endpoint == EGRESS_GATEWAY_NO_GATEWAY) {
 				/* Special case for no gateway to drop the traffic */
 				return DROP_NO_EGRESS_GATEWAY;
@@ -1229,7 +1222,7 @@ pass_to_stack:
 #endif
 	}
 
-#if defined(TUNNEL_MODE) || defined(ENABLE_EGRESS_GATEWAY) || defined(ENABLE_HIGH_SCALE_IPCACHE)
+#if defined(TUNNEL_MODE) || defined(ENABLE_EGRESS_GATEWAY_COMMON) || defined(ENABLE_HIGH_SCALE_IPCACHE)
 encrypt_to_stack:
 #endif
 	send_trace_notify(ctx, TRACE_TO_STACK, SECLABEL, *dst_sec_identity, 0, 0,

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	. "github.com/cilium/checkmate"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
@@ -20,20 +19,17 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/hivetest"
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/k8s"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
-	v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
-	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 )
@@ -76,10 +72,6 @@ var (
 	nodeGroupNotFoundLabels = map[string]string{"label1": "notfound"}
 	nodeGroup1Labels        = map[string]string{"label1": "1"}
 	nodeGroup2Labels        = map[string]string{"label2": "2"}
-
-	nodeGroupNotFoundSelector = &slimv1.LabelSelector{MatchLabels: nodeGroupNotFoundLabels}
-	nodeGroup1Selector        = &slimv1.LabelSelector{MatchLabels: nodeGroup1Labels}
-	nodeGroup2Selector        = &slimv1.LabelSelector{MatchLabels: nodeGroup2Labels}
 )
 
 type ipRule struct {
@@ -112,8 +104,8 @@ type parsedEgressRule struct {
 
 // Hook up gocheck into the "go test" runner.
 type EgressGatewayTestSuite struct {
-	hive        *hive.Hive
 	manager     *Manager
+	policies    fakeResource[*Policy]
 	cacheStatus k8s.CacheStatus
 }
 
@@ -135,41 +127,40 @@ func (k *EgressGatewayTestSuite) SetUpSuite(c *C) {
 
 func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 	k.cacheStatus = make(k8s.CacheStatus)
-	k.hive = hive.New(
-		egressmap.Cell,
-		cell.Provide(NewEgressGatewayManager),
-		cell.Provide(
-			func() Config { return Config{true, 1 * time.Millisecond} },
-			func() *option.DaemonConfig { return &option.DaemonConfig{EnableIPv4EgressGateway: true} },
-			func() k8s.CacheStatus { return k.cacheStatus },
-			func() cache.IdentityAllocator { return identityAllocator },
-		),
-		cell.Invoke(func(m *Manager) {
-			k.manager = m
-		}),
-	)
-	c.Assert(k.hive.Start(context.Background()), IsNil)
+	k.policies = make(fakeResource[*Policy])
+
+	lc := hivetest.Lifecycle(c)
+	policyMap := egressmap.CreatePrivatePolicyMap(lc, egressmap.DefaultPolicyConfig)
+
+	var err error
+	k.manager, err = NewEgressGatewayManager(Params{
+		Lifecycle: lc,
+		Config:    Config{true, 1 * time.Millisecond},
+		DaemonConfig: &option.DaemonConfig{
+			EnableIPv4EgressGateway:  true,
+			EnableIPv4Masquerade:     true,
+			EnableBPFMasquerade:      true,
+			EnableRemoteNodeIdentity: true,
+		},
+		CacheStatus:       k.cacheStatus,
+		IdentityAllocator: identityAllocator,
+		PolicyMap:         policyMap,
+		Policies:          k.policies,
+	})
+	c.Assert(err, IsNil)
 	c.Assert(k.manager, NotNil)
 }
 
-func (k *EgressGatewayTestSuite) TearDownTest(c *C) {
-	c.Assert(k.hive.Stop(context.Background()), IsNil)
-}
-
 func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
-	testInterface1Idx := createTestInterface(testInterface1, egressCIDR1)
-	testInterface2Idx := createTestInterface(testInterface2, egressCIDR2)
-
-	defer destroyTestInterface(testInterface2)
-	defer destroyTestInterface(testInterface1)
+	testInterface1Idx := createTestInterface(c, testInterface1, egressCIDR1)
+	testInterface2Idx := createTestInterface(c, testInterface2, egressCIDR2)
 
 	policyMap := k.manager.policyMap
-	defer cleanupPolicies(policyMap)
-
 	egressGatewayManager := k.manager
 	assertIPRules(c, []ipRule{})
 
 	close(k.cacheStatus)
+	k.policies.sync(c)
 
 	node1 := newCiliumNode(node1, node1IP, nodeGroup1Labels)
 	egressGatewayManager.OnUpdateNode(node1)
@@ -178,8 +169,13 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	egressGatewayManager.OnUpdateNode(node2)
 
 	// Create a new policy
-	policy1 := newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{}, nodeGroup1Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{})
 	assertIPRules(c, []ipRule{})
@@ -214,8 +210,13 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Create a new policy
-	policy2 := newEgressPolicyConfigWithNodeSelector("policy-2", ep2Labels, destCIDR, []string{}, nodeGroup2Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy2)
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-2",
+		endpointLabels:  ep2Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup2Labels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
@@ -253,24 +254,37 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	/* Changing the selected egress interface should update the IP rules. */
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{}, nodeGroup1Selector, testInterface2)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface2,
+	})
 
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	/* Restore the selected egress interface. */
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{}, nodeGroup1Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
 
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Test excluded CIDRs by adding one to policy-1
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{excludedCIDR1}, nodeGroup1Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		excludedCIDRs:   []string{excludedCIDR1},
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
@@ -303,8 +317,13 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Add a second excluded CIDR to policy-1
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{excludedCIDR1, excludedCIDR2}, nodeGroup1Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		excludedCIDRs:   []string{excludedCIDR1, excludedCIDR2},
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
@@ -344,8 +363,13 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Remove the first excluded CIDR from policy-1
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{excludedCIDR2}, nodeGroup1Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		excludedCIDRs:   []string{excludedCIDR2},
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
@@ -370,8 +394,12 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Remove the second excluded CIDR
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{}, nodeGroup1Selector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
@@ -383,8 +411,12 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Test matching no gateway
-	policy1 = newEgressPolicyConfigWithNodeSelector("policy-1", ep1Labels, destCIDR, []string{}, nodeGroupNotFoundSelector, testInterface1)
-	egressGatewayManager.OnAddEgressPolicy(policy1)
+	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroupNotFoundLabels,
+		iface:           testInterface1,
+	})
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, zeroIP4, gatewayNotFoundValue},
@@ -410,47 +442,37 @@ func TestCell(t *testing.T) {
 	}
 }
 
-func createTestInterface(iface string, addr string) int {
+func createTestInterface(tb testing.TB, iface string, addr string) int {
+	tb.Helper()
+
 	la := netlink.NewLinkAttrs()
 	la.Name = iface
 	dummy := &netlink.Dummy{LinkAttrs: la}
 	if err := netlink.LinkAdd(dummy); err != nil {
-		panic(err)
+		tb.Fatal(err)
 	}
 
 	link, err := netlink.LinkByName(iface)
 	if err != nil {
-		panic(err)
+		tb.Fatal(err)
 	}
 
+	tb.Cleanup(func() {
+		if err := netlink.LinkDel(link); err != nil {
+			tb.Error(err)
+		}
+	})
+
 	if err := netlink.LinkSetUp(link); err != nil {
-		panic(err)
+		tb.Fatal(err)
 	}
 
 	a, _ := netlink.ParseAddr(addr)
-	netlink.AddrAdd(link, a)
+	if err := netlink.AddrAdd(link, a); err != nil {
+		tb.Fatal(err)
+	}
 
 	return link.Attrs().Index
-}
-
-func destroyTestInterface(iface string) error {
-	link, err := netlink.LinkByName(iface)
-	if err != nil {
-		return err
-	}
-
-	if err := netlink.LinkDel(link); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func cleanupPolicies(policyMap egressmap.PolicyMap) {
-	for _, ep := range []string{ep1IP, ep2IP} {
-		pr := parseEgressRule(ep, destCIDR, zeroIP4, zeroIP4)
-		policyMap.Delete(pr.sourceIP, pr.destCIDR)
-	}
 }
 
 func newCiliumNode(name, nodeIP string, nodeLabels map[string]string) nodeTypes.Node {
@@ -462,35 +484,6 @@ func newCiliumNode(name, nodeIP string, nodeLabels map[string]string) nodeTypes.
 				Type: addressing.NodeInternalIP,
 				IP:   net.ParseIP(nodeIP),
 			},
-		},
-	}
-}
-
-func newEgressPolicyConfigWithNodeSelector(policyName string, labels map[string]string, destinationCIDR string, excludedCIDRs []string, selector *v1.LabelSelector, iface string) PolicyConfig {
-	_, parsedDestinationCIDR, _ := net.ParseCIDR(destinationCIDR)
-
-	parsedExcludedCIDRs := []*net.IPNet{}
-	for _, excludedCIDR := range excludedCIDRs {
-		_, parsedExcludedCIDR, _ := net.ParseCIDR(excludedCIDR)
-		parsedExcludedCIDRs = append(parsedExcludedCIDRs, parsedExcludedCIDR)
-	}
-
-	return PolicyConfig{
-		id: types.NamespacedName{
-			Name: policyName,
-		},
-		endpointSelectors: []api.EndpointSelector{
-			{
-				LabelSelector: &slimv1.LabelSelector{
-					MatchLabels: labels,
-				},
-			},
-		},
-		dstCIDRs:      []*net.IPNet{parsedDestinationCIDR},
-		excludedCIDRs: parsedExcludedCIDRs,
-		policyGwConfig: &policyGatewayConfig{
-			nodeSelector: api.NewESFromK8sLabelSelector("", selector),
-			iface:        iface,
 		},
 	}
 }

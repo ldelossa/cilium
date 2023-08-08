@@ -237,6 +237,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableHealthCheckNodePort, defaults.EnableHealthCheckNodePort, "Enables a healthcheck nodePort server for NodePort services with 'healthCheckNodePort' being set")
 	option.BindEnv(vp, option.EnableHealthCheckNodePort)
 
+	flags.Bool(option.EnableHealthCheckLoadBalancerIP, defaults.EnableHealthCheckLoadBalancerIP, "Enable access of the healthcheck nodePort on the LoadBalancerIP. Needs --enable-health-check-nodeport to be enabled")
+	option.BindEnv(vp, option.EnableHealthCheckLoadBalancerIP)
+
 	flags.StringSlice(option.EndpointStatus, []string{},
 		"Enable additional CiliumEndpoint status features ("+strings.Join(option.EndpointStatusValues(), ",")+")")
 	option.BindEnv(vp, option.EndpointStatus)
@@ -1421,9 +1424,6 @@ func initEnv(vp *viper.Viper) {
 		if option.Config.TunnelingEnabled() {
 			log.Fatal("The high-scale IPcache mode requires native routing.")
 		}
-		if option.Config.EnableIPv4EgressGateway {
-			log.Fatal("The egress gateway is not supported in high scale IPcache mode.")
-		}
 		if option.Config.EnableIPSec {
 			log.Fatal("IPsec is not supported in high scale IPcache mode.")
 		}
@@ -1539,12 +1539,6 @@ func initEnv(vp *viper.Viper) {
 			)
 		}
 	}
-
-	if option.Config.IdentityAllocationMode == option.IdentityAllocationModeKVstore {
-		if option.Config.EnableIPv4EgressGateway {
-			log.Fatal("The egress gateway is not supported in KV store identity allocation mode.")
-		}
-	}
 }
 
 func (d *Daemon) initKVStore() {
@@ -1643,6 +1637,7 @@ type daemonParams struct {
 	Settings             cellSettings
 	HealthProvider       cell.Health
 	HealthReporter       cell.HealthReporter
+	DeviceManager        *linuxdatapath.DeviceManager `optional:"true"`
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {

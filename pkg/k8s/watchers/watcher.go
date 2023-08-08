@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	k8s_metrics "k8s.io/client-go/tools/metrics"
@@ -25,7 +24,6 @@ import (
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
-	"github.com/cilium/cilium/pkg/egressgateway"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/identity"
@@ -69,7 +67,6 @@ const (
 	k8sAPIGroupCiliumNodeV2                     = "cilium/v2::CiliumNode"
 	k8sAPIGroupCiliumEndpointV2                 = "cilium/v2::CiliumEndpoint"
 	k8sAPIGroupCiliumLocalRedirectPolicyV2      = "cilium/v2::CiliumLocalRedirectPolicy"
-	k8sAPIGroupCiliumEgressGatewayPolicyV2      = "cilium/v2::CiliumEgressGatewayPolicy"
 	k8sAPIGroupCiliumEndpointSliceV2Alpha1      = "cilium/v2alpha1::CiliumEndpointSlice"
 	k8sAPIGroupCiliumClusterwideEnvoyConfigV2   = "cilium/v2::CiliumClusterwideEnvoyConfig"
 	k8sAPIGroupCiliumEnvoyConfigV2              = "cilium/v2::CiliumEnvoyConfig"
@@ -166,8 +163,6 @@ type bgpSpeakerManager interface {
 	OnUpdateEndpoints(eps *k8s.Endpoints) error
 }
 type EgressGatewayManager interface {
-	OnAddEgressPolicy(config egressgateway.PolicyConfig)
-	OnDeleteEgressPolicy(configID types.NamespacedName)
 	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
 	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
 	OnUpdateNode(node nodeTypes.Node)
@@ -430,7 +425,7 @@ var ciliumResourceToGroupMapping = map[string]watcherInfo{
 	synced.CRDResourceName(v2.CIDName):                  {skip, ""}, // Handled in pkg/k8s/identitybackend/
 	synced.CRDResourceName(v2.CLRPName):                 {start, k8sAPIGroupCiliumLocalRedirectPolicyV2},
 	synced.CRDResourceName(v2.CEWName):                  {skip, ""}, // Handled in clustermesh-apiserver/
-	synced.CRDResourceName(v2.CEGPName):                 {start, k8sAPIGroupCiliumEgressGatewayPolicyV2},
+	synced.CRDResourceName(v2.CEGPName):                 {skip, ""}, // Handled via Resource[T].
 	synced.CRDResourceName(v2alpha1.CESName):            {start, k8sAPIGroupCiliumEndpointSliceV2Alpha1},
 	synced.CRDResourceName(v2.CCECName):                 {afterNodeInit, k8sAPIGroupCiliumClusterwideEnvoyConfigV2},
 	synced.CRDResourceName(v2.CECName):                  {afterNodeInit, k8sAPIGroupCiliumEnvoyConfigV2},
@@ -583,8 +578,6 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			// no-op; handled in k8sAPIGroupCiliumEndpointV2
 		case k8sAPIGroupCiliumLocalRedirectPolicyV2:
 			k.ciliumLocalRedirectPolicyInit(k.clientset)
-		case k8sAPIGroupCiliumEgressGatewayPolicyV2:
-			k.ciliumEgressGatewayPolicyInit(k.clientset)
 		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2:
 			k.ciliumClusterwideEnvoyConfigInit(ctx, k.clientset)
 		case k8sAPIGroupCiliumEnvoyConfigV2:
@@ -611,13 +604,15 @@ func (k *K8sWatcher) k8sServiceHandler() {
 			logfields.K8sNamespace: event.ID.Namespace,
 		})
 
-		scopedLog.WithFields(logrus.Fields{
-			"action":        event.Action.String(),
-			"service":       event.Service.String(),
-			"old-service":   event.OldService.String(),
-			"endpoints":     event.Endpoints.String(),
-			"old-endpoints": event.OldEndpoints.String(),
-		}).Debug("Kubernetes service definition changed")
+		if logging.CanLogAt(scopedLog.Logger, logrus.DebugLevel) {
+			scopedLog.WithFields(logrus.Fields{
+				"action":        event.Action.String(),
+				"service":       event.Service.String(),
+				"old-service":   event.OldService.String(),
+				"endpoints":     event.Endpoints.String(),
+				"old-endpoints": event.OldEndpoints.String(),
+			}).Debug("Kubernetes service definition changed")
+		}
 
 		switch event.Action {
 		case k8s.UpdateService:
