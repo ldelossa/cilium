@@ -4,8 +4,10 @@
     Please use the official rendered version released here:
     https://docs.cilium.io
 
+.. _docs_style_guide:
+
 *******************
-Documentation Style
+Documentation style
 *******************
 
 .. |RST| replace:: reStructuredText
@@ -26,7 +28,7 @@ documentation. They have several objectives:
 See also :ref:`the documentation for testing <testing-documentation>` for
 instructions on how to preview documentation changes.
 
-General Considerations
+General considerations
 ----------------------
 
 Write in US English.
@@ -55,12 +57,11 @@ Use the following header when adding new files to the Documentation.
 One exception is |RST| fragments that are supposed to be sourced from other
 documentation files. Those do not need this header.
 
-Titles
-------
+Headings
+--------
 
-Prefer title case (capital letters on most words of the title) rather than
-sentence case for titles.
-See this link if necessary: https://titlecaseconverter.com/.
+Prefer sentence case (capital letter on first word) rather than
+title case for all headings.
 
 Body
 ----
@@ -96,14 +97,16 @@ The following examples are correct::
 
 But the following examples are incorrect::
 
-    - The implemention of gateway API
+    - The implementation of gateway API
     - To create a gateway object, ...
 
 .. _the section on capitalization for API objects: https://kubernetes.io/docs/contribute/style/style-guide/#use-upper-camel-case-for-api-objects
 .. _UpperCamelCase: https://en.wikipedia.org/wiki/Camel_case
 .. _sentence-style capitalization: https://docs.microsoft.com/en-us/style-guide/text-formatting/using-type/use-sentence-style-capitalization
 
-Code Blocks
+.. _docs_style_code_blocks:
+
+Code blocks
 -----------
 
 Code snippets and other literal blocks usually fall under one of those three
@@ -372,7 +375,7 @@ Roles
 
     See `this GitHub issue <https://github.com/cilium/cilium/issues/1234>`__.
 
-Common Pitfalls
+Common pitfalls
 ---------------
 
 There are best practices for writing documentation; follow them. In general,
@@ -484,7 +487,7 @@ Avoid::
 .. _Kubernetes style guide: https://kubernetes.io/docs/contribute/style/style-guide/
 .. _content best practices: https://kubernetes.io/docs/contribute/style/style-guide/#content-best-practices
 
-Specific Language
+Specific language
 -----------------
 
 Use specific language. Avoid words like "this" (as a pronoun) and "it" when

@@ -506,11 +506,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	nd := nodediscovery.NewNodeDiscovery(params.NodeManager, params.Clientset, mtuConfig, params.CNIConfigManager.GetCustomNetConf())
 
-	devMngr, err := linuxdatapath.NewDeviceManager()
-	if err != nil {
-		return nil, nil, err
-	}
-
 	d := Daemon{
 		ctx:               ctx,
 		clientset:         params.Clientset,
@@ -519,7 +514,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		compilationMutex:  new(lock.RWMutex),
 		mtuConfig:         mtuConfig,
 		datapath:          params.Datapath,
-		deviceManager:     devMngr,
+		deviceManager:     params.DeviceManager,
 		nodeDiscovery:     nd,
 		nodeLocalStore:    params.LocalNodeStore,
 		endpointCreations: newEndpointCreationManager(params.Clientset),
@@ -904,14 +899,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// This is because the device detection requires self (Cilium)Node object,
 	// and the k8s service watcher depends on option.Config.EnableNodePort flag
 	// which can be modified after the device detection.
-	devices, err := d.deviceManager.Detect(params.Clientset.IsEnabled())
-	if err != nil {
-		if option.Config.AreDevicesRequired() {
-			// Fail hard if devices are required to function.
-			return nil, nil, fmt.Errorf("failed to detect devices: %w", err)
+	var devices []string
+	if d.deviceManager != nil {
+		if _, err := d.deviceManager.Detect(params.Clientset.IsEnabled()); err != nil {
+			if option.Config.AreDevicesRequired() {
+				// Fail hard if devices are required to function.
+				return nil, nil, fmt.Errorf("failed to detect devices: %w", err)
+			}
+			log.WithError(err).Warn("failed to detect devices, disabling BPF NodePort")
+			disableNodePort()
 		}
-		log.WithError(err).Warn("failed to detect devices, disabling BPF NodePort")
-		disableNodePort()
 	}
 
 	if d.l2announcer != nil {
@@ -957,22 +954,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			}
 		}
 	}
-	if option.Config.EnableIPv4EgressGateway {
-		// datapath code depends on remote node identities to distinguish between cluser-local and
-		// cluster-egress traffic
-		if !option.Config.EnableRemoteNodeIdentity {
-			log.WithError(err).Errorf("egress gateway requires remote node identities (--%s=\"true\").",
-				option.EnableRemoteNodeIdentity)
-			return nil, nil, fmt.Errorf("egress gateway requires remote node identities (--%s=\"true\").",
-				option.EnableRemoteNodeIdentity)
-		}
 
-		if option.Config.EnableL7Proxy {
-			log.WithField(logfields.URL, "https://github.com/cilium/cilium/issues/19642").
-				Warningf("both egress gateway and L7 proxy (--%s) are enabled. This is currently not fully supported: "+
-					"if the same endpoint is selected both by an egress gateway and a L7 policy, endpoint traffic will not go through egress gateway.", option.EnableL7Proxy)
-		}
-	}
 	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 		// TODO(brb) nodeport constraints will be lifted once the SNAT BPF code has been refactored
 		if err := node.InitBPFMasqueradeAddrs(option.Config.GetDevices()); err != nil {
@@ -982,9 +964,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	} else if option.Config.EnableIPMasqAgent {
 		log.WithError(err).Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
 		return nil, nil, fmt.Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
-	} else if option.Config.EnableIPv4EgressGateway {
-		log.WithError(err).Errorf("egress gateway requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
-		return nil, nil, fmt.Errorf("egress gateway requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
 	} else if !option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 		log.Infof("Auto-disabling %q feature since IPv4 and IPv6 masquerading are disabled",
 			option.EnableBPFMasquerade)
@@ -1209,7 +1188,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	identitymanager.Subscribe(d.policy)
 
 	// Start listening to changed devices if requested.
-	if option.Config.EnableRuntimeDeviceDetection {
+	if option.Config.EnableRuntimeDeviceDetection && d.deviceManager != nil {
 		if option.Config.AreDevicesRequired() {
 			devicesChan, err := d.deviceManager.Listen(ctx)
 			if err != nil {
@@ -1331,7 +1310,10 @@ func changedOption(key string, value option.OptionSetting, data interface{}) {
 			logging.SetLogLevelToDebug()
 		}
 		// Reflect log level change to proxies
-		proxy.ChangeLogLevel(logging.GetLevel(logging.DefaultLogger))
+		// Might not be initialized yet
+		if option.Config.EnableL7Proxy {
+			d.l7Proxy.ChangeLogLevel(logging.GetLevel(logging.DefaultLogger))
+		}
 	}
 	d.policy.BumpRevision() // force policy recalculation
 }

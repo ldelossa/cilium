@@ -17,6 +17,8 @@ var (
 		Indexer:      &memdb.UUIDFieldIndex{Field: "UUID"},
 	}
 
+	IDIndex = Index("id")
+
 	RevisionIndex       = Index("revision")
 	RevisionIndexSchema = &memdb.IndexSchema{
 		Name:         string(RevisionIndex),
@@ -30,6 +32,6 @@ var (
 		Name:         string(IPIndex),
 		AllowMissing: false,
 		Unique:       false,
-		Indexer:      &IPIndexer{Field: "IP"},
+		Indexer:      &IPFieldIndex{Field: "IP"},
 	}
 )

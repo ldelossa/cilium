@@ -56,7 +56,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.4
+  cilium_cli_version: v0.15.5
   cilium_cli_ci_version:
   CILIUM_CLI_MODE: helm
   # renovate: datasource=github-releases depName=kubernetes-sigs/kind
@@ -82,33 +82,48 @@ jobs:
       matrix:
         include:
         - name: Without XDP
+          kube-proxy-replacement: true
+          enable-node-port: false
           bpf-lb-acceleration: disabled
           loadbalancer-mode: dedicated
           default-ingress-controller: false
         - name: With XDP
+          kube-proxy-replacement: true
+          enable-node-port: false
           bpf-lb-acceleration: native
           loadbalancer-mode: dedicated
           default-ingress-controller: false
         - name: With Shared LB
+          kube-proxy-replacement: true
+          enable-node-port: false
           bpf-lb-acceleration: disabled
           loadbalancer-mode: shared
           default-ingress-controller: false
         - name: With Default Ingress Controller
+          kube-proxy-replacement: true
+          enable-node-port: false
           bpf-lb-acceleration: disabled
           loadbalancer-mode: dedicated
           default-ingress-controller: true
+        - name: Without KPR
+          kube-proxy-replacement: false
+          enable-node-port: true
+          bpf-lb-acceleration: disabled
+          loadbalancer-mode: dedicated
+          default-ingress-controller: false
 
     steps:
-      - name: Checkout main branch to access local actions
+      - name: Checkout context ref (trusted)
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
+
       - name: Set Environment Variables
         uses: ./.github/actions/set-env-variables
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@2037fb55bc81db08b66e315f5f0b9169ce6f30c2 # v0.15.4
+        uses: cilium/cilium-cli@8144df39be1411403dbe06a14fdddf24e9eb0c1e # v0.15.5
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -134,14 +149,17 @@ jobs:
             --helm-set=operator.image.tag=${SHA} \
             --helm-set=operator.image.useDigest=false \
             --helm-set=securityContext.privileged=true \
-            --helm-set kubeProxyReplacement=true \
+            --helm-set kubeProxyReplacement=${{ matrix.kube-proxy-replacement }} \
+            --helm-set nodePort.enabled=${{ matrix.enable-node-port }} \
             --helm-set=ingressController.enabled=true \
             --helm-set=ingressController.loadbalancerMode=${{ matrix.loadbalancer-mode }} \
             --helm-set=ingressController.default=${{ matrix.default-ingress-controller }} \
             --helm-set=extraConfig.bpf-lb-acceleration=${{ matrix.bpf-lb-acceleration }}"
           echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
 
-      - name: Checkout
+      # Warning: since this is a privileged workflow, subsequent workflow job
+      # steps must take care not to execute untrusted code.
+      - name: Checkout pull request branch (NOT TRUSTED)
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ steps.vars.outputs.sha }}
@@ -235,6 +253,7 @@ jobs:
           curl -s -v --connect-timeout 5 --max-time 20 --retry 3 --fail -- http://"$lb"/details/1
 
       - name: Run Sanity check (internal to NodePort)
+        if: ${{ matrix.kube-proxy-replacement == 'true' }}
         timeout-minutes: 5
         run: |
           if [ ${{ matrix.loadbalancer-mode }} = "dedicated" ]; then

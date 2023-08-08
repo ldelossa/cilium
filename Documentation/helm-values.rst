@@ -604,18 +604,6 @@
      - When set to true, automatically generate a CA and certificates to enable mTLS between clustermesh-apiserver and external workload instances. If set to false, the certs to be provided by setting appropriate values below.
      - bool
      - ``true``
-   * - :spelling:ignore:`clustermesh.apiserver.tls.ca`
-     - Deprecated in favor of tls.ca. To be removed in 1.15. base64 encoded PEM values for the ExternalWorkload CA certificate and private key.
-     - object
-     - ``{"cert":"","key":""}``
-   * - :spelling:ignore:`clustermesh.apiserver.tls.ca.cert`
-     - Deprecated in favor of tls.ca.cert. To be removed in 1.15. Optional CA cert. If it is provided, it will be used by the 'cronJob' method to generate all other certificates. Otherwise, an ephemeral CA is generated.
-     - string
-     - ``""``
-   * - :spelling:ignore:`clustermesh.apiserver.tls.ca.key`
-     - Deprecated in favor of tls.ca.key. To be removed in 1.15. Optional CA private key. If it is provided, it will be used by the 'cronJob' method to generate all other certificates. Otherwise, an ephemeral CA is generated.
-     - string
-     - ``""``
    * - :spelling:ignore:`clustermesh.apiserver.tls.client`
      - base64 encoded PEM values for the clustermesh-apiserver client certificate and private key. Used if 'auto' is not enabled.
      - object
@@ -1700,6 +1688,14 @@
      - Hubble-ui backend image.
      - object
      - ``{"digest":"sha256:8a79a1aad4fc9c2aa2b3e4379af0af872a89fcec9d99e117188190671c66fc2e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.12.0","useDigest":true}``
+   * - :spelling:ignore:`hubble.ui.backend.livenessProbe.enabled`
+     - Enable liveness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
+     - bool
+     - ``false``
+   * - :spelling:ignore:`hubble.ui.backend.readinessProbe.enabled`
+     - Enable readiness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
+     - bool
+     - ``false``
    * - :spelling:ignore:`hubble.ui.backend.resources`
      - Resource requests and limits for the 'backend' container of the 'hubble-ui' deployment.
      - object
@@ -2127,7 +2123,7 @@
    * - :spelling:ignore:`nodePort`
      - Configure N-S k8s service loadbalancing
      - object
-     - ``{"autoProtectPortRange":true,"bindProtection":true,"enableHealthCheck":true,"enabled":false}``
+     - ``{"autoProtectPortRange":true,"bindProtection":true,"enableHealthCheck":true,"enableHealthCheckLoadBalancerIP":false,"enabled":false}``
    * - :spelling:ignore:`nodePort.autoProtectPortRange`
      - Append NodePort range to ip_local_reserved_ports if clash with ephemeral ports is detected.
      - bool
@@ -2140,6 +2136,10 @@
      - Enable healthcheck nodePort server for NodePort services
      - bool
      - ``true``
+   * - :spelling:ignore:`nodePort.enableHealthCheckLoadBalancerIP`
+     - Enable access of the healthcheck nodePort on the LoadBalancerIP. Needs EnableHealthCheck to be enabled
+     - bool
+     - ``false``
    * - :spelling:ignore:`nodePort.enabled`
      - Enable the Cilium NodePort service implementation.
      - bool

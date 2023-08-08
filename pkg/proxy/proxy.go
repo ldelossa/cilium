@@ -22,7 +22,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/proxy/endpoint"
-	"github.com/cilium/cilium/pkg/proxy/logger"
 	"github.com/cilium/cilium/pkg/rand"
 	"github.com/cilium/cilium/pkg/revert"
 )
@@ -105,10 +104,6 @@ type ProxyPort struct {
 type Proxy struct {
 	envoy.XDSServer
 
-	// runDir is the path of the directory where the state of L7 proxies is
-	// stored.
-	runDir string
-
 	// mutex is the lock required when modifying any proxy datastructure
 	mutex lock.RWMutex
 
@@ -129,10 +124,6 @@ type Proxy struct {
 	// proxy port
 	datapathUpdater DatapathUpdater
 
-	// defaultEndpointInfoRegistry is the default instance implementing the
-	// EndpointInfoRegistry interface.
-	defaultEndpointInfoRegistry logger.EndpointInfoRegistry
-
 	// allocatedPorts is the map of all allocated proxy ports
 	// 'true' - port is currently in use
 	// 'false' - port has been used the past, and can be reused if needed
@@ -141,19 +132,22 @@ type Proxy struct {
 	// proxyPorts defaults to a map of all supported proxy ports.
 	// In addition, it also manages dynamically created proxy ports (e.g. CEC).
 	proxyPorts map[string]*ProxyPort
+
+	envoyIntegration *envoyProxyIntegration
+	dnsIntegration   *dnsProxyIntegration
 }
 
-func createProxy(minPort uint16, maxPort uint16, runDir string, datapathUpdater DatapathUpdater, eir logger.EndpointInfoRegistry, xdsServer envoy.XDSServer) *Proxy {
+func createProxy(minPort uint16, maxPort uint16, datapathUpdater DatapathUpdater, envoyIntegration *envoyProxyIntegration, dnsIntegration *dnsProxyIntegration, xdsServer envoy.XDSServer) *Proxy {
 	return &Proxy{
-		runDir:                      runDir,
-		XDSServer:                   xdsServer,
-		rangeMin:                    minPort,
-		rangeMax:                    maxPort,
-		redirects:                   make(map[string]*Redirect),
-		datapathUpdater:             datapathUpdater,
-		defaultEndpointInfoRegistry: eir,
-		allocatedPorts:              make(map[uint16]bool),
-		proxyPorts:                  defaultProxyPortMap(),
+		XDSServer:        xdsServer,
+		rangeMin:         minPort,
+		rangeMax:         maxPort,
+		redirects:        make(map[string]*Redirect),
+		datapathUpdater:  datapathUpdater,
+		allocatedPorts:   make(map[uint16]bool),
+		proxyPorts:       defaultProxyPortMap(),
+		envoyIntegration: envoyIntegration,
+		dnsIntegration:   dnsIntegration,
 	}
 }
 
@@ -185,18 +179,6 @@ func defaultProxyPortMap() map[string]*ProxyPort {
 			localOnly: true,
 		},
 	}
-}
-
-// Overload XDSServer.UpsertEnvoyResources to start Envoy on demand
-func (p *Proxy) UpsertEnvoyResources(ctx context.Context, resources envoy.Resources, portAllocator envoy.PortAllocator) error {
-	initEnvoy(p.runDir, p.XDSServer, nil)
-	return p.XDSServer.UpsertEnvoyResources(ctx, resources, portAllocator)
-}
-
-// Overload XDSServer.UpdateEnvoyResources to start Envoy on demand
-func (p *Proxy) UpdateEnvoyResources(ctx context.Context, old, new envoy.Resources, portAllocator envoy.PortAllocator) error {
-	initEnvoy(p.runDir, p.XDSServer, nil)
-	return p.XDSServer.UpdateEnvoyResources(ctx, old, new, portAllocator)
 }
 
 // Called with mutex held!
@@ -579,7 +561,7 @@ func (p *Proxy) createNewRedirect(
 			pp.proxyPort = proxyPort
 		}
 
-		if err := p.createRedirectImpl(redirect, l4, pp, wg); err != nil {
+		if err := p.createRedirectImpl(redirect, l4, wg); err != nil {
 			if nRetry < redirectCreationAttempts-1 {
 				// an error occurred and we are retrying
 				scopedLog.
@@ -640,20 +622,14 @@ func (p *Proxy) createNewRedirect(
 	return pp.proxyPort, nil, finalizeFunc, revertFunc
 }
 
-func (p *Proxy) createRedirectImpl(redir *Redirect, l4 policy.ProxyPolicy, pp *ProxyPort, wg *completion.WaitGroup) error {
+func (p *Proxy) createRedirectImpl(redir *Redirect, l4 policy.ProxyPolicy, wg *completion.WaitGroup) error {
 	var err error
 
 	switch l4.GetL7Parser() {
 	case policy.ParserTypeDNS:
-		redir.implementation, err = createDNSRedirect(redir, p.defaultEndpointInfoRegistry)
+		redir.implementation, err = p.dnsIntegration.createRedirect(redir, wg)
 	default:
-		if pp.proxyType == ProxyTypeCRD {
-			// CRD Listeners already exist, create a no-op implementation
-			redir.implementation = &CRDRedirect{}
-		} else {
-			// create an Envoy Listener for Cilium policy enforcement
-			redir.implementation, err = createEnvoyRedirect(redir, p.runDir, p.XDSServer, p.datapathUpdater.SupportsOriginalSourceAddr(), wg)
-		}
+		redir.implementation, err = p.envoyIntegration.createRedirect(redir, wg)
 	}
 
 	return err
@@ -739,10 +715,13 @@ func (p *Proxy) removeRedirect(id string, wg *completion.WaitGroup) (error, reve
 }
 
 // ChangeLogLevel changes proxy log level to correspond to the logrus log level 'level'.
-func ChangeLogLevel(level logrus.Level) {
-	if envoyAdminClient != nil {
-		err := envoyAdminClient.ChangeLogLevel(level)
-		log.WithError(err).Debug("failed to change log level in Envoy")
+func (p *Proxy) ChangeLogLevel(level logrus.Level) {
+	if err := p.envoyIntegration.changeLogLevel(level); err != nil {
+		log.WithError(err).Debug("failed to change log level in Envoy proxy")
+	}
+
+	if err := p.dnsIntegration.changeLogLevel(level); err != nil {
+		log.WithError(err).Debug("failed to change log level in DNS proxy")
 	}
 }
 
@@ -785,9 +764,4 @@ func (p *Proxy) updateRedirectMetrics() {
 	for proto, count := range result {
 		metrics.ProxyRedirects.WithLabelValues(proto).Set(float64(count))
 	}
-}
-
-// UpdateNetworkPolicy must update the redirect configuration of an endpoint in the proxy
-func (p *Proxy) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, vis *policy.VisibilityPolicy, policy *policy.L4Policy, ingressPolicyEnforced, egressPolicyEnforced bool, wg *completion.WaitGroup) (error, func() error) {
-	return p.XDSServer.UpdateNetworkPolicy(ep, vis, policy, ingressPolicyEnforced, egressPolicyEnforced, wg)
 }

@@ -479,14 +479,12 @@ func TestExportPodCIDRReconciler(t *testing.T) {
 			testSC.Config = oldc
 			for _, cidr := range tt.advertised {
 				advrtResp, err := testSC.Server.AdvertisePath(context.Background(), types.PathRequest{
-					Advert: types.Advertisement{
-						Prefix: cidr,
-					},
+					Path: types.NewPathForPrefix(cidr),
 				})
 				if err != nil {
 					t.Fatalf("failed to advertise initial pod cidr routes: %v", err)
 				}
-				testSC.PodCIDRAnnouncements = append(testSC.PodCIDRAnnouncements, advrtResp.Advert)
+				testSC.PodCIDRAnnouncements = append(testSC.PodCIDRAnnouncements, advrtResp.Path)
 			}
 
 			newc := &v2alpha1api.CiliumBGPVirtualRouter{
@@ -519,7 +517,7 @@ func TestExportPodCIDRReconciler(t *testing.T) {
 				prefix := netip.MustParsePrefix(cidr)
 				var seen bool
 				for _, advrt := range testSC.PodCIDRAnnouncements {
-					if advrt.Prefix == prefix {
+					if advrt.NLRI.String() == prefix.String() {
 						seen = true
 					}
 				}
@@ -533,7 +531,7 @@ func TestExportPodCIDRReconciler(t *testing.T) {
 			for _, advrt := range testSC.PodCIDRAnnouncements {
 				var seen bool
 				for _, cidr := range tt.updated {
-					if advrt.Prefix == netip.MustParsePrefix(cidr) {
+					if advrt.NLRI.String() == cidr {
 						seen = true
 					}
 				}
@@ -603,6 +601,12 @@ func TestLBServiceReconciler(t *testing.T) {
 	svc1IPv6ETPLocal := svc1.DeepCopy()
 	svc1IPv6ETPLocal.Status.LoadBalancer.Ingress[0] = slim_corev1.LoadBalancerIngress{IP: ingressV6}
 	svc1IPv6ETPLocal.Spec.ExternalTrafficPolicy = slim_corev1.ServiceExternalTrafficPolicyLocal
+
+	svc1LbClass := svc1.DeepCopy()
+	svc1LbClass.Spec.LoadBalancerClass = pointer.String(v2alpha1api.BGPLoadBalancerClass)
+
+	svc1UnsupportedClass := svc1LbClass.DeepCopy()
+	svc1UnsupportedClass.Spec.LoadBalancerClass = pointer.String("io.vendor/unsupported-class")
 
 	svc2NonDefault := &slim_corev1.Service{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -896,6 +900,55 @@ func TestLBServiceReconciler(t *testing.T) {
 				},
 			},
 		},
+		// BGP load balancer class with matching selectors for service.
+		{
+			name:               "lb-class-and-selectors",
+			oldServiceSelector: &blueSelector,
+			newServiceSelector: &blueSelector,
+			advertised:         map[resource.Key][]string{},
+			upsertedServices:   []*slim_corev1.Service{svc1LbClass},
+			updated: map[resource.Key][]string{
+				svc1Name: {
+					ingressV4Prefix,
+				},
+			},
+		},
+		// BGP load balancer class with no selectors for service.
+		{
+			name:               "lb-class-no-selectors",
+			oldServiceSelector: nil,
+			newServiceSelector: nil,
+			advertised:         map[resource.Key][]string{},
+			upsertedServices:   []*slim_corev1.Service{svc1LbClass},
+			updated:            map[resource.Key][]string{},
+		},
+		// BGP load balancer class with selectors for a different service.
+		{
+			name:               "lb-class-with-diff-selectors",
+			oldServiceSelector: &slim_metav1.LabelSelector{MatchLabels: map[string]string{"io.kubernetes.service.name": "svc-2"}},
+			newServiceSelector: &slim_metav1.LabelSelector{MatchLabels: map[string]string{"io.kubernetes.service.name": "svc-2"}},
+			advertised:         map[resource.Key][]string{},
+			upsertedServices:   []*slim_corev1.Service{svc1LbClass},
+			updated:            map[resource.Key][]string{},
+		},
+		// Unsupported load balancer class with matching selectors for service.
+		{
+			name:               "unsupported-lb-class-with-selectors",
+			oldServiceSelector: &blueSelector,
+			newServiceSelector: &blueSelector,
+			advertised:         map[resource.Key][]string{},
+			upsertedServices:   []*slim_corev1.Service{svc1UnsupportedClass},
+			updated:            map[resource.Key][]string{},
+		},
+		// Unsupported load balancer class with no matching selectors for service.
+		{
+			name:               "unsupported-lb-class-with-no-selectors",
+			oldServiceSelector: nil,
+			newServiceSelector: nil,
+			advertised:         map[resource.Key][]string{},
+			upsertedServices:   []*slim_corev1.Service{svc1UnsupportedClass},
+			updated:            map[resource.Key][]string{},
+		},
 		// No-LB service
 		{
 			name:               "non-lb svc",
@@ -1069,15 +1122,13 @@ func TestLBServiceReconciler(t *testing.T) {
 				for _, cidr := range cidrs {
 					prefix := netip.MustParsePrefix(cidr)
 					advrtResp, err := testSC.Server.AdvertisePath(context.Background(), types.PathRequest{
-						Advert: types.Advertisement{
-							Prefix: prefix,
-						},
+						Path: types.NewPathForPrefix(prefix),
 					})
 					if err != nil {
 						t.Fatalf("failed to advertise initial svc lb cidr routes: %v", err)
 					}
 
-					testSC.ServiceAnnouncements[svcKey] = append(testSC.ServiceAnnouncements[svcKey], advrtResp.Advert)
+					testSC.ServiceAnnouncements[svcKey] = append(testSC.ServiceAnnouncements[svcKey], advrtResp.Path)
 				}
 			}
 
@@ -1116,9 +1167,9 @@ func TestLBServiceReconciler(t *testing.T) {
 
 			// if we disable exports of pod cidr ensure no advertisements are
 			// still present.
-			if tt.newServiceSelector == nil {
+			if tt.newServiceSelector == nil && !containsLbClass(tt.upsertedServices) {
 				if len(testSC.ServiceAnnouncements) > 0 {
-					t.Fatal("disabled export but advertisements till present")
+					t.Fatal("disabled export but advertisements still present")
 				}
 			}
 
@@ -1130,7 +1181,7 @@ func TestLBServiceReconciler(t *testing.T) {
 					prefix := netip.MustParsePrefix(cidr)
 					var seen bool
 					for _, advrt := range testSC.ServiceAnnouncements[svcKey] {
-						if advrt.Prefix == prefix {
+						if advrt.NLRI.String() == prefix.String() {
 							seen = true
 						}
 					}
@@ -1146,7 +1197,7 @@ func TestLBServiceReconciler(t *testing.T) {
 				for _, advrt := range advrts {
 					var seen bool
 					for _, cidr := range tt.updated[svcKey] {
-						if advrt.Prefix == netip.MustParsePrefix(cidr) {
+						if advrt.NLRI.String() == cidr {
 							seen = true
 						}
 					}
@@ -1281,4 +1332,13 @@ func toHostPrefix(addr string) string {
 		bits = 128
 	}
 	return netip.PrefixFrom(addrNet, bits).String()
+}
+
+func containsLbClass(svcs []*slim_corev1.Service) bool {
+	for _, svc := range svcs {
+		if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass == v2alpha1api.BGPLoadBalancerClass {
+			return true
+		}
+	}
+	return false
 }

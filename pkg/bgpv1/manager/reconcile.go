@@ -171,7 +171,7 @@ func preflightReconciler(
 
 	// Clear the shadow state since any advertisements will be gone now that the server has been recreated.
 	sc.PodCIDRAnnouncements = nil
-	sc.ServiceAnnouncements = make(map[resource.Key][]types.Advertisement)
+	sc.ServiceAnnouncements = make(map[resource.Key][]*types.Path)
 
 	return nil
 }
@@ -366,13 +366,13 @@ func exportPodCIDRReconciler(
 		return fmt.Errorf("attempted pod CIDR advertisements reconciliation with nil ControlPlaneState")
 	}
 
-	toAdvertise := []netip.Prefix{}
+	var toAdvertise []*types.Path
 	for _, cidr := range cstate.PodCIDRs {
 		prefix, err := netip.ParsePrefix(cidr)
 		if err != nil {
 			return fmt.Errorf("failed to parse prefix %s: %w", cidr, err)
 		}
-		toAdvertise = append(toAdvertise, prefix)
+		toAdvertise = append(toAdvertise, types.NewPathForPrefix(prefix))
 	}
 
 	advertisements, err := exportAdvertisementsReconciler(&advertisementsReconcilerParams{
@@ -627,26 +627,33 @@ func (r *LBServiceReconciler) svcDiffReconciliation(ctx context.Context, sc *Ser
 // desired state.
 func (r *LBServiceReconciler) svcDesiredRoutes(newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls localServices) ([]netip.Prefix, error) {
 	if newc.ServiceSelector == nil {
-		// If the vRouter has no service selector, there are no desired routes
+		// If the vRouter has no service selector, there are no desired routes.
 		return nil, nil
 	}
 
-	// Ignore non-loadbalancer services
+	// Ignore non-loadbalancer services.
 	if svc.Spec.Type != slim_corev1.ServiceTypeLoadBalancer {
 		return nil, nil
 	}
 
+	// The vRouter has a service selector, so determine the desired routes.
 	svcSelector, err := slim_metav1.LabelSelectorAsSelector(newc.ServiceSelector)
 	if err != nil {
 		return nil, fmt.Errorf("labelSelectorAsSelector: %w", err)
 	}
 
-	// Ignore non matching services
+	// Ignore non matching services.
 	if !svcSelector.Matches(serviceLabelSet(svc)) {
 		return nil, nil
 	}
 
-	// Ignore externalTrafficPolicy == Local && no local endpoints
+	// Ignore service managed by an unsupported LB class.
+	if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != v2alpha1api.BGPLoadBalancerClass {
+		// The service is managed by a different LB class.
+		return nil, nil
+	}
+
+	// Ignore externalTrafficPolicy == Local && no local endpoints.
 	if svc.Spec.ExternalTrafficPolicy == slim_corev1.ServiceExternalTrafficPolicyLocal &&
 		!hasLocalEndpoints(svc, ls) {
 		return nil, nil
@@ -681,22 +688,20 @@ func (r *LBServiceReconciler) reconcileService(ctx context.Context, sc *ServerWi
 
 	for _, desiredCidr := range desiredCidrs {
 		// If this route has already been announced, don't add it again
-		if slices.IndexFunc(sc.ServiceAnnouncements[svcKey], func(existing types.Advertisement) bool {
-			return desiredCidr == existing.Prefix
+		if slices.IndexFunc(sc.ServiceAnnouncements[svcKey], func(existing *types.Path) bool {
+			return desiredCidr.String() == existing.NLRI.String()
 		}) != -1 {
 			continue
 		}
 
 		// Advertise the new cidr
 		advertPathResp, err := sc.Server.AdvertisePath(ctx, types.PathRequest{
-			Advert: types.Advertisement{
-				Prefix: desiredCidr,
-			},
+			Path: types.NewPathForPrefix(desiredCidr),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to advertise service route %v: %w", desiredCidr, err)
 		}
-		sc.ServiceAnnouncements[svcKey] = append(sc.ServiceAnnouncements[svcKey], advertPathResp.Advert)
+		sc.ServiceAnnouncements[svcKey] = append(sc.ServiceAnnouncements[svcKey], advertPathResp.Path)
 	}
 
 	// Loop over announcements in reverse order so we can delete entries without effecting iteration.
@@ -704,13 +709,13 @@ func (r *LBServiceReconciler) reconcileService(ctx context.Context, sc *ServerWi
 		announcement := sc.ServiceAnnouncements[svcKey][i]
 		// If the announcement is within the list of desired routes, don't remove it
 		if slices.IndexFunc(desiredCidrs, func(existing netip.Prefix) bool {
-			return existing == announcement.Prefix
+			return existing.String() == announcement.NLRI.String()
 		}) != -1 {
 			continue
 		}
 
-		if err := sc.Server.WithdrawPath(ctx, types.PathRequest{Advert: announcement}); err != nil {
-			return fmt.Errorf("failed to withdraw service route %s: %w", announcement, err)
+		if err := sc.Server.WithdrawPath(ctx, types.PathRequest{Path: announcement}); err != nil {
+			return fmt.Errorf("failed to withdraw service route %s: %w", announcement.NLRI, err)
 		}
 
 		// Delete announcement from slice
@@ -726,10 +731,10 @@ func (r *LBServiceReconciler) withdrawService(ctx context.Context, sc *ServerWit
 	// Loop in reverse order so we can delete without effect to the iteration.
 	for i := len(advertisements) - 1; i >= 0; i-- {
 		advertisement := advertisements[i]
-		if err := sc.Server.WithdrawPath(ctx, types.PathRequest{Advert: advertisement}); err != nil {
+		if err := sc.Server.WithdrawPath(ctx, types.PathRequest{Path: advertisement}); err != nil {
 			// Persist remaining advertisements
 			sc.ServiceAnnouncements[key] = advertisements
-			return fmt.Errorf("failed to withdraw deleted service route: %v: %w", advertisement.Prefix, err)
+			return fmt.Errorf("failed to withdraw deleted service route: %v: %w", advertisement.NLRI, err)
 		}
 
 		// Delete the advertisement after each withdraw in case we error half way through
