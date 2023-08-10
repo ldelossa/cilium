@@ -1,0 +1,288 @@
+name: CuTE CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      PR-number:
+        description: "Pull request number."
+        required: true
+      context-ref:
+        description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
+        required: true
+      SHA:
+        description: "SHA under test (head of the PR branch)."
+        required: true
+      extra-args:
+        description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
+        required: true
+
+env:
+  helm_registry: quay.io
+  helm_registry_namespace: isovalent-charts-dev
+  regions: '{"aws": "us-west-2", "azure": "westus2", "gcp": "us-west2-a"}'
+  name: ${{ github.run_id }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
+
+jobs:
+  cute-ci:
+    name: CuTE CI
+    runs-on: ubuntu-latest
+    # ~25min [Helm charts] + ~15min [CuTE infra] + ~15min [tests] + ~10min [destroy]
+    timeout-minutes: 180
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        with:
+          # checkout pull request head ref so that print-chart-version.sh prints the correct chart version.
+          ref: ${{ github.event.pull_request.head.ref }}
+          # required for git describe
+          fetch-depth: 0
+          path: 'cilium'
+
+      - name: Set up job variables
+        id: vars
+        working-directory: ./cilium
+        run: |
+          input=${{ inputs.extra-args }}
+          repo="${input%%[/@]*}"; dir=""; ref=""
+          if [[ $input == */* ]]; then
+            dir_ref="${input##*/}"
+            dir="${dir_ref%%@*}"
+          fi
+          if [[ $input == *@* ]]; then
+            ref="${input##*@}"
+          fi
+
+          echo cute_repo=$repo >> $GITHUB_OUTPUT
+          echo cute_dir=$dir >> $GITHUB_OUTPUT
+          echo cute_ref=$ref >> $GITHUB_OUTPUT
+          echo helm_chart_version=$(bash contrib/scripts/print-chart-version.sh) >> $GITHUB_OUTPUT
+          echo helm_enterprise_chart_version=$(bash contrib/scripts/print-chart-version.sh)-enterprise >> $GITHUB_OUTPUT
+
+      - name: Build cilium-cli
+        working-directory: ./cilium
+        run: |
+          cd enterprise/cilium-cli
+          go mod tidy
+          test -z "$(git status --porcelain)" || (echo "please run 'go mod tidy' and submit your changes"; exit 1)
+          make
+          echo $(pwd) >> $GITHUB_PATH
+
+      - name: Checkout CuTE repository
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
+        with:
+          repository: isovalent/cute-${{ steps.vars.outputs.cute_repo }}
+          ref: ${{ steps.vars.outputs.cute_ref }}
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+          path: 'cute'
+
+      - name: Get CuTE provider & region
+        id: cute_tf
+        working-directory: ./cute
+        run: |
+          cd ./${{ steps.vars.outputs.cute_dir }}
+          provider=""
+          region=""
+          count=$(cat *.tf | grep -c 'provider "aws"' || true)
+          if [ "$count" -gt 0 ]; then
+            provider="aws"
+            region=$(echo "$regions" | jq -r .aws)
+          fi
+          count=$(cat *.tf | grep -c 'provider "azurerm"' || true)
+          if [ "$count" -gt 0 ]; then
+            provider="azure"
+            region=$(echo "$regions" | jq -r .azure)
+          fi
+          count=$(cat *.tf | grep -c 'provider "google"' || true)
+          if [ "$count" -gt 0 ]; then
+            provider="gcp"
+            region=$(echo "$regions" | jq -r .gcp)
+          fi
+          
+          if [ -z $provider ]; then
+            echo "terraform provider not found!"
+            exit 1
+          fi
+          echo provider=$provider >> $GITHUB_OUTPUT
+          echo region=$region >> $GITHUB_OUTPUT
+
+      - name: Check CuTE for enterprise chart
+        id: cute_check
+        working-directory: ./cute
+        run: |
+          ce=false
+          cd ./${{ steps.vars.outputs.cute_dir }}
+          count=$(grep -c '^cilium:\s*$' *.y*ml || true)
+          if [ "$count" -gt 0 ];
+          then
+            ce=true
+          fi
+          echo cute_enterprise=$ce >> $GITHUB_OUTPUT
+
+      - name: Install cfssl
+        working-directory: ./cute
+        run: |
+          mkdir bin
+          curl -L https://github.com/cloudflare/cfssl/releases/download/v1.6.4/cfssl_1.6.4_linux_amd64 \
+               --output bin/cfssl --show-error --fail
+          curl -L https://github.com/cloudflare/cfssl/releases/download/v1.6.4/cfssljson_1.6.4_linux_amd64 \
+               --output bin/cfssljson --show-error --fail
+          chmod +x bin/cfssl*
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Install cfssl
+        working-directory: ./cute
+        run: |
+          cfssl version
+          cfssljson -version
+
+      # We configure Git SSH to use a private access token so that `terraform
+      # get` commands ran as part of `terraform init` are able to download
+      # terraform modules from private repositories
+      - name: Configure Git
+        run: |
+          git config --global url."https://oauth2:${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}@github.com".insteadOf ssh://git@github.com
+
+      - name: Set up AWS CLI credentials
+        if: steps.cute_tf.outputs.provider == 'aws'
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838
+        with:
+          aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
+          aws-region: ${{ steps.cute_tf.outputs.region }}
+
+      - name: Set up gcloud credentials
+        if: steps.cute_tf.outputs.provider == 'gcp'
+        id: 'auth'
+        uses: 'google-github-actions/auth@dac4e13deb3640f22e3ffe758fd3f95e6e89f712'
+        with:
+          credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
+
+      - name: Set up gcloud CLI
+        if: steps.cute_tf.outputs.provider == 'gcp'
+        uses: google-github-actions/setup-gcloud@877d4953d2c70a0ba7ef3290ae968eb24af233bb
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Get gcloud user unique id
+        if: steps.cute_tf.outputs.provider == 'gcp'
+        run: |
+          GCLOUD_USER_UNIQUE_ID=$(gcloud iam service-accounts describe isovalent-cilium-sa@cilium-pr.iam.gserviceaccount.com --project "${{ secrets.GCP_PROJECT_ID }}" | grep uniqueId | cut -d' ' -f2 | tr -d "'")
+          echo "GCLOUD_USER_UNIQUE_ID=$GCLOUD_USER_UNIQUE_ID" >> $GITHUB_ENV
+
+      - name: Install gke-gcloud-auth-plugin
+        if: steps.cute_tf.outputs.provider == 'gcp'
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+
+      - name: Display gcloud CLI info
+        if: steps.cute_tf.outputs.provider == 'gcp'
+        run: |
+          gcloud info
+
+      - name: Create an SSH key pair
+        if: steps.cute_tf.outputs.provider == 'gcp'
+        run: |
+          ssh-keygen -t rsa -f ${HOME}/.ssh/google_compute_engine -C ${{ env.name }} -b 2048 -N "" -q
+
+      - name: Login to Azure
+        if: steps.cute_tf.outputs.provider == 'azure'
+        uses: azure/login@92a5484dfaf04ca78a94597f4f19fea633851fa2 # v1.4.7
+        with:
+          creds: ${{ secrets.AZURE_PR_SP_CREDS }}
+
+      - name: Prepare Azure TF variables
+        if: steps.cute_tf.outputs.provider == 'azure'
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_PR_SP_CREDS }}
+        run: |
+          # Parse Azure secret into Terraform variables
+          echo "ARM_CLIENT_ID=$( jq -r '.clientId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
+          echo "ARM_CLIENT_SECRET=$( jq -r '.clientSecret' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=$( jq -r '.subscriptionId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
+
+      - name: Create Terraform variables file
+        working-directory: ./cute
+        run: |
+          HELM_CHART="oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium"
+          HELM_CHART_VERSION=${{ steps.vars.outputs.helm_chart_version }}
+          if [ ${{ steps.cute_check.outputs.cute_enterprise }} == 'true' ];
+          then
+            HELM_CHART="oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium-enterprise"
+            HELM_CHART_VERSION=${{ steps.vars.outputs.helm_enterprise_chart_version }}
+          fi
+          
+          cd ./${{ steps.vars.outputs.cute_dir }}
+          cat > terraform.tfvars << EOF
+          cluster_name="cute-${{ env.name }}"
+          owner="cute-ci"
+          region="${{ steps.cute_tf.outputs.region }}"
+          cilium_helm_chart="$HELM_CHART"
+          cilium_helm_version="$HELM_CHART_VERSION"
+          # the below variables are for cluster mesh scenario
+          cilium_helm_version_1="$HELM_CHART_VERSION"
+          cilium_helm_version_2="$HELM_CHART_VERSION"
+          EOF
+
+      - name: Wait for Helm dev chart to be available
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          until helm pull oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium --version ${{ steps.vars.outputs.helm_chart_version }} &> /dev/null;
+            do sleep 30s;
+          done
+
+      - name: Checkout enterprise helm repo
+        if: steps.cute_check.outputs.cute_enterprise == 'true'
+        id: ce_chart
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
+        with:
+          repository: isovalent/helm-charts
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+          path: 'ce_chart'
+
+      - name: Hack enterprise helm chart
+        if: steps.cute_check.outputs.cute_enterprise == 'true'
+        working-directory: ./ce_chart
+        shell: bash
+        run: |
+          yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.vars.outputs.helm_chart_version }}"' ./cilium-enterprise/Chart.yaml
+          yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}"' ./cilium-enterprise/Chart.yaml
+
+      - name: Push enterprise helm chart
+        if: steps.cute_check.outputs.cute_enterprise == 'true'
+        uses: cilium/reusable-workflows/.github/actions/push-helm-chart@6ae27958f2f37545bf48e44106b73df05b1f6d12 # v0.1.0
+        with:
+          name: cilium-enterprise
+          path: ce_chart/cilium-enterprise
+          version: ${{ steps.vars.outputs.helm_enterprise_chart_version }}
+          registry: quay.io
+          registry_namespace: ${{ env.helm_registry_namespace }}
+          registry_username: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
+          registry_password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+
+      - name: Create CuTE resources
+        id: create
+        working-directory: ./cute
+        run: |
+          # The below line is required for Terraform provisioner script:
+          # https://github.com/isovalent/terraform-k8s-cilium/blob/main/scripts/provisioner.sh#L79
+          helm repo add isovalent https://helm.isovalent.com
+          cd ./${{ steps.vars.outputs.cute_dir }}
+          make apply AUTO_APPROVE=true
+
+      - name: Run CuTE tests
+        timeout-minutes: 60
+        working-directory: ./cute
+        run: |
+          cd ./${{ steps.vars.outputs.cute_dir }}
+          make test
+
+      # If the creation step was run, always run the cleanup step, even if create or test steps failed
+      - name: Clean up CuTE resources
+        if: always() && steps.create.outcome != 'skipped'
+        working-directory: ./cute
+        run: |
+          cd ./${{ steps.vars.outputs.cute_dir }}
+          make destroy AUTO_APPROVE=true

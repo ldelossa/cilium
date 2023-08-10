@@ -61,6 +61,11 @@ triggers:
   /ci-l4lb:
     workflows:
     - tests-l4lb.yaml
+  # `(.+)` is regex capture group that is used as `extra-args` inputs parameter in the CuTE workflow
+  # For example: `/cute isovalent/cute-bloomberg`
+  /cute (.+):
+    workflows:
+    - cute.yaml
 
 workflows:
   conformance-aks.yaml:
