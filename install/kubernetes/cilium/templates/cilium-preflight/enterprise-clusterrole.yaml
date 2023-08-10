@@ -1,4 +1,4 @@
-{{- if and .Values.agent (not .Values.preflight.enabled) }}
+{{- if .Values.preflight.enabled }}
 {{- /*
 Keep file in sync with cilium-agent/enterprise-clusterrole.yaml
 */ -}}
