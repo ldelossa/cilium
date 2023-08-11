@@ -8,6 +8,7 @@
   // This ensures that the gitAuthor and gitSignOff fields match
   "gitAuthor": "renovate[bot] <bot@renovateapp.com>",
   "includePaths": [
+    ".github/workflows/enterprise-*",
     "images/cilium/download-hubble-enterprise.sh"
   ],
   "pinDigests": true,
@@ -40,6 +41,87 @@
         "isovalent/hubble-releases",
       ],
     },
+    {
+      "groupName": "all github action dependencies in enterprise workflows",
+      "groupSlug": "all-github-action",
+      "matchFileNames": [
+        ".github/workflows/enterprise-*"
+      ],
+      excludeDepNames: [
+        "quay.io/cilium/kindest-node"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "digest",
+        "patch",
+        "pin",
+        "pinDigest"
+      ],
+      "schedule": [
+        "on monday"
+      ]
+    },
+    // Ref: https://github.com/cilium/cilium-cli#releases
+    {
+      "groupName": "Cilium CLI",
+      "groupSlug": "cilium-cli",
+      "matchDepNames": [
+        "cilium/cilium-cli"
+      ],
+      "matchBaseBranches": [
+        "main-ce",
+        "v1.14-ce",
+      ]
+    },
+    {
+      "groupName": "Cilium CLI",
+      "groupSlug": "cilium-cli",
+      "matchDepNames": [
+        "cilium/cilium-cli"
+      ],
+      "allowedVersions": "/^v0\\.14\\.[0-9]+$/",
+      "matchBaseBranches": [
+        "v1.13-ce",
+        "v1.12-ce",
+        "v1.11-ce",
+      ]
+    },
+    {
+      "groupName": "all kind-images",
+      "groupSlug": "all-kind-images",
+      "matchPackageNames": [
+        "kindest/node",
+        "quay.io/cilium/kindest-node"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "patch",
+        "pin",
+        "pinDigest"
+      ],
+      "schedule": [
+        "on monday"
+      ],
+    },
+    {
+      // Do not allow any updates for major.minor, they will be done by maintainers
+      "enabled": false,
+      "matchPackageNames": [
+        "kindest/node",
+        "quay.io/cilium/kindest-node"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+    },
+    {
+      "matchPackageNames": [
+        "quay.io/cilium/kindest-node"
+      ],
+      "ignoreUnstable": false,
+    }
   ],
   "regexManagers": [
     {
@@ -58,6 +140,21 @@
         "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?) digestVersion=(?<currentValue>.*)\\s+.+_sha256.*=\"(?<currentDigest>.*)\""
       ]
     },
+    {
+      "fileMatch": [
+        "^\\.github/workflows/enterprise-[^/]+\\.ya?ml$",
+      ],
+      // This regex manages version strings in GitHub actions workflow files,
+      // similar to the examples shown here:
+      //   https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+version: (?<currentValue>.*)",
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_VERSION: (?<currentValue>.*)",
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+kernel: '(?<currentValue>.*)'",
+        '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\s+.+kernel: "(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
+        '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\s+.+image-version: "(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
+        '# renovate: datasource=(?<datasource>.*?)\\s+.+kube-image: "(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"'
+      ]
+    }
   ]
 }
-
