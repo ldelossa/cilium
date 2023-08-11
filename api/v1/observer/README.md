@@ -46,6 +46,7 @@
 
 ### Aggregation
 Aggregation is a filter to define flow aggregation behavior
+Deprecated. Use isovalent.flow.aggregation.Aggregation instead.
 
 
 | Field | Type | Label | Description |
@@ -62,6 +63,7 @@ Aggregation is a filter to define flow aggregation behavior
 
 ### Aggregator
 Aggregator is an aggregator configuration
+Deprecated. Use isovalent.flow.aggregation.Aggregator instead.
 
 
 | Field | Type | Label | Description |
@@ -80,6 +82,7 @@ Aggregator is an aggregator configuration
 
 ### DirectionStatistics
 DirectionStatistics are flow statistics in a particular direction
+Deprecated. Use isovalent.flow.aggregation.DirectionStatistics instead.
 
 
 | Field | Type | Label | Description |
@@ -124,6 +127,7 @@ exporter feature.
 
 ### FlowStatistics
 FlowStatistics includes the statistics for a flow in both directions
+Deprecated. Use isovalent.flow.aggregation.FlowStatistics instead.
 
 
 | Field | Type | Label | Description |
@@ -226,7 +230,7 @@ GetDebugEventsResponse contains a Cilium datapath debug events.
 | until | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  | Until this time for returned flows. Incompatible with `number`. |
 | experimental | [GetFlowsRequest.Experimental](#observer-GetFlowsRequest-Experimental) |  |  |
 | extensions | [google.protobuf.Any](#google-protobuf-Any) |  | extensions can be used to add arbitrary additional metadata to GetFlowsRequest. This can be used to extend functionality for other Hubble compatible APIs, or experiment with new functionality without needing to change the public API. |
-| aggregation | [Aggregation](#observer-Aggregation) |  | Aggregation defines flow aggregation settings, determining how flows get aggregated when queried. |
+| aggregation | [Aggregation](#observer-Aggregation) |  | **Deprecated.** Aggregation defines flow aggregation settings, determining how flows get aggregated when queried. Deprecated. Use the extensions field with the isovalent.extensions.GetFlowsRequestExtension message type instead. |
 
 
 
@@ -411,6 +415,7 @@ TLS represents TLS information.
 
 ### AggregatorType
 AggregatorType are all aggregator types
+Deprecated. Use isovalent.flow.aggregation.AggregatorType instead.
 
 | Name | Number | Description |
 | ---- | ------ | ----------- |
@@ -423,7 +428,7 @@ AggregatorType are all aggregator types
 <a name="observer-StateChange"></a>
 
 ### StateChange
-
+Deprecated. Use isovalent.flow.aggregation.StateChange instead.
 
 | Name | Number | Description |
 | ---- | ------ | ----------- |

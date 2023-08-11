@@ -16,21 +16,24 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	wrappers "google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/api/v1/observer"
+	"github.com/cilium/cilium/enterprise/api/extensions"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/chain"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 )
 
-type contextKey string
+type aggregatorContextKey struct{}
 
 var (
-	aggregatorKey = contextKey("aggregator")
-	requestKey    = contextKey("request")
+	ctxKey = aggregatorContextKey{}
 
 	_ FlowAggregator = (*flowAggregation)(nil)
 )
@@ -54,21 +57,74 @@ type flowAggregation struct {
 	logger logrus.FieldLogger
 }
 
+type aggregatorCtx struct {
+	aggregator  types.Aggregator
+	aggregation *aggregationpb.Aggregation
+}
+
+func extractAggregation(req *observer.GetFlowsRequest) (*aggregationpb.Aggregation, error) {
+	ext := new(extensions.GetFlowsRequestExtension)
+	if err := anypb.UnmarshalTo(req.Extensions, ext, proto.UnmarshalOptions{DiscardUnknown: true}); err != nil {
+		return nil, err
+	}
+	if ext.Aggregation == nil {
+		return nil, nil
+	}
+	return ext.Aggregation, nil
+}
+
 func (p *flowAggregation) OnGetFlows(ctx context.Context, req *observer.GetFlowsRequest) (context.Context, error) {
-	if req.Aggregation != nil {
-		aggregator, err := ConfigureAggregator(req.Aggregation.Aggregators)
-		p.logger.Debugf("Configured flow aggregator %#v", aggregator)
+	if req.Extensions != nil {
+		agg, err := extractAggregation(req)
+		if err != nil {
+			return nil, err
+		}
+		if agg == nil {
+			return ctx, nil
+		}
+		newCtx, err := p.newContext(ctx, agg)
 		if err != nil {
 			return ctx, err
 		}
+		return newCtx, nil
+	} else if req.Aggregation != nil { //nolint:staticcheck
+		// If the request specifies the 'old' aggregation field (Cilium <= 1.15),
+		// convert it to the extension based aggregation type
+		newAggregators := make([]*aggregationpb.Aggregator, 0, len(req.Aggregation.Aggregators)) //nolint:staticcheck
+		for _, ag := range req.Aggregation.Aggregators {                                         //nolint:staticcheck
+			newAggregators = append(newAggregators, &aggregationpb.Aggregator{
+				Type:             aggregationpb.AggregatorType(ag.Type),
+				IgnoreSourcePort: ag.IgnoreSourcePort,
+				Ttl:              ag.Ttl,
+				RenewTtl:         ag.RenewTtl,
+			})
+		}
+		agg := &aggregationpb.Aggregation{
+			Aggregators:       newAggregators,
+			StateChangeFilter: aggregationpb.StateChange(req.Aggregation.StateChangeFilter),
+		}
+		newCtx, err := p.newContext(ctx, agg)
+		if err != nil {
+			return ctx, err
+		}
+		return newCtx, nil
+	}
+	return ctx, nil
+}
 
-		go aggregator.Start(ctx)
-
-		ctx = context.WithValue(ctx, aggregatorKey, aggregator)
-		return context.WithValue(ctx, requestKey, req), nil
+func (p *flowAggregation) newContext(ctx context.Context, agg *aggregationpb.Aggregation) (context.Context, error) {
+	aggregator, err := ConfigureAggregator(agg.Aggregators)
+	p.logger.Debugf("Configured flow aggregator %#v", aggregator)
+	if err != nil {
+		return ctx, err
 	}
 
-	return ctx, nil
+	go aggregator.Start(ctx)
+
+	return context.WithValue(ctx, ctxKey, &aggregatorCtx{
+		aggregator:  aggregator,
+		aggregation: agg,
+	}), nil
 }
 
 func (p *flowAggregation) OnFlowDelivery(ctx context.Context, f *flow.Flow) (bool, error) {
@@ -80,18 +136,16 @@ func (p *flowAggregation) OnFlowDelivery(ctx context.Context, f *flow.Flow) (boo
 		return false, nil
 	}
 
-	aggregator, ok := ctx.Value(aggregatorKey).(types.Aggregator)
+	aggCtx, ok := ctx.Value(ctxKey).(*aggregatorCtx)
 	if !ok {
 		return false, nil
 	}
 
-	req, ok := ctx.Value(requestKey).(*observer.GetFlowsRequest)
-	if !ok {
-		return false, nil
-	}
+	fmt.Printf("aggregation %#v\n", aggCtx.aggregation)
+	fmt.Printf("aggregator %#v\n", aggCtx.aggregator)
 
-	result := aggregator.Aggregate(&aggregation.AggregatableFlow{Flow: f})
-	if result != nil && (result.StateChange&req.Aggregation.StateChangeFilter) == 0 {
+	result := aggCtx.aggregator.Aggregate(&aggregation.AggregatableFlow{Flow: f})
+	if result != nil && (result.StateChange&aggCtx.aggregation.StateChangeFilter) == 0 {
 		return true, nil
 	}
 
@@ -106,15 +160,15 @@ func (p *flowAggregation) GetAggregationContext(
 	ignoreSourcePort bool,
 	ttl time.Duration,
 	renewTTL bool) (context.Context, error) {
-	agg, err := GetAggregation(aggregators, filters, ignoreSourcePort, ttl, renewTTL)
+	agg, err := NewAggregation(aggregators, filters, ignoreSourcePort, ttl, renewTTL)
 	if err != nil {
 		return nil, err
 	}
-	return p.OnGetFlows(context.Background(), &observer.GetFlowsRequest{Aggregation: agg})
+	return p.newContext(context.Background(), agg)
 }
 
 // ConfigureAggregator configures a set of aggregators as a chain
-func ConfigureAggregator(aggregators []*observer.Aggregator) (types.Aggregator, error) {
+func ConfigureAggregator(aggregators []*aggregationpb.Aggregator) (types.Aggregator, error) {
 	var as []types.Aggregator
 	ttl := 30 * time.Second
 	renewTTL := true
@@ -129,9 +183,9 @@ func ConfigureAggregator(aggregators []*observer.Aggregator) (types.Aggregator, 
 		}
 
 		switch requestedAggregator.Type {
-		case observer.AggregatorType_connection:
+		case aggregationpb.AggregatorType_connection:
 			a = aggregation.NewConnectionAggregator(ttl, requestedAggregator.IgnoreSourcePort, renewTTL)
-		case observer.AggregatorType_identity:
+		case aggregationpb.AggregatorType_identity:
 			a = aggregation.NewIdentityAggregator(ttl, renewTTL)
 		default:
 			return nil, fmt.Errorf("unknown aggregator: %d", requestedAggregator.Type)
@@ -150,28 +204,28 @@ func ConfigureAggregator(aggregators []*observer.Aggregator) (types.Aggregator, 
 	}
 }
 
-func GetAggregation(
+func NewAggregation(
 	aggregators []string,
 	filters []string,
 	ignoreSourcePort bool,
 	ttl time.Duration,
-	renewTTL bool) (*observer.Aggregation, error) {
-	agg := observer.Aggregation{}
+	renewTTL bool) (*aggregationpb.Aggregation, error) {
+	agg := aggregationpb.Aggregation{}
 	if len(aggregators) > 0 {
 		for _, f := range filters {
-			v, ok := observer.StateChange_value[f]
+			v, ok := aggregationpb.StateChange_value[f]
 			if !ok {
 				return nil, fmt.Errorf("unknown state change: %s", f)
 			}
-			agg.StateChangeFilter |= observer.StateChange(v)
+			agg.StateChangeFilter |= aggregationpb.StateChange(v)
 		}
 		for _, a := range aggregators {
-			t, ok := observer.AggregatorType_value[a]
+			t, ok := aggregationpb.AggregatorType_value[a]
 			if !ok {
 				return nil, fmt.Errorf("unknown aggregator: %s", a)
 			}
-			agg.Aggregators = append(agg.Aggregators, &observer.Aggregator{
-				Type:             observer.AggregatorType(t),
+			agg.Aggregators = append(agg.Aggregators, &aggregationpb.Aggregator{
+				Type:             aggregationpb.AggregatorType(t),
 				IgnoreSourcePort: ignoreSourcePort,
 				Ttl:              durationpb.New(ttl),
 				RenewTtl:         &wrappers.BoolValue{Value: renewTTL},

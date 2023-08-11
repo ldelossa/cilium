@@ -13,7 +13,7 @@ package aggregation
 import (
 	"time"
 
-	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/cache"
 )
@@ -26,9 +26,9 @@ func newIdentityAggregation(f types.AggregatableFlow) *connectionAggregation {
 	}
 }
 
-func aggregateIdentity(a *types.AggregatedFlow, _ *observer.DirectionStatistics, _ types.AggregatableFlow, r *types.Result) {
+func aggregateIdentity(a *types.AggregatedFlow, _ *aggregationpb.DirectionStatistics, _ types.AggregatableFlow, r *types.Result) {
 	if !a.Stats.Established {
-		r.StateChange |= observer.StateChange_established
+		r.StateChange |= aggregationpb.StateChange_established
 		a.Stats.Established = true
 	}
 }

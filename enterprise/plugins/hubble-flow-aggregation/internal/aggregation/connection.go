@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/cache"
 )
@@ -221,15 +222,15 @@ func newConnectionAggregation(f types.AggregatableFlow, ignoreSourcePort bool) *
 	}
 }
 
-func aggregateConnection(a *types.AggregatedFlow, _ *observer.DirectionStatistics, f types.AggregatableFlow, r *types.Result) {
+func aggregateConnection(a *types.AggregatedFlow, _ *aggregationpb.DirectionStatistics, f types.AggregatableFlow, r *types.Result) {
 	switch {
 	case a.Stats.Forward.CloseRequests > 0 && a.Stats.Reply.CloseRequests > 0:
-		r.StateChange |= observer.StateChange_closed
+		r.StateChange |= aggregationpb.StateChange_closed
 	case f.Protocol() == "TCP" && a.Stats.Forward.AckSeen && a.Stats.Reply.AckSeen && !a.Stats.Established:
-		r.StateChange |= observer.StateChange_established
+		r.StateChange |= aggregationpb.StateChange_established
 		a.Stats.Established = true
 	case f.Protocol() != "TCP" && !a.Stats.Established:
-		r.StateChange |= observer.StateChange_established
+		r.StateChange |= aggregationpb.StateChange_established
 		a.Stats.Established = true
 	}
 }

@@ -9,3 +9,5 @@
 # permission is obtained from Isovalent Inc.
 
 include ../../daemon/Makefile
+
+enterprise-proto: ../plugins/hubble-flow-aggregation/api/aggregation ../api/extensions

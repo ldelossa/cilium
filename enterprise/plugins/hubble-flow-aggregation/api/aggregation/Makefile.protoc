@@ -1,0 +1,36 @@
+# Copyright Authors of Cilium
+# SPDX-License-Identifier: Apache-2.0
+
+# This Makefile is expected to run inside the cilium-builder image to generate
+# the proto files. Run `make proto` on ./Makefile to invoke run this inside a
+# a container.
+
+PROTOC ?= protoc
+
+AGGREGATION_PROTO_SOURCES := \
+	./aggregation.proto
+
+AGGREGATION_GO_TARGETS := $(AGGREGATION_PROTO_SOURCES:.proto=.pb.go) $(AGGREGATION_PROTO_SOURCES:.proto=.pb.json.go)
+
+AGGREGATION_PROTO_PATH := .
+
+AGGREGATION_PROTOC_PLUGINS := --plugin=$(GOPATH)/bin/protoc-gen-doc
+AGGREGATION_PROTOC_PLUGINS += --plugin=$(GOPATH)/bin/protoc-gen-go-grpc
+AGGREGATION_PROTOC_PLUGINS += --plugin=$(GOPATH)/bin/protoc-gen-go-json
+AGGREGATION_PROTOC_PLUGINS += --plugin=$(GOPATH)/bin/protoc-gen-go
+AGGREGATION_PROTOC_PLUGINS += --plugin=$(GOPATH)/bin/protoc-gen-deepcopy
+
+.PHONY: all
+all:
+	@echo NOTE: The warning about package github.com/golang/protobuf/protoc-gen-go/generator can be ignored
+	$(QUIET)set -e; \
+	for proto in $(AGGREGATION_PROTO_SOURCES) ; do \
+		echo Generating $${proto} && \
+		$(PROTOC) $(AGGREGATION_PROTOC_PLUGINS) -I $(AGGREGATION_PROTO_PATH) \
+			--doc_out=./ \
+			--doc_opt=markdown,README.md,source_relative \
+			--go_out=paths=source_relative:. \
+			--go-grpc_out=require_unimplemented_servers=false,paths=source_relative:. \
+			--go-json_out=orig_name=true,paths=source_relative:. \
+			$${proto}; \
+	done

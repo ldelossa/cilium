@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/testflow"
 )
@@ -117,40 +118,40 @@ func TestConnectionAggregationTCP(t *testing.T) {
 	go ca.Start(ctx)
 	defer cancel()
 	r := ca.Aggregate(p1)
-	assert.True(t, r.StateChange == observer.StateChange_new)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new)
 	assert.False(t, r.AggregatedFlow.Stats.Forward.AckSeen)
 	r = ca.Aggregate(p2)
-	assert.True(t, r.StateChange == observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_first_reply)
 	assert.True(t, r.Reply)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p1)
 	assert.True(t, r.AggregatedFlow.Stats.Reply.AckSeen)
 
 	r = ca.Aggregate(p3)
-	assert.True(t, r.StateChange == observer.StateChange_established)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_established)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p1)
 	assert.True(t, r.AggregatedFlow.Stats.Forward.AckSeen)
 	r = ca.Aggregate(p4)
-	assert.True(t, r.StateChange == observer.StateChange_unspec)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p1)
 
 	// Different flow
 	r = ca.Aggregate(p5a)
-	assert.True(t, r.StateChange == observer.StateChange_new)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new)
 	r = ca.Aggregate(p5b)
-	assert.True(t, r.StateChange == observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_first_reply)
 	assert.True(t, r.Reply)
 	r = ca.Aggregate(p5c)
-	assert.True(t, r.StateChange == observer.StateChange_new)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new)
 
 	// Different flow
 	r = ca.Aggregate(p6)
-	assert.True(t, r.StateChange == observer.StateChange_new|observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new|aggregationpb.StateChange_first_reply)
 
 	r = ca.Aggregate(p7)
-	assert.True(t, r.StateChange == observer.StateChange_unspec)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p1)
 	r = ca.Aggregate(p8)
-	assert.True(t, r.StateChange == observer.StateChange_closed)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_closed)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p1)
 
 	af := ca.Cache().Lookup(p2)
@@ -167,37 +168,37 @@ func TestConnectionAggregationReply(t *testing.T) {
 	go ca.Start(ctx)
 	defer cancel()
 	r := ca.Aggregate(p2)
-	assert.True(t, r.StateChange == observer.StateChange_new|observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new|aggregationpb.StateChange_first_reply)
 	assert.True(t, r.Reply)
 	r = ca.Aggregate(p1)
-	assert.True(t, r.StateChange == observer.StateChange_unspec)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p2)
 
 	r = ca.Aggregate(p4)
-	assert.True(t, r.StateChange == observer.StateChange_unspec)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p2)
 	r = ca.Aggregate(p3)
-	assert.True(t, r.StateChange == observer.StateChange_established)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_established)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p2)
 
 	// Different flow
 	r = ca.Aggregate(p5a)
-	assert.True(t, r.StateChange == observer.StateChange_new)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new)
 	r = ca.Aggregate(p5b)
-	assert.True(t, r.StateChange == observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_first_reply)
 	assert.True(t, r.Reply)
 	r = ca.Aggregate(p5c)
-	assert.True(t, r.StateChange == observer.StateChange_new)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new)
 
 	// Different flow
 	r = ca.Aggregate(p6)
-	assert.True(t, r.StateChange == observer.StateChange_new|observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new|aggregationpb.StateChange_first_reply)
 
 	r = ca.Aggregate(p8)
-	assert.True(t, r.StateChange == observer.StateChange_unspec)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p2)
 	r = ca.Aggregate(p7)
-	assert.True(t, r.StateChange == observer.StateChange_closed)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_closed)
 	assert.True(t, r.AggregatedFlow.FirstFlow == p2)
 
 	af := ca.Cache().Lookup(p1)
@@ -220,7 +221,7 @@ func TestConnectionAggregationUDP(t *testing.T) {
 		Destination: testflow.Peer{IP: net.ParseIP("2.2.2.2"), Port: 22},
 		ProtocolStr: "UDP",
 	})
-	assert.True(t, r.StateChange == observer.StateChange_new|observer.StateChange_established)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new|aggregationpb.StateChange_established)
 
 	r = ca.Aggregate(&testflow.Flow{
 		Source:      testflow.Peer{IP: net.ParseIP("2.2.2.2"), Port: 22},
@@ -228,7 +229,7 @@ func TestConnectionAggregationUDP(t *testing.T) {
 		ProtocolStr: "UDP",
 		Reply:       true,
 	})
-	assert.True(t, r.StateChange == observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_first_reply)
 	assert.True(t, r.Reply)
 
 	// Different flow
@@ -237,7 +238,7 @@ func TestConnectionAggregationUDP(t *testing.T) {
 		Destination: testflow.Peer{IP: net.ParseIP("2.2.2.2"), Port: 22},
 		ProtocolStr: "UDP",
 	})
-	assert.True(t, r.StateChange == observer.StateChange_new|observer.StateChange_established)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_new|aggregationpb.StateChange_established)
 
 	// Different flow reply
 	r = ca.Aggregate(&testflow.Flow{
@@ -246,7 +247,7 @@ func TestConnectionAggregationUDP(t *testing.T) {
 		ProtocolStr: "UDP",
 		Reply:       true,
 	})
-	assert.True(t, r.StateChange == observer.StateChange_first_reply)
+	assert.True(t, r.StateChange == aggregationpb.StateChange_first_reply)
 	assert.True(t, r.Reply)
 
 	af := ca.Cache().Lookup(&testflow.Flow{
@@ -350,7 +351,7 @@ func TestConnectionExpiration(t *testing.T) {
 	// flag matches the default state change filter, which causes the initial flow to be included
 	// in the GetFlows() response.
 	result := ca.Aggregate(&flow)
-	assert.Equal(t, observer.StateChange_new, result.StateChange)
+	assert.Equal(t, aggregationpb.StateChange_new, result.StateChange)
 
 	for i := 0; i < 100; i++ {
 		// Subsequent aggregations don't set any state change flag until the flow expires from
@@ -359,7 +360,7 @@ func TestConnectionExpiration(t *testing.T) {
 		result = ca.Aggregate(&flow)
 
 		// The flow expires after 1 second, and the next flow gets the "new" flags again.
-		if result.StateChange == observer.StateChange_new {
+		if result.StateChange == aggregationpb.StateChange_new {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -17,21 +17,21 @@ import (
 	"github.com/jonboulle/clockwork"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/pkg/lock"
 )
 
 func (c *Cache) aggregateFlow(a *types.AggregatedFlow, f types.AggregatableFlow) (r *types.Result) {
 	r = &types.Result{}
-	var s *observer.DirectionStatistics
+	var s *aggregationpb.DirectionStatistics
 
 	if a.Stats.Reply == nil {
-		a.Stats.Reply = &observer.DirectionStatistics{}
+		a.Stats.Reply = &aggregationpb.DirectionStatistics{}
 	}
 
 	if a.Stats.Forward == nil {
-		a.Stats.Forward = &observer.DirectionStatistics{}
+		a.Stats.Forward = &aggregationpb.DirectionStatistics{}
 	}
 
 	if f.IsReply() {
@@ -39,7 +39,7 @@ func (c *Cache) aggregateFlow(a *types.AggregatedFlow, f types.AggregatableFlow)
 		if s.NumFlows == 0 {
 			// This is the first flow observed with is_reply set to true.
 			// Set the first_reply state change.
-			r.StateChange |= observer.StateChange_first_reply
+			r.StateChange |= aggregationpb.StateChange_first_reply
 		}
 	} else {
 		s = a.Stats.Forward
@@ -56,9 +56,9 @@ func (c *Cache) aggregateFlow(a *types.AggregatedFlow, f types.AggregatableFlow)
 	switch {
 	case state.Error:
 		if s.Errors == 0 {
-			r.StateChange |= observer.StateChange_first_error
+			r.StateChange |= aggregationpb.StateChange_first_error
 		} else {
-			r.StateChange |= observer.StateChange_error
+			r.StateChange |= aggregationpb.StateChange_error
 		}
 		s.Errors++
 	case state.CloseRequest:
@@ -97,7 +97,7 @@ type Cache struct {
 type Configuration struct {
 	CompareFunc   types.FlowCompareFunc
 	HashFunc      types.FlowHashFunc
-	AggregateFunc func(a *types.AggregatedFlow, s *observer.DirectionStatistics, f types.AggregatableFlow, r *types.Result)
+	AggregateFunc func(a *types.AggregatedFlow, s *aggregationpb.DirectionStatistics, f types.AggregatableFlow, r *types.Result)
 	Expiration    time.Duration
 	RenewTTL      bool
 }
@@ -171,7 +171,7 @@ func (c *Cache) Aggregate(f types.AggregatableFlow) *types.Result {
 	}
 	result := c.aggregateFlow(a, f)
 	if isNew {
-		result.StateChange |= observer.StateChange_new
+		result.StateChange |= aggregationpb.StateChange_new
 	}
 
 	return result

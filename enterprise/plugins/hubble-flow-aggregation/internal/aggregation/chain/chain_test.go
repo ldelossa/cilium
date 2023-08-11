@@ -16,7 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/testflow"
 )
@@ -24,7 +24,7 @@ import (
 type trueAggregator struct{}
 
 func (a *trueAggregator) Aggregate(_ types.AggregatableFlow) *types.Result {
-	return &types.Result{StateChange: observer.StateChange_new}
+	return &types.Result{StateChange: aggregationpb.StateChange_new}
 }
 
 func (a *trueAggregator) Start(context.Context) {}
@@ -52,7 +52,7 @@ func TestAggregationChain(t *testing.T) {
 
 	af.Add(&trueAggregator{})
 	assert.True(t, af.String() != "[]")
-	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == observer.StateChange_new)
+	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == aggregationpb.StateChange_new)
 
 	af = NewAggregationChain([]types.Aggregator{
 		&trueAggregator{}, &trueAggregator{},
@@ -62,7 +62,7 @@ func TestAggregationChain(t *testing.T) {
 	}
 
 	assert.True(t, af.String() != "[]")
-	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == observer.StateChange_new)
+	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == aggregationpb.StateChange_new)
 
 	af = NewAggregationChain([]types.Aggregator{
 		&trueAggregator{}, &falseAggregator{},
@@ -72,7 +72,7 @@ func TestAggregationChain(t *testing.T) {
 	}
 
 	// Latest result wins
-	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == observer.StateChange_unspec)
+	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == aggregationpb.StateChange_unspec)
 
 	af = NewAggregationChain([]types.Aggregator{
 		&falseAggregator{}, &falseAggregator{},
@@ -81,5 +81,5 @@ func TestAggregationChain(t *testing.T) {
 		panic("Aggregation chain is nil")
 	}
 
-	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == observer.StateChange_unspec)
+	assert.True(t, af.Aggregate(&testflow.Flow{}).StateChange == aggregationpb.StateChange_unspec)
 }

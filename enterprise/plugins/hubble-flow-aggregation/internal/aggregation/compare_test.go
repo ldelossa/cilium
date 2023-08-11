@@ -17,7 +17,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/cache"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/testflow"
 )
@@ -50,15 +50,15 @@ func TestAggregatorCache(t *testing.T) {
 
 	assert.True(t, ca.String() == Name)
 
-	assert.True(t, ca.Aggregate(a).StateChange == observer.StateChange_new)
-	assert.True(t, ca.Aggregate(a).StateChange == observer.StateChange_unspec)
-	assert.True(t, ca.Aggregate(a).StateChange == observer.StateChange_unspec)
+	assert.True(t, ca.Aggregate(a).StateChange == aggregationpb.StateChange_new)
+	assert.True(t, ca.Aggregate(a).StateChange == aggregationpb.StateChange_unspec)
+	assert.True(t, ca.Aggregate(a).StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, ca.Cache().Lookup(a) != nil)
 	assert.True(t, ca.Cache().Lookup(b) == nil)
 
-	assert.True(t, ca.Aggregate(b).StateChange == observer.StateChange_new)
-	assert.True(t, ca.Aggregate(b).StateChange == observer.StateChange_unspec)
-	assert.True(t, ca.Aggregate(b).StateChange == observer.StateChange_unspec)
+	assert.True(t, ca.Aggregate(b).StateChange == aggregationpb.StateChange_new)
+	assert.True(t, ca.Aggregate(b).StateChange == aggregationpb.StateChange_unspec)
+	assert.True(t, ca.Aggregate(b).StateChange == aggregationpb.StateChange_unspec)
 	assert.True(t, ca.Cache().Lookup(b) != nil)
 	assert.True(t, ca.Cache().Lookup(a) != nil)
 }

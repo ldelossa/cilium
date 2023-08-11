@@ -19,7 +19,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/cilium/cilium/api/v1/observer"
+	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/testflow"
 )
@@ -53,7 +53,7 @@ func TestAggregationStateChange(t *testing.T) {
 
 	time1 := clock.Now().UTC()
 	res := c.Aggregate(p1)
-	assert.Equal(t, observer.StateChange_new, res.StateChange)
+	assert.Equal(t, aggregationpb.StateChange_new, res.StateChange)
 	assert.Equal(t, time1, res.AggregatedFlow.Stats.Forward.LastActivity.AsTime())
 	assert.Equal(t, time1, res.AggregatedFlow.Stats.Forward.FirstActivity.AsTime())
 	assert.Equal(t, uint64(1), res.AggregatedFlow.Stats.Forward.NumFlows)
@@ -63,7 +63,7 @@ func TestAggregationStateChange(t *testing.T) {
 	time2 := clock.Now().UTC()
 
 	res = c.Aggregate(p2)
-	assert.Equal(t, observer.StateChange_unspec, res.StateChange)
+	assert.Equal(t, aggregationpb.StateChange_unspec, res.StateChange)
 	assert.Equal(t, time2, res.AggregatedFlow.Stats.Forward.LastActivity.AsTime())
 	// First activity was time1, not time2
 	assert.Equal(t, time1, res.AggregatedFlow.Stats.Forward.FirstActivity.AsTime())
@@ -90,12 +90,12 @@ func TestAggregationCache(t *testing.T) {
 		HashFunc:    testflow.Hash,
 	})
 
-	assert.Equal(t, observer.StateChange_new, c.Aggregate(a).StateChange)
+	assert.Equal(t, aggregationpb.StateChange_new, c.Aggregate(a).StateChange)
 	assert.Equal(t, a, c.Lookup(a).FirstFlow)
-	assert.Equal(t, observer.StateChange_new|observer.StateChange_first_reply, c.Aggregate(b).StateChange)
+	assert.Equal(t, aggregationpb.StateChange_new|aggregationpb.StateChange_first_reply, c.Aggregate(b).StateChange)
 	assert.Equal(t, b, c.Lookup(b).FirstFlow)
 	// subsequent reply flows should not trigger first_reply state change.
-	assert.Equal(t, observer.StateChange_unspec, c.Aggregate(b).StateChange)
+	assert.Equal(t, aggregationpb.StateChange_unspec, c.Aggregate(b).StateChange)
 }
 
 func TestAggregationCacheExpiration(t *testing.T) {
@@ -121,7 +121,7 @@ func TestAggregationCacheExpiration(t *testing.T) {
 		assert.NoError(t, c.WaitForShutdown(context.Background()))
 	}()
 
-	assert.Equal(t, observer.StateChange_new, c.Aggregate(a).StateChange)
+	assert.Equal(t, aggregationpb.StateChange_new, c.Aggregate(a).StateChange)
 	assert.Equal(t, a, c.Lookup(a).FirstFlow)
 	clock.Advance(time.Minute)
 	assert.Nil(t, c.Lookup(a))

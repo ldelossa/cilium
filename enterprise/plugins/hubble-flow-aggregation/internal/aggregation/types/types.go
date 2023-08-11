@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/cilium/cilium/api/v1/flow"
-	"github.com/cilium/cilium/api/v1/observer"
+	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 )
 
 // Hash is a hash value of a flow. The definition of the hash depends on the
@@ -35,7 +35,7 @@ type FlowHashFunc func(a AggregatableFlow) Hash
 type Result struct {
 	// StateChange is the observed change in state as triggered by the flow
 	// that was aggregated
-	StateChange observer.StateChange
+	StateChange aggregation.StateChange
 
 	// Reply indicates whether the latest aggregated flow was seen in the
 	// forward or reply direction
@@ -55,7 +55,7 @@ type AggregatedFlow struct {
 	FirstFlow AggregatableFlow
 	// Stats represents the flow statistics in both the forward and reply
 	// direction
-	Stats observer.FlowStatistics
+	Stats aggregation.FlowStatistics
 }
 
 // Aggregator is the interface that an aggregator has to implement

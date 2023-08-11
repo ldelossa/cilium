@@ -132,7 +132,9 @@ message GetFlowsRequest {
 
     // Aggregation defines flow aggregation settings, determining how flows get
     // aggregated when queried.
-    Aggregation aggregation = 10001;
+    // Deprecated. Use the extensions field with the
+    // isovalent.extensions.GetFlowsRequestExtension message type instead.
+    Aggregation aggregation = 10001 [deprecated=true];
 }
 
 // GetFlowsResponse contains either a flow or a protocol message.
@@ -303,7 +305,10 @@ message ExportEvent {
 // Enterprise specific protobuf messages
 
 // DirectionStatistics are flow statistics in a particular direction
+// Deprecated. Use isovalent.flow.aggregation.DirectionStatistics instead.
 message DirectionStatistics {
+	option deprecated = true;
+
 	// first_activity is the timestamp of first activity on the flow
 	google.protobuf.Timestamp first_activity = 1;
 
@@ -333,7 +338,10 @@ message DirectionStatistics {
 }
 
 // FlowStatistics includes the statistics for a flow in both directions
+// Deprecated. Use isovalent.flow.aggregation.FlowStatistics instead.
 message FlowStatistics {
+	option deprecated = true;
+
 	// forward represents flow statistics in the forward direction
 	DirectionStatistics forward = 1;
 
@@ -344,7 +352,10 @@ message FlowStatistics {
 	bool established = 3;
 }
 
+// Deprecated. Use isovalent.flow.aggregation.StateChange instead.
 enum StateChange {
+	option deprecated = true;
+
 	// unspec represents no change in state
 	unspec = 0;
 
@@ -379,14 +390,20 @@ enum StateChange {
 }
 
 // AggregatorType are all aggregator types
+// Deprecated. Use isovalent.flow.aggregation.AggregatorType instead.
 enum AggregatorType {
+	option deprecated = true;
+
 	unknown = 0;
 	connection = 1;
 	identity = 2;
 }
 
 // Aggregator is an aggregator configuration
+// Deprecated. Use isovalent.flow.aggregation.Aggregator instead.
 message Aggregator {
+    option deprecated = true;
+
     AggregatorType type = 1;
     // Ignore source port during aggregation.
     bool ignore_source_port = 2;
@@ -404,7 +421,10 @@ message Aggregator {
 }
 
 // Aggregation is a filter to define flow aggregation behavior
+// Deprecated. Use isovalent.flow.aggregation.Aggregation instead.
 message Aggregation {
+	option deprecated = true;
+
 	// aggregators is a list of aggregators to apply on flows before
 	// returning them. If multiple aggregator are defined, all of them are
 	// applied in a row.

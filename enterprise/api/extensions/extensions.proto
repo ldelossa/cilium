@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package isovalent.extensions;
+
+import "aggregation/aggregation.proto";
+
+option go_package = "github.com/cilium/cilium/enterprise/api/extensions";
+
+message GetFlowsRequestExtension {
+    isovalent.flow.aggregation.Aggregation aggregation = 1;
+
+}
