@@ -17,7 +17,7 @@ In this directory, update to the given `cilium-cli` OSS upstream version:
 
     go get github.com/cilium/cilium-cli@${OSS_VERSION}
     go mod tidy
-    git add go.mod
+    git add go.mod go.sum
 
 ## Prepare the release
 
