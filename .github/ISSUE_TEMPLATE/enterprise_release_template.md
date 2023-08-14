@@ -67,8 +67,9 @@ _If you need help: ask in #enterprise-release._
         - [ ] `git checkout --ours install/kubernetes/cilium/{Chart.yaml,README.md,values.yaml}`
         - [ ] `make -C install/kubernetes`
         - [ ] for `>=v1.11-ce` only:
-          - [ ] run `make MAKEFILE_VALUES=Makefile.enterprise.values cilium/values.yaml`
-                and make sure the values.yaml points to the correct image tags.
+          - [ ] for `<v1.14-ce`:
+            - [ ] run `make MAKEFILE_VALUES=Makefile.enterprise.values cilium/values.yaml`
+                  and make sure the values.yaml points to the correct image tags.
           - [ ] run `make -C Documentation update-helm-values`
         - [ ] `git diff` and manually inspect that all of the changes make sense
               in the Cilium Enterprise tree. Digests will be removed (e.g. in
