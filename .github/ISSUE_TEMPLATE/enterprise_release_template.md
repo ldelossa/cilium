@@ -164,8 +164,6 @@ release manager if something remains unclear or you need a review._
     `1.12.{0,1,2}-cee.beta1` since `1.12.3-cee.1` was the first stable CEE
     release of the `1.12` series.
   - [ ] Merge the PR
-- [ ] Review [`Next Release` customer support tickets]. If this release fixes the issue, move the status
-      from `Next Release` to `Fix Ready` and change assignee to the designated solutions architect.
 - [ ] Update isogo.to/releases
   - [ ] Move the entry for the current release from planned to past.
   - [ ] Add an entry for the next release and its planned date.
