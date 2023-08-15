@@ -8,5 +8,8 @@
 # or reproduction of this material is strictly forbidden unless prior written
 # permission is obtained from Isovalent Inc.
 
-SUBDIRS_CILIUM_CONTAINER := envoy bpf enterprise/cilium enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix
-SUBDIR_OPERATOR_CONTAINER := enterprise/operator
+include ../../cilium/Makefile
+
+GO_BUILD_FLAGS += -mod=readonly
+GO_TEST_FLAGS += -mod=readonly
+GO_CLEAN_FLAGS += -mod=readonly
