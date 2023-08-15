@@ -62,6 +62,10 @@ plugins enabled again before shipping a release, though! :ship:
         OSS variant.
   - [ ] Change `install/kubernetes/Makefile` so that `MAKEFILE_VALUES` points to
         the newly created `Makefile.enterprise.values`.
+- [ ] Add "Call closer" workflow `.github/workflows/call-closer.yaml` which
+      will take care of closing backport tracking issues. This can be done by
+      copying the corresponding workflow from a previous `v1.X-ce` branch and
+      adjusting the branch name and label. See [this v1.14 PR] for an example.
 
 ## Update Hubble enterprise CLI version
 - [ ] Make sure that `images/cilium/download-hubble-enterprise.sh` has the
@@ -86,3 +90,4 @@ Here's a likely not exhaustive list of what needs to come with:
 [this PR for v1.13]: https://github.com/isovalent/cilium/pull/574
 [`BRANCHES`]: https://github.com/isovalent/cilium/blob/db3697989ca5224b246e358867107cc28c3d25ba/.github/workflows/mirror-upstream.yaml#L28
 [`PATHSPEC`]: https://github.com/isovalent/cilium/blob/db3697989ca5224b246e358867107cc28c3d25ba/.github/workflows/mirror-upstream.yaml#L65
+[this v1.14 PR]: https://github.com/isovalent/cilium/pull/1629
