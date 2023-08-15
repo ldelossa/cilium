@@ -75,7 +75,12 @@ jobs:
           retention-days: 3
       - name: Output scan results
         run: >
-          jq -r '.runs[].results[] as $r |
-             .runs[].tool.driver.rules[] | select(.id == $r.ruleId) |
-             [.id, $r.locations[].physicalLocation.artifactLocation.uri, .shortDescription.text] |
-             @tsv' filtered-results.json
+          OUTPUT=$(jq -r '.runs[].results[] as $r |
+                   .runs[].tool.driver.rules[] | select(.id == $r.ruleId) |
+                   [.id, $r.locations[].physicalLocation.artifactLocation.uri, .shortDescription.text] |
+                   @tsv' filtered-results.json
+                  )
+          if [[ ! -z "$OUTPUT" ]]; then
+            echo "$OUTPUT"
+            exit 1
+          fi
