@@ -13,7 +13,7 @@ Upgrade Guide
 .. _upgrade_general:
 
 This upgrade guide is intended for Cilium running on Kubernetes. If you have
-questions, feel free to ping us on the :term:`Slack channel`.
+questions, feel free to ping us on `Cilium Slack`_.
 
 .. include:: upgrade-warning.rst
 
@@ -329,6 +329,16 @@ Helm Options
 * Values ``clustermesh.apiserver.tls.ca.cert`` and ``clustermesh.apiserver.tls.ca.key``
   were deprecated in Cilium 1.14 in favor of ``tls.ca.cert`` and ``tls.ca.key`` respectively,
   and have been removed. The ```clustermesh-apiserver-ca-cert`` secret is no longer generated.
+
+Changed Metrics
+~~~~~~~~~~~~~~~
+
+* ``cilium_kvstore_operations_duration_seconds``,
+  ``cilium_clustermesh_apiserver_kvstore_operations_duration_seconds``
+  and ``cilium_kvstoremesh_kvstore_operations_duration_seconds``
+  do not include client-side rate-limiting latency anymore.
+  For checking client-side rate-limiting you can use corresponding
+  ``*_api_limiter_wait_duration_seconds`` metrics.
 
 .. _earlier_upgrade_notes:
 

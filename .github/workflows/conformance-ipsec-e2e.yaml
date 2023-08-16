@@ -77,7 +77,8 @@ jobs:
           # See https://github.com/cilium/cilium/issues/20606 for configuration table
 
           - name: '1'
-            kernel: '4.19-20230420.212204'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '4.19-20230810.091425'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -85,7 +86,8 @@ jobs:
             encryption-node: 'false'
 
           - name: '2'
-            kernel: '5.4-20230420.212204'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '5.4-20230810.091425'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -93,7 +95,8 @@ jobs:
             encryption-node: 'false'
 
           - name: '3'
-            kernel: '5.10-20230420.212204'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '5.10-20230810.091425'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -102,7 +105,8 @@ jobs:
             endpoint-routes: 'true'
 
           - name: '4'
-            kernel: 'bpf-next-20230420.212204'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-next-20230810.091425'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'geneve'

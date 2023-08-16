@@ -380,6 +380,7 @@ The Kubernetes tests support the following Kubernetes versions:
 * 1.25
 * 1.26
 * 1.27
+* 1.28
 
 By default, the Vagrant VMs are provisioned with Kubernetes 1.23. To run with any other
 supported version of Kubernetes, run the test suite with the following format:
@@ -969,5 +970,5 @@ Further Assistance
 ~~~~~~~~~~~~~~~~~~
 
 Have a question about how the tests work or want to chat more about improving the
-testing infrastructure for Cilium? Hop on over to the
-`testing <https://cilium.slack.com/messages/C7PE7V806>`_ channel on Slack.
+testing infrastructure for Cilium? Hop on over to the ``#testing`` channel on
+`Cilium Slack`_.
