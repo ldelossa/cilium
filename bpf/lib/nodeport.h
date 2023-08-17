@@ -574,7 +574,9 @@ static __always_inline int xlate_dsr_v6(struct __ctx_buff *ctx,
 		return 0;
 
 	ctx_snat_done_set(ctx);
-	return snat_v6_rewrite_egress(ctx, &nat_tup, entry, l4_off);
+	return snat_v6_rewrite_headers(ctx, nat_tup.nexthdr, ETH_HLEN, l4_off,
+				       &nat_tup.saddr, &entry->to_saddr, IPV6_SADDR_OFF,
+				       nat_tup.sport, entry->to_sport, TCP_SPORT_OFF);
 }
 
 static __always_inline int dsr_reply_icmp6(struct __ctx_buff *ctx,
@@ -791,7 +793,6 @@ create_ct:
 
 		ct_state_new.src_sec_id = WORLD_ID;
 		ct_state_new.dsr = 1;
-		ct_state_new.ifindex = (__u16)NATIVE_DEV_IFINDEX;
 		ret = ct_create6(get_ct_map6(tuple), NULL, tuple, ctx,
 				 CT_EGRESS, &ct_state_new, false, false, ext_err);
 		if (!IS_ERR(ret))
@@ -1017,8 +1018,8 @@ int tail_nodeport_nat_egress_ipv6(struct __ctx_buff *ctx)
 	if (unlikely(ret != CTX_ACT_OK))
 		goto drop_err;
 
-	ret = __snat_v6_nat(ctx, &tuple, l4_off, true, &target, &trace,
-			    &ext_err);
+	ret = __snat_v6_nat(ctx, &tuple, l4_off, true, &target, TCP_SPORT_OFF,
+			    &trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop_err;
 
@@ -2053,7 +2054,9 @@ static __always_inline int xlate_dsr_v4(struct __ctx_buff *ctx,
 		return 0;
 
 	ctx_snat_done_set(ctx);
-	return snat_v4_rewrite_egress(ctx, &nat_tup, entry, l4_off, has_l4_header);
+	return snat_v4_rewrite_headers(ctx, nat_tup.nexthdr, ETH_HLEN, has_l4_header, l4_off,
+				       nat_tup.saddr, entry->to_saddr, IPV4_SADDR_OFF,
+				       nat_tup.sport, entry->to_sport, TCP_SPORT_OFF);
 }
 
 static __always_inline int dsr_reply_icmp4(struct __ctx_buff *ctx,
@@ -2263,7 +2266,6 @@ create_ct:
 
 		ct_state_new.src_sec_id = WORLD_ID;
 		ct_state_new.dsr = 1;
-		ct_state_new.ifindex = (__u16)NATIVE_DEV_IFINDEX;
 		ret = ct_create4(get_ct_map4(tuple), NULL, tuple, ctx,
 				 CT_EGRESS, &ct_state_new, false, false, ext_err);
 		if (!IS_ERR(ret))
@@ -2447,7 +2449,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 		goto drop_err;
 
 	ret = __snat_v4_nat(ctx, &tuple, has_l4_header, l4_off,
-			    true, &target, &trace, &ext_err);
+			    true, &target, TCP_SPORT_OFF, &trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop_err;
 

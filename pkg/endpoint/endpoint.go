@@ -134,15 +134,20 @@ type Endpoint struct {
 	mutex lock.RWMutex
 
 	// containerName is the name given to the endpoint by the container runtime.
-	// Mutable, must be read with the endpoint lock!
-	containerName string
+	// It is not mutable once set, but is not set on the initial endpoint creation
+	// when using the docker plugin. CNI-based clusters (read: all clusters) set
+	// this on endpoint creation.
+	containerName atomic.Pointer[string]
 
 	// containerID is the container ID that docker has assigned to the endpoint.
-	// Mutable, must be read with the endpoint lock!
-	containerID string
+	// It is not mutable once set, but is not set on the initial endpoint creation
+	// when using the docker plugin. CNI-based clusters (read: all clusters) set
+	// this on endpoint creation.
+	containerID atomic.Pointer[string]
 
 	// dockerNetworkID is the network ID of the libnetwork network if the
 	// endpoint is a docker managed container which uses libnetwork
+	// Constant after endpoint creation / restoration.
 	dockerNetworkID string
 
 	// dockerEndpointID is the Docker network endpoint ID if managed by
@@ -179,22 +184,27 @@ type Endpoint struct {
 	bps uint64
 
 	// mac is the MAC address of the endpoint
-	//
+	// Constant after endpoint creation / restoration.
 	mac mac.MAC // Container MAC address.
 
-	// IPv6 is the IPv6 address of the endpoint
+	// IPv6 is the IPv6 address of the endpoint.
+	// Constant after endpoint creation / restoration.
 	IPv6 netip.Addr
 
-	// IPv6IPAMPool is the IPAM address pool from which the IPv6 address has been allocated from
+	// IPv6IPAMPool is the IPAM address pool from which the IPv6 address has been allocated from.
+	// Constant after endpoint creation / restoration.
 	IPv6IPAMPool string
 
-	// IPv4 is the IPv4 address of the endpoint
+	// IPv4 is the IPv4 address of the endpoint.
+	// Constant after endpoint creation / restoration.
 	IPv4 netip.Addr
 
-	// IPv4IPAMPool is the IPAM address pool from which the IPv4 address has been allocated from
+	// IPv4IPAMPool is the IPAM address pool from which the IPv4 address has been allocated from.
+	// Constant after endpoint creation / restoration.
 	IPv4IPAMPool string
 
 	// nodeMAC is the MAC of the node (agent). The MAC is different for every endpoint.
+	// Constant after endpoint creation / restoration.
 	nodeMAC mac.MAC
 
 	// SecurityIdentity is the security identity of this endpoint. This is computed from
@@ -371,6 +381,7 @@ type Endpoint struct {
 
 	noTrackPort uint16
 
+	// mutable! must hold the endpoint lock to read
 	ciliumEndpointUID k8sTypes.UID
 }
 
