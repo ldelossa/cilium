@@ -1013,6 +1013,10 @@ int tail_nodeport_nat_egress_ipv6(struct __ctx_buff *ctx)
 	ipv6_ct_tuple_swap_ports(&tuple);
 	tuple.flags = TUPLE_F_OUT;
 
+	ret = ipv6_l3(ctx, ETH_HLEN, NULL, NULL, METRIC_EGRESS);
+	if (unlikely(ret != CTX_ACT_OK))
+		goto drop_err;
+
 	ret = __snat_v6_nat(ctx, &tuple, l4_off, true, &target, &trace,
 			    &ext_err);
 	if (IS_ERR(ret))
@@ -1363,6 +1367,10 @@ static __always_inline int rev_nodeport_lb6(struct __ctx_buff *ctx, __s8 *ext_er
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off,
 			      CT_INGRESS, SCOPE_REVERSE, &ct_state, &monitor);
 	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
+		ret = ipv6_l3(ctx, ETH_HLEN, NULL, NULL, METRIC_EGRESS);
+		if (unlikely(ret != CTX_ACT_OK))
+			return ret;
+
 		ret = lb6_rev_nat(ctx, l4_off, ct_state.rev_nat_index,
 				  &tuple, REV_NAT_F_TUPLE_SADDR);
 		if (IS_ERR(ret))
@@ -2375,6 +2383,12 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV4_NODEPORT_NAT_EGRESS)
 int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 {
+	struct bpf_fib_lookup_padded fib_params = {
+		.l = {
+			.family		= AF_INET,
+			.ifindex	= ctx_get_ifindex(ctx),
+		},
+	};
 	struct ipv4_nat_target target = {
 		.min_port = NODEPORT_PORT_MIN_NAT,
 		.max_port = NODEPORT_PORT_MAX_NAT,
@@ -2392,6 +2406,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 	};
 	int ret, l4_off, oif = 0;
 	void *data, *data_end;
+	bool has_l4_header;
 	struct iphdr *ip4;
 	__s8 ext_err = 0;
 #ifdef TUNNEL_MODE
@@ -2404,6 +2419,8 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
+
+	has_l4_header = ipv4_has_l4_header(ip4);
 
 #ifdef TUNNEL_MODE
 	info = ipcache_lookup4(&IPCACHE_MAP, ip4->daddr, V4_CACHE_KEY_LEN, 0);
@@ -2425,7 +2442,11 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 	ipv4_ct_tuple_swap_ports(&tuple);
 	tuple.flags = TUPLE_F_OUT;
 
-	ret = __snat_v4_nat(ctx, &tuple, ipv4_has_l4_header(ip4), l4_off,
+	ret = ipv4_l3(ctx, ETH_HLEN, NULL, NULL, ip4);
+	if (unlikely(ret != CTX_ACT_OK))
+		goto drop_err;
+
+	ret = __snat_v4_nat(ctx, &tuple, has_l4_header, l4_off,
 			    true, &target, &trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop_err;
@@ -2467,8 +2488,10 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	fib_params.l.ipv4_src = ip4->saddr;
+	fib_params.l.ipv4_dst = ip4->daddr;
+
+	ret = fib_redirect(ctx, true, &fib_params, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -2796,6 +2819,12 @@ nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
  */
 static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_err)
 {
+	struct bpf_fib_lookup_padded fib_params = {
+		.l = {
+			.family		= AF_INET,
+			.ifindex	= ctx_get_ifindex(ctx),
+		},
+	};
 	enum trace_reason __maybe_unused reason = TRACE_REASON_UNKNOWN;
 	int ifindex = 0, ret, l3_off = ETH_HLEN, l4_off;
 	struct ipv4_ct_tuple tuple = {};
@@ -2805,7 +2834,6 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 	__u32 monitor = TRACE_PAYLOAD_LEN;
 	__u32 tunnel_endpoint __maybe_unused = 0;
 	__u32 dst_sec_identity __maybe_unused = 0;
-	__be16 src_port __maybe_unused = 0;
 	bool check_revdnat = true;
 	bool has_l4_header;
 
@@ -2830,7 +2858,7 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 	 */
 	if (egress_gw_reply_needs_redirect(ip4, &tunnel_endpoint, &dst_sec_identity)) {
 		reason = TRACE_REASON_CT_REPLY;
-		goto encap_redirect;
+		goto redirect;
 	}
 #endif /* ENABLE_EGRESS_GATEWAY_COMMON */
 
@@ -2860,12 +2888,11 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 			if (info != NULL && info->tunnel_endpoint != 0) {
 				tunnel_endpoint = info->tunnel_endpoint;
 				dst_sec_identity = info->sec_identity;
-				goto encap_redirect;
 			}
 		}
 #endif
 
-		goto fib_lookup;
+		goto redirect;
 	}
 out:
 	if (bpf_skip_recirculation(ctx))
@@ -2874,26 +2901,34 @@ out:
 	ctx_skip_nodeport_set(ctx);
 	ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_NETDEV);
 	return DROP_MISSED_TAIL_CALL;
-#if (defined(ENABLE_EGRESS_GATEWAY_COMMON) && !defined(IS_BPF_OVERLAY)) || defined(TUNNEL_MODE)
-encap_redirect:
-	src_port = tunnel_gen_src_port_v4(&tuple);
 
-	ret = nodeport_add_tunnel_encap(ctx, IPV4_DIRECT_ROUTING, src_port,
-					tunnel_endpoint, SECLABEL, dst_sec_identity,
-					reason, monitor, &ifindex);
-	if (IS_ERR(ret))
+redirect:
+	ret = ipv4_l3(ctx, l3_off, NULL, NULL, ip4);
+	if (unlikely(ret != CTX_ACT_OK))
 		return ret;
 
-	if (ret == CTX_ACT_REDIRECT && ifindex)
-		return ctx_redirect(ctx, ifindex, 0);
+#if (defined(ENABLE_EGRESS_GATEWAY_COMMON) && !defined(IS_BPF_OVERLAY)) || defined(TUNNEL_MODE)
+	if (tunnel_endpoint) {
+		__be16 src_port = tunnel_gen_src_port_v4(&tuple);
+
+		ret = nodeport_add_tunnel_encap(ctx, IPV4_DIRECT_ROUTING, src_port,
+						tunnel_endpoint, SECLABEL, dst_sec_identity,
+						reason, monitor, &ifindex);
+		if (IS_ERR(ret))
+			return ret;
+
+		if (ret == CTX_ACT_REDIRECT && ifindex)
+			return ctx_redirect(ctx, ifindex, 0);
+	}
+#endif
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
-#endif
 
-fib_lookup:
-	return fib_redirect_v4(ctx, l3_off, ip4, true, ext_err,
-			       ctx_get_ifindex(ctx), &ifindex);
+	fib_params.l.ipv4_src = ip4->saddr;
+	fib_params.l.ipv4_dst = ip4->daddr;
+
+	return fib_redirect(ctx, true, &fib_params, ext_err, &ifindex);
 }
 
 __section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_NODEPORT_REVNAT)

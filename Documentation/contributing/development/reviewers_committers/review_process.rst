@@ -89,14 +89,30 @@ Review process
    +-----------------------------------+--------------------------------------------------------------------------------------------------------+
 
 #. Check for upgrade compatibility impact and if in doubt, set the label
-   ``upgrade-impact`` and discuss in the Slack channel or in the weekly
-   meeting.
+   ``upgrade-impact`` and discuss in `Cilium Slack`_'s ``#development`` channel
+   or in the weekly meeting.
 
    +--------------------------+---------------------------------------------------------------------------+
    | Labels                   | When to set                                                               |
    +==========================+===========================================================================+
    | ``upgrade-impact``       | The code changes have a potential upgrade impact                          |
    +--------------------------+---------------------------------------------------------------------------+
+
+#. When submitting a review, provide explicit approval or request specific
+   changes whenever possible. Clear feedback indicates whether contributors
+   must take action before a PR can merge.
+
+   If you need more information before you can approve or request changes, you
+   can leave comments seeking clarity. If you do not explicitly approve or
+   request changes, it's best practice to raise awareness about the discussion
+   so that others can participate. Here are some ways you can raise awareness:
+
+   - Re-request review from codeowners in the PR
+   - Raise the topic for discussion in Slack or during community meetings
+
+   When requesting changes, summarize your feedback for the PR, including
+   overall issues for a contributor to consider and/or encouragement for what a
+   contributor is already doing well.
 
 #. When all review objectives for all ``CODEOWNERS`` are met, all CI tests have
    passed, and all reviewers have approved the requested changes, you can merge
@@ -114,7 +130,8 @@ Reviewer Teams
 
 Every reviewer, including committers in the `committers team`_, belongs to `one
 or more teams in the Cilium organization <cilium_teams_>`_. If you would like
-to be added or removed from any team, please contact any of the `maintainers`_.
+to add or remove yourself from any team, please submit a PR against the
+`community repository`_.
 
 Once a contributor opens a PR, GitHub automatically picks which `teams
 <cilium_teams>`_ should review the PR using the ``CODEOWNERS`` file. Each
@@ -155,6 +172,7 @@ requirements were met.
 +--------------------------+---------------------------+
 
 .. _committers team: https://github.com/orgs/cilium/teams/committers/members
+.. _community repository: https://github.com/cilium/community
 .. _cilium_teams: https://github.com/orgs/cilium/teams/team/teams
 .. _maintainers: https://github.com/orgs/cilium/teams/cilium-maintainers/members
 .. _user_review_filter: https://github.com/cilium/cilium/pulls?q=is%3Apr+is%3Aopen+draft%3Afalse+user-review-requested%3A%40me+sort%3Aupdated-asc

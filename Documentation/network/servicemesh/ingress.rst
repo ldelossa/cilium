@@ -10,7 +10,7 @@
 Kubernetes Ingress Support
 **************************
 
-Cilium uses the standard Kubernetes Ingress resource definition, with
+Cilium uses the standard `Kubernetes Ingress`_ resource definition, with
 an ``ingressClassName`` of ``cilium``. This can be used for path-based
 routing and for TLS termination. For backwards compatibility, the
 ``kubernetes.io/ingress.class`` annotation with value of ``cilium``
@@ -43,14 +43,17 @@ path prefix) between resources.
 This is a step-by-step guide on how to enable the Ingress Controller in
 an existing K8s cluster with Cilium installed.
 
+.. _Kubernetes Ingress: https://kubernetes.io/docs/concepts/services-networking/ingress/
+
 Prerequisites
 #############
 
-* Cilium must be configured with ``kubeProxyReplacement`` as partial
-  or strict. Please refer to :ref:`kube-proxy replacement <kubeproxy-free>`
-  for more details.
-* Cilium must be configured with the L7 proxy enabled using the ``--enable-l7-proxy`` flag (enabled by default).
-* The minimum supported Kubernetes version for Ingress is 1.19.
+* Cilium must be configured with NodePort enabled, using
+  ``nodePort.enabled=true`` or by enabling the kube-proxy replacement with
+  ``kubeProxyReplacement=true``. For more information, see :ref:`kube-proxy
+  replacement <kubeproxy-free>`.
+* Cilium must be configured with the L7 proxy enabled using ``l7Proxy=true``
+  (enabled by default).
 
 .. include:: installation.rst
 
@@ -106,7 +109,21 @@ Supported Ingress Annotations
      - ``disabled``
 
 Additionally, cloud-provider specific annotations for the LoadBalancer service
-are supported. Please refer to the `Kubernetes documentation <https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer>`_
+are supported.
+
+By default, annotations with values beginning with:
+
+* ``service.beta.kubernetes.io``
+* ``service.kubernetes.io``
+* ``cloud.google.com``
+
+will be copied from an Ingress object to the generated LoadBalancer service objects.
+
+This setting is controlled by the Cilium Operator's ``ingress-lb-annotation-prefixes``
+config flag, and can be configured in Cilium's Helm ``values.yaml``
+using the ``ingressController.ingressLBAnnotationPrefixes`` setting.
+
+Please refer to the `Kubernetes documentation <https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer>`_
 for more details.
 
 Examples

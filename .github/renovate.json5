@@ -8,7 +8,10 @@
   // This ensures that the gitAuthor and gitSignOff fields match
   "gitAuthor": "renovate[bot] <bot@renovateapp.com>",
   "includePaths": [
+    ".github/actions/ginkgo/**",
     ".github/workflows/**",
+    ".github/kind-config.yaml",
+    ".github/kind-config-ipv6.yaml",
     "images/**",
     "enterprise/**",
     "examples/hubble/*",
@@ -66,6 +69,10 @@
       "matchPaths": [
         ".github/workflows/**"
       ],
+      excludeDepNames: [
+        "quay.io/lvh-images/kind",
+        "quay.io/cilium/kindest-node"
+      ],
       "matchUpdateTypes": [
         "major",
         "minor",
@@ -75,7 +82,7 @@
         "pinDigest"
       ],
       "schedule": [
-        "on friday"
+        "on monday"
       ]
     },
     {
@@ -98,7 +105,7 @@
         "pinDigest"
       ],
       "schedule": [
-        "on friday"
+        "on monday"
       ],
       matchBaseBranches: [
         "main"
@@ -126,8 +133,6 @@
         // want to update them automatically.
         "go.universe.tf/metallb",
         "github.com/cilium/metallb",
-        "github.com/vishvananda/netlink",
-        "github.com/cilium/netlink",
         // metallb is still using an old version of "github.com/mdlayher/arp"
         "github.com/mdlayher/arp",
         "github.com/miekg/dns",
@@ -154,8 +159,11 @@
         "images/builder/Dockerfile",
         "images/runtime/Dockerfile"
       ],
+      "matchPackageNames": [
+        "docker.io/library/golang"
+      ],
       "schedule": [
-        "on friday"
+        "on monday"
       ]
     },
     {
@@ -166,10 +174,11 @@
         "images/cilium-docker-plugin/Dockerfile",
         "images/clustermesh-apiserver/Dockerfile",
         "images/hubble-relay/Dockerfile",
-        "images/operator/Dockerfile"
+        "images/operator/Dockerfile",
+        "images/kvstoremesh/Dockerfile"
       ],
       "schedule": [
-        "on friday"
+        "on monday"
       ]
     },
     {
@@ -179,10 +188,12 @@
         "contrib/coccinelle/Dockerfile",
         "images/cache/Dockerfile",
         "images/clustermesh-apiserver/Dockerfile",
-        "images/operator/Dockerfile"
+        "images/hubble-relay/Dockerfile",
+        "images/operator/Dockerfile",
+        "images/kvstoremesh/Dockerfile"
       ],
       "schedule": [
-        "on friday"
+        "on monday"
       ]
     },
     {
@@ -229,9 +240,7 @@
         "docker.io/library/golang",
         "go"
       ],
-      // Golang 1.20.0 had a regression which prevented us from upgrading it
-      // to 1.20 before the 1.13 release.
-      "allowedVersions": "<1.20",
+      "allowedVersions": "<1.21",
       "matchBaseBranches": [
         "v1.13"
       ]
@@ -241,7 +250,7 @@
         "docker.io/library/golang",
         "go"
       ],
-      "allowedVersions": "<1.20",
+      "allowedVersions": "<1.21",
       "matchBaseBranches": [
         "v1.12"
       ]
@@ -319,7 +328,7 @@
         "docker.io/library/golang"
       ],
       "schedule": [
-        "on friday"
+        "on monday"
       ]
     },
     {
@@ -341,6 +350,64 @@
         "v1.13",
         "v1.12"
       ]
+    },
+    {
+      "matchDepNames": [
+        "quay.io/lvh-images/kind"
+      ],
+      "versioning": "regex:^((?<compatibility>[a-z-]+)|((?<major>\\d+)\\.(?<minor>\\d+)))\\-(?<patch>\\d+)\\.(?<build>\\d+)(@(?<currentDigest>sha256:[a-f0-9]+))?$"
+    },
+    {
+      "groupName": "all lvh-images main",
+      "groupSlug": "all-lvh-images-main",
+      "matchPackageNames": [
+        "quay.io/lvh-images/kind"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "patch",
+        "pin",
+        "pinDigest"
+      ],
+      "schedule": [
+        "on monday"
+      ],
+    },
+    {
+      "groupName": "all kind-images main",
+      "groupSlug": "all-kind-images-main",
+      "matchPackageNames": [
+        "kindest/node",
+        "quay.io/cilium/kindest-node"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "patch",
+        "pin",
+        "pinDigest"
+      ],
+      "schedule": [
+        "on monday"
+      ],
+    },
+    {
+      // Do not allow any updates for major.minor, they will be done by maintainers
+      "enabled": false,
+      "matchPackageNames": [
+        "quay.io/lvh-images/kind",
+        "kindest/node",
+        "quay.io/cilium/kindest-node"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+    },
+    {
+      "matchPackageNames": [
+        "quay.io/cilium/kindest-node"
+      ],
+      "ignoreUnstable": false,
     }
   ],
   "kubernetes": {
@@ -368,14 +435,19 @@
     },
     {
       "fileMatch": [
-        "^\\.github/workflows/[^/]+\\.ya?ml$"
+        "^\\.github/workflows/[^/]+\\.ya?ml$",
+        "^\\.github/actions/ginkgo/[^/]+\\.ya?ml$"
       ],
       // This regex manages version strings in GitHub actions workflow files,
       // similar to the examples shown here:
       //   https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
       "matchStrings": [
         "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+version: (?<currentValue>.*)",
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_VERSION: (?<currentValue>.*)"
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_VERSION: (?<currentValue>.*)",
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+kernel: '(?<currentValue>.*)'",
+        '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\s+.+kernel: "(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
+        '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\s+.+image-version: "(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
+        '# renovate: datasource=(?<datasource>.*?)\\s+.+kube-image: "(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"'
       ]
     },
     {

@@ -26,6 +26,7 @@ import (
 	"github.com/cilium/cilium/api/v1/server"
 	"github.com/cilium/cilium/daemon/cmd/cni"
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
+	"github.com/cilium/cilium/pkg/auth"
 	"github.com/cilium/cilium/pkg/aws/eni"
 	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/bpf"
@@ -1546,8 +1547,10 @@ func (d *Daemon) initKVStore() {
 		ClusterSizeDependantInterval: d.nodeDiscovery.Manager.ClusterSizeDependantInterval,
 	}
 
+	var cg = controller.NewGroup("kvstore-locks-gc")
 	controller.NewManager().UpdateController("kvstore-locks-gc",
 		controller.ControllerParams{
+			Group: cg,
 			DoFunc: func(ctx context.Context) error {
 				kvstore.RunLockGC()
 				return nil
@@ -1634,6 +1637,7 @@ type daemonParams struct {
 	L7Proxy              *proxy.Proxy
 	DB                   statedb.DB
 	APILimiterSet        *rate.APILimiterSet
+	AuthManager          *auth.AuthManager
 	Settings             cellSettings
 	HealthProvider       cell.Health
 	HealthReporter       cell.HealthReporter

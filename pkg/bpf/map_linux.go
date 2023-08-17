@@ -28,9 +28,13 @@ import (
 	"github.com/cilium/cilium/pkg/spanstat"
 )
 
-// ErrMaxLookup is returned when the maximum number of map element lookups has
-// been reached.
-var ErrMaxLookup = errors.New("maximum number of lookups reached")
+var (
+	// ErrMaxLookup is returned when the maximum number of map element lookups has
+	// been reached.
+	ErrMaxLookup = errors.New("maximum number of lookups reached")
+
+	bpfMapSyncControllerGroup = controller.NewGroup("bpf-map-sync")
+)
 
 type MapKey interface {
 	fmt.Stringer
@@ -225,6 +229,7 @@ func (m *Map) scheduleErrorResolver() {
 		time.Sleep(errorResolverSchedulerDelay)
 		mapControllers.UpdateController(m.controllerName(),
 			controller.ControllerParams{
+				Group:       bpfMapSyncControllerGroup,
 				DoFunc:      m.resolveErrors,
 				RunInterval: errorResolverSchedulerMinInterval,
 			},
@@ -288,7 +293,8 @@ func (m *Map) WithPressureMetric() *Map {
 	return m.WithPressureMetricThreshold(0.0)
 }
 
-func (m *Map) updatePressureMetric() {
+// UpdatePressureMetricWithSize updates map pressure metric using the given map size.
+func (m *Map) UpdatePressureMetricWithSize(size int32) {
 	if m.pressureGauge == nil {
 		return
 	}
@@ -303,8 +309,17 @@ func (m *Map) updatePressureMetric() {
 		return
 	}
 
-	pvalue := float64(len(m.cache)) / float64(m.MaxEntries())
+	pvalue := float64(size) / float64(m.MaxEntries())
 	m.pressureGauge.Set(pvalue)
+}
+
+func (m *Map) updatePressureMetric() {
+	// Skipping pressure metric gauge updates for LRU map as the cache size
+	// does not accurately represent the actual map sie.
+	if m.spec != nil && m.spec.Type == ebpf.LRUHash {
+		return
+	}
+	m.UpdatePressureMetricWithSize(int32(len(m.cache)))
 }
 
 func (m *Map) FD() int {
