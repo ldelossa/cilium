@@ -208,10 +208,7 @@ func (e *Endpoint) RegenerateAfterRestore() error {
 		return fmt.Errorf("failed while regenerating endpoint")
 	}
 
-	// NOTE: unconditionalRLock is used here because it's used only for logging an already restored endpoint
-	e.unconditionalRLock()
 	scopedLog.WithField(logfields.IPAddr, []string{e.GetIPv4Address(), e.GetIPv6Address()}).Info("Restored endpoint")
-	e.runlock()
 	return nil
 }
 
@@ -371,8 +368,8 @@ func (e *Endpoint) toSerializedEndpoint() *serializableEndpoint {
 
 	return &serializableEndpoint{
 		ID:                       e.ID,
-		ContainerName:            e.containerName,
-		ContainerID:              e.containerID,
+		ContainerName:            e.GetContainerName(),
+		ContainerID:              e.GetContainerID(),
 		DockerNetworkID:          e.dockerNetworkID,
 		DockerEndpointID:         e.dockerEndpointID,
 		IfName:                   e.ifName,
@@ -528,8 +525,8 @@ func (ep *Endpoint) MarshalJSON() ([]byte, error) {
 func (ep *Endpoint) fromSerializedEndpoint(r *serializableEndpoint) {
 	ep.ID = r.ID
 	ep.createdAt = time.Now()
-	ep.containerName = r.ContainerName
-	ep.containerID = r.ContainerID
+	ep.containerName.Store(&r.ContainerName)
+	ep.containerID.Store(&r.ContainerID)
 	ep.dockerNetworkID = r.DockerNetworkID
 	ep.dockerEndpointID = r.DockerEndpointID
 	ep.ifName = r.IfName
