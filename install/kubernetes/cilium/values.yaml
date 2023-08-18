@@ -7,6 +7,10 @@ enterprise:
     # -- Enable overlapping PodCIDR support
     enableOverlappingPodCIDRSupport: false
 
+  srv6:
+    # -- Enables custom SRv6 SID locator pool operator support.
+    locatorPoolEnabled: false
+
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This flag is not required for new installations.
