@@ -9,6 +9,10 @@ package v1alpha1
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}
 
+// IsovalentSRv6LocatorPoolListerExpansion allows custom methods to be added to
+// IsovalentSRv6LocatorPoolLister.
+type IsovalentSRv6LocatorPoolListerExpansion interface{}
+
 // IsovalentSRv6SIDManagerListerExpansion allows custom methods to be added to
 // IsovalentSRv6SIDManagerLister.
 type IsovalentSRv6SIDManagerListerExpansion interface{}

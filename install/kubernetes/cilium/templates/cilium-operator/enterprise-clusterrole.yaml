@@ -14,4 +14,24 @@ rules:
   - update
   resourceNames:
   - isovalentegressgatewaypolicies.isovalent.com
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentsrv6locatorpools
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentsrv6sidmanagers
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
 {{- end }}
