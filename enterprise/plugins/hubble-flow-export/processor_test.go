@@ -20,29 +20,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/pkg/hubble/filters"
+	"github.com/cilium/cilium/pkg/hubble/metrics/api"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 )
-
-type fakeAggregationPlugin struct {
-	stop  bool
-	err   error
-	count int
-}
-
-func (f *fakeAggregationPlugin) GetAggregationContext(_ []string, _ []string, _ bool, _ time.Duration, _ bool) (context.Context, error) {
-	panic("Don't call me")
-}
-
-func (f *fakeAggregationPlugin) OnFlowDelivery(_ context.Context, _ *flow.Flow) (bool, error) {
-	f.count++
-	return f.stop, f.err
-}
 
 type fakeHubbleServer struct{}
 
@@ -58,33 +47,48 @@ func Test_export_OnDecodedFlow(t *testing.T) {
 	log := logrus.New()
 	log.SetOutput(io.Discard)
 	encoder := json.NewEncoder(io.Discard)
-	agg := fakeAggregationPlugin{stop: true, err: nil}
 	exportPlugin := &export{
 		viper:              viper.New(),
 		encoder:            encoder,
 		denylist:           []filters.FilterFunc{},
 		allowlist:          []filters.FilterFunc{},
 		logger:             log,
-		aggregationPlugin:  &agg,
 		aggregationContext: context.Background(),
 		formatVersion:      formatVersionV1,
 	}
-	stop, err := exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{})
+	promRegistry := prometheus.NewRegistry()
+	metricsHandler := exportPlugin.NewHandler()
+	metricsHandler.Init(promRegistry, api.Options{})
+	f := &flow.Flow{}
+	labelNames := exportPlugin.metricsHandler.getLabelNames()
+	labelValues, err := exportPlugin.metricsHandler.getLabelValues(f)
+	require.NoError(t, err)
+
+	metricsLabels := make(prometheus.Labels)
+	for i, name := range labelNames {
+		metricsLabels[name] = labelValues[i]
+	}
+	stop, err := exportPlugin.OnDecodedFlow(context.Background(), f)
 	// stop should be false even if the aggregation plugin returns stop=true.
 	assert.False(t, stop)
 	assert.NoError(t, err)
+
+	// get the counter metric for this plugin
+	counter, err := exportPlugin.metricsHandler.flowsExportedTotal.GetMetricWith(metricsLabels)
+	require.NoError(t, err)
+	exportedCount := testutil.ToFloat64(counter)
 	// no decoded flows if disabled
-	assert.Equal(t, 0, agg.count)
+	assert.EqualValues(t, 0, exportedCount)
 
 	exportPlugin.enabled = true
 	stop, err = exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{})
 	assert.False(t, stop)
 	assert.NoError(t, err)
 	// should only decode flows if enabled
-	assert.Equal(t, 1, agg.count)
+	exportedCount = testutil.ToFloat64(counter)
+	assert.EqualValues(t, 1, exportedCount)
 
 	var sb strings.Builder
-	exportPlugin.aggregationPlugin = nil
 	exportPlugin.encoder = json.NewEncoder(&sb)
 	stop, err = exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{NodeName: "foobar"})
 	assert.False(t, stop)

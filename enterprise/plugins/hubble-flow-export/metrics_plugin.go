@@ -57,8 +57,7 @@ func (h *metricsHandler) Init(registry *prometheus.Registry, options metricsAPI.
 	}
 	h.context = c
 
-	labels := []string{"protocol", "type", "subtype", "verdict"}
-	labels = append(labels, h.context.GetLabelNames()...)
+	labels := h.getLabelNames()
 
 	h.flowsExportedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: metricsAPI.DefaultPrometheusNamespace,
@@ -102,13 +101,16 @@ func (h *metricsHandler) Context() *metricsAPI.ContextOptions {
 // (*export).exportFlow method
 func (h *metricsHandler) ProcessFlow(_ context.Context, _ *flowpb.Flow) error { return nil }
 
-// processFlow is a helper method that is used by (*export).exportFlow to
-// update the metric.
-// It was copied from https://github.com/cilium/cilium/blob/08d571a97ff6402c8654f99c4af42afbd25848a6/pkg/hubble/metrics/flow/handler.go#L47-L81
-func (h *metricsHandler) updateMetrics(_ context.Context, flow *flowpb.Flow) error {
+func (h *metricsHandler) getLabelNames() []string {
+	labels := []string{"protocol", "type", "subtype", "verdict"}
+	labels = append(labels, h.context.GetLabelNames()...)
+	return labels
+}
+
+func (h *metricsHandler) getLabelValues(flow *flowpb.Flow) ([]string, error) {
 	labelValues, err := h.context.GetLabelValues(flow)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var typeName, subType string
@@ -142,8 +144,16 @@ func (h *metricsHandler) updateMetrics(_ context.Context, flow *flowpb.Flow) err
 
 	labels := []string{v1.FlowProtocol(flow), typeName, subType, flow.GetVerdict().String()}
 	labels = append(labels, labelValues...)
+	return labels, nil
+}
+
+func (h *metricsHandler) updateMetrics(_ context.Context, flow *flowpb.Flow) error {
+	labels, err := h.getLabelValues(flow)
+	if err != nil {
+		return err
+	}
 	h.flowsExportedTotal.WithLabelValues(labels...).Inc()
-	h.flowsExportTimestamp.Set(float64(flow.GetTime().Seconds))
+	h.flowsExportTimestamp.Set(float64(flow.GetTime().GetSeconds()))
 	return nil
 }
 

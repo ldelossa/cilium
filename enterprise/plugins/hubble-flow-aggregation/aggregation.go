@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/cilium/cilium/api/v1/flow"
@@ -30,7 +31,28 @@ type contextKey string
 var (
 	aggregatorKey = contextKey("aggregator")
 	requestKey    = contextKey("request")
+
+	_ FlowAggregator = (*flowAggregation)(nil)
 )
+
+type FlowAggregator interface {
+	GetAggregationContext(
+		aggregators []string,
+		filters []string,
+		ignoreSourcePort bool,
+		ttl time.Duration,
+		renewTTL bool) (context.Context, error)
+	OnGetFlows(context.Context, *observer.GetFlowsRequest) (context.Context, error)
+	OnFlowDelivery(context.Context, *flow.Flow) (bool, error)
+}
+
+func NewFlowAggregator(logger logrus.FieldLogger) FlowAggregator {
+	return &flowAggregation{logger: logger}
+}
+
+type flowAggregation struct {
+	logger logrus.FieldLogger
+}
 
 func (p *flowAggregation) OnGetFlows(ctx context.Context, req *observer.GetFlowsRequest) (context.Context, error) {
 	if req.Aggregation != nil {
@@ -78,7 +100,7 @@ func (p *flowAggregation) OnFlowDelivery(ctx context.Context, f *flow.Flow) (boo
 
 // GetAggregationContext returns a context that can be used with OnFlowDelivery() to perform
 // aggregation with the given configuration parameters.
-func (p *flowAggregationPlugin) GetAggregationContext(
+func (p *flowAggregation) GetAggregationContext(
 	aggregators []string,
 	filters []string,
 	ignoreSourcePort bool,

@@ -13,7 +13,6 @@ package aggregation
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
 	"github.com/cilium/cilium/api/v1/flow"
@@ -28,23 +27,21 @@ var (
 	_ plugins.ServerOptions = (*flowAggregationPlugin)(nil)
 )
 
-type flowAggregation struct {
-	logger logrus.FieldLogger
+type Plugin interface {
+	GetFlowAggregator() FlowAggregator
 }
 
 type flowAggregationPlugin struct {
-	flowAggregation *flowAggregation
+	flowAggregator FlowAggregator
 }
 
 // New returns a new flow aggregation plugin
 func New(_ *viper.Viper) (plugins.Instance, error) {
-	return &flowAggregationPlugin{
-		flowAggregation: &flowAggregation{},
-	}, nil
+	return &flowAggregationPlugin{}, nil
 }
 
 func (p *flowAggregationPlugin) OnServerInit(srv observeroption.Server) error {
-	p.flowAggregation.logger = srv.GetLogger()
+	p.flowAggregator = NewFlowAggregator(srv.GetLogger())
 	return nil
 }
 
@@ -57,9 +54,13 @@ func (p *flowAggregationPlugin) ServerOptions() []observeroption.Option {
 }
 
 func (p *flowAggregationPlugin) OnGetFlows(ctx context.Context, req *observer.GetFlowsRequest) (context.Context, error) {
-	return p.flowAggregation.OnGetFlows(ctx, req)
+	return p.flowAggregator.OnGetFlows(ctx, req)
 }
 
 func (p *flowAggregationPlugin) OnFlowDelivery(ctx context.Context, f *flow.Flow) (bool, error) {
-	return p.flowAggregation.OnFlowDelivery(ctx, f)
+	return p.flowAggregator.OnFlowDelivery(ctx, f)
+}
+
+func (p *flowAggregationPlugin) GetFlowAggregator() FlowAggregator {
+	return p.flowAggregator
 }

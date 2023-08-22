@@ -23,6 +23,7 @@ import (
 
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/enterprise/plugins"
+	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
 	"github.com/cilium/cilium/pkg/hubble/filters"
 	metricsAPI "github.com/cilium/cilium/pkg/hubble/metrics/api"
 	"github.com/cilium/cilium/pkg/logging"
@@ -35,7 +36,7 @@ type export struct {
 	denylist           filters.FilterFuncs
 	allowlist          filters.FilterFuncs
 	logger             logrus.FieldLogger
-	aggregationPlugin  aggregationPlugin
+	flowAggregator     aggregation.FlowAggregator
 	aggregationContext context.Context
 	formatVersion      string
 	enabled            bool
@@ -83,7 +84,7 @@ func (e *export) AddAgentFlags() *pflag.FlagSet {
 	fs.String(exportFormatVersion, formatVersionV1, "Default to v1 format. Set to '' to use the legacy format")
 	fs.Int(exportRateLimit, -1, "Rate limit (per minute) for flow exports. Set to -1 to disable")
 	fs.String(exportNodeName, "", "Override the node_name field in exported flows")
-	if e.aggregationPlugin != nil {
+	if e.flowAggregator != nil {
 		fs.StringSlice(exportAggregation, []string{},
 			"Perform aggregation pre-storage ('connection', 'identity')")
 		fs.Bool(exportAggregationIgnoreSourcePort, true, "Ignore source port during aggregation")
@@ -119,21 +120,11 @@ func parseFilterList(filters string) ([]*flow.FlowFilter, error) {
 	return results, nil
 }
 
-type aggregationPlugin interface {
-	GetAggregationContext(
-		aggregators []string,
-		filters []string,
-		ignoreSourcePort bool,
-		ttl time.Duration,
-		renewTTL bool) (context.Context, error)
-	OnFlowDelivery(ctx context.Context, f *flow.Flow) (bool, error)
-}
-
 // AcceptDeps is used to check if the aggregation plugin is enabled.
 func (e *export) AcceptDeps(list plugins.Instances) error {
 	for _, instance := range list {
-		if agg, ok := instance.(aggregationPlugin); ok {
-			e.aggregationPlugin = agg
+		if agg, ok := instance.(aggregation.Plugin); ok {
+			e.flowAggregator = agg.GetFlowAggregator()
 		}
 	}
 	return nil

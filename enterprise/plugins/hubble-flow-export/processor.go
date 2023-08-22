@@ -82,9 +82,9 @@ func (e *export) OnServerInit(_ observeroption.Server) error {
 		return err
 	}
 	// Initialize aggregation context if the aggregation plugin is enabled.
-	if e.aggregationPlugin != nil {
+	if e.flowAggregator != nil {
 		e.logger.Info("Enabling aggregation for json export")
-		e.aggregationContext, err = e.aggregationPlugin.GetAggregationContext(
+		e.aggregationContext, err = e.flowAggregator.GetAggregationContext(
 			conf.aggregation,
 			conf.aggregationStateFilter,
 			conf.aggregationIgnoreSourcePort,
@@ -136,12 +136,12 @@ func (e *export) OnDecodedFlow(ctx context.Context, f *flowpb.Flow) (bool, error
 	if !filters.Apply(e.allowlist, e.denylist, &v1.Event{Event: f}) {
 		return false, nil
 	}
-	if e.aggregationPlugin == nil {
+	if e.flowAggregator == nil {
 		return false, e.exportFlow(ctx, f)
 	}
 	// The aggregation plugin is enabled. Pass the flow to the aggregation plugin
 	// to determine if the flow needs to be exported.
-	stop, err := e.aggregationPlugin.OnFlowDelivery(e.aggregationContext, f)
+	stop, err := e.flowAggregator.OnFlowDelivery(e.aggregationContext, f)
 	if err != nil {
 		e.logger.WithError(err).Warn("aggregation.OnFlowDelivery failed")
 		return false, err
