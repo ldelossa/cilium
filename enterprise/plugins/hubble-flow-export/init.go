@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/enterprise/plugins"
 	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
+	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/aggregator"
 	"github.com/cilium/cilium/pkg/hubble/filters"
 	metricsAPI "github.com/cilium/cilium/pkg/hubble/metrics/api"
 	"github.com/cilium/cilium/pkg/logging"
@@ -36,7 +37,7 @@ type export struct {
 	denylist           filters.FilterFuncs
 	allowlist          filters.FilterFuncs
 	logger             logrus.FieldLogger
-	flowAggregator     aggregation.FlowAggregator
+	flowAggregator     aggregator.FlowAggregator
 	aggregationContext context.Context
 	formatVersion      string
 	enabled            bool

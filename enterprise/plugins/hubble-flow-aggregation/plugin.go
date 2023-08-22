@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/api/v1/observer"
 	"github.com/cilium/cilium/enterprise/plugins"
+	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/aggregator"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 )
 
@@ -28,11 +29,11 @@ var (
 )
 
 type Plugin interface {
-	GetFlowAggregator() FlowAggregator
+	GetFlowAggregator() aggregator.FlowAggregator
 }
 
 type flowAggregationPlugin struct {
-	flowAggregator FlowAggregator
+	flowAggregator aggregator.FlowAggregator
 }
 
 // New returns a new flow aggregation plugin
@@ -41,7 +42,7 @@ func New(_ *viper.Viper) (plugins.Instance, error) {
 }
 
 func (p *flowAggregationPlugin) OnServerInit(srv observeroption.Server) error {
-	p.flowAggregator = NewFlowAggregator(srv.GetLogger())
+	p.flowAggregator = aggregator.NewFlowAggregator(srv.GetLogger())
 	return nil
 }
 
@@ -61,6 +62,6 @@ func (p *flowAggregationPlugin) OnFlowDelivery(ctx context.Context, f *flow.Flow
 	return p.flowAggregator.OnFlowDelivery(ctx, f)
 }
 
-func (p *flowAggregationPlugin) GetFlowAggregator() FlowAggregator {
+func (p *flowAggregationPlugin) GetFlowAggregator() aggregator.FlowAggregator {
 	return p.flowAggregator
 }
