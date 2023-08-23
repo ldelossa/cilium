@@ -364,6 +364,10 @@ type IsovalentVRFSpec struct {
 	// speakers.
 	ExportRouteTarget string `json:"exportRouteTarget,omitempty"`
 
+	// LocatorPoolRef specifies a name of the locator pool that the SRv6
+	// SID for this VRF will be allocated from.
+	LocatorPoolRef string `json:"locatorPoolRef,omitempty"`
+
 	// Rules describes what traffic is assigned to the VRF. Egress packets are matched
 	// against these rules to know to in which VRF the SID should be looked up.
 	Rules []IsovalentVRFRule `json:"rules"`
