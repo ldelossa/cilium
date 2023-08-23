@@ -63,7 +63,7 @@ env:
   # renovate: datasource=github-releases depName=kubernetes-sigs/kind
   kind_version: v0.20.0
   kind_config: .github/kind-config.yaml
-  gateway_api_version: v0.7.1
+  gateway_api_version: v0.8.0-rc1
   metallb_version: 0.12.1
   timeout: 5m
 
@@ -96,7 +96,7 @@ jobs:
         uses: ./.github/actions/set-env-variables
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@8144df39be1411403dbe06a14fdddf24e9eb0c1e # v0.15.5
+        uses: cilium/cilium-cli@e718cf78ef55d95cfa0a5a0a935d6a224d567e1d # v0.15.6
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -111,13 +111,10 @@ jobs:
           fi
           echo sha=${SHA} >> $GITHUB_OUTPUT
           
-          SUPPORTED_FEATURES="ReferenceGrant,HTTPRoute,TLSRoute,HTTPRouteQueryParamMatching,HTTPRouteMethodMatching,GatewayClassObservedGenerationBump"
+          SUPPORTED_FEATURES="ReferenceGrant,HTTPRoute,TLSRoute,HTTPRouteQueryParamMatching,HTTPRouteMethodMatching,GatewayClassObservedGenerationBump,HTTPRouteHostRewrite,HTTPRoutePathRewrite,HTTPRouteSchemeRedirect,HTTPRoutePathRedirect,HTTPRoutePortRedirect,HTTPRouteRequestMirror"
           if [ ${{ matrix.crd-channel }} == "experimental" ]; then
             SUPPORTED_FEATURES+=",HTTPResponseHeaderModification,RouteDestinationPortMatching"
           fi
-          
-          # Enable HTTPRouteRedirectHostAndStatus once https://github.com/kubernetes-sigs/gateway-api/issues/1805 is fixed upstream
-          SKIPPED_TESTS="TestConformance/HTTPRouteRedirectHostAndStatus"
 
           CILIUM_INSTALL_DEFAULTS="--chart-directory=install/kubernetes/cilium \
             --helm-set=debug.enabled=true \

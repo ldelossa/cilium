@@ -31,7 +31,7 @@ require (
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/cilium/charts v0.0.0-20230811143932-370e87675033 // indirect
 	github.com/cilium/hubble v0.12.0 // indirect
-	github.com/cilium/proxy v0.0.0-20230717091635-46b594d97d19 // indirect
+	github.com/cilium/proxy v0.0.0-20230816061101-bad30dbe3f4c // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230814160316-1b358ea62570 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
