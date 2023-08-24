@@ -1016,6 +1016,10 @@
      - Enable overlapping PodCIDR support
      - bool
      - ``false``
+   * - :spelling:ignore:`enterprise.srv6.locatorPoolEnabled`
+     - Enables custom SRv6 SID locator pool operator support.
+     - bool
+     - ``false``
    * - :spelling:ignore:`envoy.affinity`
      - Affinity for cilium-envoy.
      - object

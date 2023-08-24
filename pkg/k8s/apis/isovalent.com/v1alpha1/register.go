@@ -27,6 +27,11 @@ const (
 	SRv6SIDManagerPluralName     = "isovalentsrv6sidmanagers"
 	SRv6SIDManagerKindDefinition = "IsovalentSRv6SIDManager"
 	SRv6SIDManagerName           = SRv6SIDManagerPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentSRv6LocatorPool (SRv6LocatorPool)
+	SRv6LocatorPoolPluralName     = "isovalentsrv6locatorpools"
+	SRv6LocatorPoolKindDefinition = "IsovalentSRv6LocatorPool"
+	SRv6LocatorPoolName           = SRv6LocatorPoolPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -73,6 +78,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentFQDNGroup{},
 		&IsovalentFQDNGroupList{},
 		&IsovalentSRv6SIDManager{},
+		&IsovalentSRv6LocatorPool{},
+		&IsovalentSRv6LocatorPoolList{},
 		&IsovalentSRv6SIDManagerList{},
 	)
 

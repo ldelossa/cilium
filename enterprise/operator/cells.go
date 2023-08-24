@@ -11,6 +11,7 @@
 package main
 
 import (
+	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
 	"github.com/cilium/cilium/operator/cmd"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
@@ -23,14 +24,15 @@ var (
 
 		cmd.Operator,
 
-		// enteprise-only cells here
+		// enterprise-only cells here
 
 		cell.Decorate(
 			func(lc *cmd.LeaderLifecycle) hive.Lifecycle {
 				return lc
 			},
 
-			// enteprise-only cells to be started after leader election here
+			// enterprise-only cells to be started after leader election here
+			locatorpool.Cell,
 		),
 	)
 )
