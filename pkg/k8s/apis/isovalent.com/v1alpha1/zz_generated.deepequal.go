@@ -49,6 +49,10 @@ func (in *IsovalentSRv6Locator) DeepEqual(other *IsovalentSRv6Locator) bool {
 		return false
 	}
 
+	if in.BehaviorType != other.BehaviorType {
+		return false
+	}
+
 	return true
 }
 
@@ -107,6 +111,10 @@ func (in *IsovalentSRv6LocatorPoolSpec) DeepEqual(other *IsovalentSRv6LocatorPoo
 		return false
 	}
 	if in.Structure != other.Structure {
+		return false
+	}
+
+	if in.BehaviorType != other.BehaviorType {
 		return false
 	}
 
