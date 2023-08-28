@@ -3,44 +3,20 @@
 
 package statedb
 
-import memdb "github.com/hashicorp/go-memdb"
+import "fmt"
 
-type filterIterator[Obj any] struct {
-	Iterator[Obj]
-	keep func(obj Obj) bool
-}
-
-func (it filterIterator[Obj]) Next() (obj Obj, ok bool) {
-	for {
-		obj, ok = it.Iterator.Next()
-		if !ok {
-			return
-		}
-		if it.keep(obj) {
-			return
-		}
-	}
-}
-
-// Filter wraps an iterator that only returns the objects for which 'keep' returns
-// true.
-func Filter[Obj any](it Iterator[Obj], keep func(obj Obj) bool) Iterator[Obj] {
-	return filterIterator[Obj]{Iterator: it, keep: keep}
-}
-
-// Collect collects the object returned by the iterator into a slice.
 func Collect[Obj any](iter Iterator[Obj]) []Obj {
-	out := make([]Obj, 0, 64)
-	for obj, ok := iter.Next(); ok; obj, ok = iter.Next() {
-		out = append(out, obj)
+	objs := []Obj{}
+	for obj, _, ok := iter.Next(); ok; obj, _, ok = iter.Next() {
+		objs = append(objs, obj)
 	}
-	return out
+	return objs
 }
 
 // ProcessEach invokes the given function for each object provided by the iterator.
-func ProcessEach[Obj any, It Iterator[Obj]](iter It, fn func(Obj) error) (err error) {
-	for obj, ok := iter.Next(); ok; obj, ok = iter.Next() {
-		err = fn(obj)
+func ProcessEach[Obj any, It Iterator[Obj]](iter It, fn func(Obj, Revision) error) (err error) {
+	for obj, rev, ok := iter.Next(); ok; obj, rev, ok = iter.Next() {
+		err = fn(obj, rev)
 		if err != nil {
 			return
 		}
@@ -48,36 +24,75 @@ func ProcessEach[Obj any, It Iterator[Obj]](iter It, fn func(Obj) error) (err er
 	return
 }
 
-// Length consumes the iterator and returns the number of items consumed.
-func Length[Obj any, It Iterator[Obj]](iter It) (n int) {
-	for _, ok := iter.Next(); ok; _, ok = iter.Next() {
-		n++
-	}
-	return
-}
-
-// iterator implements type-safe iteration around the go-memdb's ResultIterator.
-// This implements both the Iterator and the WatchableIterator. The query method
-// should take care to not return the iterator as WatchableIterator if WatchCh()
-// is not supported (e.g. if it's LowerBound).
+// iterator adapts the "any" object iterator to a typed object.
 type iterator[Obj any] struct {
-	it memdb.ResultIterator
+	iter interface{ Next() ([]byte, object, bool) }
 }
 
-func (s iterator[Obj]) Next() (obj Obj, ok bool) {
-	if v := s.it.Next(); v != nil {
-		obj = v.(Obj)
-		ok = true
+func (it *iterator[Obj]) Next() (obj Obj, revision uint64, ok bool) {
+	_, iobj, ok := it.iter.Next()
+	if ok {
+		obj = iobj.data.(Obj)
+		revision = iobj.revision
 	}
 	return
 }
 
-func (s iterator[Obj]) Invalidated() <-chan struct{} {
-	ch := s.it.WatchCh()
-	if ch == nil {
-		// Some iterators don't support watching. The normal Iterator[] type
-		// should be used and not the WatchableIterator[].
-		panic("Internal error: WatchCH() returned nil. This query should return plain Iterator[] instead?")
+func NewDualIterator[Obj any](left, right Iterator[Obj]) *DualIterator[Obj] {
+	return &DualIterator[Obj]{
+		left:  iterState[Obj]{iter: left},
+		right: iterState[Obj]{iter: right},
 	}
-	return ch
+}
+
+type iterState[Obj any] struct {
+	iter Iterator[Obj]
+	obj  Obj
+	rev  Revision
+	ok   bool
+}
+
+// DualIterator allows iterating over two iterators in revision order.
+// Meant to be used for combined iteration of LowerBound(ByRevision)
+// and Deleted().
+type DualIterator[Obj any] struct {
+	left  iterState[Obj]
+	right iterState[Obj]
+}
+
+func (it *DualIterator[Obj]) Next() (obj Obj, revision uint64, fromLeft, ok bool) {
+	// Advance the iterators
+	if !it.left.ok && it.left.iter != nil {
+		it.left.obj, it.left.rev, it.left.ok = it.left.iter.Next()
+		if !it.left.ok {
+			it.left.iter = nil
+		}
+	}
+	if !it.right.ok && it.right.iter != nil {
+		it.right.obj, it.right.rev, it.right.ok = it.right.iter.Next()
+		if !it.right.ok {
+			it.right.iter = nil
+		}
+	}
+
+	// Find the lowest revision object
+	switch {
+	case !it.left.ok && !it.right.ok:
+		ok = false
+		return
+	case it.left.ok && !it.right.ok:
+		it.left.ok = false
+		return it.left.obj, it.left.rev, true, true
+	case it.right.ok && !it.left.ok:
+		it.right.ok = false
+		return it.right.obj, it.right.rev, false, true
+	case it.left.rev <= it.right.rev:
+		it.left.ok = false
+		return it.left.obj, it.left.rev, true, true
+	case it.right.rev <= it.left.rev:
+		it.right.ok = false
+		return it.right.obj, it.right.rev, false, true
+	default:
+		panic(fmt.Sprintf("BUG: Unhandled case: %+v", it))
+	}
 }

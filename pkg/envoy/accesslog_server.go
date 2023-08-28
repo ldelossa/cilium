@@ -27,15 +27,15 @@ import (
 )
 
 type AccessLogServer struct {
-	socketPath string
-	xdsServer  XDSServer
-	stopCh     chan struct{}
+	socketPath         string
+	localEndpointStore *LocalEndpointStore
+	stopCh             chan struct{}
 }
 
-func newAccessLogServer(envoySocketDir string, xdsServer XDSServer) *AccessLogServer {
+func newAccessLogServer(envoySocketDir string, localEndpointStore *LocalEndpointStore) *AccessLogServer {
 	return &AccessLogServer{
-		socketPath: getAccessLogSocketPath(envoySocketDir),
-		xdsServer:  xdsServer,
+		socketPath:         getAccessLogSocketPath(envoySocketDir),
+		localEndpointStore: localEndpointStore,
 	}
 }
 
@@ -51,6 +51,7 @@ func (s *AccessLogServer) start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
+		log.Infof("Envoy: Starting access log server listening on %s", socketListener.Addr())
 		for {
 			// Each Envoy listener opens a new connection over the Unix domain socket.
 			// Multiple worker threads serving the listener share that same connection
@@ -152,7 +153,7 @@ func (s *AccessLogServer) handleConn(ctx context.Context, conn *net.UnixConn) {
 		r := logRecord(&pblog)
 
 		// Update proxy stats for the endpoint if it still exists
-		localEndpoint := s.xdsServer.getLocalEndpoint(pblog.PolicyName)
+		localEndpoint := s.localEndpointStore.getLocalEndpoint(pblog.PolicyName)
 		if localEndpoint != nil {
 			// Update stats for the endpoint.
 			ingress := r.ObservationPoint == accesslog.Ingress
