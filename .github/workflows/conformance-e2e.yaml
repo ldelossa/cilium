@@ -1,4 +1,4 @@
-name: Cilium Conformance E2E (ci-e2e)
+name: Conformance E2E (ci-e2e)
 
 # Any change in triggers needs to be reflected in the concurrency group.
 on:
@@ -52,12 +52,13 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.5
+  cilium_cli_version: v0.15.6
   cilium_cli_ci_version:
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   commit-status-start:
+    name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
@@ -356,6 +357,7 @@ jobs:
 
   commit-status-final:
     if: ${{ always() }}
+    name: Commit Status Final
     needs: setup-and-test
     runs-on: ubuntu-latest
     steps:

@@ -17,9 +17,11 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/mattn/go-shellwords"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/byteorder"
+	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/command/exec"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
@@ -1189,7 +1191,7 @@ func (m *IptablesManager) installMasqueradeRules(prog iptablesInterface, ifName,
 	snatDstExclusionCIDR, allocRange, hostMasqueradeIP string) error {
 	if option.Config.NodeIpsetNeeded() {
 		// Exclude traffic to nodes from masquerade.
-		if err := createIpset(prog.getIpset(), prog.getProg() == "ip6tables"); err != nil {
+		if err := createIpset(prog.getIpset(), prog == ip6tables); err != nil {
 			return err
 		}
 
@@ -1198,11 +1200,11 @@ func (m *IptablesManager) installMasqueradeRules(prog iptablesInterface, ifName,
 			"-A", ciliumPostNatChain,
 		}
 
-		// If EgressMasqueradeInterfaces is set, we need to mirror base condition
-		// of the "cilium masquerade non-cluster" rule below, as the allocRange might
-		// not be valid in such setups (e.g. in ENI mode).
-		if option.Config.EgressMasqueradeInterfaces != "" {
-			progArgs = append(progArgs, "-o", option.Config.EgressMasqueradeInterfaces)
+		// If MasqueradeInterfaces is set, we need to mirror base condition of the
+		// "cilium masquerade non-cluster" rule below, as the allocRange might not
+		// be valid in such setups (e.g. in ENI mode).
+		if len(option.Config.MasqueradeInterfaces) > 0 {
+			progArgs = append(progArgs, "-o", strings.Join(option.Config.MasqueradeInterfaces, ","))
 		} else {
 			progArgs = append(progArgs, "-s", allocRange)
 		}
@@ -1217,7 +1219,92 @@ func (m *IptablesManager) installMasqueradeRules(prog iptablesInterface, ifName,
 		}
 	}
 
-	// Masquerade all egress traffic leaving the node
+	// Masquerade egress traffic leaving the node based on source routing
+	//
+	// If this option is enabled, then it takes precedence over the catch-all
+	// MASQUERADE further below.
+	if option.Config.EnableMasqueradeRouteSource {
+		var defaultRoutes []netlink.Route
+
+		devices := option.Config.GetDevices()
+		if len(option.Config.MasqueradeInterfaces) > 0 {
+			devices = option.Config.MasqueradeInterfaces
+		}
+		family := netlink.FAMILY_V4
+		if prog == ip6tables {
+			family = netlink.FAMILY_V6
+		}
+		initialPass := true
+		if routes, err := netlink.RouteList(nil, family); err == nil {
+		nextPass:
+			for _, r := range routes {
+				var link netlink.Link
+				match := false
+				if r.LinkIndex > 0 {
+					link, err = netlink.LinkByIndex(r.LinkIndex)
+					if err != nil {
+						continue
+					}
+					// Routes are dedicated to the specific interface, so we
+					// need to install the SNAT rules also for that interface
+					// via -o. If we cannot correlate to anything because no
+					// devices were specified, we need to bail out.
+					if len(devices) == 0 {
+						return fmt.Errorf("cannot correlate source route device for generating masquerading rules")
+					}
+					for _, device := range devices {
+						if device == link.Attrs().Name {
+							match = true
+							break
+						}
+					}
+				} else {
+					// There might be next hop groups where ifindex is zero
+					// and the underlying next hop devices might not be known
+					// to Cilium. In this case, assume match and don't encode
+					// -o device.
+					match = true
+				}
+				_, exclusionCIDR, err := net.ParseCIDR(snatDstExclusionCIDR)
+				if !match || r.Src == nil || (err == nil && cidr.Equal(r.Dst, exclusionCIDR)) {
+					continue
+				}
+				if initialPass && cidr.Equal(r.Dst, cidr.ZeroNet(r.Family)) {
+					defaultRoutes = append(defaultRoutes, r)
+					continue
+				}
+				progArgs := []string{
+					"-t", "nat",
+					"-A", ciliumPostNatChain,
+					"-s", allocRange,
+					"-d", r.Dst.String(),
+				}
+				if link != nil {
+					progArgs = append(
+						progArgs,
+						"-o", link.Attrs().Name)
+				}
+				progArgs = append(
+					progArgs,
+					"-m", "comment", "--comment", "cilium snat non-cluster via source route",
+					"-j", "SNAT",
+					"--to-source", r.Src.String())
+				if option.Config.IPTablesRandomFully {
+					progArgs = append(progArgs, "--random-fully")
+				}
+				if err := prog.runProg(progArgs); err != nil {
+					return err
+				}
+			}
+			if initialPass {
+				initialPass = false
+				routes = defaultRoutes
+				goto nextPass
+			}
+		}
+	}
+
+	// Masquerade all egress traffic leaving the node (catch-all)
 	//
 	// This rule must be first as the node ipset rule as it has different
 	// exclusion criteria than the other rules in this table.
@@ -1237,11 +1324,10 @@ func (m *IptablesManager) installMasqueradeRules(prog iptablesInterface, ifName,
 		"-A", ciliumPostNatChain,
 		"!", "-d", snatDstExclusionCIDR,
 	}
-
-	if option.Config.EgressMasqueradeInterfaces != "" {
+	if len(option.Config.MasqueradeInterfaces) > 0 {
 		progArgs = append(
 			progArgs,
-			"-o", option.Config.EgressMasqueradeInterfaces)
+			"-o", strings.Join(option.Config.MasqueradeInterfaces, ","))
 	} else {
 		progArgs = append(
 			progArgs,

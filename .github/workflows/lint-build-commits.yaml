@@ -1,4 +1,4 @@
-name: build-commits
+name: Build Commits
 
 # Any change in triggers needs to be reflected in the concurrency group.
 on: [pull_request]
@@ -96,6 +96,7 @@ jobs:
         with:
           filters: |
             src:
+              - 'pkg/**'
               - 'test/**'
 
       # Runs only if code under test/ is changed.

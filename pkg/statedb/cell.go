@@ -4,32 +4,59 @@
 package statedb
 
 import (
-	memdb "github.com/hashicorp/go-memdb"
-
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 // This module provides an in-memory database built on top of immutable radix trees
-// (courtesy of github.com/hashicorp/go-memdb). It adapts the go-memdb library for
-// use with Hive by taking the table schemas as a group values from hive and provides
-// typed API (Table[Obj]) for manipulating tables. As the database is based on an
-// immutable data structure, all objects inserted into the database MUST NOT be mutated!
+// As the database is based on an immutable data structure, the objects inserted into
+// the database MUST NOT be mutated, but rather copied first!
 //
 // For example use see pkg/statedb/example.
 var Cell = cell.Module(
 	"statedb",
-	"In-memory database",
+	"In-memory transactional database",
 
-	cell.Provide(New),
-	cell.Provide(newDumpHandler), // REST API Handler
+	cell.Provide(
+		newHiveDB,
+		newDumpHandler,
+	),
+	cell.Metric(NewMetrics),
 )
 
-type params struct {
+type tablesIn struct {
 	cell.In
 
-	Lifecycle hive.Lifecycle
+	TableMetas []TableMeta `group:"statedb-tables"`
+	Metrics    Metrics
+}
 
-	// Schemas are the table schemas provided by NewTableCell/NewPrivateTableCell.
-	Schemas []*memdb.TableSchema `group:"statedb-table-schemas"`
+func newHiveDB(lc hive.Lifecycle, tablesIn tablesIn) (*DB, error) {
+	db, err := NewDB(tablesIn.TableMetas, tablesIn.Metrics)
+	if err != nil {
+		return nil, err
+	}
+	lc.Append(db)
+	return db, nil
+}
+
+type tableOut[Obj any] struct {
+	cell.Out
+	Table Table[Obj]
+	Meta  TableMeta `group:"statedb-tables"`
+}
+
+// NewTableCell creates a cell for creating and registering a statedb Table[Obj].
+func NewTableCell[Obj any](
+	tableName TableName,
+	primaryIndexer Indexer[Obj],
+	secondaryIndexers ...Indexer[Obj],
+) cell.Cell {
+	return cell.Provide(func() (tableOut[Obj], error) {
+		if table, err := NewTable(tableName, primaryIndexer, secondaryIndexers...); err != nil {
+			return tableOut[Obj]{}, err
+		} else {
+			return tableOut[Obj]{Table: table, Meta: table}, nil
+		}
+	})
 }

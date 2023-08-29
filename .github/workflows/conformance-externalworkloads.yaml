@@ -1,4 +1,4 @@
-name: External workloads (ci-external-workloads)
+name: Conformance External Workloads (ci-external-workloads)
 
 # Any change in triggers needs to be reflected in the concurrency group.
 on:
@@ -55,7 +55,7 @@ env:
   vmName: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}-vm
   vmStartupScript: .github/gcp-vm-startup.sh
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.5
+  cilium_cli_version: v0.15.6
   cilium_cli_ci_version:
   CILIUM_CLI_MODE: helm
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -63,6 +63,7 @@ env:
 
 jobs:
   commit-status-start:
+    name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
@@ -71,6 +72,7 @@ jobs:
           sha: ${{ inputs.SHA || github.sha }}
 
   generate-matrix:
+    name: Generate Matrix
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -105,7 +107,7 @@ jobs:
           echo "matrix=$(jq -c . < /tmp/matrix.json)" >> $GITHUB_OUTPUT
 
   installation-and-connectivity:
-    name: "Installation and Connectivity Test"
+    name: Installation and Connectivity Test
     needs: generate-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -349,6 +351,7 @@ jobs:
 
   commit-status-final:
     if: ${{ always() }}
+    name: Commit Status Final
     needs: installation-and-connectivity
     runs-on: ubuntu-latest
     steps:

@@ -372,6 +372,9 @@ const (
 	// EnableBPFMasquerade masquerades packets from endpoints leaving the host with BPF instead of iptables
 	EnableBPFMasquerade = "enable-bpf-masquerade"
 
+	// EnableMasqueradeRouteSource masquerades to the source route IP address instead of the interface one
+	EnableMasqueradeRouteSource = "enable-masquerade-to-route-source"
+
 	// DeriveMasqIPAddrFromDevice is device name which IP addr is used for BPF masquerades
 	DeriveMasqIPAddrFromDevice = "derive-masquerade-ip-addr-from-device"
 
@@ -908,9 +911,9 @@ const (
 	// IPv6NativeRoutingCIDR describes a v6 CIDR in which pod IPs are routable
 	IPv6NativeRoutingCIDR = "ipv6-native-routing-cidr"
 
-	// EgressMasqueradeInterfaces is the selector used to select interfaces
-	// subject to egress masquerading
-	EgressMasqueradeInterfaces = "egress-masquerade-interfaces"
+	// MasqueradeInterfaces is the selector used to select interfaces subject to
+	// egress masquerading
+	MasqueradeInterfaces = "egress-masquerade-interfaces"
 
 	// PolicyTriggerInterval is the amount of time between triggers of policy
 	// updates are invoked.
@@ -1797,29 +1800,31 @@ type DaemonConfig struct {
 
 	// Masquerade specifies whether or not to masquerade packets from endpoints
 	// leaving the host.
-	EnableIPv4Masquerade       bool
-	EnableIPv6Masquerade       bool
-	EnableBPFMasquerade        bool
-	DeriveMasqIPAddrFromDevice string
-	EnableBPFClockProbe        bool
-	EnableIPMasqAgent          bool
-	EnableIPv4EgressGateway    bool
-	EnableEnvoyConfig          bool
-	EnableIngressController    bool
-	EnableGatewayAPI           bool
-	EnvoyConfigTimeout         time.Duration
-	IPMasqAgentConfigPath      string
-	InstallIptRules            bool
-	MonitorAggregation         string
-	PreAllocateMaps            bool
-	IPv6NodeAddr               string
-	IPv4NodeAddr               string
-	SidecarIstioProxyImage     string
-	SocketPath                 string
-	TracePayloadlen            int
-	Version                    string
-	PrometheusServeAddr        string
-	ToFQDNsMinTTL              int
+	EnableIPv4Masquerade        bool
+	EnableIPv6Masquerade        bool
+	EnableBPFMasquerade         bool
+	EnableMasqueradeRouteSource bool
+	EnableIPMasqAgent           bool
+	DeriveMasqIPAddrFromDevice  string
+	IPMasqAgentConfigPath       string
+
+	EnableBPFClockProbe     bool
+	EnableIPv4EgressGateway bool
+	EnableEnvoyConfig       bool
+	EnableIngressController bool
+	EnableGatewayAPI        bool
+	EnvoyConfigTimeout      time.Duration
+	InstallIptRules         bool
+	MonitorAggregation      string
+	PreAllocateMaps         bool
+	IPv6NodeAddr            string
+	IPv4NodeAddr            string
+	SidecarIstioProxyImage  string
+	SocketPath              string
+	TracePayloadlen         int
+	Version                 string
+	PrometheusServeAddr     string
+	ToFQDNsMinTTL           int
 
 	// DNSMaxIPsPerRestoredRule defines the maximum number of IPs to maintain
 	// for each FQDN selector in endpoint's restored DNS rules
@@ -2147,8 +2152,11 @@ type DaemonConfig struct {
 	// IPv6NativeRoutingCIDR describes a CIDR in which pod IPs are routable
 	IPv6NativeRoutingCIDR *cidr.CIDR
 
-	// EgressMasqueradeInterfaces is the selector used to select interfaces
-	// subject to egress masquerading
+	// MasqueradeInterfaces is the selector used to select interfaces subject
+	// to egress masquerading. EgressMasqueradeInterfaces is the same but as
+	// a string representation. It's deprecated and can be removed once the GH
+	// issue https://github.com/cilium/cilium-cli/issues/1896 is fixed.
+	MasqueradeInterfaces       []string
 	EgressMasqueradeInterfaces string
 
 	// PolicyTriggerInterval is the amount of time between when policy updates
@@ -3044,7 +3052,8 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableWellKnownIdentities = vp.GetBool(EnableWellKnownIdentities)
 	c.EnableXDPPrefilter = vp.GetBool(EnableXDPPrefilter)
 	c.DisableCiliumEndpointCRD = vp.GetBool(DisableCiliumEndpointCRDName)
-	c.EgressMasqueradeInterfaces = vp.GetString(EgressMasqueradeInterfaces)
+	c.MasqueradeInterfaces = vp.GetStringSlice(MasqueradeInterfaces)
+	c.EgressMasqueradeInterfaces = strings.Join(c.MasqueradeInterfaces, ",")
 	c.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
 	c.EnableSocketLB = vp.GetBool(EnableSocketLB)
 	c.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)
@@ -3189,6 +3198,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableIPv4Masquerade = vp.GetBool(EnableIPv4Masquerade) && c.EnableIPv4
 	c.EnableIPv6Masquerade = vp.GetBool(EnableIPv6Masquerade) && c.EnableIPv6
 	c.EnableBPFMasquerade = vp.GetBool(EnableBPFMasquerade)
+	c.EnableMasqueradeRouteSource = vp.GetBool(EnableMasqueradeRouteSource)
 	c.DeriveMasqIPAddrFromDevice = vp.GetString(DeriveMasqIPAddrFromDevice)
 	c.EnablePMTUDiscovery = vp.GetBool(EnablePMTUDiscovery)
 	c.IPv6NAT46x64CIDR = defaults.IPv6NAT46x64CIDR
@@ -3353,6 +3363,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.DNSProxyConcurrencyProcessingGracePeriod = vp.GetDuration(DNSProxyConcurrencyProcessingGracePeriod)
 	c.DNSProxyLockCount = vp.GetInt(DNSProxyLockCount)
 	c.DNSProxyLockTimeout = vp.GetDuration(DNSProxyLockTimeout)
+	c.FQDNRejectResponse = vp.GetString(FQDNRejectResponseCode)
 
 	// Convert IP strings into net.IPNet types
 	subnets, invalid := ip.ParseCIDRs(vp.GetStringSlice(IPv4PodSubnets))

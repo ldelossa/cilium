@@ -38,6 +38,7 @@ env:
 jobs:
   build-and-push-prs:
     timeout-minutes: 45
+    name: Build and Push Images
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -221,7 +222,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:338153a9b40d67ac698f1223555b763941a5f50f@sha256:563807aada3faeeeb64c0e41eba547d2b1d6d04f093927001efb18fc5f1eb80f
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:f232bafe61ba306e783d83001bc58cd04e73423d@sha256:ff28a34f1853f222716773aac9497b1622c488da985c93e72e72f469f2a007f5
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -355,7 +356,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:338153a9b40d67ac698f1223555b763941a5f50f@sha256:563807aada3faeeeb64c0e41eba547d2b1d6d04f093927001efb18fc5f1eb80f
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:f232bafe61ba306e783d83001bc58cd04e73423d@sha256:ff28a34f1853f222716773aac9497b1622c488da985c93e72e72f469f2a007f5
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}

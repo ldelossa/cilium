@@ -4,136 +4,230 @@
 package statedb
 
 import (
-	"bufio"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
+	"reflect"
+	"runtime"
+	"strings"
+	"sync/atomic"
+	"time"
 
-	memdb "github.com/hashicorp/go-memdb"
+	iradix "github.com/hashicorp/go-immutable-radix/v2"
+	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/cilium/cilium/pkg/stream"
+	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/lock"
 )
 
-func New(p params) (DB, error) {
-	dbSchema := &memdb.DBSchema{
-		Tables: make(map[string]*memdb.TableSchema),
+// DB provides an in-memory transaction database built on top of immutable radix
+// trees. The database supports multiple tables, each with one or more user-defined
+// indexes. Readers can access the data locklessly with a simple atomic pointer read
+// to obtain a snapshot. On writes to the database table-level locks are acquired
+// on target tables and on write transaction commit a root lock is taken to swap
+// in the new root with the modified tables.
+//
+// As data is stored in immutable data structures any objects inserted into
+// it MUST NOT be mutated afterwards.
+//
+// DB holds the "root" tree of tables with each table holding a tree of indexes:
+//
+//	           root
+//	          /    \
+//	         ba    T(foo)
+//	       /   \
+//	   T(bar)  T(baz)
+//
+//	      T(bar).indexes
+//		   /  \
+//		  i    I(byRevision)
+//		/   \
+//	   I(id)    I(ip)
+//
+//	          I(ip)
+//	          /  \
+//	        192  172
+//	        /     ...
+//	    bar(192.168.1.1)
+//
+// T = tableEntry
+// I = indexTree
+//
+// To lookup:
+//  1. Create a read (or write) transaction
+//  2. Find the table from the root tree
+//  3. Find the index from the table's index tree
+//  4. Find the object from the index
+//
+// To insert:
+//  1. Create write transaction against the target table
+//  2. Find the table from the root tree
+//  3. Create/reuse write transaction on primary index
+//  4. Insert/replace the object into primary index
+//  5. Create/reuse write transaction on revision index
+//  6. If old object existed, remove from revision index
+//  7. If old object existed, remove from graveyard
+//  8. Update each secondary index
+//  9. Commit transaction by committing each index to
+//     the table and then committing table to the root.
+//     Swap the root atomic pointer to new root and
+//     notify by closing channels of all modified nodes.
+//
+// To observe deletions:
+//  1. Create write transaction against the target table
+//  2. Create new delete tracker and add it to the table
+//  3. Commit the write transaction to update the table
+//     with the new delete tracker
+//  4. Query the graveyard by revision, starting from the
+//     revision of the write transaction at which it was
+//     created.
+//  5. For each successfully processed deletion, mark the
+//     revision to set low watermark for garbage collection.
+//  6. Periodically garbage collect the graveyard by finding
+//     the lowest revision of all delete trackers.
+type DB struct {
+	tables    map[TableName]TableMeta
+	mu        lock.Mutex // sequences modifications to the root tree
+	root      atomic.Pointer[iradix.Tree[tableEntry]]
+	gcTrigger chan struct{} // trigger for graveyard garbage collection
+	gcExited  chan struct{}
+	metrics   Metrics
+}
+
+func NewDB(tables []TableMeta, metrics Metrics) (*DB, error) {
+	txn := iradix.New[tableEntry]().Txn()
+	db := &DB{
+		tables:  make(map[TableName]TableMeta),
+		metrics: metrics,
 	}
-	for _, tableSchema := range p.Schemas {
-		if _, ok := dbSchema.Tables[tableSchema.Name]; ok {
-			panic(fmt.Sprintf("Table %q already registered", tableSchema.Name))
+	for _, t := range tables {
+		name := t.Name()
+		if _, ok := db.tables[name]; ok {
+			return nil, fmt.Errorf("table %q already exists", name)
 		}
-		dbSchema.Tables[tableSchema.Name] = tableSchema
+		db.tables[name] = t
+		var table tableEntry
+		table.meta = t
+		table.deleteTrackers = iradix.New[deleteTracker]()
+		indexTxn := iradix.New[indexTree]().Txn()
+		indexTxn.Insert([]byte(t.primaryIndexer().name), iradix.New[object]())
+		indexTxn.Insert([]byte(RevisionIndex), iradix.New[object]())
+		indexTxn.Insert([]byte(GraveyardIndex), iradix.New[object]())
+		indexTxn.Insert([]byte(GraveyardRevisionIndex), iradix.New[object]())
+		for index := range t.secondaryIndexers() {
+			indexTxn.Insert([]byte(index), iradix.New[object]())
+		}
+		table.indexes = indexTxn.CommitOnly()
+		txn.Insert(t.tableKey(), table)
 	}
-	memdb, err := memdb.NewMemDB(dbSchema)
-	if err != nil {
-		return nil, err
-	}
-	db := &stateDB{
-		memDB:    memdb,
-		revision: 0,
-	}
-	db.Observable, db.emit, _ = stream.Multicast[Event]()
+	db.root.Store(txn.CommitOnly())
 
 	return db, nil
 }
 
-// stateDB implements StateDB using go-memdb.
-type stateDB struct {
-	stream.Observable[Event]
-	emit func(Event)
-
-	memDB    *memdb.MemDB
-	revision uint64 // Commit revision, protected by the write tx lock.
-}
-
-var _ DB = &stateDB{}
-
-// WriteJSON marshals out the whole database as JSON into the given writer.
-func (db *stateDB) WriteJSON(w io.Writer) error {
-	tx := db.memDB.Txn(false)
-	buf := bufio.NewWriter(w)
-	buf.WriteString("{\n")
-	first := true
-	for table := range db.memDB.DBSchema().Tables {
-		if !first {
-			buf.WriteString(",\n")
-		} else {
-			first = false
-		}
-		iter, err := tx.Get(table, "id")
-		if err != nil {
-			return err
-		}
-		buf.WriteString("  \"" + table + "\": [\n")
-		obj := iter.Next()
-		for obj != nil {
-			buf.WriteString("    ")
-			bs, err := json.Marshal(obj)
-			if err != nil {
-				return err
-			}
-			buf.Write(bs)
-			obj = iter.Next()
-			if obj != nil {
-				buf.WriteString(",\n")
-			} else {
-				buf.WriteByte('\n')
-			}
-		}
-		buf.WriteString("  ]")
-	}
-	buf.WriteString("\n}\n")
-	return buf.Flush()
-}
-
-// WriteTxn constructs a new WriteTransaction
-func (db *stateDB) WriteTxn() WriteTransaction {
-	txn := db.memDB.Txn(true)
-	txn.TrackChanges()
-	return &transaction{
-		db:  db,
-		txn: txn,
-		// Assign a revision to the transaction. Protected by
-		// the memDB writer lock that we acquired with Txn(true).
-		revision: db.revision + 1,
+// ReadTxn constructs a new read transaction for performing reads against
+// a snapshot of the database.
+//
+// ReadTxn is not thread-safe!
+func (db *DB) ReadTxn() ReadTxn {
+	return &txn{
+		db:          db,
+		rootReadTxn: db.root.Load().Txn(),
 	}
 }
 
-// ReadTxn constructs a new ReadTransaction.
-func (db *stateDB) ReadTxn() ReadTransaction {
-	return &transaction{db: nil, txn: db.memDB.Txn(false)}
-}
+// WriteTxn constructs a new write transaction against the given set of tables.
+// Each table is locked, which may block until the table locks are acquired.
+// The modifications performed in the write transaction are not visible outside
+// it until Commit() is called. To discard the changes call Abort().
+//
+// WriteTxn is not thread-safe!
+func (db *DB) WriteTxn(table TableMeta, tables ...TableMeta) WriteTxn {
+	callerPkg := callerPackage()
 
-// transaction implements ReadTransaction and WriteTransaction using go-memdb.
-type transaction struct {
-	db       *stateDB
-	revision uint64
-	txn      *memdb.Txn
-}
-
-func (t *transaction) getTxn() *memdb.Txn { return t.txn }
-func (t *transaction) Revision() uint64   { return t.revision }
-func (t *transaction) Abort()             { t.txn.Abort() }
-func (t *transaction) Defer(fn func())    { t.txn.Defer(fn) }
-
-func (t *transaction) Commit() error {
-	changedTables := map[string]struct{}{}
-	for _, change := range t.txn.Changes() {
-		changedTables[change.Table] = struct{}{}
-
-		// Verify that a copy of the original object is being
-		// inserted rather than mutated in-place.
-		if change.Before == change.After {
-			panic("statedb: The original object is being modified without being copied first!")
-		}
+	allTables := append(tables, table)
+	smus := lock.SortableMutexes{}
+	for _, table := range allTables {
+		smus = append(smus, table.sortableMutex())
 	}
-	t.db.revision = t.revision
-	t.txn.Commit()
+	lockAt := time.Now()
+	smus.Lock()
+	acquiredAt := time.Now()
 
-	// Notify that these tables have changed. We are not concerned
-	// about the order in which these events are received by subscribers.
-	for table := range changedTables {
-		t.db.emit(Event{Table: TableName(table)})
+	rootReadTxn := db.root.Load().Txn()
+	tableEntries := make(map[TableName]*tableEntry, len(tables))
+	var tableNames []string
+	for _, table := range allTables {
+		tableEntry, ok := rootReadTxn.Get(table.tableKey())
+		if !ok {
+			panic("BUG: Table '" + table.Name() + "' not found")
+		}
+		tableEntries[table.Name()] = &tableEntry
+		tableNames = append(tableNames, table.Name())
+
+		db.metrics.TableContention.With(prometheus.Labels{
+			"table": table.Name(),
+		}).Set(table.sortableMutex().AcquireDuration().Seconds())
+	}
+
+	db.metrics.WriteTxnAcquisition.With(prometheus.Labels{
+		"package": callerPkg,
+		"tables":  strings.Join(tableNames, "+"),
+	}).Observe(acquiredAt.Sub(lockAt).Seconds())
+
+	return &txn{
+		db:                     db,
+		rootReadTxn:            rootReadTxn,
+		tables:                 tableEntries,
+		writeTxns:              make(map[tableIndex]*iradix.Txn[object]),
+		smus:                   smus,
+		acquiredAt:             acquiredAt,
+		tableNames:             strings.Join(tableNames, "+"),
+		packageName:            callerPkg,
+		pendingObjectDeltas:    make(map[string]float64),
+		pendingGraveyardDeltas: make(map[string]float64),
+	}
+}
+
+func (db *DB) Start(hive.HookContext) error {
+	db.gcTrigger = make(chan struct{}, 1)
+	db.gcExited = make(chan struct{})
+	go graveyardWorker(db)
+	return nil
+}
+
+func (db *DB) Stop(ctx hive.HookContext) error {
+	close(db.gcTrigger)
+	select {
+	case <-ctx.Done():
+		return errors.New("timed out waiting for graveyard worker to exit")
+	case <-db.gcExited:
 	}
 	return nil
+}
+
+var ciliumPackagePrefix = func() string {
+	sentinel := func() {}
+	name := runtime.FuncForPC(reflect.ValueOf(sentinel).Pointer()).Name()
+	if idx := strings.Index(name, "pkg/"); idx >= 0 {
+		return name[:idx]
+	}
+	return ""
+}()
+
+func callerPackage() string {
+	var callerPkg string
+	pc, _, _, ok := runtime.Caller(2)
+	if ok {
+		f := runtime.FuncForPC(pc)
+		if f != nil {
+			callerPkg = f.Name()
+			callerPkg, _ = strings.CutPrefix(callerPkg, ciliumPackagePrefix)
+			callerPkg = strings.SplitN(callerPkg, ".", 2)[0]
+		} else {
+			callerPkg = "unknown"
+		}
+	} else {
+		callerPkg = "unknown"
+	}
+	return callerPkg
 }

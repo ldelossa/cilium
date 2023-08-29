@@ -90,7 +90,6 @@ import (
 	"github.com/cilium/cilium/pkg/service"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 	"github.com/cilium/cilium/pkg/source"
-	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/trigger"
 )
@@ -214,9 +213,6 @@ type Daemon struct {
 	cniConfigManager cni.CNIConfigManager
 
 	l2announcer *l2announcer.L2Announcer
-
-	// statedb for implementing /statedb/dump
-	db statedb.DB
 
 	// authManager for reporting the status of the auth system certificate provider
 	authManager *auth.AuthManager
@@ -536,7 +532,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		monitorAgent:         params.MonitorAgent,
 		l2announcer:          params.L2Announcer,
 		l7Proxy:              params.L7Proxy,
-		db:                   params.DB,
 		authManager:          params.AuthManager,
 		settings:             params.Settings,
 		healthProvider:       params.HealthProvider,
@@ -936,9 +931,9 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		case !option.Config.EnableRemoteNodeIdentity:
 			err = fmt.Errorf("BPF masquerade requires remote node identities (--%s=\"true\")",
 				option.EnableRemoteNodeIdentity)
-		case option.Config.EgressMasqueradeInterfaces != "":
+		case len(option.Config.MasqueradeInterfaces) > 0:
 			err = fmt.Errorf("BPF masquerade does not allow to specify devices via --%s (use --%s instead)",
-				option.EgressMasqueradeInterfaces, option.Devices)
+				option.MasqueradeInterfaces, option.Devices)
 		case option.Config.TunnelingEnabled() && !option.Config.EnableSocketLB:
 			err = fmt.Errorf("BPF masquerade requires socket-LB (--%s=\"false\")",
 				option.EnableSocketLB)
@@ -959,6 +954,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
+		if option.Config.EnableMasqueradeRouteSource {
+			log.Error("BPF masquerading does not yet support masquerading to source IP from routing layer")
+			return nil, nil, fmt.Errorf("BPF masquerading to route source (--%s=\"true\") currently not supported with BPF-based masquerading (--%s=\"true\")", option.EnableMasqueradeRouteSource, option.EnableBPFMasquerade)
+		}
 		// TODO(brb) nodeport constraints will be lifted once the SNAT BPF code has been refactored
 		if err := node.InitBPFMasqueradeAddrs(option.Config.GetDevices()); err != nil {
 			log.WithError(err).Error("failed to determine BPF masquerade addrs")

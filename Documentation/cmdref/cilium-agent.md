@@ -30,11 +30,11 @@ cilium-agent [flags]
       --bpf-ct-global-any-max int                                 Maximum number of entries in non-TCP CT table (default 262144)
       --bpf-ct-global-tcp-max int                                 Maximum number of entries in TCP CT table (default 524288)
       --bpf-ct-timeout-regular-any duration                       Timeout for entries in non-TCP CT table (default 1m0s)
-      --bpf-ct-timeout-regular-tcp duration                       Timeout for established entries in TCP CT table (default 6h0m0s)
+      --bpf-ct-timeout-regular-tcp duration                       Timeout for established entries in TCP CT table (default 2h13m20s)
       --bpf-ct-timeout-regular-tcp-fin duration                   Teardown timeout for entries in TCP CT table (default 10s)
       --bpf-ct-timeout-regular-tcp-syn duration                   Establishment timeout for entries in TCP CT table (default 1m0s)
       --bpf-ct-timeout-service-any duration                       Timeout for service entries in non-TCP CT table (default 1m0s)
-      --bpf-ct-timeout-service-tcp duration                       Timeout for established service entries in TCP CT table (default 6h0m0s)
+      --bpf-ct-timeout-service-tcp duration                       Timeout for established service entries in TCP CT table (default 2h13m20s)
       --bpf-ct-timeout-service-tcp-grace duration                 Timeout for graceful shutdown of service entries in TCP CT table (default 1m0s)
       --bpf-fragments-map-max int                                 Maximum number of entries in fragments tracking map (default 8192)
       --bpf-lb-acceleration string                                BPF load balancing acceleration via XDP ("native", "disabled") (default "disabled")
@@ -85,7 +85,7 @@ cilium-agent [flags]
       --dnsproxy-concurrency-processing-grace-period duration     Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing
       --egress-gateway-policy-map-max int                         Maximum number of entries in egress gateway policy map (default 16384)
       --egress-gateway-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
-      --egress-masquerade-interfaces string                       Limit iptables-based egress masquerading to interface selector
+      --egress-masquerade-interfaces strings                      Limit iptables-based egress masquerading to interface selector
       --egress-multi-home-ip-rule-compat                          Offset routing table IDs under ENI IPAM mode to avoid collisions with reserved table IDs. If false, the offset is performed (new scheme), otherwise, the old scheme stays in-place.
       --enable-auto-protect-node-port-range                       Append NodePort range to net.ipv4.ip_local_reserved_ports if it overlaps with ephemeral port range (net.ipv4.ip_local_port_range) (default true)
       --enable-bandwidth-manager                                  Enable BPF bandwidth manager
@@ -138,6 +138,7 @@ cilium-agent [flags]
       --enable-l7-proxy                                           Enable L7 proxy for L7 policy enforcement (default true)
       --enable-local-node-route                                   Enable installation of the route which points the allocation prefix of the local node (default true)
       --enable-local-redirect-policy                              Enable Local Redirect Policy
+      --enable-masquerade-to-route-source                         Masquerade packets to the source IP provided from the routing layer rather than interface address
       --enable-monitor                                            Enable the monitor unix domain socket server (default true)
       --enable-nat46x64-gateway                                   Enable NAT46 and NAT64 gateway
       --enable-node-port                                          Enable NodePort type services by Cilium
