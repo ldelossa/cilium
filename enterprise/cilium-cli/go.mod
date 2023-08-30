@@ -1,6 +1,7 @@
 module github.com/isovalent/cilium/enterprise/cilium-cli
 
-go 1.20
+// renovate: datasource=golang-version depName=go
+go 1.21.0
 
 require (
 	github.com/blang/semver/v4 v4.0.0
