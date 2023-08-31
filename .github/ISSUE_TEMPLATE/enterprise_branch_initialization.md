@@ -11,8 +11,8 @@ After OSS has created a new stable branch (say, [v1.13]), it's time to also
 create the corresponding enterprise branch, and initialize it with all the magic
 sprinkles that make up the enterprise edition.
 
-On a high level, we need to introduce the [atlantis] configuration, adjust CI
-to now care about `-ce` branches and add some automation details. 
+On a high level, we need to adjust CI to now care about `-ce` branches and add
+some automation details.
 
 ## Prepare the branch
 
@@ -29,24 +29,6 @@ to now care about `-ce` branches and add some automation details.
 
 (We don't add the things below directly at this point so that there's a chance
 to do review on a PR.)
-
-## Add Atlantis
-
-- [ ] Add atlantis:
-  - [ ] Add the `atlantis.yaml` file, which you can typically copy from the
-        last stable branch to have a template, and then figure out which
-        versions you should be pulling in (typically the latest released ones).
-  - [ ] Run `atlantis gen` as part of the CI/Release/Hotfix builds, by adding
-        jobs to the github workflows. For inspiration, look at [this PR for
-        v1.13]. (Things might have moved around a fair bit, don't just blindly
-        copy.)
-
-Note that at this point some of the atlantis plugins might not be compatible
-with the new OSS code structure. Disable them, and notify people on Slack that
-this incompatibility exists. It's more important to get the branch initialized
-than to have it be perfect from the get-go, as not having this branch blocks
-forward porting work of enterprise-only features. Don't forget to get all the
-plugins enabled again before shipping a release, though! :ship:
 
 ## CI and Makefiles
 
@@ -85,7 +67,6 @@ Here's a likely not exhaustive list of what needs to come with:
 
 
 [v1.13]: https://github.com/cilium/cilium/tree/v1.13
-[atlantis]: https://github.com/isovalent/atlantis/
 [this diff]: https://github.com/isovalent/cilium/pull/746#issuecomment-1437703837
 [this PR for v1.13]: https://github.com/isovalent/cilium/pull/574
 [`BRANCHES`]: https://github.com/isovalent/cilium/blob/db3697989ca5224b246e358867107cc28c3d25ba/.github/workflows/mirror-upstream.yaml#L28

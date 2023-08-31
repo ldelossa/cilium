@@ -554,7 +554,6 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
-/atlantis.yaml @isovalent/void
 /renovate.json5 @isovalent/void
 /enterprise @isovalent/void
 /vex-data.vex.json @isovalent/void
