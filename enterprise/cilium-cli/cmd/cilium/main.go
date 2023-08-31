@@ -14,18 +14,35 @@ import (
 	"fmt"
 	"os"
 
-	cfsslLog "github.com/cloudflare/cfssl/log"
-
 	"github.com/cilium/cilium-cli/cli"
+	cfsslLog "github.com/cloudflare/cfssl/log"
+	"golang.org/x/exp/slices"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks"
 )
 
 func main() {
+	supportedCommands := []string{
+		"sysdump",
+		"version",
+	}
+
 	// Hide unwanted cfssl log messages
 	cfsslLog.Level = cfsslLog.LevelWarning
+	command := cli.NewCiliumCommand(&hooks.EnterpriseHooks{})
+	command.Short = "CLI to collect troubleshooting information for Isovalent Enterprise for Cilium"
+	command.Long = ""
+	command.Example = `# Collect sysdump from the entire cluster.
+cilium sysdump
 
-	if err := cli.NewCiliumCommand(&hooks.EnterpriseHooks{}).Execute(); err != nil {
+# Collect sysdump from specific nodes.
+cilium sysdump --node-list node-a,node-b,node-c`
+	for _, cmd := range command.Commands() {
+		if !slices.Contains(supportedCommands, cmd.Name()) {
+			cmd.Hidden = true
+		}
+	}
+	if err := command.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

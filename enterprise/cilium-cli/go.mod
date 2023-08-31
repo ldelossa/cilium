@@ -9,6 +9,7 @@ require (
 	github.com/cilium/cilium-cli v0.15.7
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	k8s.io/api v0.28.0-rc.0
 	k8s.io/apimachinery v0.28.0-rc.0
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
@@ -190,7 +191,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
 	golang.org/x/crypto v0.12.0 // indirect
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
