@@ -23,6 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/kvstore"
+	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/logging"
 	fakeConfig "github.com/cilium/cilium/pkg/option/fake"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -49,8 +50,10 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 		ClusterIDsManager:    newClusterIDManager(logging.DefaultLogger, maps),
 
 		RemoteIdentityWatcher: mgr,
-		Metrics:               clustermesh.NewMetrics(),
-		CommonMetrics:         cmcommon.MetricsProvider("foo")(),
+		StoreFactory:          store.NewFactory(store.MetricsProvider()),
+
+		Metrics:       clustermesh.NewMetrics(),
+		CommonMetrics: cmcommon.MetricsProvider("foo")(),
 	})
 	require.NotNil(t, cm, "Failed to initialize clustermesh")
 
@@ -125,8 +128,10 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 		ClusterIDsManager:    idsMgr,
 
 		RemoteIdentityWatcher: mgr,
-		Metrics:               clustermesh.NewMetrics(),
-		CommonMetrics:         cmcommon.MetricsProvider("foo")(),
+		StoreFactory:          store.NewFactory(store.MetricsProvider()),
+
+		Metrics:       clustermesh.NewMetrics(),
+		CommonMetrics: cmcommon.MetricsProvider("foo")(),
 	})
 	require.NotNil(t, cm, "Failed to initialize clustermesh")
 

@@ -4,15 +4,12 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,11 +32,9 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache"
-	"github.com/cilium/cilium/pkg/k8s"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
-	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/synced"
 	"github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/kvstore"
@@ -100,8 +95,7 @@ var (
 		},
 	}
 
-	mockFile string
-	cfg      configuration
+	cfg configuration
 )
 
 func init() {
@@ -128,6 +122,7 @@ func init() {
 
 		healthAPIServerCell,
 		cmmetrics.Cell,
+		store.Cell,
 		usersManagementCell,
 		cell.Invoke(registerHooks),
 	)
@@ -142,6 +137,7 @@ type parameters struct {
 	Clientset      k8sClient.Clientset
 	Resources      apiserverK8s.Resources
 	BackendPromise promise.Promise[kvstore.BackendOperations]
+	StoreFactory   store.Factory
 }
 
 func registerHooks(lc hive.Lifecycle, params parameters) error {
@@ -156,82 +152,10 @@ func registerHooks(lc hive.Lifecycle, params parameters) error {
 				return err
 			}
 
-			startServer(ctx, params.Clientset, backend, params.Resources)
+			startServer(ctx, params.Clientset, backend, params.Resources, params.StoreFactory)
 			return nil
 		},
 	})
-	return nil
-}
-
-func readMockFile(ctx context.Context, path string, backend kvstore.BackendOperations) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("unable to open file %s: %s", path, err)
-	}
-	defer f.Close()
-
-	identities := newIdentitySynchronizer(ctx, backend)
-	nodes := newNodeSynchronizer(ctx, backend)
-	endpoints := newEndpointSynchronizer(ctx, backend)
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		switch {
-		case strings.Contains(line, "\"CiliumIdentity\""):
-			var identity ciliumv2.CiliumIdentity
-			err := json.Unmarshal([]byte(line), &identity)
-			if err != nil {
-				log.WithError(err).WithField("line", line).Warning("Unable to unmarshal CiliumIdentity")
-			} else {
-				identities.upsert(ctx, resource.NewKey(&identity), &identity)
-			}
-		case strings.Contains(line, "\"CiliumNode\""):
-			var node ciliumv2.CiliumNode
-			err = json.Unmarshal([]byte(line), &node)
-			if err != nil {
-				log.WithError(err).WithField("line", line).Warning("Unable to unmarshal CiliumNode")
-			} else {
-				nodes.upsert(ctx, resource.NewKey(&node), &node)
-			}
-		case strings.Contains(line, "\"CiliumEndpoint\""):
-			var endpoint types.CiliumEndpoint
-			err = json.Unmarshal([]byte(line), &endpoint)
-			if err != nil {
-				log.WithError(err).WithField("line", line).Warning("Unable to unmarshal CiliumEndpoint")
-			} else {
-				endpoints.upsert(ctx, resource.NewKey(&endpoint), &endpoint)
-			}
-		case strings.Contains(line, "\"Service\""):
-			var service slim_corev1.Service
-			err = json.Unmarshal([]byte(line), &service)
-			if err != nil {
-				log.WithError(err).WithField("line", line).Warning("Unable to unmarshal Service")
-			} else {
-				operatorWatchers.K8sSvcCache.UpdateService(&service, nil)
-			}
-		case strings.Contains(line, "\"Endpoints\""):
-			var endpoints slim_corev1.Endpoints
-			err = json.Unmarshal([]byte(line), &endpoints)
-			if err != nil {
-				log.WithError(err).WithField("line", line).Warning("Unable to unmarshal Endpoints")
-			} else {
-				operatorWatchers.K8sSvcCache.UpdateEndpoints(k8s.ParseEndpoints(&endpoints), nil)
-			}
-		default:
-			log.Warningf("Unknown line in mockfile %s: %s", path, line)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	identities.synced(ctx)
-	nodes.synced(ctx)
-	endpoints.synced(ctx)
-
 	return nil
 }
 
@@ -251,8 +175,6 @@ func runApiserver() error {
 
 	flags.StringVar(&cfg.clusterName, option.ClusterName, "default", "Cluster name")
 	option.BindEnv(vp, option.ClusterName)
-
-	flags.StringVar(&mockFile, "mock-file", "", "Read from mock file")
 
 	flags.StringVar(&cfg.serviceProxyName, option.K8sServiceProxyName, "", "Value of K8s service-proxy-name label for which Cilium handles the services (empty = all services without service.kubernetes.io/service-proxy-name label)")
 	option.BindEnv(vp, option.K8sServiceProxyName)
@@ -292,8 +214,8 @@ type identitySynchronizer struct {
 	encoder func([]byte) string
 }
 
-func newIdentitySynchronizer(ctx context.Context, backend kvstore.BackendOperations) synchronizer {
-	identitiesStore := store.NewWorkqueueSyncStore(cfg.LocalClusterName(), backend,
+func newIdentitySynchronizer(ctx context.Context, backend kvstore.BackendOperations, factory store.Factory) synchronizer {
+	identitiesStore := factory.NewSyncStore(cfg.LocalClusterName(), backend,
 		path.Join(identityCache.IdentitiesPath, "id"),
 		store.WSSWithSyncedKeyOverride(identityCache.IdentitiesPath))
 	go identitiesStore.Run(ctx)
@@ -366,8 +288,8 @@ type nodeSynchronizer struct {
 	store store.SyncStore
 }
 
-func newNodeSynchronizer(ctx context.Context, backend kvstore.BackendOperations) synchronizer {
-	nodesStore := store.NewWorkqueueSyncStore(cfg.LocalClusterName(), backend, nodeStore.NodeStorePrefix)
+func newNodeSynchronizer(ctx context.Context, backend kvstore.BackendOperations, factory store.Factory) synchronizer {
+	nodesStore := factory.NewSyncStore(cfg.LocalClusterName(), backend, nodeStore.NodeStorePrefix)
 	go nodesStore.Run(ctx)
 
 	return &nodeSynchronizer{store: nodesStore}
@@ -418,8 +340,8 @@ type endpointSynchronizer struct {
 	cache map[string]ipmap
 }
 
-func newEndpointSynchronizer(ctx context.Context, backend kvstore.BackendOperations) synchronizer {
-	endpointsStore := store.NewWorkqueueSyncStore(cfg.LocalClusterName(), backend,
+func newEndpointSynchronizer(ctx context.Context, backend kvstore.BackendOperations, factory store.Factory) synchronizer {
+	endpointsStore := factory.NewSyncStore(cfg.LocalClusterName(), backend,
 		path.Join(ipcache.IPIdentitiesPath, ipcache.DefaultAddressSpace),
 		store.WSSWithSyncedKeyOverride(ipcache.IPIdentitiesPath))
 	go endpointsStore.Run(ctx)
@@ -521,15 +443,13 @@ func synchronize[T runtime.Object](ctx context.Context, r resource.Resource[T], 
 	}
 }
 
-func startServer(startCtx hive.HookContext, clientset k8sClient.Clientset, backend kvstore.BackendOperations, resources apiserverK8s.Resources) {
+func startServer(startCtx hive.HookContext, clientset k8sClient.Clientset, backend kvstore.BackendOperations, resources apiserverK8s.Resources, factory store.Factory) {
 	log.WithFields(logrus.Fields{
 		"cluster-name": cfg.clusterName,
 		"cluster-id":   cfg.clusterID,
 	}).Info("Starting clustermesh-apiserver...")
 
-	if mockFile == "" {
-		synced.SyncCRDs(startCtx, clientset, synced.ClusterMeshAPIServerResourceNames(), &synced.Resources{}, &synced.APIGroups{})
-	}
+	synced.SyncCRDs(startCtx, clientset, synced.ClusterMeshAPIServerResourceNames(), &synced.Resources{}, &synced.APIGroups{})
 
 	var err error
 
@@ -559,23 +479,18 @@ func startServer(startCtx hive.HookContext, clientset k8sClient.Clientset, backe
 	}
 
 	ctx := context.Background()
-	if mockFile != "" {
-		if err := readMockFile(ctx, mockFile, backend); err != nil {
-			log.WithError(err).Fatal("Unable to read mock file")
-		}
-	} else {
-		go synchronize(ctx, resources.CiliumIdentities, newIdentitySynchronizer(ctx, backend))
-		go synchronize(ctx, resources.CiliumNodes, newNodeSynchronizer(ctx, backend))
-		go synchronize(ctx, resources.CiliumSlimEndpoints, newEndpointSynchronizer(ctx, backend))
-		operatorWatchers.StartSynchronizingServices(ctx, &sync.WaitGroup{}, operatorWatchers.ServiceSyncParameters{
-			ServiceSyncConfiguration: cfg,
-			Clientset:                clientset,
-			Services:                 resources.Services,
-			Endpoints:                resources.Endpoints,
-			Backend:                  backend,
-			SharedOnly:               !cfg.enableExternalWorkloads,
-		})
-	}
+	go synchronize(ctx, resources.CiliumIdentities, newIdentitySynchronizer(ctx, backend, factory))
+	go synchronize(ctx, resources.CiliumNodes, newNodeSynchronizer(ctx, backend, factory))
+	go synchronize(ctx, resources.CiliumSlimEndpoints, newEndpointSynchronizer(ctx, backend, factory))
+	operatorWatchers.StartSynchronizingServices(ctx, &sync.WaitGroup{}, operatorWatchers.ServiceSyncParameters{
+		ServiceSyncConfiguration: cfg,
+		Clientset:                clientset,
+		Services:                 resources.Services,
+		Endpoints:                resources.Endpoints,
+		Backend:                  backend,
+		SharedOnly:               !cfg.enableExternalWorkloads,
+		StoreFactory:             factory,
+	})
 
 	log.Info("Initialization complete")
 }

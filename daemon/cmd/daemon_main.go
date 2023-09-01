@@ -45,6 +45,7 @@ import (
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/egressgateway"
+	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/flowdebug"
@@ -61,6 +62,7 @@ import (
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
 	"github.com/cilium/cilium/pkg/kvstore"
+	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/l2announcer"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
@@ -854,7 +856,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Int(option.ToFQDNsProxyPort, 0, "Global port on which the in-agent DNS proxy should listen. Default 0 is a OS-assigned port.")
 	option.BindEnv(vp, option.ToFQDNsProxyPort)
 
-	flags.StringVar(&option.Config.FQDNRejectResponse, option.FQDNRejectResponseCode, option.FQDNProxyDenyWithRefused, fmt.Sprintf("DNS response code for rejecting DNS requests, available options are '%v'", option.FQDNRejectOptions))
+	flags.String(option.FQDNRejectResponseCode, option.FQDNProxyDenyWithRefused, fmt.Sprintf("DNS response code for rejecting DNS requests, available options are '%v'", option.FQDNRejectOptions))
 	option.BindEnv(vp, option.FQDNRejectResponseCode)
 
 	flags.Int(option.ToFQDNsMaxIPsPerHost, defaults.ToFQDNsMaxIPsPerHost, "Maximum number of IPs to maintain per FQDN name for each endpoint")
@@ -993,8 +995,14 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	)
 	option.BindEnv(vp, option.HubbleMonitorEvents)
 
-	flags.StringSlice(option.HubbleRedact, []string{}, "List of Hubble redact options")
-	option.BindEnv(vp, option.HubbleRedact)
+	flags.Bool(option.HubbleRedactEnabled, defaults.HubbleRedactEnabled, "Hubble redact sensitive information from flows")
+	option.BindEnv(vp, option.HubbleRedactEnabled)
+
+	flags.Bool(option.HubbleRedactHttpURLQuery, defaults.HubbleRedactHttpURLQuery, "Hubble redact http URL query from flows")
+	option.BindEnv(vp, option.HubbleRedactHttpURLQuery)
+
+	flags.Bool(option.HubbleRedactKafkaApiKey, defaults.HubbleRedactKafkaApiKey, "Hubble redact Kafka API key from flows")
+	option.BindEnv(vp, option.HubbleRedactKafkaApiKey)
 
 	flags.StringSlice(option.DisableIptablesFeederRules, []string{}, "Chains to ignore when installing feeder rules.")
 	option.BindEnv(vp, option.DisableIptablesFeederRules)
@@ -1645,11 +1653,12 @@ type daemonParams struct {
 	HealthProvider       cell.Health
 	HealthReporter       cell.HealthReporter
 	DeviceManager        *linuxdatapath.DeviceManager `optional:"true"`
-
 	// Grab the GC object so that we can start the CT/NAT map garbage collection.
 	// This is currently necessary because these maps have not yet been modularized,
 	// and because it depends on parameters which are not provided through hive.
-	CTNATMapGC gc.Enabler
+	CTNATMapGC          gc.Enabler
+	StoreFactory        store.Factory
+	EndpointRegenerator *endpoint.Regenerator
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1716,12 +1725,14 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		<-params.CacheStatus
 	}
 	bootstrapStats.k8sInit.End(true)
-	restoreComplete := d.initRestore(restoredEndpoints)
+	restoreComplete := d.initRestore(restoredEndpoints, params.EndpointRegenerator)
 
 	if params.WGAgent != nil {
-		if err := params.WGAgent.RestoreFinished(); err != nil {
-			log.WithError(err).Error("Failed to set up WireGuard peers")
-		}
+		go func() {
+			if err := params.WGAgent.RestoreFinished(d.clustermesh); err != nil {
+				log.WithError(err).Error("Failed to set up WireGuard peers")
+			}
+		}()
 	}
 
 	if d.endpointManager.HostEndpointExists() {

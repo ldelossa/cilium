@@ -78,8 +78,8 @@
      - ``{}``
    * - :spelling:ignore:`authentication.mutual.spire.install.agent.image`
      - SPIRE agent image
-     - string
-     - ``"ghcr.io/spiffe/spire-agent:1.6.3@sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823"``
+     - object
+     - ``{"digest":"sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823","override":null,"pullPolicy":"Always","repository":"ghcr.io/spiffe/spire-agent","tag":"1.6.3","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.agent.labels`
      - SPIRE agent labels
      - object
@@ -100,6 +100,10 @@
      - Enable SPIRE installation. This will only take effect only if authentication.mutual.spire.enabled is true
      - bool
      - ``true``
+   * - :spelling:ignore:`authentication.mutual.spire.install.initImage`
+     - init container image of SPIRE agent and server
+     - object
+     - ``{"digest":"sha256:223ae047b1065bd069aac01ae3ac8088b3ca4a527827e283b85112f29385fb1b","override":null,"pullPolicy":"Always","repository":"docker.io/library/busybox","tag":"1.35.0","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.namespace`
      - SPIRE namespace to install into
      - string
@@ -138,8 +142,8 @@
      - ``nil``
    * - :spelling:ignore:`authentication.mutual.spire.install.server.image`
      - SPIRE server image
-     - string
-     - ``"ghcr.io/spiffe/spire-server:1.6.3@sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f"``
+     - object
+     - ``{"digest":"sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f","override":null,"pullPolicy":"Always","repository":"ghcr.io/spiffe/spire-server","tag":"1.6.3","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.server.initContainers`
      - SPIRE server init containers
      - list
@@ -1075,7 +1079,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:ec4f5a3b9504288b4de1db00893bd0ef79187c501a63e08bce11e2fb3de88920","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.26.4-bad30dbe3f4c33c4a6e6747236f7c6d84b380d0d","useDigest":true}``
+     - ``{"digest":"sha256:dbcb20bb208eb0031991f5c234eb6de567f95ebd814520dcbfda868b7c1af210","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.26.4-5a76016dde9a7b4d537f37e3ef84593ea1af87c7","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1465,9 +1469,9 @@
      - bool
      - ``false``
    * - :spelling:ignore:`hubble.redact`
-     - Configures the list of redact options for Hubble. Example:    redact:   - http-url-query   - kafka-api-key  You can specify the list of options from the helm CLI:    --set hubble.redact="{http-url-query,kafka-api-key}"
-     - string
-     - ``nil``
+     - Configures the redact options for Hubble. Example:    redact:     enabled: true     http:       urlQuery: true     kafka:       apiKey: false  You can specify the options from the helm CLI:    --set hubble.redact.enabled="true"   --set hubble.redact.http.urlQuery="true"   --set hubble.redact.kafka.apiKey="false"
+     - object
+     - ``{"enabled":false,"http":{"urlQuery":false},"kafka":{"apiKey":false}}``
    * - :spelling:ignore:`hubble.relay.affinity`
      - Affinity for hubble-replay
      - object

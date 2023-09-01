@@ -5,6 +5,7 @@ package clustermesh
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/allocator"
@@ -17,7 +18,6 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
-	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
@@ -74,6 +74,7 @@ type Configuration struct {
 
 	Metrics       Metrics
 	CommonMetrics common.Metrics
+	StoreFactory  store.Factory
 }
 
 // RemoteIdentityWatcher is any type which provides identities that have been
@@ -145,28 +146,32 @@ func NewClusterMesh(lifecycle hive.Lifecycle, c Configuration) *ClusterMesh {
 
 func (cm *ClusterMesh) NewRemoteCluster(name string, status common.StatusFunc) common.RemoteCluster {
 	rc := &remoteCluster{
-		name:    name,
-		mesh:    cm,
-		usedIDs: cm.conf.ClusterIDsManager,
-		status:  status,
-		swg:     lock.NewStoppableWaitGroup(),
+		name:         name,
+		mesh:         cm,
+		usedIDs:      cm.conf.ClusterIDsManager,
+		status:       status,
+		storeFactory: cm.conf.StoreFactory,
+		synced:       newSynced(),
 	}
-
-	rc.remoteNodes = store.NewRestartableWatchStore(
+	rc.remoteNodes = cm.conf.StoreFactory.NewWatchStore(
 		name,
 		cm.conf.NodeKeyCreator,
 		cm.conf.NodeObserver,
+		store.RWSWithOnSyncCallback(func(ctx context.Context) { close(rc.synced.nodes) }),
 		store.RWSWithEntriesMetric(cm.conf.Metrics.TotalNodes.WithLabelValues(cm.conf.ClusterName, cm.nodeName, rc.name)),
 	)
 
-	rc.remoteServices = store.NewRestartableWatchStore(
+	rc.remoteServices = cm.conf.StoreFactory.NewWatchStore(
 		name,
 		func() store.Key { return new(serviceStore.ClusterService) },
-		&remoteServiceObserver{remoteCluster: rc, swg: rc.swg},
-		store.RWSWithOnSyncCallback(func(ctx context.Context) { rc.swg.Stop() }),
+		&remoteServiceObserver{remoteCluster: rc, swg: rc.synced.services},
+		store.RWSWithOnSyncCallback(func(ctx context.Context) { rc.synced.services.Stop() }),
 	)
 
-	rc.ipCacheWatcher = ipcache.NewIPIdentityWatcher(name, cm.conf.IPCache)
+	rc.ipCacheWatcher = ipcache.NewIPIdentityWatcher(
+		name, cm.conf.IPCache, cm.conf.StoreFactory,
+		store.RWSWithOnSyncCallback(func(ctx context.Context) { close(rc.synced.ipcache) }),
+	)
 	rc.ipCacheWatcherExtraOpts = cm.conf.IPCacheWatcherExtraOpts
 
 	return rc
@@ -178,21 +183,44 @@ func (cm *ClusterMesh) NumReadyClusters() int {
 	return cm.common.NumReadyClusters()
 }
 
-// ClustersSynced returns after all clusters were synchronized with the bpf
-// datapath.
-func (cm *ClusterMesh) ClustersSynced(ctx context.Context) error {
-	swgs := make([]*lock.StoppableWaitGroup, 0)
+// SyncedWaitFn is the type of a function to wait for the initial synchronization
+// of a given resource type from all remote clusters.
+type SyncedWaitFn func(ctx context.Context) error
+
+// NodesSynced returns after that the initial list of nodes has been received
+// from all remote clusters, and synchronized with the different subscribers.
+func (cm *ClusterMesh) NodesSynced(ctx context.Context) error {
+	return cm.synced(ctx, func(rc *remoteCluster) SyncedWaitFn { return rc.synced.Nodes })
+}
+
+// ServicesSynced returns after that the initial list of shared services has been
+// received from all remote clusters, and synchronized with the BPF datapath.
+func (cm *ClusterMesh) ServicesSynced(ctx context.Context) error {
+	return cm.synced(ctx, func(rc *remoteCluster) SyncedWaitFn { return rc.synced.Services })
+}
+
+// IPIdentitiesSynced returns after that the initial list of ipcache entries and
+// identities has been received from all remote clusters, and synchronized with
+// the BPF datapath.
+func (cm *ClusterMesh) IPIdentitiesSynced(ctx context.Context) error {
+	return cm.synced(ctx, func(rc *remoteCluster) SyncedWaitFn { return rc.synced.IPIdentities })
+}
+
+func (cm *ClusterMesh) synced(ctx context.Context, toWaitFn func(*remoteCluster) SyncedWaitFn) error {
+	waiters := make([]SyncedWaitFn, 0)
 	cm.common.ForEachRemoteCluster(func(rci common.RemoteCluster) error {
 		rc := rci.(*remoteCluster)
-		swgs = append(swgs, rc.swg)
+		waiters = append(waiters, toWaitFn(rc))
 		return nil
 	})
 
-	for _, swg := range swgs {
-		select {
-		case <-swg.WaitChannel():
-		case <-ctx.Done():
-			return ctx.Err()
+	for _, wait := range waiters {
+		err := wait(ctx)
+
+		// Ignore the error in case the given cluster was disconnected in
+		// the meanwhile, as we do not longer care about it.
+		if err != nil && !errors.Is(err, ErrRemoteClusterDisconnected) {
+			return err
 		}
 	}
 	return nil

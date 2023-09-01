@@ -25,7 +25,6 @@ func (k *K8sWatcher) namespacesInit() {
 	apiGroup := k8sAPIGroupNamespaceV1Core
 
 	var synced atomic.Bool
-	synced.Store(false)
 
 	k.blockWaitGroupToSyncResources(
 		k.stop,
@@ -36,7 +35,7 @@ func (k *K8sWatcher) namespacesInit() {
 	k.k8sAPIGroups.AddAPI(apiGroup)
 
 	nsUpdater := namespaceUpdater{
-		oldLabels:       make(map[string]labels.Labels),
+		oldIdtyLabels:   make(map[string]labels.Labels),
 		endpointManager: k.endpointManager,
 	}
 
@@ -66,28 +65,28 @@ func (k *K8sWatcher) namespacesInit() {
 }
 
 type namespaceUpdater struct {
-	oldLabels map[string]labels.Labels
+	oldIdtyLabels map[string]labels.Labels
 
 	endpointManager endpointManager
 }
 
 func getNamespaceLabels(ns *slim_corev1.Namespace) labels.Labels {
-	labelMap := map[string]string{}
-	for k, v := range ns.GetLabels() {
+	lbls := ns.GetLabels()
+	labelMap := make(map[string]string, len(lbls))
+	for k, v := range lbls {
 		labelMap[policy.JoinPath(ciliumio.PodNamespaceMetaLabels, k)] = v
 	}
 	return labels.Map2Labels(labelMap, labels.LabelSourceK8s)
 }
 
 func (u *namespaceUpdater) update(newNS *slim_corev1.Namespace) error {
-	oldLabels := u.oldLabels[newNS.Name]
 	newLabels := getNamespaceLabels(newNS)
 
-	oldIdtyLabels, _ := labelsfilter.Filter(oldLabels)
+	oldIdtyLabels := u.oldIdtyLabels[newNS.Name]
 	newIdtyLabels, _ := labelsfilter.Filter(newLabels)
 
-	// Do not perform any other operations the the old labels are the same as
-	// the new labels
+	// Do not perform any other operations if the old labels are the same as
+	// the new labels.
 	if oldIdtyLabels.DeepEqual(&newIdtyLabels) {
 		return nil
 	}
@@ -100,7 +99,7 @@ func (u *namespaceUpdater) update(newNS *slim_corev1.Namespace) error {
 			err := ep.ModifyIdentityLabels(newIdtyLabels, oldIdtyLabels)
 			if err != nil {
 				log.WithError(err).WithField(logfields.EndpointID, ep.ID).
-					Warningf("unable to update endpoint with new namespace labels")
+					Warning("unable to update endpoint with new identity labels from namespace labels")
 				failed = true
 			}
 		}
@@ -108,6 +107,7 @@ func (u *namespaceUpdater) update(newNS *slim_corev1.Namespace) error {
 	if failed {
 		return errors.New("unable to update some endpoints with new namespace labels")
 	}
+	u.oldIdtyLabels[newNS.Name] = newIdtyLabels
 	return nil
 }
 

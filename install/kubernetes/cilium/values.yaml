@@ -1046,18 +1046,28 @@ hubble:
   # -- Unix domain socket path to listen to when Hubble is enabled.
   socketPath: /var/run/cilium/hubble.sock
 
-  # -- Configures the list of redact options for Hubble.
+  # -- Configures the redact options for Hubble.
   # Example:
   #
   #   redact:
-  #   - http-url-query
-  #   - kafka-api-key
+  #     enabled: true
+  #     http:
+  #       urlQuery: true
+  #     kafka:
+  #       apiKey: false
   #
-  # You can specify the list of options from the helm CLI:
+  # You can specify the options from the helm CLI:
   #
-  #   --set hubble.redact="{http-url-query,kafka-api-key}"
+  #   --set hubble.redact.enabled="true"
+  #   --set hubble.redact.http.urlQuery="true"
+  #   --set hubble.redact.kafka.apiKey="false"
   #
-  redact: ~
+  redact:
+    enabled: false
+    http:
+        urlQuery: false
+    kafka:
+        apiKey: false
 
   # -- An additional address for Hubble to listen to.
   # Set this field ":4244" if you are enabling Hubble Relay, as it assumes that
@@ -1902,9 +1912,9 @@ envoy:
   image:
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.26.4-bad30dbe3f4c33c4a6e6747236f7c6d84b380d0d"
+    tag: "v1.26.4-5a76016dde9a7b4d537f37e3ef84593ea1af87c7"
     pullPolicy: "Always"
-    digest: "sha256:ec4f5a3b9504288b4de1db00893bd0ef79187c501a63e08bce11e2fb3de88920"
+    digest: "sha256:dbcb20bb208eb0031991f5c234eb6de567f95ebd814520dcbfda868b7c1af210"
     useDigest: true
 
   # -- Additional containers added to the cilium Envoy DaemonSet.
@@ -3165,10 +3175,24 @@ authentication:
         enabled: true
         # -- SPIRE namespace to install into
         namespace: cilium-spire
+        # -- init container image of SPIRE agent and server
+        initImage:
+          override: ~
+          repository: "docker.io/library/busybox"
+          tag: "1.35.0"
+          digest: "sha256:223ae047b1065bd069aac01ae3ac8088b3ca4a527827e283b85112f29385fb1b"
+          useDigest: true
+          pullPolicy: "Always"
         # SPIRE agent configuration
         agent:
           # -- SPIRE agent image
-          image: ghcr.io/spiffe/spire-agent:1.6.3@sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823
+          image:
+            override: ~
+            repository: "ghcr.io/spiffe/spire-agent"
+            tag: "1.6.3"
+            digest: "sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823"
+            useDigest: true
+            pullPolicy: "Always"
           # -- SPIRE agent service account
           serviceAccount:
             create: true
@@ -3184,7 +3208,13 @@ authentication:
           tolerations: []
         server:
           # -- SPIRE server image
-          image: ghcr.io/spiffe/spire-server:1.6.3@sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f
+          image:
+            override: ~
+            repository: "ghcr.io/spiffe/spire-server"
+            tag: "1.6.3"
+            digest: "sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f"
+            useDigest: true
+            pullPolicy: "Always"
           # -- SPIRE server service account
           serviceAccount:
             create: true

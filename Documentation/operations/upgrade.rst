@@ -315,7 +315,7 @@ Annotations:
   Upgrading from Cilium 1.14.x or earlier to 1.15.y or later does not
   trigger this problem. Downgrading from Cilium 1.15.y or later to Cilium
   1.14.x or earlier may trigger this problem.
-  
+
 .. _upgrade_cilium_cli_helm_mode:
 
 Cilium CLI
@@ -340,6 +340,15 @@ Helm Options
   were deprecated in Cilium 1.14 in favor of ``tls.ca.cert`` and ``tls.ca.key`` respectively,
   and have been removed. The ```clustermesh-apiserver-ca-cert`` secret is no longer generated.
 
+* Values ``authentication.mutual.spire.install.agent.image`` and ``authentication.mutual.spire.install.server.image``
+  changed their type from a string to a structured definition that decouples repository and tag. This improves the
+  usage in offline environments.
+
+Added Metrics
+~~~~~~~~~~~~~
+
+* ``cilium_ipam_capacity``
+
 Changed Metrics
 ~~~~~~~~~~~~~~~
 
@@ -349,6 +358,8 @@ Changed Metrics
   do not include client-side rate-limiting latency anymore.
   For checking client-side rate-limiting you can use corresponding
   ``*_api_limiter_wait_duration_seconds`` metrics.
+* The ``cilium_bpf_map_pressure`` for policy maps is now exposed as a single
+  label ``cilium_policy_*``, rather than a label per policy map of an endpoint.
 
 .. _earlier_upgrade_notes:
 
@@ -370,7 +381,7 @@ functional in general. The following is a list of operations that will not be
 available during the upgrade:
 
 * API-aware policy rules are enforced in user space proxies and are
-  running as part of the Cilium pod. Upgrading Cilium causes the proxy to 
+  running as part of the Cilium pod. Upgrading Cilium causes the proxy to
   restart, which results in a connectivity outage and causes the connection to reset.
 
 * Existing policy will remain effective but implementation of new policy rules

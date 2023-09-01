@@ -1,6 +1,7 @@
 module github.com/cilium/cilium
 
-go 1.21
+// renovate: datasource=golang-version depName=go
+go 1.21.0
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24
@@ -9,11 +10,11 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.23
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.12
 	github.com/Azure/go-autorest/autorest/to v0.4.0
-	github.com/aliyun/alibaba-cloud-sdk-go v1.62.510
+	github.com/aliyun/alibaba-cloud-sdk-go v1.62.528
 	github.com/aws/aws-sdk-go-v2 v1.21.0
-	github.com/aws/aws-sdk-go-v2/config v1.18.33
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.8
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.114.0
+	github.com/aws/aws-sdk-go-v2/config v1.18.37
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.11
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.115.0
 	github.com/aws/smithy-go v1.14.2
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/checkmate v1.0.3
@@ -24,7 +25,7 @@ require (
 	github.com/cilium/fake v0.5.0
 	github.com/cilium/linters v0.0.0-20230822071834-30df268c15f9
 	github.com/cilium/lumberjack/v2 v2.3.0
-	github.com/cilium/proxy v0.0.0-20230816061101-bad30dbe3f4c
+	github.com/cilium/proxy v0.0.0-20230825101411-5a76016dde9a
 	github.com/cilium/workerpool v1.2.0
 	github.com/containernetworking/cni v1.1.2
 	github.com/containernetworking/plugins v1.3.0
@@ -48,12 +49,12 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/google/gops v0.3.27
 	github.com/google/renameio/v2 v2.0.0
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/consul/api v1.24.0
 	github.com/hashicorp/go-immutable-radix/v2 v2.0.0
-	github.com/hashicorp/golang-lru/v2 v2.0.5
+	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/jeremywohl/flatten v1.0.1
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/kr/pretty v0.3.1
@@ -79,7 +80,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.16.0
 	github.com/spiffe/go-spiffe/v2 v2.1.6
-	github.com/spiffe/spire-api-sdk v1.7.1
+	github.com/spiffe/spire-api-sdk v1.7.2
 	github.com/stretchr/testify v1.8.4
 	github.com/tidwall/gjson v1.16.0
 	github.com/tidwall/sjson v1.2.5
@@ -94,7 +95,7 @@ require (
 	go.uber.org/goleak v1.2.1
 	go.uber.org/zap v1.25.0
 	go.universe.tf/metallb v0.11.0
-	go4.org/netipx v0.0.0-20230728184502-ec4c8b891b28
+	go4.org/netipx v0.0.0-20230824141953-6213f710f925
 	golang.org/x/crypto v0.12.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	golang.org/x/mod v0.12.0
@@ -103,10 +104,10 @@ require (
 	golang.org/x/sys v0.11.0
 	golang.org/x/term v0.11.0
 	golang.org/x/time v0.3.0
-	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846
+	golang.org/x/tools v0.12.1-0.20230825192346-2191a27a6dc5
 	golang.zx2c4.com/wireguard v0.0.0-20230704135630-469159ecf7d1
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230821184602-ccc8af3d0e93
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/ini.v1 v1.67.0
@@ -136,14 +137,14 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.13.32 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.13.35 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.41 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.35 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.39 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.42 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.35 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.13.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.15.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.21.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.13.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.15.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.21.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect

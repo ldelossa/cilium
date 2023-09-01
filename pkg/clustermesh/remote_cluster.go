@@ -5,6 +5,7 @@ package clustermesh
 
 import (
 	"context"
+	"errors"
 	"path"
 
 	"github.com/cilium/cilium/api/v1/models"
@@ -61,7 +62,10 @@ type remoteCluster struct {
 	// status is the function which fills the common part of the status.
 	status common.StatusFunc
 
-	swg *lock.StoppableWaitGroup
+	storeFactory store.Factory
+
+	// synced tracks the initial synchronization with the remote cluster.
+	synced synced
 }
 
 func (rc *remoteCluster) Run(ctx context.Context, backend kvstore.BackendOperations, config *cmtypes.CiliumClusterConfig, ready chan<- error) {
@@ -95,7 +99,7 @@ func (rc *remoteCluster) Run(ctx context.Context, backend kvstore.BackendOperati
 
 	var mgr store.WatchStoreManager
 	if capabilities.SyncedCanaries {
-		mgr = store.NewWatchStoreManagerSync(backend, rc.name)
+		mgr = rc.storeFactory.NewWatchStoreManager(backend, rc.name)
 	} else {
 		mgr = store.NewWatchStoreManagerImmediate(rc.name)
 	}
@@ -118,14 +122,16 @@ func (rc *remoteCluster) Run(ctx context.Context, backend kvstore.BackendOperati
 	})
 
 	mgr.Register(adapter(identityCache.IdentitiesPath), func(ctx context.Context) {
-		rc.remoteIdentityCache.Watch(ctx)
+		rc.remoteIdentityCache.Watch(ctx, func(context.Context) { rc.synced.identities.Done() })
 	})
 
 	close(ready)
 	mgr.Run(ctx)
 }
 
-func (rc *remoteCluster) Stop() {}
+func (rc *remoteCluster) Stop() {
+	rc.synced.stop()
+}
 
 func (rc *remoteCluster) Remove() {
 	// Draining shall occur only when the configuration for the remote cluster
@@ -203,4 +209,77 @@ func (rc *remoteCluster) ipCacheWatcherOpts(config *cmtypes.CiliumClusterConfig)
 	}
 
 	return opts
+}
+
+var (
+	// ErrRemoteClusterDisconnected is the error returned by wait for sync
+	// operations if the remote cluster is disconnected while still waiting.
+	ErrRemoteClusterDisconnected = errors.New("remote cluster disconnected")
+)
+
+type synced struct {
+	services   *lock.StoppableWaitGroup
+	nodes      chan struct{}
+	ipcache    chan struct{}
+	identities *lock.StoppableWaitGroup
+	stopped    chan struct{}
+}
+
+func newSynced() synced {
+	// Use a StoppableWaitGroup for identities, instead of a plain channel to
+	// avoid having to deal with the possibility of a closed channel if already
+	// synced (as the callback is executed every time the etcd connection
+	// is restarted, differently from the other resource types).
+	idswg := lock.NewStoppableWaitGroup()
+	idswg.Add()
+	idswg.Stop()
+
+	return synced{
+		services:   lock.NewStoppableWaitGroup(),
+		nodes:      make(chan struct{}),
+		ipcache:    make(chan struct{}),
+		identities: idswg,
+		stopped:    make(chan struct{}),
+	}
+}
+
+// Nodes returns after that the initial list of nodes has been received
+// from the remote cluster, and synchronized with the different subscribers,
+// the remote cluster is disconnected, or the given context is canceled.
+func (s *synced) Nodes(ctx context.Context) error {
+	return s.wait(ctx, s.nodes)
+}
+
+// Services returns after that the initial list of shared services has been
+// received from the remote cluster, and synchronized with the BPF datapath,
+// the remote cluster is disconnected, or the given context is canceled.
+func (s *synced) Services(ctx context.Context) error {
+	return s.wait(ctx, s.services.WaitChannel())
+}
+
+// IPIdentities returns after that the initial list of ipcache entries and
+// identities has been received from the remote cluster, and synchronized
+// with the BPF datapath, the remote cluster is disconnected, or the given
+// context is canceled.
+func (s *synced) IPIdentities(ctx context.Context) error {
+	return s.wait(ctx, s.ipcache, s.identities.WaitChannel())
+}
+
+func (s *synced) wait(ctx context.Context, chs ...<-chan struct{}) error {
+	for _, ch := range chs {
+		select {
+		case <-ch:
+			continue
+		case <-s.stopped:
+			return ErrRemoteClusterDisconnected
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return nil
+}
+
+func (s *synced) stop() {
+	close(s.stopped)
 }

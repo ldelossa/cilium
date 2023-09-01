@@ -934,7 +934,7 @@ struct ct_entry {
 	__u32 lifetime;
 	__u16 rx_closing:1,
 	      tx_closing:1,
-	      nat46:1,
+	      unused_nat46:1,	/* unused since v1.12 / 81dee05e82fb */
 	      lb_loopback:1,
 	      seen_non_syn:1,
 	      node_port:1,
@@ -947,6 +947,7 @@ struct ct_entry {
 	__u16 rev_nat_index;
 	/* In the kernel ifindex is u32, so we need to check in cilium-agent
 	 * that ifindex of a NodePort device is <= MAX(u16).
+	 * Unused when HAVE_FIB_INDEX is available.
 	 */
 	__u16 ifindex;
 
@@ -1137,10 +1138,6 @@ struct ct_state {
 	      reserved1:1,	/* Was auth_required, not used in production anywhere */
 	      from_tunnel:1,	/* Connection is from tunnel */
 	      reserved:8;
-#ifndef DISABLE_LOOPBACK_LB
-	__be32 addr;
-	__be32 svc_addr;
-#endif
 	__u32 src_sec_id;
 #ifndef HAVE_FIB_IFINDEX
 	__u16 ifindex;

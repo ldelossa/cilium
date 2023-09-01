@@ -4,7 +4,6 @@
 package ingestion
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/cilium/cilium/operator/pkg/ingress/annotations"
@@ -87,10 +86,16 @@ func Ingress(ing slim_networkingv1.Ingress, defaultSecretNamespace, defaultSecre
 		l.Port = 80
 		l.Sources = model.AddSource(l.Sources, sourceResource)
 		if !ok {
-			l.Name = fmt.Sprintf("ing-%s-%s-%s", ing.Name, ing.Namespace, host)
+			l.Name = "ing-" + ing.Name + "-" + ing.Namespace + "-" + host
 		}
 
 		l.Hostname = host
+		if rule.HTTP == nil {
+			log.WithField(logfields.Ingress, ing.Namespace+"/"+ing.Name).
+				Warn("Invalid Ingress rule without spec.rules.HTTP defined, skipping rule")
+			continue
+		}
+
 		for _, path := range rule.HTTP.Paths {
 
 			route := model.HTTPRoute{}

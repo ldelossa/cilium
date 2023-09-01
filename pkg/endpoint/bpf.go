@@ -27,8 +27,6 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/loadinfo"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -36,7 +34,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
-	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/revert"
@@ -175,28 +172,6 @@ func (e *Endpoint) writeHeaderfile(prefix string) error {
 	return f.CloseAtomicallyReplace()
 }
 
-// GetLabelsLocked implements the policy.Identites interface{} method GetLabelsLocked, which allows
-// Endpoint.addNewRedirectsFromDesiredPolicy to call `UpdateRedirects` with a label cache. This
-// enables `UpdateRedirects` to call `toMapState` to look up CIDRs associated with identites to make
-// a final determination about whether they should even be inserted into an Endpoint's policy map.
-//
-// Note that while other policy implementations use the SelectorCache as the underlying source for
-// labels during calls to ToMapState(), this implementation uses the identity allocator. This means
-// that the locking patterns from this code path will differ from the other policy calculation
-// cases!
-//
-// This is needed due to the endpoint being locked when UpdateRedirects is called so that selector
-// cache can not be used for this function, as it will lock the endpoint via the ip cache.
-//
-// Called with the Endpoint locked.
-func (e *Endpoint) GetLabelsLocked(id identity.NumericIdentity) labels.LabelArray {
-	ident := e.allocator.LookupIdentityByID(context.Background(), id)
-	if ident != nil {
-		return ident.LabelArray
-	}
-	return nil
-}
-
 // addNewRedirectsFromDesiredPolicy must be called while holding the endpoint lock for
 // writing. On success, returns nil; otherwise, returns an error indicating the
 // problem that occurred while adding an l7 redirect for the specified policy.
@@ -217,7 +192,7 @@ func (e *Endpoint) addNewRedirectsFromDesiredPolicy(ingress bool, desiredRedirec
 		Old:  make(policy.MapState),
 	}
 
-	e.desiredPolicy.UpdateRedirects(ingress, e,
+	e.desiredPolicy.UpdateRedirects(ingress,
 		func(l4 *policy.L4Filter) (uint16, bool) {
 			var redirectPort uint16
 			// Only create a redirect if the proxy is NOT running in a sidecar container
@@ -780,7 +755,6 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 		if err != nil {
 			return false, err
 		}
-		e.initPolicyMapPressureMetric()
 		e.updatePolicyMapPressureMetric()
 	}
 
@@ -1027,25 +1001,16 @@ func (e *Endpoint) SkipStateClean() {
 	e.unlock()
 }
 
-func (e *Endpoint) initPolicyMapPressureMetric() {
-	if !metrics.BPFMapPressure {
-		return
-	}
-
-	if e.policyMapPressureGauge != nil {
-		return
-	}
-
-	e.policyMapPressureGauge = metrics.NewBPFMapPressureGauge(e.policyMap.NonPrefixedName(), policymap.PressureMetricThreshold)
+// PolicyMapPressureEvent represents an event for a policymap pressure metric
+// update that is sent via the policyMapPressureUpdater interface.
+type PolicyMapPressureEvent struct{ Value float64 }
+type policyMapPressureUpdater interface {
+	Update(PolicyMapPressureEvent)
 }
 
 func (e *Endpoint) updatePolicyMapPressureMetric() {
-	if e.policyMapPressureGauge == nil {
-		return
-	}
-
 	value := float64(len(e.realizedPolicy.PolicyMapState)) / float64(e.policyMap.MaxEntries())
-	e.policyMapPressureGauge.Set(value)
+	e.PolicyMapPressureUpdater.Update(PolicyMapPressureEvent{value})
 }
 
 func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) bool {

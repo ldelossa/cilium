@@ -86,6 +86,15 @@
       ]
     },
     {
+      "matchPaths": [
+        ".github/workflows/integration-test.yaml"
+      ],
+      matchPackageNames: [
+        "ubuntu"
+      ],
+      "allowedVersions": "20.04",
+    },
+    {
       "groupName": "all go dependencies main",
       "groupSlug": "all-go-deps-main",
       "matchFiles": [
@@ -482,6 +491,14 @@
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_VERSION=\"(?<currentValue>.*)\""
+      ]
+    },
+    {
+      "fileMatch": [
+        "^go.mod$",
+      ],
+      "matchStrings": [
+        "// renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+go (?<currentValue>.*)"
       ]
     }
   ]

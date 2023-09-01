@@ -1035,9 +1035,14 @@ const (
 	// By default, Hubble observes all monitor events.
 	HubbleMonitorEvents = "hubble-monitor-events"
 
-	// HubbleRedact controls which values Hubble will redact in network flows.
-	// By default, Hubble does not redact any values.
-	HubbleRedact = "hubble-redact"
+	// HubbleRedactEnabled controls if sensitive information will be redacted from L7 flows
+	HubbleRedactEnabled = "hubble-redact-enabled"
+
+	// HubbleRedactHttpURLQuery controls if the URL query will be redacted from flows
+	HubbleRedactHttpURLQuery = "hubble-redact-http-urlquery"
+
+	// HubbleRedactKafkaApiKey controls if the Kafka API key will be redacted from flows
+	HubbleRedactKafkaApiKey = "hubble-redact-kafka-apikey"
 
 	// DisableIptablesFeederRules specifies which chains will be excluded
 	// when installing the feeder rules
@@ -2275,9 +2280,14 @@ type DaemonConfig struct {
 	// By default, Hubble observes all monitor events.
 	HubbleMonitorEvents []string
 
-	// HubbleRedact controls which values Hubble will redact in network flows.
-	// By default, Hubble does not redact any values.
-	HubbleRedact []string
+	// HubbleRedactEnabled controls if Hubble will be redacting sensitive information from L7 flows
+	HubbleRedactEnabled bool
+
+	// HubbleRedactURLQuery controls if the URL query will be redacted from flows
+	HubbleRedactHttpURLQuery bool
+
+	// HubbleRedactKafkaApiKey controls if Kafka API key will be redacted from flows
+	HubbleRedactKafkaApiKey bool
 
 	// EndpointStatus enables population of information in the
 	// CiliumEndpoint.Status resource
@@ -3557,7 +3567,9 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.HubbleRecorderSinkQueueSize = vp.GetInt(HubbleRecorderSinkQueueSize)
 	c.HubbleSkipUnknownCGroupIDs = vp.GetBool(HubbleSkipUnknownCGroupIDs)
 	c.HubbleMonitorEvents = vp.GetStringSlice(HubbleMonitorEvents)
-	c.HubbleRedact = vp.GetStringSlice(HubbleRedact)
+	c.HubbleRedactEnabled = vp.GetBool(HubbleRedactEnabled)
+	c.HubbleRedactHttpURLQuery = vp.GetBool(HubbleRedactHttpURLQuery)
+	c.HubbleRedactKafkaApiKey = vp.GetBool(HubbleRedactKafkaApiKey)
 
 	c.DisableIptablesFeederRules = vp.GetStringSlice(DisableIptablesFeederRules)
 
@@ -3772,29 +3784,52 @@ func (c *DaemonConfig) checkMapSizeLimits() error {
 }
 
 func (c *DaemonConfig) checkIPv4NativeRoutingCIDR() error {
-	if c.GetIPv4NativeRoutingCIDR() == nil && c.EnableIPv4Masquerade && !c.TunnelingEnabled() &&
-		c.IPAMMode() != ipamOption.IPAMENI && c.EnableIPv4 && c.IPAMMode() != ipamOption.IPAMAlibabaCloud {
-		return fmt.Errorf(
-			"native routing cidr must be configured with option --%s "+
-				"in combination with --%s --%s=%s --%s=%s --%s=true",
-			IPv4NativeRoutingCIDR, EnableIPv4Masquerade, RoutingMode, RoutingModeNative,
-			IPAM, c.IPAMMode(), EnableIPv4Name)
+	if c.GetIPv4NativeRoutingCIDR() != nil {
+		return nil
+	}
+	if !c.EnableIPv4 || !c.EnableIPv4Masquerade {
+		return nil
+	}
+	if c.EnableIPMasqAgent {
+		return nil
+	}
+	if c.TunnelingEnabled() {
+		return nil
+	}
+	if c.IPAMMode() == ipamOption.IPAMENI || c.IPAMMode() == ipamOption.IPAMAlibabaCloud {
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf(
+		"native routing cidr must be configured with option --%s "+
+			"in combination with --%s=true --%s=true --%s=false --%s=%s --%s=%s",
+		IPv4NativeRoutingCIDR,
+		EnableIPv4Name, EnableIPv4Masquerade,
+		EnableIPMasqAgent,
+		RoutingMode, RoutingModeNative,
+		IPAM, c.IPAMMode())
 }
 
 func (c *DaemonConfig) checkIPv6NativeRoutingCIDR() error {
-	if c.GetIPv6NativeRoutingCIDR() == nil && c.EnableIPv6Masquerade && !c.TunnelingEnabled() &&
-		c.EnableIPv6 {
-		return fmt.Errorf(
-			"native routing cidr must be configured with option --%s "+
-				"in combination with --%s --%s=%s --%s=true",
-			IPv6NativeRoutingCIDR, EnableIPv6Masquerade, RoutingMode, RoutingModeNative,
-			EnableIPv6Name)
+	if c.GetIPv6NativeRoutingCIDR() != nil {
+		return nil
 	}
-
-	return nil
+	if !c.EnableIPv6 || !c.EnableIPv6Masquerade {
+		return nil
+	}
+	if c.EnableIPMasqAgent {
+		return nil
+	}
+	if c.TunnelingEnabled() {
+		return nil
+	}
+	return fmt.Errorf(
+		"native routing cidr must be configured with option --%s "+
+			"in combination with --%s=true --%s=true --%s=false --%s=%s",
+		IPv6NativeRoutingCIDR,
+		EnableIPv6Name, EnableIPv6Masquerade,
+		EnableIPMasqAgent,
+		RoutingMode, RoutingModeNative)
 }
 
 func (c *DaemonConfig) checkIPAMDelegatedPlugin() error {
