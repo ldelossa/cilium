@@ -5,8 +5,8 @@ go 1.21.0
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cilium/cilium v1.14.0
-	github.com/cilium/cilium-cli v0.15.6
+	github.com/cilium/cilium v1.14.1
+	github.com/cilium/cilium-cli v0.15.7
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/stretchr/testify v1.8.4
 	k8s.io/api v0.28.0-rc.0
@@ -30,10 +30,10 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20230811143932-370e87675033 // indirect
+	github.com/cilium/charts v0.0.0-20230815110222-84cbc90ed50d // indirect
 	github.com/cilium/hubble v0.12.0 // indirect
 	github.com/cilium/proxy v0.0.0-20230816061101-bad30dbe3f4c // indirect
-	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230814160316-1b358ea62570 // indirect
+	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230825140014-ba1b9144068d // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
 	github.com/containerd/containerd v1.7.0 // indirect
