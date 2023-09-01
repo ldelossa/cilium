@@ -65,6 +65,7 @@ env:
 
 jobs:
   commit-status-start:
+    name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
@@ -387,6 +388,7 @@ jobs:
         retention-days: 5
 
   commit-status-final:
+    name: Commit Status Final
     if: ${{ always() }}
     needs: installation-and-connectivity
     runs-on: ubuntu-latest

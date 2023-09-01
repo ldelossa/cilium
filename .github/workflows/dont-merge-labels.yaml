@@ -6,11 +6,13 @@ on:
 
 jobs:
   check-dont-merge-labels:
+    name: Check for dont-merge/* labels
     runs-on: ubuntu-latest
     env:
       LABELS: "${{ toJson(github.event.pull_request.labels.*.name) }}"
     steps:
-      - run: |
+      - name: Check for dont-merge/* labels
+        run: |
           for label in $(echo "$LABELS" | jq -r '.[]');
           do
             if [[ "$label" =~ ^dont-merge\/.* ]]; then

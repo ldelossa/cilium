@@ -9,10 +9,12 @@ on:
 jobs:
   mirror-cilium:
     # This job mirrors github.com/cilium/cilium to github.com/isovalent/cilium
+    name: Mirror cilium/cilium branches
     if: github.repository == 'isovalent/cilium'
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f
+      - name: Checkout
+        uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f
         with:
           # The default token does not have permissions to create and update
           # workflows. We need that permission because some of the commits

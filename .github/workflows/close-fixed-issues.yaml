@@ -22,6 +22,7 @@ on:
 
 jobs:
   closer:
+    name: Close issues mentioned by PR
     runs-on: ubuntu-latest
     permissions:
       issues: write  # Closing the issue

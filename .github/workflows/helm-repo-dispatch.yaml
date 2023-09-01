@@ -7,6 +7,7 @@ on:
       - "v*"
 jobs:
   helm-repo-dispatch:
+    name: Dispatch to https://github.com/isovalent/helm-repo
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch to https://github.com/isovalent/helm-repo

@@ -62,7 +62,8 @@ jobs:
           pcc_user: 0541c4a6-1f9a-4dfd-8e86-86829fda7205
           pcc_pass: ${{ secrets.TWISTCLI_PASSWORD }} 
           image_name: ${{ matrix.image.name }}:${{ matrix.branch }}
-      - uses: actions/setup-go@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
       - name: Install vexctl
         run: go install github.com/openvex/vexctl@latest
       - name: Filter false positives
