@@ -1,0 +1,45 @@
+name: CuTE scheduled workflows
+
+on:
+  schedule:
+    # Every Wednesday at 00:00
+    - cron: "0 0 * * 3"
+  workflow_dispatch:
+
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To trigger workflows via workflow_dispatch
+  actions: write
+
+jobs:
+  cute-scheduled:
+    name: CuTE Scheduled
+    strategy:
+      fail-fast: false
+      matrix:
+        cute: [
+          { repo: sky, dir: . },
+          { repo: bloomberg, dir: . },
+          { repo: form3, dir: MAKS },
+        ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        with:
+          persist-credentials: false
+
+      - name: Manually run CuTE workflows
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REF=${GITHUB_REF#refs/heads/}
+          echo "Triggering workflow for CuTE: ${{ matrix.cute.repo }}/${{ matrix.cute.dir }}"
+          gh workflow run enterprise-cute.yaml \
+            --ref ${REF} \
+            -f PR-number=${REF/./-} \
+            -f context-ref=${REF} \
+            -f SHA=$GITHUB_SHA \
+            -f extra-args="${{ matrix.cute.repo }}/${{ matrix.cute.dir }}" \
+            -f use-stable-branch="true"
