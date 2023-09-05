@@ -18,7 +18,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/cilium/dns"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/hive"

@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/cilium/dns"
 	"go.uber.org/goleak"
 
 	"github.com/cilium/cilium/pkg/hive"
