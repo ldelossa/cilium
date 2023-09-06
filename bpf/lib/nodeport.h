@@ -783,7 +783,8 @@ nodeport_dsr_ingress_ipv6(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple,
 	__ipv6_ct_tuple_reverse(tuple);
 
 	ret = ct_lazy_lookup6(get_ct_map6(tuple), tuple, ctx, l4_off,
-			      CT_EGRESS, SCOPE_FORWARD, &ct_state, &monitor);
+			      CT_EGRESS, SCOPE_FORWARD, CT_ENTRY_DSR,
+			      &ct_state, &monitor);
 	switch (ret) {
 	case CT_NEW:
 	case CT_REOPENED:
@@ -802,7 +803,7 @@ create_ct:
 			return ret;
 		break;
 	case CT_ESTABLISHED:
-		if ((tuple->nexthdr == IPPROTO_TCP && port) || !ct_state.dsr)
+		if (tuple->nexthdr == IPPROTO_TCP && port)
 			goto create_ct;
 		break;
 	default:
@@ -865,8 +866,7 @@ int tail_nat_ipv46(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
-	ret = fib_redirect_v6(ctx, l3_off, ip6, false, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v6(ctx, l3_off, ip6, false, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -897,8 +897,7 @@ int tail_nat_ipv64(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
-	ret = fib_redirect_v4(ctx, l3_off, ip4, false, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v4(ctx, l3_off, ip4, false, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -945,12 +944,10 @@ nodeport_rev_dnat_ingress_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 		return ret;
 	}
 
-	if (!ct_has_nodeport_egress_entry6(get_ct_map6(&tuple), &tuple, NULL, false))
-		goto out;
-
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off,
-			      CT_INGRESS, SCOPE_REVERSE, &ct_state, &trace->monitor);
-	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
+			      CT_INGRESS, SCOPE_REVERSE, CT_ENTRY_NODEPORT,
+			      &ct_state, &trace->monitor);
+	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 		ret = ipv6_l3(ctx, ETH_HLEN, NULL, NULL, METRIC_EGRESS);
 		if (unlikely(ret != CTX_ACT_OK))
@@ -1389,7 +1386,8 @@ skip_service_lookup:
 		__ipv6_ct_tuple_reverse(&tuple);
 
 		ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off,
-				      CT_EGRESS, SCOPE_FORWARD, &ct_state, &monitor);
+				      CT_EGRESS, SCOPE_FORWARD, CT_ENTRY_NODEPORT,
+				      &ct_state, &monitor);
 		switch (ret) {
 		case CT_NEW:
 redo:
@@ -1497,7 +1495,8 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 #endif
 
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, CT_INGRESS,
-			      SCOPE_REVERSE, &ct_state, &trace->monitor);
+			      SCOPE_REVERSE, CT_ENTRY_NODEPORT | CT_ENTRY_DSR,
+			      &ct_state, &trace->monitor);
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 
@@ -2253,8 +2252,7 @@ int tail_nodeport_ipv4_dsr(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
-	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -2279,7 +2277,7 @@ nodeport_dsr_ingress_ipv4(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
 
 	ret = ct_lazy_lookup4(get_ct_map4(tuple), tuple, ctx, l4_off,
 			      has_l4_header, CT_EGRESS, SCOPE_FORWARD,
-			      &ct_state, &monitor);
+			      CT_ENTRY_DSR, &ct_state, &monitor);
 	switch (ret) {
 	case CT_NEW:
 	/* Maybe we can be a bit more selective about CT_REOPENED?
@@ -2311,7 +2309,7 @@ create_ct:
 		 * Otherwise we tolerate DSR info on an established connection.
 		 * TODO: how do we know if we need to refresh the SNAT entry?
 		 */
-		if ((tuple->nexthdr == IPPROTO_TCP && port) || !ct_state.dsr)
+		if (tuple->nexthdr == IPPROTO_TCP && port)
 			goto create_ct;
 		break;
 	default:
@@ -2410,12 +2408,10 @@ nodeport_rev_dnat_ingress_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
 	if (!check_revdnat)
 		goto out;
 
-	if (!ct_has_nodeport_egress_entry4(get_ct_map4(&tuple), &tuple, NULL, false))
-		goto out;
-
 	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
-			      CT_INGRESS, SCOPE_REVERSE, &ct_state, &trace->monitor);
-	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
+			      CT_INGRESS, SCOPE_REVERSE, CT_ENTRY_NODEPORT,
+			      &ct_state, &trace->monitor);
+	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 		ret = lb4_rev_nat(ctx, l3_off, l4_off, ct_state.rev_nat_index, false,
 				  &tuple, REV_NAT_F_TUPLE_SADDR, has_l4_header);
@@ -2887,7 +2883,8 @@ skip_service_lookup:
 		__ipv4_ct_tuple_reverse(&tuple);
 
 		ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
-				      CT_EGRESS, SCOPE_FORWARD, &ct_state, &monitor);
+				      CT_EGRESS, SCOPE_FORWARD, CT_ENTRY_NODEPORT,
+				      &ct_state, &monitor);
 		switch (ret) {
 		case CT_NEW:
 redo:
@@ -2989,7 +2986,9 @@ nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
 #endif
 
 	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
-			      CT_INGRESS, SCOPE_REVERSE, &ct_state, &trace->monitor);
+			      CT_INGRESS, SCOPE_REVERSE,
+			      CT_ENTRY_NODEPORT | CT_ENTRY_DSR,
+			      &ct_state, &trace->monitor);
 
 	/* nodeport_rev_dnat_get_info_ipv4() just checked that such a
 	 * CT entry exists:
