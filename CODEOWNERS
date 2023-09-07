@@ -551,6 +551,8 @@ Vagrantfile @cilium/ci-structure
 #
 # - @isovalent/core-structure
 #   A team responsible for mindfulness of isovalent/cilium codebase.
+# - @isovalent/traffic-engineering
+#   Responsible for maintaining features related to traffic engineering such as SRv6.
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
@@ -558,3 +560,5 @@ Vagrantfile @cilium/ci-structure
 /enterprise @isovalent/void
 /vex-data.vex.json @isovalent/void
 *enterprise* @isovalent/void
+/enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/pkg/srv6/ @isovalent/traffic-engineering
