@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/ipam/types"
 	"github.com/cilium/cilium/pkg/k8s"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"github.com/cilium/cilium/pkg/k8s/watchers/subscriber"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
@@ -183,6 +184,15 @@ func (p pendingAllocationsPerOwner) removeExpiredEntries(now time.Time, pool Poo
 // pendingForPool returns how many IP allocations are pending for the given family
 func (p pendingAllocationsPerOwner) pendingForFamily(family Family) int {
 	return len(p[family])
+}
+
+type nodeUpdater interface {
+	Update(ctx context.Context, ciliumNode *ciliumv2.CiliumNode, opts metav1.UpdateOptions) (*ciliumv2.CiliumNode, error)
+	UpdateStatus(ctx context.Context, ciliumNode *ciliumv2.CiliumNode, opts metav1.UpdateOptions) (*ciliumv2.CiliumNode, error)
+}
+
+type nodeWatcher interface {
+	RegisterCiliumNodeSubscriber(s subscriber.CiliumNode)
 }
 
 type multiPoolManager struct {
@@ -505,10 +515,10 @@ func (m *multiPoolManager) upsertPoolLocked(poolName Pool, podCIDRs []types.IPAM
 	if !ok {
 		pool = &poolPair{}
 		if m.conf.IPv4Enabled() {
-			pool.v4 = newPodCIDRPool(nil)
+			pool.v4 = newPodCIDRPool()
 		}
 		if m.conf.IPv6Enabled() {
-			pool.v6 = newPodCIDRPool(nil)
+			pool.v6 = newPodCIDRPool()
 		}
 	}
 
@@ -562,11 +572,11 @@ func (m *multiPoolManager) OnDeleteCiliumNode(node *ciliumv2.CiliumNode, swg *lo
 	return nil
 }
 
-func (m *multiPoolManager) dump(family Family) (allocated map[string]string, status string) {
+func (m *multiPoolManager) dump(family Family) (allocated map[Pool]map[string]string, status string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	allocated = map[string]string{}
+	allocated = map[Pool]map[string]string{}
 	for poolName, pool := range m.pools {
 		var p *podCIDRPool
 		switch family {
@@ -584,13 +594,16 @@ func (m *multiPoolManager) dump(family Family) (allocated map[string]string, sta
 			return nil, fmt.Sprintf("error: %s", err)
 		}
 
-		ipPrefix := ""
-		if poolName != PoolDefault {
-			ipPrefix = poolName.String() + "/"
+		if poolName == "" {
+			poolName = PoolDefault
+		}
+
+		if _, ok := allocated[poolName]; !ok {
+			allocated[poolName] = map[string]string{}
 		}
 
 		for ip, owner := range ipToOwner {
-			allocated[ipPrefix+ip] = owner
+			allocated[poolName][ip] = owner
 		}
 	}
 
@@ -714,7 +727,7 @@ func (c *multiPoolAllocator) AllocateNextWithoutSyncUpstream(owner string, pool 
 	return c.manager.allocateNext(owner, pool, c.family, false)
 }
 
-func (c *multiPoolAllocator) Dump() (map[string]string, string) {
+func (c *multiPoolAllocator) Dump() (map[Pool]map[string]string, string) {
 	return c.manager.dump(c.family)
 }
 

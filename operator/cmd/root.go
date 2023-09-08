@@ -35,6 +35,7 @@ import (
 	"github.com/cilium/cilium/operator/pkg/ingress"
 	"github.com/cilium/cilium/operator/pkg/lbipam"
 	operatorWatchers "github.com/cilium/cilium/operator/watchers"
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/components"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -100,6 +101,9 @@ var (
 		"operator-controlplane",
 		"Operator Control Plane",
 
+		cell.Config(cmtypes.DefaultClusterInfo),
+		cell.Invoke(func(cinfo cmtypes.ClusterInfo) error { return cinfo.Validate() }),
+
 		cell.Invoke(
 			registerOperatorHooks,
 		),
@@ -119,9 +123,7 @@ var (
 			return identitygc.SharedConfig{
 				IdentityAllocationMode: daemonCfg.IdentityAllocationMode,
 				EnableMetrics:          operatorCfg.EnableMetrics,
-				ClusterName:            daemonCfg.LocalClusterName(),
 				K8sNamespace:           daemonCfg.CiliumNamespaceName(),
-				ClusterID:              daemonCfg.LocalClusterID(),
 			}
 		}),
 
@@ -471,7 +473,6 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 	case ipamOption.IPAMAzure,
 		ipamOption.IPAMENI,
 		ipamOption.IPAMClusterPool,
-		ipamOption.IPAMClusterPoolV2,
 		ipamOption.IPAMMultiPool,
 		ipamOption.IPAMAlibabaCloud:
 		alloc, providerBuiltin := allocatorProviders[ipamMode]
@@ -510,13 +511,17 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 		})
 
 		if legacy.clientset.IsEnabled() && operatorOption.Config.SyncK8sServices {
+			clusterInfo := cmtypes.ClusterInfo{
+				ID:   option.Config.ClusterID,
+				Name: option.Config.ClusterName,
+			}
 			operatorWatchers.StartSynchronizingServices(legacy.ctx, &legacy.wg, operatorWatchers.ServiceSyncParameters{
-				ServiceSyncConfiguration: option.Config,
-				Clientset:                legacy.clientset,
-				Services:                 legacy.resources.Services,
-				Endpoints:                legacy.resources.Endpoints,
-				SharedOnly:               true,
-				StoreFactory:             legacy.storeFactory,
+				ClusterInfo:  clusterInfo,
+				Clientset:    legacy.clientset,
+				Services:     legacy.resources.Services,
+				Endpoints:    legacy.resources.Endpoints,
+				SharedOnly:   true,
+				StoreFactory: legacy.storeFactory,
 			})
 			// If K8s is enabled we can do the service translation automagically by
 			// looking at services from k8s and retrieve the service IP from that.
@@ -644,7 +649,7 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 		}
 	}
 
-	if option.Config.IPAM == ipamOption.IPAMClusterPool || option.Config.IPAM == ipamOption.IPAMClusterPoolV2 || option.Config.IPAM == ipamOption.IPAMMultiPool {
+	if option.Config.IPAM == ipamOption.IPAMClusterPool || option.Config.IPAM == ipamOption.IPAMMultiPool {
 		// We will use CiliumNodes as the source of truth for the podCIDRs.
 		// Once the CiliumNodes are synchronized with the operator we will
 		// be able to watch for K8s Node events which they will be used

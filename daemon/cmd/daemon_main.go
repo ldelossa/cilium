@@ -32,6 +32,7 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
 	"github.com/cilium/cilium/pkg/clustermesh"
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/common"
 	"github.com/cilium/cilium/pkg/components"
 	"github.com/cilium/cilium/pkg/controller"
@@ -190,12 +191,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.String(option.CGroupRoot, "", "Path to Cgroup2 filesystem")
 	option.BindEnv(vp, option.CGroupRoot)
-
-	flags.Int(option.ClusterIDName, 0, "Unique identifier of the cluster")
-	option.BindEnv(vp, option.ClusterIDName)
-
-	flags.String(option.ClusterName, defaults.ClusterName, "Name of the cluster")
-	option.BindEnv(vp, option.ClusterName)
 
 	flags.StringSlice(option.CompilerFlags, []string{}, "Extra CFLAGS for BPF compilation")
 	flags.MarkHidden(option.CompilerFlags)
@@ -383,6 +378,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.EnableWireguardUserspaceFallback, false, "Enable fallback to the WireGuard userspace implementation")
 	option.BindEnv(vp, option.EnableWireguardUserspaceFallback)
+
+	flags.Duration(option.WireguardPersistentKeepalive, 0, "The Wireguard keepalive interval as a Go duration string")
+	option.BindEnv(vp, option.WireguardPersistentKeepalive)
 
 	flags.String(option.NodeEncryptionOptOutLabels, defaults.NodeEncryptionOptOutLabels, "Label selector for nodes which will opt-out of node-to-node encryption")
 	option.BindEnv(vp, option.NodeEncryptionOptOutLabels)
@@ -1498,7 +1496,7 @@ func initEnv(vp *viper.Viper) {
 		)
 	}
 
-	if option.Config.IPAM == ipamOption.IPAMClusterPoolV2 || option.Config.IPAM == ipamOption.IPAMMultiPool {
+	if option.Config.IPAM == ipamOption.IPAMMultiPool {
 		if option.Config.TunnelingEnabled() {
 			log.Fatalf("Cannot specify IPAM mode %s in tunnel mode.", option.Config.IPAM)
 		}
@@ -1663,6 +1661,7 @@ type daemonParams struct {
 	CTNATMapGC          gc.Enabler
 	StoreFactory        store.Factory
 	EndpointRegenerator *endpoint.Regenerator
+	ClusterInfo         cmtypes.ClusterInfo
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1698,6 +1697,9 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 		},
 		OnStop: func(hive.HookContext) error {
 			cancelDaemonCtx()
+			if daemon.statusCollector != nil {
+				daemon.statusCollector.Close()
+			}
 			cleaner.Clean()
 			wg.Wait()
 			return nil
