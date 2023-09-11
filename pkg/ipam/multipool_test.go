@@ -18,9 +18,69 @@ import (
 	"github.com/cilium/cilium/pkg/ipam/service/ipallocator"
 	"github.com/cilium/cilium/pkg/ipam/types"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"github.com/cilium/cilium/pkg/k8s/watchers/subscriber"
+	"github.com/cilium/cilium/pkg/lock"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/trigger"
 )
+
+type fakeK8sCiliumNodeAPI struct {
+	mutex lock.Mutex
+	node  *ciliumv2.CiliumNode
+	sub   subscriber.CiliumNode
+
+	onUpsertEvent func()
+	onDeleteEvent func()
+}
+
+func (f *fakeK8sCiliumNodeAPI) RegisterCiliumNodeSubscriber(s subscriber.CiliumNode) {
+	f.sub = s
+}
+
+// UpdateStatus implements nodeUpdater
+func (f *fakeK8sCiliumNodeAPI) UpdateStatus(_ context.Context, ciliumNode *ciliumv2.CiliumNode, _ metav1.UpdateOptions) (*ciliumv2.CiliumNode, error) {
+	err := f.updateNode(ciliumNode)
+	return ciliumNode, err
+}
+
+// UpdateStatus implements nodeUpdater
+func (f *fakeK8sCiliumNodeAPI) Update(_ context.Context, ciliumNode *ciliumv2.CiliumNode, _ metav1.UpdateOptions) (*ciliumv2.CiliumNode, error) {
+	err := f.updateNode(ciliumNode)
+	return ciliumNode, err
+}
+
+// currentNode returns a the current snapshot of the node
+func (f *fakeK8sCiliumNodeAPI) currentNode() *ciliumv2.CiliumNode {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	return f.node.DeepCopy()
+}
+
+// updateNode is to be invoked by the test code to simulate updates by the operator
+func (f *fakeK8sCiliumNodeAPI) updateNode(newNode *ciliumv2.CiliumNode) error {
+	f.mutex.Lock()
+	oldNode := f.node
+	if oldNode == nil {
+		f.mutex.Unlock()
+		return fmt.Errorf("failed to update CiliumNode %q: node not found", newNode.Name)
+	}
+	f.node = newNode.DeepCopy()
+
+	sub := f.sub
+	onUpsertEvent := f.onUpsertEvent
+	f.mutex.Unlock()
+
+	var err error
+	if sub != nil {
+		err = sub.OnUpdateCiliumNode(oldNode, newNode, nil)
+	}
+	if onUpsertEvent != nil {
+		onUpsertEvent()
+	}
+
+	return err
+}
 
 func Test_MultiPoolManager(t *testing.T) {
 	fakeConfig := &testConfiguration{}
@@ -277,7 +337,9 @@ func Test_MultiPoolManager(t *testing.T) {
 	assert.Error(t, errors.New("all pod CIDR ranges are exhausted"), err)
 
 	ipv4Dump, _ := c.dump(IPv4)
-	assert.Len(t, ipv4Dump, numMarsIPs+1) // +1 from default pool
+	assert.Len(t, ipv4Dump, 2) // 2 pools: default + mars
+	assert.Len(t, ipv4Dump[PoolDefault], 1)
+	assert.Len(t, ipv4Dump[Pool("mars")], numMarsIPs)
 
 	// Ensure Requested numbers are bumped
 	assert.Equal(t, <-events, "upsert")
@@ -370,9 +432,13 @@ func Test_MultiPoolManager(t *testing.T) {
 	}, currentNode.Spec.IPAM.Pools.Allocated)
 
 	ipv4Dump, ipv4Summary := c.dump(IPv4)
-	assert.Equal(t, map[string]string{
-		defaultAllocation.IP.String():        "",
-		"mars/" + marsAllocation.IP.String(): "",
+	assert.Equal(t, map[Pool]map[string]string{
+		PoolDefault: {
+			defaultAllocation.IP.String(): "",
+		},
+		Pool("mars"): {
+			marsAllocation.IP.String(): "",
+		},
 	}, ipv4Dump)
 	assert.Equal(t, "2 IPAM pool(s) available", ipv4Summary)
 }

@@ -20,12 +20,10 @@ import (
 	cmcommon "github.com/cilium/cilium/pkg/clustermesh/common"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/hive/hivetest"
-	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/logging"
-	fakeConfig "github.com/cilium/cilium/pkg/option/fake"
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 
@@ -37,7 +35,6 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 
 	kvstore.SetupDummy(t, "etcd")
 
-	identity.InitWellKnownIdentities(&fakeConfig.Config{})
 	mgr := cache.NewCachingIdentityAllocator(&testidentity.IdentityAllocatorOwnerMock{})
 	<-mgr.InitIdentityAllocator(nil)
 	t.Cleanup(mgr.Close)
@@ -45,7 +42,7 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 	maps := cectnat.NewFakePerCluster(true, true)
 	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
 		Config:               cmcommon.Config{ClusterMeshConfig: t.TempDir()},
-		ClusterIDName:        cmtypes.ClusterIDName{ClusterID: 99, ClusterName: "foo"},
+		ClusterInfo:          cmtypes.ClusterInfo{ID: 99, Name: "foo"},
 		ConfigValidationMode: cmtypes.Strict,
 		ClusterIDsManager:    newClusterIDManager(logging.DefaultLogger, maps),
 
@@ -106,7 +103,6 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 
 	kvstore.SetupDummy(t, "etcd")
 
-	identity.InitWellKnownIdentities(&fakeConfig.Config{})
 	mgr := cache.NewCachingIdentityAllocator(&testidentity.IdentityAllocatorOwnerMock{})
 	<-mgr.InitIdentityAllocator(nil)
 	t.Cleanup(mgr.Close)
@@ -123,7 +119,7 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 	idsMgr := newClusterIDManager(logging.DefaultLogger, maps)
 	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
 		Config:               cmcommon.Config{ClusterMeshConfig: t.TempDir()},
-		ClusterIDName:        cmtypes.ClusterIDName{ClusterID: 99, ClusterName: "foo"},
+		ClusterInfo:          cmtypes.ClusterInfo{ID: 99, Name: "foo"},
 		ConfigValidationMode: cmtypes.Strict,
 		ClusterIDsManager:    idsMgr,
 

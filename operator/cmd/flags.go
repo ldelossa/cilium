@@ -47,13 +47,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Int64(operatorOption.ParallelAllocWorkers, defaults.ParallelAllocWorkers, "Maximum number of parallel IPAM workers")
 	option.BindEnv(vp, operatorOption.ParallelAllocWorkers)
 
-	// Clustermesh dedicated flags
-	flags.Uint32(option.ClusterIDName, 0, "Unique identifier of the cluster")
-	option.BindEnv(vp, option.ClusterIDName)
-
-	flags.String(option.ClusterName, defaults.ClusterName, "Name of the cluster")
-	option.BindEnv(vp, option.ClusterName)
-
 	// Operator-specific flags
 	flags.String(option.ConfigFile, "", `Configuration file (default "$HOME/ciliumd.yaml")`)
 	option.BindEnv(vp, option.ConfigFile)
@@ -156,7 +149,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 				return "cilium-operator-azure"
 			case ipamOption.IPAMAlibabaCloud:
 				return "cilium-operator-alibabacloud"
-			case ipamOption.IPAMKubernetes, ipamOption.IPAMClusterPool, ipamOption.IPAMClusterPoolV2, ipamOption.IPAMCRD:
+			case ipamOption.IPAMKubernetes, ipamOption.IPAMClusterPool, ipamOption.IPAMCRD:
 				return "cilium-operator-generic"
 			default:
 				return ""
