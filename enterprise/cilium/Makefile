@@ -9,7 +9,3 @@
 # permission is obtained from Isovalent Inc.
 
 include ../../cilium/Makefile
-
-GO_BUILD_FLAGS += -mod=readonly
-GO_TEST_FLAGS += -mod=readonly
-GO_CLEAN_FLAGS += -mod=readonly
