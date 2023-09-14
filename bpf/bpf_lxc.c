@@ -2092,12 +2092,13 @@ int tail_ipv4_to_endpoint(struct __ctx_buff *ctx)
 	 */
 	if (ipv4_to_endpoint_is_hairpin_flow(ctx, ip4)) {
 		send_trace_notify4(ctx, TRACE_TO_LXC,
-				   ctx_load_meta(ctx, CB_SRC_LABEL),
+				   src_sec_identity,
 				   SECLABEL, ip4->saddr, LXC_ID,
 				   ctx->ingress_ifindex,
 				   TRACE_REASON_UNKNOWN, 0);
 
 		/* Skip policy check for hairpinned flow */
+		cilium_dbg(ctx, DBG_SKIP_POLICY, LXC_ID, src_sec_identity);
 		ret = CTX_ACT_OK;
 		goto out;
 	}

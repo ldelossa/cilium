@@ -22,10 +22,11 @@ jobs:
       bpf-tree: ${{ steps.changes.outputs.bpf-tree }}
       coccinelle: ${{ steps.changes.outputs.coccinelle }}
       bpf-tests-runner: ${{ steps.changes.outputs.bpf-tests-runner }}
+      workflow-description: ${{ steps.changes.outputs.workflow-description }}
     steps:
       - name: Checkout code
         if: ${{ !github.event.pull_request }}
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           persist-credentials: false
       - name: Check code changes
@@ -43,13 +44,15 @@ jobs:
             bpf-tests-runner:
               - 'test/bpf_tests/**'
               - 'pkg/bpf/**'
+            workflow-description:
+              - '.github/workflows/lint-bpf-checks.yaml'
 
   checkpatch:
     name: Check Patch
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -60,12 +63,12 @@ jobs:
   # Runs only if code under bpf/ or contrib/coccinnelle/ is changed.
   coccicheck:
     needs: check_changes
-    if: ${{ needs.check_changes.outputs.bpf-tree == 'true' || needs.check_changes.outputs.coccinelle == 'true' }}
+    if: ${{ needs.check_changes.outputs.bpf-tree == 'true' || needs.check_changes.outputs.coccinelle == 'true' || needs.check_changes.outputs.workflow-description == 'true' }}
     name: Run coccicheck
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           persist-credentials: false
       - name: Run coccicheck
@@ -92,7 +95,7 @@ jobs:
   # Runs only if code under bpf/ is changed.
   build_all:
     needs: [check_changes, set_clang_dir]
-    if: ${{ needs.check_changes.outputs.bpf-tree == 'true' }}
+    if: ${{ needs.check_changes.outputs.bpf-tree == 'true' || needs.check_changes.outputs.workflow-description == 'true' }}
     name: Build Datapath
     runs-on: ubuntu-22.04
     steps:
@@ -100,10 +103,10 @@ jobs:
         uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.21.0
+          go-version: 1.21.1
       - name: Cache LLVM and Clang
         id: cache-llvm
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           path: ${{ needs.set_clang_dir.outputs.clang_dir }}
           key: llvm-10.0
@@ -118,7 +121,7 @@ jobs:
           directory: ${{ needs.set_clang_dir.outputs.clang_dir }}
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
       - name: Checkout code
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -130,7 +133,7 @@ jobs:
 
   bpf_tests:
     needs: [check_changes, set_clang_dir]
-    if: ${{ needs.check_changes.outputs.bpf-tree == 'true' || needs.check_changes.outputs.bpf-tests-runner == 'true' }}
+    if: ${{ needs.check_changes.outputs.bpf-tree == 'true' || needs.check_changes.outputs.bpf-tests-runner == 'true' || needs.check_changes.outputs.workflow-description == 'true' }}
     name: BPF unit/integration Tests
     runs-on: ubuntu-22.04
     steps:
@@ -138,10 +141,10 @@ jobs:
         uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.21.0
+          go-version: 1.21.1
       - name: Cache LLVM and Clang
         id: cache-llvm
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           path: ${{ needs.set_clang_dir.outputs.clang_dir }}
           key: llvm-10.0
@@ -156,19 +159,10 @@ jobs:
           directory: ${{ needs.set_clang_dir.outputs.clang_dir }}
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
       - name: Checkout code
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Run BPF tests with code coverage reporting
-        env:
-          # Disable coverage report for these test cases since they are hitting
-          # https://github.com/cilium/coverbee/issues/7
-          NOCOVER_PATTERN: "inter_cluster_snat_clusterip.*|l4lb_ipip_health_check_host.o|nodeport_geneve_dsr_*|session_affinity_test.o|tc_egressgw_redirect.o|tc_egressgw_snat.o|tc_nodeport_lb4_dsr_backend.o|tc_nodeport_lb4_dsr_lb.o|tc_nodeport_lb4_nat_backend.o|tc_nodeport_lb4_nat_lb.o|tc_nodeport_lb6_dsr_backend.o|tc_nodeport_lb6_dsr_lb.o|xdp_egressgw_reply.o|xdp_nodeport_lb4_dsr_lb.o|xdp_nodeport_lb4_nat_backend.o|xdp_nodeport_lb4_nat_lb.o|xdp_nodeport_lb4_test.o|xdp_nodeport_lb6_dsr_lb.o|bpf_nat_tests.o"
+      - name: Run BPF tests
         run: |
-          make -C test run_bpf_tests COVER=1 NOCOVER="$NOCOVER_PATTERN" || (echo "Run 'make -C test run_bpf_tests COVER=1 NOCOVER=\"$NOCOVER_PATTERN\"' locally to investigate failures"; exit 1)
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
-        with:
-          name: bpf-code-coverage-report
-          path: bpf-coverage.html
+          make -C test run_bpf_tests || (echo "Run 'make -C test run_bpf_tests' locally to investigate failures"; exit 1)

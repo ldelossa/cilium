@@ -260,8 +260,8 @@ disable the following two metrics as they generate too much data:
 
 You can then configure the agent with ``--metrics="-cilium_node_connectivity_status -cilium_node_connectivity_latency_seconds"``.
 
-Exported Metrics by Default
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Exported Metrics
+^^^^^^^^^^^^^^^^
 
 Endpoint
 ~~~~~~~~
@@ -270,10 +270,19 @@ Endpoint
 Name                                         Labels                                             Default    Description
 ============================================ ================================================== ========== ========================================================
 ``endpoint``                                                                                    Enabled    Number of endpoints managed by this agent
+``endpoint_max_ifindex``                                                                        Disabled   Maximum interface index observed for existing endpoints
 ``endpoint_regenerations_total``             ``outcome``                                        Enabled    Count of all endpoint regenerations that have completed
 ``endpoint_regeneration_time_stats_seconds`` ``scope``                                          Enabled    Endpoint regeneration time stats
 ``endpoint_state``                           ``state``                                          Enabled    Count of all endpoints
 ============================================ ================================================== ========== ========================================================
+
+The default enabled status of ``endpoint_max_ifindex`` is dynamic. On earlier
+kernels (typically with version lower than 5.10), Cilium must store the
+interface index for each endpoint in the conntrack map, which reserves 16 bits
+for this field. If Cilium is running on such a kernel, this metric will be
+enabled by default. It can be used to implement an alert if the ifindex is
+approaching the limit of 65535. This may be the case in instances of
+significant Endpoint churn.
 
 Services
 ~~~~~~~~
@@ -386,16 +395,16 @@ Name                                       Labels                               
 ``policy_implementation_delay``            ``source``                                         Enabled    Time in seconds between a policy change and it being fully deployed into the datapath, labeled by the policy's source
 ========================================== ================================================== ========== ========================================================
 
-Policy L7 (HTTP/Kafka)
-~~~~~~~~~~~~~~~~~~~~~~
+Policy L7 (HTTP/Kafka/FQDN)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ======================================== ================================================== ========== ========================================================
 Name                                     Labels                                             Default    Description
 ======================================== ================================================== ========== ========================================================
 ``proxy_redirects``                      ``protocol``                                       Enabled    Number of redirects installed for endpoints
-``proxy_upstream_reply_seconds``                                                            Enabled    Seconds waited for upstream server to reply to a request
+``proxy_upstream_reply_seconds``         ``error``, ``protocol_l7``, ``scope``              Enabled    Seconds waited for upstream server to reply to a request
 ``proxy_datapath_update_timeout_total``                                                     Disabled   Number of total datapath update timeouts due to FQDN IP updates
-``policy_l7_total``                      ``type``                                           Enabled    Number of total L7 requests/responses
+``policy_l7_total``                      ``rule``, ``proxy_type``                           Enabled    Number of total L7 requests/responses
 ======================================== ================================================== ========== ========================================================
 
 Identity
@@ -528,6 +537,16 @@ Name                               Labels                           Default     
 ``jobs_timer_run_seconds``         ``job``                          Enabled      Histogram of timer job run duration
 ``jobs_observer_run_seconds``      ``job``                          Enabled      Histogram of observer job run duration
 ================================== ================================ ============ ========================================================
+
+CIDRGroups
+~~~~~~~~~~
+
+=================================================== ===================== =============================
+Name                                                Labels                Default    Description
+=================================================== ===================== =============================
+``cidrgroups_referenced``                                                 Enabled    Number of CNPs and CCNPs referencing at least one CiliumCIDRGroup. CNPs with empty or non-existing CIDRGroupRefs are not considered
+``cidrgroup_translation_time_stats_seconds``                              Disabled   CIDRGroup translation time stats
+=================================================== ===================== =============================
 
 .. _metrics_api_rate_limiting:
 

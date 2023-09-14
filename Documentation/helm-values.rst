@@ -736,6 +736,10 @@
      - Configure how frequently garbage collection should occur for the datapath connection tracking table.
      - string
      - ``"0s"``
+   * - :spelling:ignore:`conntrackGCMaxInterval`
+     - Configure the maximum frequency for the garbage collection of the connection tracking table. Only affects the automatic computation for the frequency and has no effect when 'conntrackGCInterval' is set. This can be set to more frequently clean up unused identities created from ToFQDN policies.
+     - string
+     - ``""``
    * - :spelling:ignore:`containerRuntime`
      - Configure container runtime specific integration. Deprecated in favor of bpf.autoMount.enabled. To be removed in 1.15.
      - object
@@ -956,6 +960,10 @@
      - Encryption method. Can be either ipsec or wireguard.
      - string
      - ``"ipsec"``
+   * - :spelling:ignore:`encryption.wireguard.persistentKeepalive`
+     - Controls Wireguard PersistentKeepalive option. Set 0s to disable.
+     - string
+     - ``"0s"``
    * - :spelling:ignore:`encryption.wireguard.userspaceFallback`
      - Enables the fallback to the user-space implementation.
      - bool
@@ -1079,7 +1087,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:dbcb20bb208eb0031991f5c234eb6de567f95ebd814520dcbfda868b7c1af210","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.26.4-5a76016dde9a7b4d537f37e3ef84593ea1af87c7","useDigest":true}``
+     - ``{"digest":"sha256:37168e791fd1bcb456988554e17dea85a200287a30011b6601791b25a354a7d7","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.0-49b6a7c9c075b587f26255e73eda3fa08506b3e4","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
