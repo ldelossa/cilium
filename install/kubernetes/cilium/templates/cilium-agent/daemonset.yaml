@@ -192,6 +192,10 @@ spec:
               fieldPath: metadata.namespace
         - name: CILIUM_CLUSTERMESH_CONFIG
           value: /var/lib/cilium/clustermesh/
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
         {{- if .Values.k8sServiceHost }}
         - name: KUBERNETES_SERVICE_HOST
           value: {{ .Values.k8sServiceHost | quote }}
@@ -590,6 +594,12 @@ spec:
               name: cilium-config
               key: clean-cilium-bpf-state
               optional: true
+        - name: WRITE_CNI_CONF_WHEN_READY
+          valueFrom:
+            configMapKeyRef:
+              name: cilium-config
+              key: write-cni-conf-when-ready
+              optional: true
         {{- if .Values.k8sServiceHost }}
         - name: KUBERNETES_SERVICE_HOST
           value: {{ .Values.k8sServiceHost | quote }}
@@ -634,7 +644,7 @@ spec:
         resources:
           {{- toYaml . | trim | nindent 10 }}
         {{- end }}
-      {{- if and .Values.waitForKubeProxy (ne $kubeProxyReplacement "strict") }}
+      {{- if and .Values.waitForKubeProxy (and (ne $kubeProxyReplacement "strict") (ne $kubeProxyReplacement "true"))  }}
       - name: wait-for-kube-proxy
         image: {{ include "cilium.image" .Values.image | quote }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}

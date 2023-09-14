@@ -25,6 +25,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/matchpattern"
+	"github.com/cilium/cilium/pkg/fqdn/proxy/ipfamily"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	ippkg "github.com/cilium/cilium/pkg/ip"
@@ -144,7 +145,7 @@ type DNSProxy struct {
 
 	// rejectReply is the OPCode send from the DNS-proxy to the endpoint if the
 	// DNS request is invalid
-	rejectReply int32
+	rejectReply atomic.Int32
 
 	// UnbindAddress unbinds dns servers from socket in order to stop serving DNS traffic before proxy shutdown
 	unbindAddress func()
@@ -631,7 +632,7 @@ func StartDNSProxy(
 		p.ConcurrencyLimit = semaphore.NewWeighted(int64(concurrencyLimit))
 		p.ConcurrencyGracePeriod = concurrencyGracePeriod
 	}
-	atomic.StoreInt32(&p.rejectReply, dns.RcodeRefused)
+	p.rejectReply.Store(dns.RcodeRefused)
 
 	// Start the DNS listeners on UDP and TCP for IPv4 and/or IPv6
 	var (
@@ -1003,7 +1004,7 @@ func (p *DNSProxy) enforceConcurrencyLimit(ctx context.Context) error {
 // The returned error is logged with scopedLog and is returned for convenience
 func (p *DNSProxy) sendRefused(scopedLog *logrus.Entry, w dns.ResponseWriter, request *dns.Msg) (err error) {
 	refused := new(dns.Msg)
-	refused.SetRcode(request, int(atomic.LoadInt32(&p.rejectReply)))
+	refused.SetRcode(request, int(p.rejectReply.Load()))
 
 	if err = w.WriteMsg(refused); err != nil {
 		scopedLog.WithError(err).Error("Cannot send REFUSED response")
@@ -1016,9 +1017,9 @@ func (p *DNSProxy) sendRefused(scopedLog *logrus.Entry, w dns.ResponseWriter, re
 func (p *DNSProxy) SetRejectReply(opt string) {
 	switch strings.ToLower(opt) {
 	case strings.ToLower(option.FQDNProxyDenyWithNameError):
-		atomic.StoreInt32(&p.rejectReply, dns.RcodeNameError)
+		p.rejectReply.Store(dns.RcodeNameError)
 	case strings.ToLower(option.FQDNProxyDenyWithRefused):
-		atomic.StoreInt32(&p.rejectReply, dns.RcodeRefused)
+		p.rejectReply.Store(dns.RcodeRefused)
 	default:
 		log.Infof("DNS reject response '%s' is not valid, available options are '%v'",
 			opt, option.FQDNRejectOptions)
@@ -1101,12 +1102,12 @@ func bindToAddr(address string, port uint16, handler dns.Handler, ipv4, ipv6 boo
 	// Global singleton sessionUDPFactory which is used for IPv4 & IPv6
 	sessUdpFactory := &sessionUDPFactory{ipv4Enabled: ipv4, ipv6Enabled: ipv6}
 
-	var ipFamilies []ipFamily
+	var ipFamilies []ipfamily.IPFamily
 	if ipv4 {
-		ipFamilies = append(ipFamilies, ipv4Family())
+		ipFamilies = append(ipFamilies, ipfamily.IPv4())
 	}
 	if ipv6 {
-		ipFamilies = append(ipFamilies, ipv6Family())
+		ipFamilies = append(ipFamilies, ipfamily.IPv6())
 	}
 
 	for _, ipf := range ipFamilies {
@@ -1138,7 +1139,11 @@ func bindToAddr(address string, port uint16, handler dns.Handler, ipv4, ipv6 boo
 	return dnsServers, bindPort, nil
 }
 
-func evaluateAddress(address string, port uint16, bindPort uint16, ipFamily ipFamily) string {
+func evaluateAddress(address string, port uint16, bindPort uint16, ipFamily ipfamily.IPFamily) string {
+	// If the address is ever changed, ensure that the change is also reflected
+	// where the proxy bind address is referenced in the iptables rules. See
+	// (*IptablesManager).doGetProxyPort().
+
 	addr := ipFamily.Localhost
 
 	if address != "" {

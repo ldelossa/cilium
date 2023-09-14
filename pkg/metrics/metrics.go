@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/api/v1/models"
+	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	"github.com/cilium/cilium/pkg/metrics/metric"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/version"
@@ -258,6 +259,9 @@ var (
 	// It must be thread-safe.
 	Endpoint metric.GaugeFunc
 
+	// EndpointMaxIfindex is the maximum observed interface index for existing endpoints
+	EndpointMaxIfindex = NoOpGauge
+
 	// EndpointRegenerationTotal is a count of the number of times any endpoint
 	// has been regenerated and success/fail outcome
 	EndpointRegenerationTotal = NoOpCounterVec
@@ -309,13 +313,13 @@ var (
 
 	// CIDRGroup
 
+	// CIDRGroupsReferenced is the number of CNPs and CCNPs referencing at least one CiliumCIDRGroup.
+	// CNPs with empty or non-existing CIDRGroupRefs are not considered.
+	CIDRGroupsReferenced = NoOpGauge
+
 	// CIDRGroupTranslationTimeStats is the time taken to translate the policy field `FromCIDRGroupRef`
 	// after the referenced CIDRGroups have been updated or deleted.
 	CIDRGroupTranslationTimeStats = NoOpHistogram
-
-	// CIDRGroupPolicies is the number of CNPs and CCNPs referencing at least one CiliumCIDRGroup.
-	// CNPs with empty or non-existing CIDRGroupRefs are not considered
-	CIDRGroupPolicies = NoOpGauge
 
 	// Identity
 
@@ -341,22 +345,6 @@ var (
 
 	// ProxyPolicyL7Total is a count of all l7 requests handled by proxy
 	ProxyPolicyL7Total = NoOpCounterVec
-
-	// ProxyParseErrors is a count of failed parse errors on proxy
-	// Deprecated: in favor of ProxyPolicyL7Total
-	ProxyParseErrors = NoOpCounter
-
-	// ProxyForwarded is a count of all forwarded requests by proxy
-	// Deprecated: in favor of ProxyPolicyL7Total
-	ProxyForwarded = NoOpCounter
-
-	// ProxyDenied is a count of all denied requests by policy by the proxy
-	// Deprecated: in favor of ProxyPolicyL7Total
-	ProxyDenied = NoOpCounter
-
-	// ProxyReceived is a count of all received requests by the proxy
-	// Deprecated: in favor of ProxyPolicyL7Total
-	ProxyReceived = NoOpCounter
 
 	// ProxyUpstreamTime is how long the upstream server took to reply labeled
 	// by error, protocol and span time
@@ -570,6 +558,7 @@ type LegacyMetrics struct {
 	NodeConnectivityStatus           metric.Vec[metric.Gauge]
 	NodeConnectivityLatency          metric.Vec[metric.Gauge]
 	Endpoint                         metric.GaugeFunc
+	EndpointMaxIfindex               metric.Gauge
 	EndpointRegenerationTotal        metric.Vec[metric.Counter]
 	EndpointStateCount               metric.Vec[metric.Gauge]
 	EndpointRegenerationTimeStats    metric.Vec[metric.Observer]
@@ -582,17 +571,13 @@ type LegacyMetrics struct {
 	PolicyChangeTotal                metric.Vec[metric.Counter]
 	PolicyEndpointStatus             metric.Vec[metric.Gauge]
 	PolicyImplementationDelay        metric.Vec[metric.Observer]
+	CIDRGroupsReferenced             metric.Gauge
 	CIDRGroupTranslationTimeStats    metric.Histogram
-	CIDRGroupPolicies                metric.Gauge
 	Identity                         metric.Vec[metric.Gauge]
 	EventTS                          metric.Vec[metric.Gauge]
 	EventLagK8s                      metric.Gauge
 	ProxyRedirects                   metric.Vec[metric.Gauge]
 	ProxyPolicyL7Total               metric.Vec[metric.Counter]
-	ProxyParseErrors                 metric.Counter
-	ProxyForwarded                   metric.Counter
-	ProxyDenied                      metric.Counter
-	ProxyReceived                    metric.Counter
 	ProxyUpstreamTime                metric.Vec[metric.Observer]
 	ProxyDatapathUpdateTimeout       metric.Counter
 	DropCount                        metric.Vec[metric.Counter]
@@ -748,21 +733,21 @@ func NewLegacyMetrics() *LegacyMetrics {
 			Help:      "Time between a policy change and it being fully deployed into the datapath",
 		}, []string{LabelPolicySource}),
 
+		CIDRGroupsReferenced: metric.NewGauge(metric.GaugeOpts{
+			ConfigName: Namespace + "cidrgroups_referenced",
+
+			Namespace: Namespace,
+			Name:      "cidrgroups_referenced",
+			Help:      "Number of CNPs and CCNPs referencing at least one CiliumCIDRGroup. CNPs with empty or non-existing CIDRGroupRefs are not considered",
+		}),
+
 		CIDRGroupTranslationTimeStats: metric.NewHistogram(metric.HistogramOpts{
-			ConfigName: Namespace + "_cidrgroup_translation_time_stats_seconds",
+			ConfigName: Namespace + "cidrgroup_translation_time_stats_seconds",
 			Disabled:   true,
 
 			Namespace: Namespace,
 			Name:      "cidrgroup_translation_time_stats_seconds",
 			Help:      "CIDRGroup translation time stats",
-		}),
-
-		CIDRGroupPolicies: metric.NewGauge(metric.GaugeOpts{
-			ConfigName: Namespace + "_cidrgroup_policies",
-
-			Namespace: Namespace,
-			Name:      "cidrgroup_policies",
-			Help:      "Number of CNPs and CCNPs referencing at least one CiliumCIDRGroup",
 		}),
 
 		Identity: metric.NewGaugeVec(metric.GaugeOpts{
@@ -799,40 +784,10 @@ func NewLegacyMetrics() *LegacyMetrics {
 
 		ProxyPolicyL7Total: metric.NewCounterVec(metric.CounterOpts{
 			ConfigName: Namespace + "_policy_l7_total",
-
-			Namespace: Namespace,
-			Name:      "policy_l7_total",
-			Help:      "Number of total proxy requests handled",
-		}, []string{"rule"}),
-
-		ProxyParseErrors: metric.NewCounter(metric.CounterOpts{
-			ConfigName: Namespace + "_policy_l7_parse_errors_total",
 			Namespace:  Namespace,
-			Name:       "policy_l7_parse_errors_total",
-			Help:       "Number of total L7 parse errors",
-		}),
-
-		ProxyForwarded: metric.NewCounter(metric.CounterOpts{
-			ConfigName: Namespace + "_policy_l7_forwarded_total",
-			Namespace:  Namespace,
-			Name:       "policy_l7_forwarded_total",
-			Help:       "Number of total L7 forwarded requests/responses",
-		}),
-
-		ProxyDenied: metric.NewCounter(metric.CounterOpts{
-			ConfigName: Namespace + "_policy_l7_denied_total",
-			Namespace:  Namespace,
-			Name:       "policy_l7_denied_total",
-			Help:       "Number of total L7 denied requests/responses due to policy",
-		}),
-
-		ProxyReceived: metric.NewCounter(metric.CounterOpts{
-			ConfigName: Namespace + "_policy_l7_received_total",
-
-			Namespace: Namespace,
-			Name:      "policy_l7_received_total",
-			Help:      "Number of total L7 received requests/responses",
-		}),
+			Name:       "policy_l7_total",
+			Help:       "Number of total proxy requests handled",
+		}, []string{"rule", "proxy_type"}),
 
 		ProxyUpstreamTime: metric.NewHistogramVec(metric.HistogramOpts{
 			ConfigName: Namespace + "_proxy_upstream_reply_seconds",
@@ -1280,6 +1235,23 @@ func NewLegacyMetrics() *LegacyMetrics {
 		}),
 	}
 
+	ifindexOpts := metric.GaugeOpts{
+		ConfigName: Namespace + "_endpoint_max_ifindex",
+		Disabled:   true,
+		Namespace:  Namespace,
+		Name:       "endpoint_max_ifindex",
+		Help:       "Maximum interface index observed for existing endpoints",
+	}
+	// On kernels which do not provide ifindex via the FIB, Cilium needs
+	// to store it in the CT map, with a field limit of max(uint16).
+	// The EndpointMaxIfindex metric can be used to determine if that
+	// limit is approaching. However, it should only be enabled by
+	// default if we observe that the FIB is not providing the ifindex.
+	if probes.HaveFibIfindex() != nil {
+		ifindexOpts.Disabled = false
+	}
+	lm.EndpointMaxIfindex = metric.NewGauge(ifindexOpts)
+
 	v := version.GetCiliumVersion()
 	lm.VersionMetric.WithLabelValues(v.Version, v.Revision, v.Arch)
 
@@ -1288,6 +1260,7 @@ func NewLegacyMetrics() *LegacyMetrics {
 	NodeConnectivityStatus = lm.NodeConnectivityStatus
 	NodeConnectivityLatency = lm.NodeConnectivityLatency
 	Endpoint = lm.Endpoint
+	EndpointMaxIfindex = lm.EndpointMaxIfindex
 	EndpointRegenerationTotal = lm.EndpointRegenerationTotal
 	EndpointStateCount = lm.EndpointStateCount
 	EndpointRegenerationTimeStats = lm.EndpointRegenerationTimeStats
@@ -1300,17 +1273,13 @@ func NewLegacyMetrics() *LegacyMetrics {
 	PolicyChangeTotal = lm.PolicyChangeTotal
 	PolicyEndpointStatus = lm.PolicyEndpointStatus
 	PolicyImplementationDelay = lm.PolicyImplementationDelay
+	CIDRGroupsReferenced = lm.CIDRGroupsReferenced
 	CIDRGroupTranslationTimeStats = lm.CIDRGroupTranslationTimeStats
-	CIDRGroupPolicies = lm.CIDRGroupPolicies
 	Identity = lm.Identity
 	EventTS = lm.EventTS
 	EventLagK8s = lm.EventLagK8s
 	ProxyRedirects = lm.ProxyRedirects
 	ProxyPolicyL7Total = lm.ProxyPolicyL7Total
-	ProxyParseErrors = lm.ProxyParseErrors
-	ProxyForwarded = lm.ProxyForwarded
-	ProxyDenied = lm.ProxyDenied
-	ProxyReceived = lm.ProxyReceived
 	ProxyUpstreamTime = lm.ProxyUpstreamTime
 	ProxyDatapathUpdateTimeout = lm.ProxyDatapathUpdateTimeout
 	DropCount = lm.DropCount

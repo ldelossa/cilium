@@ -315,6 +315,11 @@ Annotations:
   Upgrading from Cilium 1.14.x or earlier to 1.15.y or later does not
   trigger this problem. Downgrading from Cilium 1.15.y or later to Cilium
   1.14.x or earlier may trigger this problem.
+* ``CiliumNetworkPolicy`` cannot match the ``reserved:init`` labels any more.
+  If you have ``CiliumNetworkPolicy`` resources that have a match for
+  labels ``reserved:init``, these policies must be converted to
+  ``CiliumClusterwideNetworkPolicy`` by changing the resource type for the
+  policy.
 
 .. _upgrade_cilium_cli_helm_mode:
 
@@ -355,6 +360,12 @@ Added Metrics
 ~~~~~~~~~~~~~
 
 * ``cilium_ipam_capacity``
+* ``cilium_endpoint_max_ifindex`` See `#27953 <https://github.com/cilium/cilium/pull/27953>`_ for configuration and usage information
+
+Removed Metrics
+~~~~~~~~~~~~~~~
+
+* Removed formerly deprecated metrics: ``cilium_policy_l7_parse_errors_total``, ``cilium_policy_l7_forwarded_total``, ``cilium_policy_l7_denied_total``, ``cilium_policy_l7_received_total`` (replaced by ``cilium_policy_l7_total``).
 
 Changed Metrics
 ~~~~~~~~~~~~~~~
@@ -367,6 +378,11 @@ Changed Metrics
   ``*_api_limiter_wait_duration_seconds`` metrics.
 * The ``cilium_bpf_map_pressure`` for policy maps is now exposed as a single
   label ``cilium_policy_*``, rather than a label per policy map of an endpoint.
+* ``cilium_policy_l7_total`` now has label ``proxy_type`` to distinguish between fqdn and envoy proxy requests.
+* The ``cilium_cidrgroup_policies`` metric has been renamed to
+  ``cilium_cidrgroups_referenced`` for better clarity.
+* The ``cilium_cidrgroup_translation_time_stats_seconds`` has been disabled by
+  default.
 
 .. _earlier_upgrade_notes:
 

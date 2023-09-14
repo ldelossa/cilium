@@ -116,6 +116,7 @@ Vagrantfile
 Vagrantfiles
 Viljoen
 Wendlandt
+Wireguard
 Wireshark
 Xenial
 Yan
@@ -218,6 +219,7 @@ configSources
 configmap
 configs
 conntrack
+conntrackGCInterval
 containerd
 contrib
 coord
@@ -346,6 +348,7 @@ hugepages
 hv
 icmp
 ie
+ifindex
 impactful
 ingressing
 init

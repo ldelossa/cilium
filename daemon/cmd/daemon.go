@@ -899,7 +899,9 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// which can be modified after the device detection.
 	var devices []string
 	if d.deviceManager != nil {
-		if _, err := d.deviceManager.Detect(params.Clientset.IsEnabled()); err != nil {
+		if detected, err := d.deviceManager.Detect(params.Clientset.IsEnabled()); err == nil {
+			devices = append(devices, detected...)
+		} else {
 			if option.Config.AreDevicesRequired() {
 				// Fail hard if devices are required to function.
 				return nil, nil, fmt.Errorf("failed to detect devices: %w", err)
@@ -1083,6 +1085,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	if err := d.allocateIPs(); err != nil { // will log errors/fatal internally
 		return nil, nil, err
+	}
+
+	// allocateIPs got us the routerIP so now we can create ipsec endpoint
+	// we must do this before publishing the router IP otherwise remote
+	// nodes could pick up the IP and send us outer headers we do not yet
+	// have xfrm rules for.
+	if option.Config.EnableIPSec {
+		if err := ipsec.Init(); err != nil {
+			log.WithError(err).Error("IPSec init failed")
+		}
 	}
 
 	// Must occur after d.allocateIPs(), see GH-14245 and its fix.
