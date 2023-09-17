@@ -19,9 +19,9 @@ jobs:
       fail-fast: false
       matrix:
         cute: [
-          { repo: sky, dir: . },
-          { repo: bloomberg, dir: . },
-          { repo: form3, dir: MAKS },
+          { repo: sky, dir: ., region: us-west-1 },
+          { repo: bloomberg, dir: ., region: us-west-2 },
+          { repo: form3, dir: MAKS, region: westus2 },
         ]
     runs-on: ubuntu-latest
     steps:
@@ -38,8 +38,6 @@ jobs:
           echo "Triggering workflow for CuTE: ${{ matrix.cute.repo }}/${{ matrix.cute.dir }}"
           gh workflow run enterprise-cute.yaml \
             --ref ${REF} \
-            -f PR-number=${REF/./-} \
             -f context-ref=${REF} \
-            -f SHA=$GITHUB_SHA \
-            -f extra-args="${{ matrix.cute.repo }}/${{ matrix.cute.dir }}" \
+            -f extra-args="${{ matrix.cute.repo }}/${{ matrix.cute.dir }}~${{ matrix.cute.region }}" \
             -f use-stable-branch="true"
