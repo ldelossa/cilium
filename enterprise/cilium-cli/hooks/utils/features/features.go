@@ -8,7 +8,7 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package hooks
+package features
 
 import (
 	"context"
@@ -22,13 +22,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const FeatureCiliumDNSProxyDeployed features.Feature = "cilium-dnsproxy-deployed"
+const (
+	CiliumDNSProxyDeployed features.Feature = "cilium-dnsproxy-deployed"
 
-func detectFeatures(ctx context.Context, ct *check.ConnectivityTest) error {
+	EgressGatewayHA features.Feature = "enable-ipv4-egress-gateway-ha"
+)
+
+func Detect(ctx context.Context, ct *check.ConnectivityTest) error {
 	for range ct.CiliumPods() {
 		err := extractExternalDNSProxyFeature(ctx, ct)
 		if err != nil {
-			return fmt.Errorf("failed to extract feature %s", FeatureCiliumDNSProxyDeployed)
+			return fmt.Errorf("failed to extract feature %s", CiliumDNSProxyDeployed)
+		}
+
+		err = extractFromConfigMap(ctx, ct)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -41,7 +50,7 @@ func extractExternalDNSProxyFeature(ctx context.Context, ct *check.ConnectivityT
 		return err
 	}
 
-	ct.Features[FeatureCiliumDNSProxyDeployed] = features.Status{
+	ct.Features[CiliumDNSProxyDeployed] = features.Status{
 		Enabled: isDeployed,
 	}
 
@@ -78,4 +87,20 @@ func detectExternalCiliumDNSProxyFeature(ctx context.Context, ct *check.Connecti
 	}
 
 	return true, nil
+}
+
+func extractFromConfigMap(ctx context.Context, ct *check.ConnectivityTest) error {
+	cm, err := ct.K8sClient().GetConfigMap(ctx, ct.Params().CiliumNamespace, defaults.ConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to retrieve ConfigMap %q: %w", defaults.ConfigMapName, err)
+	}
+	if cm.Data == nil {
+		return fmt.Errorf("ConfigMap %q does not contain any configuration", defaults.ConfigMapName)
+	}
+
+	ct.Features[EgressGatewayHA] = features.Status{
+		Enabled: cm.Data["enable-ipv4-egress-gateway-ha"] == "true",
+	}
+
+	return nil
 }
