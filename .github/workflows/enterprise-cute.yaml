@@ -4,16 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       PR-number:
-        description: "Pull request number."
+        description: "Pull request number. Not relevant for CuTEs."
         required: true
+        default: 'n/a'
       context-ref:
         description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
         required: true
       SHA:
-        description: "SHA under test (head of the PR branch)."
+        description: "SHA under test (head of the PR branch). Not relevant for CuTEs."
         required: true
+        default: 'n/a'
       extra-args:
-        description: "Mandatory arguments passed from the trigger comment via regex capture group. For example: `/cute sky`."
+        description: "Mandatory arguments passed from the trigger comment via regex capture group. For example: `sky`, `bloomberg`, etc."
         required: true
       use-stable-branch:
         description: "Arbitrary argument that indicates if CuTE should run on top of CE stable branch."
@@ -37,18 +39,29 @@ jobs:
         id: vars
         run: |
           input=${{ inputs.extra-args }}
-          repo="${input%%[/@]*}"; dir=""; ref=""
-          if [[ $input == */* ]]; then
-            dir_ref="${input##*/}"
-            dir="${dir_ref%%@*}"
+          region=""
+          if [[ $input == *~* ]]; then
+            region="${input##*~}"
+            input=${input%%~*}
           fi
+
+          ref=""
           if [[ $input == *@* ]]; then
             ref="${input##*@}"
+            input=${input%%@*}
+          fi
+
+          dir=""
+          repo=$input
+          if [[ $input == */* ]]; then
+            dir="${input##*/}"
+            repo=${input%%/*}
           fi
 
           echo cute_repo=$repo >> $GITHUB_OUTPUT
           echo cute_dir=$dir >> $GITHUB_OUTPUT
           echo cute_ref=$ref >> $GITHUB_OUTPUT
+          echo cute_region=$region >> $GITHUB_OUTPUT
 
       - name: Checkout CuTE repository
         uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
@@ -80,10 +93,14 @@ jobs:
             provider="gcp"
             region=$(echo "$regions" | jq -r .gcp)
           fi
-          
+
           if [ -z $provider ]; then
             echo "terraform provider not found!"
             exit 1
+          fi
+
+          if [ ${{ steps.vars.outputs.cute_region }} != "" ]; then
+            region=${{ steps.vars.outputs.cute_region }}
           fi
 
           ce_branch=${{ inputs.context-ref }}
@@ -278,7 +295,7 @@ jobs:
           cd ./${{ steps.vars.outputs.cute_dir }}
           cat > terraform.tfvars << EOF
           cluster_name="cute-${{ env.name }}"
-          owner="cute-ci"
+          owner="cute-ci-${{ env.name }}"
           region="${{ steps.cute_props.outputs.region }}"
           cilium_helm_chart="$HELM_CHART"
           cilium_helm_version="$HELM_CHART_VERSION"
