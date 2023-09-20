@@ -64,7 +64,7 @@ jobs:
           echo cute_region=$region >> $GITHUB_OUTPUT
 
       - name: Checkout CuTE repository
-        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           repository: isovalent/cute-${{ steps.vars.outputs.cute_repo }}
           ref: ${{ steps.vars.outputs.cute_ref }}
@@ -79,51 +79,48 @@ jobs:
           provider=""
           region=""
           count=$(cat *.tf | grep -c 'provider "aws"' || true)
-          if [ "$count" -gt 0 ]; then
+          if [[ "$count" -gt 0 ]]; then
             provider="aws"
             region=$(echo "$regions" | jq -r .aws)
           fi
           count=$(cat *.tf | grep -c 'provider "azurerm"' || true)
-          if [ "$count" -gt 0 ]; then
+          if [[ "$count" -gt 0 ]]; then
             provider="azure"
             region=$(echo "$regions" | jq -r .azure)
           fi
           count=$(cat *.tf | grep -c 'provider "google"' || true)
-          if [ "$count" -gt 0 ]; then
+          if [[ "$count" -gt 0 ]]; then
             provider="gcp"
             region=$(echo "$regions" | jq -r .gcp)
           fi
 
-          if [ -z $provider ]; then
+          if [[ -z $provider ]]; then
             echo "terraform provider not found!"
             exit 1
           fi
 
-          if [ ${{ steps.vars.outputs.cute_region }} != "" ]; then
+          if [[ "${{ steps.vars.outputs.cute_region }}" != "" ]]; then
             region=${{ steps.vars.outputs.cute_region }}
           fi
 
           ce_branch=${{ inputs.context-ref }}
           use_stable_branch=${{ inputs.use-stable-branch }}
-          if [[ $use_stable_branch == 'true' ]];
-          then
-            chart_version=$(grep -A 3 '^variable "cilium_helm_version" {' *.tf | grep 'default')
+          if [[ $use_stable_branch == 'true' ]]; then
+            chart_version=$(grep -A 3 '^variable "cilium_helm_version.*" {' *.tf | grep 'default')
             chart_version=$(echo "${chart_version##*=}" | xargs)
             # remove patch version number
-            if [[ $chart_version =~ ^[[:digit:]]+.[[:digit:]]+.[[:digit:]]+$ ]];
-            then
+            if [[ $chart_version =~ ^[[:digit:]]+.[[:digit:]]+..* ]]; then
               major="${chart_version%%\.*}"
               minor="${chart_version#*.}"
-              minor="${minor%.*}"
+              minor="${minor%%\.*}"
               chart_version="$major.$minor"
             fi
             ce_branch="v$chart_version-ce"
           fi
 
           use_ce_chart=false
-          count=$(grep -c '^cilium:\s*$' *.y*ml || true)
-          if [ "$count" -gt 0 ];
-          then
+          count=$(grep -o '^cilium:\s*$' *.y*ml | wc -l | xargs || true)
+          if [[ "$count" -gt 0 ]]; then
             use_ce_chart=true
           fi
 
@@ -132,59 +129,18 @@ jobs:
           echo ce_branch=$ce_branch >> $GITHUB_OUTPUT
           echo use_ce_chart=$use_ce_chart >> $GITHUB_OUTPUT
 
-      - name: Checkout CE branch
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
-        with:
-          # checkout pull request head ref so that print-chart-version.sh prints the correct chart version.
-          ref: ${{ steps.cute_props.outputs.ce_branch }}
-          # required for git describe
-          fetch-depth: 0
-          path: cilium
-
-      - name: Set helm chart version
-        id: cute_helm
-        working-directory: ./cilium
+      - name: Print CuTE properties
         run: |
-          version=$(bash contrib/scripts/print-chart-version.sh)
-          echo version=$version >> $GITHUB_OUTPUT
-          echo version_ce=$version-enterprise >> $GITHUB_OUTPUT
-
-      - name: Wait for Helm dev chart to be available
-        timeout-minutes: 30
-        run: |
-          until helm pull oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium --version ${{ steps.cute_helm.outputs.version }} &> /dev/null;
-            do sleep 15s;
-          done
-
-      - name: Checkout enterprise helm repo
-        if: steps.cute_props.outputs.use_ce_chart == 'true'
-        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
-        with:
-          repository: isovalent/helm-charts
-          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
-          path: ce_chart
-
-      - name: Hack enterprise helm chart
-        if: steps.cute_props.outputs.use_ce_chart == 'true'
-        working-directory: ./ce_chart
-        run: |
-          yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.cute_helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
-          yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}"' ./cilium-enterprise/Chart.yaml
-
-      - name: Push enterprise helm chart
-        if: steps.cute_props.outputs.use_ce_chart == 'true'
-        uses: cilium/reusable-workflows/.github/actions/push-helm-chart@6ae27958f2f37545bf48e44106b73df05b1f6d12 # v0.1.0
-        with:
-          name: cilium-enterprise
-          path: ce_chart/cilium-enterprise
-          version: ${{ steps.cute_helm.outputs.version_ce }}
-          registry: quay.io
-          registry_namespace: ${{ env.helm_registry_namespace }}
-          registry_username: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
-          registry_password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+          echo "CuTE repo: ${{ steps.vars.outputs.cute_repo }}"
+          echo "CuTE dir: ${{ steps.vars.outputs.cute_dir }}"
+          echo "CuTE ref: ${{ steps.vars.outputs.cute_ref }}"
+          echo "Cloud provider: ${{ steps.cute_props.outputs.provider }}"
+          echo "Region: ${{ steps.cute_props.outputs.region }}"
+          echo "CE branch: ${{ steps.cute_props.outputs.ce_branch }}"
+          echo "CE umbrella chart: ${{ steps.cute_props.outputs.use_ce_chart }}"
 
       - name: Checkout CE main-ce
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
         with:
           ref: main-ce
           fetch-depth: 0
@@ -281,13 +237,63 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$( jq -r '.subscriptionId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
 
+      - name: Checkout CE branch
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        with:
+          # checkout pull request head ref so that print-chart-version.sh prints the correct chart version.
+          ref: ${{ steps.cute_props.outputs.ce_branch }}
+          # required for git describe
+          fetch-depth: 0
+          path: cilium
+
+      - name: Set helm chart version
+        id: cute_helm
+        working-directory: ./cilium
+        run: |
+          version=$(bash contrib/scripts/print-chart-version.sh)
+          echo version=$version >> $GITHUB_OUTPUT
+          echo version_ce=$version-enterprise >> $GITHUB_OUTPUT
+
+      - name: Wait for Helm dev chart to be available
+        timeout-minutes: 30
+        run: |
+          until helm pull oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium --version ${{ steps.cute_helm.outputs.version }} &> /dev/null;
+            do sleep 15s;
+          done
+
+      - name: Checkout enterprise helm repo
+        if: steps.cute_props.outputs.use_ce_chart == 'true'
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        with:
+          repository: isovalent/helm-charts
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+          path: ce_chart
+
+      - name: Hack enterprise helm chart
+        if: steps.cute_props.outputs.use_ce_chart == 'true'
+        working-directory: ./ce_chart
+        run: |
+          yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.cute_helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
+          yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}"' ./cilium-enterprise/Chart.yaml
+
+      - name: Push enterprise helm chart
+        if: steps.cute_props.outputs.use_ce_chart == 'true'
+        uses: cilium/reusable-workflows/.github/actions/push-helm-chart@6ae27958f2f37545bf48e44106b73df05b1f6d12 # v0.1.0
+        with:
+          name: cilium-enterprise
+          path: ce_chart/cilium-enterprise
+          version: ${{ steps.cute_helm.outputs.version_ce }}
+          registry: quay.io
+          registry_namespace: ${{ env.helm_registry_namespace }}
+          registry_username: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
+          registry_password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+
       - name: CuTE Terraform variables file
         working-directory: ./cute
         run: |
           HELM_CHART="oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium"
           HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
-          if [ ${{ steps.cute_props.outputs.use_ce_chart }} == 'true' ];
-          then
+          if [[ ${{ steps.cute_props.outputs.use_ce_chart }} == 'true' ]]; then
             HELM_CHART="oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium-enterprise"
             HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version_ce }}
           fi
@@ -303,6 +309,10 @@ jobs:
           cilium_helm_version_1="$HELM_CHART_VERSION"
           cilium_helm_version_2="$HELM_CHART_VERSION"
           EOF
+
+          if [[ "$ARM_SUBSCRIPTION_ID" != "" ]]; then
+            echo "subscription_id=\"$ARM_SUBSCRIPTION_ID\"" >> terraform.tfvars
+          fi
 
       - name: Create CuTE resources
         id: create
