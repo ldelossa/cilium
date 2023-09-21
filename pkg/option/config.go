@@ -139,9 +139,6 @@ const (
 	// EnableExternalIPs enables implementation of k8s services with externalIPs in datapath
 	EnableExternalIPs = "enable-external-ips"
 
-	// K8sEnableEndpointSlice enables the k8s EndpointSlice feature into Cilium
-	K8sEnableEndpointSlice = "enable-k8s-endpoint-slice"
-
 	// EnableL7Proxy is the name of the option to enable L7 proxy
 	EnableL7Proxy = "enable-l7-proxy"
 
@@ -1106,10 +1103,6 @@ const (
 	// LBMaglevMapMaxEntries configures max entries of bpf map for Maglev.
 	LBMaglevMapMaxEntries = "bpf-lb-maglev-map-max"
 
-	// K8sServiceProxyName instructs Cilium to handle service objects only when
-	// service.kubernetes.io/service-proxy-name label equals the provided value.
-	K8sServiceProxyName = "k8s-service-proxy-name"
-
 	// CRDWaitTimeout is the timeout in which Cilium will exit if CRDs are not
 	// available.
 	CRDWaitTimeout = "crd-wait-timeout"
@@ -1208,6 +1201,9 @@ const (
 
 	// EnableK8sNetworkPolicy enables support for K8s NetworkPolicy.
 	EnableK8sNetworkPolicy = "enable-k8s-networkpolicy"
+
+	// PolicyCIDRMatchMode defines the entities that CIDR selectors can reach
+	PolicyCIDRMatchMode = "policy-cidr-match-mode"
 )
 
 // Default string arguments
@@ -2115,10 +2111,6 @@ type DaemonConfig struct {
 	// EnableLocalRedirectPolicy enables redirect policies to redirect traffic within nodes
 	EnableLocalRedirectPolicy bool
 
-	// K8sEnableEndpointSlice enables k8s endpoint slice feature that is used
-	// in kubernetes.
-	K8sEnableK8sEndpointSlice bool
-
 	// NodePortMin is the minimum port address for the NodePort range
 	NodePortMin int
 
@@ -2364,13 +2356,6 @@ type DaemonConfig struct {
 	// LBMaglevMapEntries is the maximum number of entries allowed in BPF lbmap for maglev.
 	LBMaglevMapEntries int
 
-	// K8sServiceProxyName is the value of service.kubernetes.io/service-proxy-name label,
-	// that identifies the service objects Cilium should handle.
-	// If the provided value is an empty string, Cilium will manage service objects when
-	// the label is not present. For more details -
-	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-network/2447-Make-kube-proxy-service-abstraction-optional
-	K8sServiceProxyName string
-
 	// CRDWaitTimeout is the timeout in which Cilium will exit if CRDs are not
 	// available.
 	CRDWaitTimeout time.Duration
@@ -2473,6 +2458,12 @@ type DaemonConfig struct {
 
 	// EnableK8sNetworkPolicy enables support for K8s NetworkPolicy.
 	EnableK8sNetworkPolicy bool
+
+	// PolicyCIDRMatchMode is the list of entities that can be selected by CIDR policy.
+	// Currently supported values:
+	// - world
+	// - world, remote-node
+	PolicyCIDRMatchMode []string
 }
 
 var (
@@ -2512,7 +2503,6 @@ var (
 		IdentityAllocationMode:          IdentityAllocationModeKVstore,
 		AllowICMPFragNeeded:             defaults.AllowICMPFragNeeded,
 		EnableWellKnownIdentities:       defaults.EnableWellKnownIdentities,
-		K8sEnableK8sEndpointSlice:       defaults.K8sEnableEndpointSlice,
 		AllocatorListTimeout:            defaults.AllocatorListTimeout,
 		EnableICMPRules:                 defaults.EnableICMPRules,
 		UseCiliumInternalIPForIPsec:     defaults.UseCiliumInternalIPForIPsec,
@@ -2523,6 +2513,7 @@ var (
 		EnableVTEP:             defaults.EnableVTEP,
 		EnableBGPControlPlane:  defaults.EnableBGPControlPlane,
 		EnableK8sNetworkPolicy: defaults.EnableK8sNetworkPolicy,
+		PolicyCIDRMatchMode:    defaults.PolicyCIDRMatchMode,
 	}
 )
 
@@ -2747,13 +2738,6 @@ func (c *DaemonConfig) EndpointStatusIsEnabled(option string) bool {
 	return ok
 }
 
-// K8sServiceProxyName returns the required value for the
-// service.kubernetes.io/service-proxy-name label in order for services to be
-// handled.
-func (c *DaemonConfig) K8sServiceProxyNameValue() string {
-	return c.K8sServiceProxyName
-}
-
 // CiliumNamespaceName returns the name of the namespace in which Cilium is
 // deployed in
 func (c *DaemonConfig) CiliumNamespaceName() string {
@@ -2789,6 +2773,28 @@ func (c *DaemonConfig) K8sGatewayAPIEnabled() bool {
 // is enabled.
 func (c *DaemonConfig) EgressGatewayCommonEnabled() bool {
 	return c.EnableIPv4EgressGateway
+}
+
+func (c *DaemonConfig) PolicyCIDRMatchesNodes() bool {
+	for _, mode := range c.PolicyCIDRMatchMode {
+		if mode == "nodes" {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *DaemonConfig) validatePolicyCIDRMatchMode() error {
+	// Currently, the only acceptable values is "nodes".
+	for _, mode := range c.PolicyCIDRMatchMode {
+		switch mode {
+		case "nodes":
+			continue
+		default:
+			return fmt.Errorf("unknown CIDR match mode: %s", mode)
+		}
+	}
+	return nil
 }
 
 // DirectRoutingDeviceRequired return whether the Direct Routing Device is needed under
@@ -2928,6 +2934,10 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 		if err != nil {
 			return fmt.Errorf("Failed to validate VTEP configuration: %w", err)
 		}
+	}
+
+	if err := c.validatePolicyCIDRMatchMode(); err != nil {
+		return err
 	}
 
 	return nil
@@ -3122,7 +3132,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.IPv6Range = vp.GetString(IPv6Range)
 	c.IPv6ServiceRange = vp.GetString(IPv6ServiceRange)
 	c.JoinCluster = vp.GetBool(JoinClusterName)
-	c.K8sEnableK8sEndpointSlice = vp.GetBool(K8sEnableEndpointSlice)
 	c.K8sRequireIPv4PodCIDR = vp.GetBool(K8sRequireIPv4PodCIDRName)
 	c.K8sRequireIPv6PodCIDR = vp.GetBool(K8sRequireIPv6PodCIDRName)
 	c.K8sServiceCacheSize = uint(vp.GetInt(K8sServiceCacheSize))
@@ -3193,7 +3202,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.PolicyAuditMode = vp.GetBool(PolicyAuditModeArg)
 	c.EnableIPv4FragmentsTracking = vp.GetBool(EnableIPv4FragmentsTrackingName)
 	c.FragmentsMapEntries = vp.GetInt(FragmentsMapEntriesName)
-	c.K8sServiceProxyName = vp.GetString(K8sServiceProxyName)
 	c.CRDWaitTimeout = vp.GetDuration(CRDWaitTimeout)
 	c.LoadBalancerDSRDispatch = vp.GetString(LoadBalancerDSRDispatch)
 	c.LoadBalancerDSRL4Xlate = vp.GetString(LoadBalancerDSRL4Xlate)
@@ -3617,6 +3625,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 
 	// To support K8s NetworkPolicy
 	c.EnableK8sNetworkPolicy = vp.GetBool(EnableK8sNetworkPolicy)
+	c.PolicyCIDRMatchMode = vp.GetStringSlice(PolicyCIDRMatchMode)
 }
 
 func (c *DaemonConfig) populateDevices(vp *viper.Viper) {

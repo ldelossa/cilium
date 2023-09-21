@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 	ReservedIdentityType     = "reserved"
 	ClusterLocalIdentityType = "cluster_local"
 	WellKnownIdentityType    = "well_known"
+	RemoteNodeIdentityType   = "remote_node"
 )
 
 // Identity is the representation of the security context for a particular set of
@@ -180,18 +182,33 @@ func (pair *IPIdentityPair) PrefixString() string {
 // RequiresGlobalIdentity returns true if the label combination requires a
 // global identity
 func RequiresGlobalIdentity(lbls labels.Labels) bool {
-	needsGlobal := true
+	return ScopeForLabels(lbls) == IdentityScopeGlobal
+}
+
+// ScopeForLabels returns the identity scope to be used for the label set.
+// If all labels are either CIDR or reserved, then returns the CIDR scope.
+// Note: This assumes the caller has already called LookupReservedIdentityByLabels;
+// it does not handle that case.
+func ScopeForLabels(lbls labels.Labels) NumericIdentity {
+	scope := IdentityScopeGlobal
+
+	// If this is a remote node, return the remote node scope.
+	// Note that this is not reachable when policy-cidr-selects-nodes is false, since
+	// callers will already have gotten a value from LookupReservedIdentityByLabels.
+	if lbls.Has(labels.LabelRemoteNode[labels.IDNameRemoteNode]) {
+		return IdentityScopeRemoteNode
+	}
 
 	for _, label := range lbls {
 		switch label.Source {
 		case labels.LabelSourceCIDR, labels.LabelSourceReserved:
-			needsGlobal = false
+			scope = IdentityScopeLocal
 		default:
-			return true
+			return IdentityScopeGlobal
 		}
 	}
 
-	return needsGlobal
+	return scope
 }
 
 // AddUserDefinedNumericIdentitySet adds all key-value pairs from the given map
@@ -246,6 +263,11 @@ func LookupReservedIdentityByLabels(lbls labels.Labels) *Identity {
 	if lbls.Has(labels.LabelHost[labels.IDNameHost]) {
 		nid = ReservedIdentityHost
 	} else if lbls.Has(labels.LabelRemoteNode[labels.IDNameRemoteNode]) {
+		// If selecting remote-nodes via CIDR policies is allowed, then
+		// they no longer have a reserved identity.
+		if option.Config.PolicyCIDRMatchesNodes() {
+			return nil
+		}
 		nid = ReservedIdentityRemoteNode
 		if lbls.Has(labels.LabelKubeAPIServer[labels.IDNameKubeAPIServer]) {
 			// If there's a kube-apiserver label, then we know this is

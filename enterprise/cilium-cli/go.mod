@@ -34,7 +34,7 @@ require (
 	github.com/cilium/charts v0.0.0-20230901091647-7b38eb320edd // indirect
 	github.com/cilium/ebpf v0.11.0 // indirect
 	github.com/cilium/hubble v0.12.0 // indirect
-	github.com/cilium/proxy v0.0.0-20230911173141-49b6a7c9c075 // indirect
+	github.com/cilium/proxy v0.0.0-20230914115435-e8543968fd3d // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230907211620-84f1a3735ef1 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
