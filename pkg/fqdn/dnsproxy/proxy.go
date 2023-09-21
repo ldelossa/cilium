@@ -242,7 +242,7 @@ func (p *DNSProxy) GetRules(endpointID uint16) (restore.DNSRules, error) {
 
 	portToSelRegex := make(map[uint16][]selRegex)
 	for port, entries := range p.allowed[uint64(endpointID)] {
-		var nidRules = make([]selRegex, 0, len(entries))
+		nidRules := make([]selRegex, 0, len(entries))
 		// Copy the entries to avoid racy map accesses after we release the lock. We don't need
 		// constant time access, hence a preallocated slice instead of another map.
 		for cs, regex := range entries {
@@ -529,6 +529,7 @@ func (e ErrFailedAcquireSemaphore) Timeout() bool { return true }
 
 // Temporary is deprecated. Return false.
 func (e ErrFailedAcquireSemaphore) Temporary() bool { return false }
+
 func (e ErrFailedAcquireSemaphore) Error() string {
 	return fmt.Sprintf(
 		"failed to acquire DNS proxy semaphore, %d parallel requests already in-flight",
@@ -922,7 +923,8 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 				return err
 			}
 			return soerr
-		}}
+		},
+	}
 	client.Dialer = &dialer
 
 	conn, err := client.Dial(targetServerAddrStr)
@@ -1099,9 +1101,6 @@ func bindToAddr(address string, port uint16, handler dns.Handler, ipv4, ipv6 boo
 		}
 	}()
 
-	// Global singleton sessionUDPFactory which is used for IPv4 & IPv6
-	sessUdpFactory := &sessionUDPFactory{ipv4Enabled: ipv4, ipv6Enabled: ipv6}
-
 	var ipFamilies []ipfamily.IPFamily
 	if ipv4 {
 		ipFamilies = append(ipFamilies, ipfamily.IPv4())
@@ -1110,29 +1109,33 @@ func bindToAddr(address string, port uint16, handler dns.Handler, ipv4, ipv6 boo
 		ipFamilies = append(ipFamilies, ipfamily.IPv6())
 	}
 
-	for _, ipf := range ipFamilies {
-		lc := listenConfig(linux_defaults.MagicMarkEgress, ipf.IPv4Enabled, ipf.IPv6Enabled)
+	for _, ipFamily := range ipFamilies {
+		lc := listenConfig(linux_defaults.MagicMarkEgress, ipFamily)
 
-		tcpListener, err := lc.Listen(context.Background(), ipf.TCPAddress, evaluateAddress(address, port, bindPort, ipf))
+		tcpListener, err := lc.Listen(context.Background(), ipFamily.TCPAddress, evaluateAddress(address, port, bindPort, ipFamily))
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to listen on %s: %w", ipf.TCPAddress, err)
+			return nil, 0, fmt.Errorf("failed to listen on %s: %w", ipFamily.TCPAddress, err)
 		}
 		dnsServers = append(dnsServers, &dns.Server{
 			Listener: tcpListener, Handler: handler,
 			// Net & Addr are only set for logging purposes and aren't used if using ActivateAndServe.
-			Net: ipf.TCPAddress, Addr: tcpListener.Addr().String(),
+			Net: ipFamily.TCPAddress, Addr: tcpListener.Addr().String(),
 		})
 
 		bindPort = uint16(tcpListener.Addr().(*net.TCPAddr).Port)
 
-		udpConn, err := lc.ListenPacket(context.Background(), ipf.UDPAddress, evaluateAddress(address, port, bindPort, ipf))
+		udpConn, err := lc.ListenPacket(context.Background(), ipFamily.UDPAddress, evaluateAddress(address, port, bindPort, ipFamily))
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to listen on %s: %w", ipf.UDPAddress, err)
+			return nil, 0, fmt.Errorf("failed to listen on %s: %w", ipFamily.UDPAddress, err)
+		}
+		sessionUDPFactory, ferr := NewSessionUDPFactory(ipFamily)
+		if ferr != nil {
+			return nil, 0, fmt.Errorf("failed to create UDP session factory for %s: %w", ipFamily.UDPAddress, err)
 		}
 		dnsServers = append(dnsServers, &dns.Server{
-			PacketConn: udpConn, Handler: handler, SessionUDPFactory: sessUdpFactory,
+			PacketConn: udpConn, Handler: handler, SessionUDPFactory: sessionUDPFactory,
 			// Net & Addr are only set for logging purposes and aren't used if using ActivateAndServe.
-			Net: ipf.UDPAddress, Addr: udpConn.LocalAddr().String(),
+			Net: ipFamily.UDPAddress, Addr: udpConn.LocalAddr().String(),
 		})
 	}
 

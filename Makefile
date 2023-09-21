@@ -426,7 +426,7 @@ govet: ## Run govet on Go source files in the repository.
 	$(QUIET) $(GO_VET) ./...
 
 golangci-lint: ## Run golangci-lint
-ifneq (,$(findstring $(GOLANGCILINT_WANT_VERSION),$(GOLANGCILINT_VERSION)))
+ifneq (,$(findstring $(GOLANGCILINT_WANT_VERSION:v%=%),$(GOLANGCILINT_VERSION)))
 	@$(ECHO_CHECK) golangci-lint $(GOLANGCI_LINT_ARGS)
 	$(QUIET) golangci-lint run $(GOLANGCI_LINT_ARGS)
 else
@@ -580,7 +580,7 @@ kind-install-cilium-fast: kind-ready ## Install a local Cilium version into the 
 	@echo "  INSTALL cilium"
 	# cilium-cli doesn't support idempotent installs, so we uninstall and
 	# reinstall here. https://github.com/cilium/cilium-cli/issues/205
-	-$(CILIUM_CLI) uninstall >/dev/null
+	-@$(CILIUM_CLI) uninstall >/dev/null 2>&1 || true
 	# cilium-cli's --wait flag doesn't work, so we just force it to run
 	# in the background instead and wait for the resources to be available.
 	# https://github.com/cilium/cilium-cli/issues/1070
@@ -591,16 +591,27 @@ kind-install-cilium-fast: kind-ready ## Install a local Cilium version into the 
 		--version= \
 		>/dev/null 2>&1 &
 
-.PHONY: kind-image-fast
-kind-image-fast: ## Build cilium, operator, clustermesh-apiserver and mount them into a volume for all available Kind clusters.
-	$(eval dst:=/cilium-binaries)
-	$(MAKE) -C cilium
-	$(MAKE) -C daemon
-	$(MAKE) -C operator cilium-operator-generic
-	$(MAKE) -C clustermesh-apiserver
+.PHONY: build-cli
+build-cli: ## Build cilium cli binary
+	$(QUIET)$(MAKE) -C cilium
 
+.PHONY: build-agent
+build-agent: ## Build cilium daemon binary
+	$(QUIET)$(MAKE) -C daemon
+
+.PHONY: build-operator
+build-operator: ## Build cilium operator binary
+	$(QUIET)$(MAKE) -C operator cilium-operator-generic
+
+.PHONY: build-clustermesh-apiserver
+build-clustermesh-apiserver: ## Build cilium clustermesh-apiserver binary
+	$(QUIET)$(MAKE) -C clustermesh-apiserver
+
+.PHONY: kind-image-fast-agent
+kind-image-fast-agent: kind-ready build-cli build-agent ## Build cilium cli and daemon binaries. Copy the bins and bpf files to kind nodes.
+	$(eval dst:=/cilium-binaries)
 	for cluster_name in $${KIND_CLUSTERS:-$(shell kind get clusters)}; do \
-	    for node_name in $(shell kind get nodes -n "${cluster_name}"); do \
+		for node_name in $(shell kind get nodes -n "${cluster_name}"); do \
 			docker exec -ti $${node_name} mkdir -p "${dst}"; \
 			\
 			docker exec -ti $${node_name} rm -rf "${dst}/var/lib/cilium"; \
@@ -616,26 +627,49 @@ kind-image-fast: ## Build cilium, operator, clustermesh-apiserver and mount them
 			docker cp "./daemon/cilium-agent" $${node_name}:"${dst}"; \
 			docker exec -ti $${node_name} chmod +x "${dst}/cilium-agent"; \
 			\
+			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l k8s-app=cilium --force; \
+		done; \
+	done
+
+.PHONY: kind-image-fast-operator
+kind-image-fast-operator: kind-ready build-operator ## Build cilium operator binary and copy it to all kind nodes.
+	$(eval dst:=/cilium-binaries)
+	for cluster_name in $${KIND_CLUSTERS:-$(shell kind get clusters)}; do \
+		for node_name in $(shell kind get nodes -n "${cluster_name}"); do \
+			docker exec -ti $${node_name} mkdir -p "${dst}"; \
+			\
 			docker exec -ti $${node_name} rm -f "${dst}/cilium-operator-generic"; \
 			docker cp "./operator/cilium-operator-generic" $${node_name}:"${dst}"; \
 			docker exec -ti $${node_name} chmod +x "${dst}/cilium-operator-generic"; \
+			\
+			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l name=cilium-operator --force; \
+		done; \
+	done
+
+.PHONY: kind-image-fast-clustermesh-apiserver
+kind-image-fast-clustermesh-apiserver: kind-ready build-clustermesh-apiserver ## Build clustermesh-apiserver binary and copy it to all kind nodes.
+	$(eval dst:=/cilium-binaries)
+	for cluster_name in $${KIND_CLUSTERS:-$(shell kind get clusters)}; do \
+		for node_name in $(shell kind get nodes -n "${cluster_name}"); do \
+			docker exec -ti $${node_name} mkdir -p "${dst}"; \
 			\
 			docker exec -ti $${node_name} rm -f "${dst}/clustermesh-apiserver"; \
 			docker cp "./clustermesh-apiserver/clustermesh-apiserver" $${node_name}:"${dst}"; \
 			docker exec -ti $${node_name} chmod +x "${dst}/clustermesh-apiserver"; \
 			\
-			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l k8s-app=cilium --force; \
-			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l name=cilium-operator --force; \
 			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l k8s-app=clustermesh-apiserver --force; \
 		done; \
 	done
+
+.PHONY: kind-image-fast
+kind-image-fast: kind-image-fast-agent kind-image-fast-operator kind-image-fast-clustermesh-apiserver ## Build all binaries and copy them to kind nodes.
 
 .PHONY: kind-install-cilium
 kind-install-cilium: kind-ready ## Install a local Cilium version into the cluster.
 	@echo "  INSTALL cilium"
 	# cilium-cli doesn't support idempotent installs, so we uninstall and
 	# reinstall here. https://github.com/cilium/cilium-cli/issues/205
-	-$(CILIUM_CLI) uninstall >/dev/null
+	-@$(CILIUM_CLI) uninstall >/dev/null 2>&1 || true
 	# cilium-cli's --wait flag doesn't work, so we just force it to run
 	# in the background instead and wait for the resources to be available.
 	# https://github.com/cilium/cilium-cli/issues/1070

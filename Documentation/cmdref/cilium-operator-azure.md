@@ -45,7 +45,7 @@ cilium-operator-azure [flags]
       --enable-ipv6                                          Enable IPv6 support (default true)
       --enable-k8s                                           Enable the k8s clientset (default true)
       --enable-k8s-api-discovery                             Enable discovery of Kubernetes API groups and resources with the discovery API
-      --enable-k8s-endpoint-slice                            Enables k8s EndpointSlice feature into Cilium-Operator if the k8s cluster supports it (default true)
+      --enable-k8s-endpoint-slice                            Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-metrics                                       Enable Prometheus metrics
       --fqdn-group-min-query-interval duration               Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gops-port uint16                                     Port for gops server to listen on (default 9891)

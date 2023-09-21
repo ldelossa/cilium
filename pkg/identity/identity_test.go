@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/pkg/checker"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labels/cidr"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 // Hook up gocheck into the "go test" runner.
@@ -81,6 +82,64 @@ func (s *IdentityTestSuite) TestRequiresGlobalIdentity(c *C) {
 	c.Assert(RequiresGlobalIdentity(labels.NewLabelsFromModel([]string{"k8s:foo=bar"})), Equals, true)
 }
 
+func (s *IdentityTestSuite) TestScopeForLabels(c *C) {
+	tests := []struct {
+		lbls  labels.Labels
+		scope NumericIdentity
+	}{
+		{
+			lbls:  cidr.GetCIDRLabels(netip.MustParsePrefix("0.0.0.0/0")),
+			scope: IdentityScopeLocal,
+		},
+		{
+			lbls:  cidr.GetCIDRLabels(netip.MustParsePrefix("192.168.23.0/24")),
+			scope: IdentityScopeLocal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"k8s:foo=bar"}),
+			scope: IdentityScopeGlobal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:world"}),
+			scope: IdentityScopeGlobal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:unmanaged"}),
+			scope: IdentityScopeGlobal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:health"}),
+			scope: IdentityScopeGlobal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:init"}),
+			scope: IdentityScopeGlobal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:ingress"}),
+			scope: IdentityScopeGlobal,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:remote-node"}),
+			scope: IdentityScopeRemoteNode,
+		},
+		{
+			lbls:  labels.NewLabelsFromModel([]string{"reserved:remote-node", "reserved:kube-apiserver"}),
+			scope: IdentityScopeRemoteNode,
+		},
+	}
+
+	for i, test := range tests {
+		// ScopeForLabels requires this to return nil
+		id := LookupReservedIdentityByLabels(test.lbls)
+		if id != nil {
+			continue
+		}
+		scope := ScopeForLabels(test.lbls)
+		c.Assert(scope, Equals, test.scope, Commentf("%d / labels %s", i, test.lbls.String()))
+	}
+}
+
 func (s *IdentityTestSuite) TestNewIdentityFromLabelArray(c *C) {
 	id := NewIdentityFromLabelArray(NumericIdentity(1001),
 		labels.NewLabelArrayFromSortedList("unspec:a=;unspec:b;unspec:c=d"))
@@ -102,9 +161,10 @@ func TestLookupReservedIdentityByLabels(t *testing.T) {
 		labels labels.Labels
 	}
 	tests := []struct {
-		name string
-		args labels.Labels
-		want *want
+		name           string
+		args           labels.Labels
+		want           *want
+		nodeCIDRPolicy bool
 	}{
 		{
 			name: "nil",
@@ -239,9 +299,42 @@ func TestLookupReservedIdentityByLabels(t *testing.T) {
 			}, ""),
 			want: nil,
 		},
+		{
+			name:           "remote-node-with-cidr-policy",
+			args:           labels.LabelRemoteNode,
+			nodeCIDRPolicy: true,
+			want:           nil,
+		},
+		{
+			name: "kube-apiserver-and-remote-node-cidr-policy",
+			args: labels.Map2Labels(map[string]string{
+				labels.LabelKubeAPIServer.String(): "",
+				labels.LabelRemoteNode.String():    "",
+			}, ""),
+			nodeCIDRPolicy: true,
+			want:           nil,
+		},
+		{
+			name: "remote-node-and-kube-apiserver-cidr-policy",
+			args: labels.Map2Labels(map[string]string{
+				labels.LabelRemoteNode.String():    "",
+				labels.LabelKubeAPIServer.String(): "",
+			}, ""),
+			nodeCIDRPolicy: true,
+			want:           nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			oldVal := option.Config.PolicyCIDRMatchMode
+			defer func() {
+				option.Config.PolicyCIDRMatchMode = oldVal
+			}()
+			if tt.nodeCIDRPolicy {
+				option.Config.PolicyCIDRMatchMode = []string{"nodes"}
+			} else {
+				option.Config.PolicyCIDRMatchMode = []string{}
+			}
 			id := LookupReservedIdentityByLabels(tt.args)
 			if tt.want == nil {
 				assert.Nil(t, id)

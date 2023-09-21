@@ -1087,7 +1087,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:37168e791fd1bcb456988554e17dea85a200287a30011b6601791b25a354a7d7","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.0-49b6a7c9c075b587f26255e73eda3fa08506b3e4","useDigest":true}``
+     - ``{"digest":"sha256:4c1c6a8b3f4b643effcd7eaed57cbd3e03ce766acf6849b75d12128d3901019e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.0-e8543968fd3d6198b52640ef0b978cecfbaadcd7","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -2464,6 +2464,10 @@
      - Security Context for cilium-agent pods.
      - object
      - ``{}``
+   * - :spelling:ignore:`policyCIDRMatchMode`
+     - policyCIDRMatchMode is a list of entities that may be selected by CIDR selector. The possible value is "nodes".
+     - string
+     - ``nil``
    * - :spelling:ignore:`policyEnforcementMode`
      - The agent can be put into one of the three policy enforcement modes: default, always and never. ref: https://docs.cilium.io/en/stable/security/policy/intro/#policy-enforcement-modes
      - string
