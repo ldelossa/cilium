@@ -24,13 +24,12 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive/hivetest"
-	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipam"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
+	"github.com/cilium/cilium/pkg/k8s/resource"
 	slimMetav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
-	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
@@ -41,6 +40,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
 )
 
 type fakeSIDAllocator struct {
@@ -142,6 +143,54 @@ func (fa *fakeIPAMAllocator) RestoreFinished() {
 
 func (fa *fakeIPAMAllocator) Capacity() uint64 {
 	return 0
+}
+
+var _ resource.Store[runtime.Object] = (*fakeStore[runtime.Object])(nil)
+
+type fakeStore[T runtime.Object] struct {
+	slice []T
+}
+
+func (fs *fakeStore[T]) List() []T {
+	return fs.slice
+}
+func (fs *fakeStore[T]) IterKeys() resource.KeyIter { return nil }
+func (fs *fakeStore[T]) Get(obj T) (item T, exists bool, err error) {
+	var def T
+	return def, false, nil
+}
+func (fs *fakeStore[T]) GetByKey(key resource.Key) (item T, exists bool, err error) {
+	var def T
+	return def, false, nil
+}
+func (fs *fakeStore[T]) IndexKeys(indexName, indexedValue string) ([]string, error) {
+	return []string{}, nil
+}
+func (fs *fakeStore[T]) ByIndex(indexName, indexedValue string) ([]T, error) {
+	return []T{}, nil
+}
+func (fs *fakeStore[T]) CacheStore() cache.Store { return nil }
+
+var _ resource.Resource[runtime.Object] = (*fakeResource[runtime.Object])(nil)
+
+type fakeResource[T runtime.Object] struct {
+	store resource.Store[T]
+}
+
+func (fr *fakeResource[T]) Observe(ctx context.Context, next func(event resource.Event[T]), complete func(error)) {
+
+}
+
+func (fr *fakeResource[T]) Events(ctx context.Context, opts ...resource.EventsOpt) <-chan resource.Event[T] {
+	return make(<-chan resource.Event[T])
+}
+
+func (fr *fakeResource[T]) Store(context.Context) (resource.Store[T], error) {
+	if fr.store != nil {
+		return fr.store, nil
+	}
+
+	return &fakeStore[T]{}, nil
 }
 
 type comparableObject[T any] interface {
@@ -682,6 +731,11 @@ func TestSRv6Manager(t *testing.T) {
 			// Dummy identity allocator
 			identityAllocator := testidentity.NewMockIdentityAllocator(nil)
 
+			// Fake CiliumEndpoint Resource & Store
+			cepResource := &fakeResource[*k8sTypes.CiliumEndpoint]{}
+			cepStore := &fakeStore[*k8sTypes.CiliumEndpoint]{}
+			cepResource.store = cepStore
+
 			manager := NewSRv6Manager(Params{
 				Lifecycle: hivetest.Lifecycle(t),
 				DaemonConfig: &option.DaemonConfig{
@@ -691,6 +745,7 @@ func TestSRv6Manager(t *testing.T) {
 				CacheIdentityAllocator: identityAllocator,
 				CacheStatus:            cacheStatus,
 				SIDManagerPromise:      promise,
+				CiliumEndpointResource: cepResource,
 			})
 
 			// This allocator always returns fixed SID for AllocateNext
@@ -698,22 +753,9 @@ func TestSRv6Manager(t *testing.T) {
 				sid: sid2IP,
 			})
 
-			// Emulate an initial resource sync. Since it's hard to emulate
-			// the behavior of identity allocator, we populate epDataStore
-			// directly here.
-			// manager.epDataStore = test.endpoints
-
+			// Create initial CiliumEndpoints
 			for _, ep := range test.initEndpoints {
-				id, _, err := identityAllocator.AllocateIdentity(
-					context.TODO(),
-					labels.NewLabelsFromModel(ep.Identity.Labels),
-					false,
-					identity.InvalidIdentity,
-				)
-				copiedEp := ep.DeepCopy()
-				copiedEp.Identity.ID = int64(id.ID)
-				require.NoError(t, err)
-				manager.OnUpdateEndpoint(copiedEp)
+				cepStore.slice = append(cepStore.slice, ep.DeepCopy())
 			}
 
 			for _, vrf := range test.initVRFs {
@@ -755,24 +797,10 @@ func TestSRv6Manager(t *testing.T) {
 				return manager.sidAllocatorIsSet()
 			}, time.Second*3, time.Millisecond*100)
 
-			// Do CRUD for Endpoints
-			epsToAdd, epsToUpdate, epsToDel := planK8sObj(test.initEndpoints, test.updatedEndpoints)
-
-			for _, ep := range append(epsToAdd, epsToUpdate...) {
-				id, _, err := identityAllocator.AllocateIdentity(
-					context.TODO(),
-					labels.NewLabelsFromModel(ep.Identity.Labels),
-					false,
-					identity.InvalidIdentity,
-				)
-				copiedEp := ep.DeepCopy()
-				copiedEp.Identity.ID = int64(id.ID)
-				require.NoError(t, err)
-				manager.OnUpdateEndpoint(copiedEp)
-			}
-
-			for _, ep := range epsToDel {
-				manager.OnDeleteEndpoint(ep)
+			// Update Endpoints
+			cepStore.slice = nil
+			for _, ep := range test.updatedEndpoints {
+				cepStore.slice = append(cepStore.slice, ep.DeepCopy())
 			}
 
 			// Do CRUD for VRFs
@@ -884,34 +912,51 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	// Dummy channel to notify k8s cache sync
 	cacheStatus := make(chan struct{})
 
+	// Dummy identity allocator
+	identityAllocator := testidentity.NewMockIdentityAllocator(nil)
+
+	// Fake CiliumEndpoint Resource & Store
+	cepResource := &fakeResource[*k8sTypes.CiliumEndpoint]{}
+	cepStore := &fakeStore[*k8sTypes.CiliumEndpoint]{}
+	cepResource.store = cepStore
+
 	manager := NewSRv6Manager(Params{
 		Lifecycle: hivetest.Lifecycle(t),
 		DaemonConfig: &option.DaemonConfig{
 			EnableSRv6: true,
 		},
 		Sig:                    signaler.NewBGPCPSignaler(),
-		CacheIdentityAllocator: nil,
+		CacheIdentityAllocator: identityAllocator,
 		CacheStatus:            cacheStatus,
 		SIDManagerPromise:      promise,
+		CiliumEndpointResource: cepResource,
 	})
 
 	// This allocator will never be used
 	manager.SetSIDAllocator(&fakeIPAMAllocator{})
 
-	// Emulate initial resource sync. Since it's hard to emulate
-	// the behavior of identity allocator, we populate epDataStore
-	// directly here.
-	manager.epDataStore = map[endpointID]*endpointMetadata{
-		{Name: "pod1"}: {
-			labels: map[string]string{
+	// Create initial CiliumEndpoint
+	cepStore.slice = append(cepStore.slice, &k8sTypes.CiliumEndpoint{
+		ObjectMeta: slimMetav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "pod1",
+			Labels: map[string]string{
 				"vrf": "vrf0",
 			},
-			id: endpointID{Name: "pod1"},
-			ips: []net.IP{
-				net.ParseIP("10.0.0.1"),
+		},
+		Identity: &v2.EndpointIdentity{
+			Labels: []string{
+				"k8s:vrf=vrf0",
 			},
 		},
-	}
+		Networking: &v2.EndpointNetworking{
+			Addressing: v2.AddressPairList{
+				{
+					IPV4: "10.0.0.1",
+				},
+			},
+		},
+	})
 
 	// Emulate an initial sync
 	v, err := ParseVRF(vrf0)
@@ -1220,15 +1265,24 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			// Dummy channel to notify k8s cache sync
 			cacheStatus := make(chan struct{})
 
+			// Dummy identity allocator
+			identityAllocator := testidentity.NewMockIdentityAllocator(nil)
+
+			// Fake CiliumEndpoint Resource & Store
+			cepResource := &fakeResource[*k8sTypes.CiliumEndpoint]{}
+			cepStore := &fakeStore[*k8sTypes.CiliumEndpoint]{}
+			cepResource.store = cepStore
+
 			manager := NewSRv6Manager(Params{
 				Lifecycle: hivetest.Lifecycle(t),
 				DaemonConfig: &option.DaemonConfig{
 					EnableSRv6: true,
 				},
 				Sig:                    signaler.NewBGPCPSignaler(),
-				CacheIdentityAllocator: nil,
+				CacheIdentityAllocator: identityAllocator,
 				CacheStatus:            cacheStatus,
 				SIDManagerPromise:      promise,
+				CiliumEndpointResource: cepResource,
 			})
 
 			// This allocator will never be used
