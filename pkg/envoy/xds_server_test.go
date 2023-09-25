@@ -463,6 +463,31 @@ func (s *ServerSuite) TestGetHTTPRule(c *C) {
 	c.Assert(canShortCircuit, Equals, true)
 }
 
+func (s *ServerSuite) Test_getWildcardNetworkPolicyRule(c *C) {
+	perSelectorPoliciesWithWildcard := policy.L7DataMap{
+		cachedSelector1:           nil,
+		cachedRequiresV2Selector1: nil,
+		wildcardCachedSelector:    nil,
+	}
+
+	obtained := getWildcardNetworkPolicyRule(perSelectorPoliciesWithWildcard)
+	c.Assert(obtained, checker.ExportedEquals,
+		&cilium.PortNetworkPolicyRule{})
+
+	// both cachedSelector2 and cachedSelector2 select identity 1001, but duplicates must have been removed
+	perSelectorPolicies := policy.L7DataMap{
+		cachedSelector2:           nil,
+		cachedSelector1:           nil,
+		cachedRequiresV2Selector1: nil,
+	}
+
+	obtained = getWildcardNetworkPolicyRule(perSelectorPolicies)
+	c.Assert(obtained, checker.ExportedEquals,
+		&cilium.PortNetworkPolicyRule{
+			RemotePolicies: []uint32{1001, 1002, 1003},
+		})
+}
+
 func (s *ServerSuite) TestGetPortNetworkPolicyRule(c *C) {
 	obtained, canShortCircuit := getPortNetworkPolicyRule(cachedSelector1, cachedSelector1.IsWildcard(), policy.ParserTypeHTTP, L7Rules12)
 	c.Assert(obtained, checker.ExportedEquals, ExpectedPortNetworkPolicyRule12)
@@ -615,7 +640,7 @@ var ExpectedPerPortPoliciesL7 = []*cilium.PortNetworkPolicy{
 		Port:     9090,
 		Protocol: envoy_config_core.SocketAddress_TCP,
 		Rules: []*cilium.PortNetworkPolicyRule{{
-			// RemotePolicies: []uint64{1001, 1002}, // Effective wildcard due to only one selector in the policy
+			// RemotePolicies: []uint32{1001, 1002}, // Effective wildcard due to only one selector in the policy
 			L7Proto: "tester",
 			L7: &cilium.PortNetworkPolicyRule_L7Rules{
 				L7Rules: &cilium.L7NetworkPolicyRules{
@@ -667,7 +692,7 @@ var ExpectedPerPortPoliciesKafka = []*cilium.PortNetworkPolicy{
 		Port:     9092,
 		Protocol: envoy_config_core.SocketAddress_TCP,
 		Rules: []*cilium.PortNetworkPolicyRule{{
-			// RemotePolicies: []uint64{1001, 1002}, // Effective wildcard due to only one selector in the policy
+			// RemotePolicies: []uint32{1001, 1002}, // Effective wildcard due to only one selector in the policy
 			L7Proto: "kafka",
 			L7: &cilium.PortNetworkPolicyRule_KafkaRules{
 				KafkaRules: &cilium.KafkaNetworkPolicyRules{
@@ -724,7 +749,7 @@ var ExpectedPerPortPoliciesMySQL = []*cilium.PortNetworkPolicy{
 		Port:     3306,
 		Protocol: envoy_config_core.SocketAddress_TCP,
 		Rules: []*cilium.PortNetworkPolicyRule{{
-			// RemotePolicies: []uint64{1001, 1002}, // Effective wildcard due to only one selector in the policy
+			// RemotePolicies: []uint32{1001, 1002}, // Effective wildcard due to only one selector in the policy
 			L7Proto: "envoy.filters.network.mysql_proxy",
 			L7: &cilium.PortNetworkPolicyRule_L7Rules{
 				L7Rules: &cilium.L7NetworkPolicyRules{
