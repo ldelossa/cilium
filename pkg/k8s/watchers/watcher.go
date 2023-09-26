@@ -37,7 +37,6 @@ import (
 	k8smetrics "github.com/cilium/cilium/pkg/k8s/metrics"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/synced"
-	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
 	"github.com/cilium/cilium/pkg/k8s/watchers/subscriber"
@@ -178,12 +177,6 @@ type bgpSpeakerManager interface {
 
 	OnUpdateEndpoints(eps *k8s.Endpoints) error
 }
-type EgressGatewayManager interface {
-	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
-	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
-	OnUpdateNode(node nodeTypes.Node)
-	OnDeleteNode(node nodeTypes.Node)
-}
 
 type envoyConfigManager interface {
 	UpsertEnvoyResources(context.Context, envoy.Resources, envoy.PortAllocator) error
@@ -251,7 +244,6 @@ type K8sWatcher struct {
 	svcManager            svcManager
 	redirectPolicyManager redirectPolicyManager
 	bgpSpeakerManager     bgpSpeakerManager
-	egressGatewayManager  EgressGatewayManager
 	ipcache               ipcacheManager
 	envoyConfigManager    envoyConfigManager
 	cgroupManager         cgroupManager
@@ -306,7 +298,6 @@ func NewK8sWatcher(
 	datapath datapath.Datapath,
 	redirectPolicyManager redirectPolicyManager,
 	bgpSpeakerManager bgpSpeakerManager,
-	egressGatewayManager EgressGatewayManager,
 	envoyConfigManager envoyConfigManager,
 	cfg WatcherConfiguration,
 	ipcache ipcacheManager,
@@ -330,7 +321,6 @@ func NewK8sWatcher(
 		datapath:                datapath,
 		redirectPolicyManager:   redirectPolicyManager,
 		bgpSpeakerManager:       bgpSpeakerManager,
-		egressGatewayManager:    egressGatewayManager,
 		cgroupManager:           cgroupManager,
 		NodeChain:               subscriber.NewNodeChain(),
 		CiliumNodeChain:         subscriber.NewCiliumNodeChain(),
