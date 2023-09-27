@@ -5,8 +5,8 @@ go 1.21.1
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cilium/cilium v1.14.1
-	github.com/cilium/cilium-cli v0.15.8
+	github.com/cilium/cilium v1.14.2
+	github.com/cilium/cilium-cli v0.15.9-0.20230927135130-158b7da1b506
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
@@ -31,11 +31,11 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20230901091647-7b38eb320edd // indirect
+	github.com/cilium/charts v0.0.0-20230913190306-2ddb61e40eb8 // indirect
 	github.com/cilium/ebpf v0.11.0 // indirect
 	github.com/cilium/hubble v0.12.0 // indirect
 	github.com/cilium/proxy v0.0.0-20230914115435-e8543968fd3d // indirect
-	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230907211620-84f1a3735ef1 // indirect
+	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230922170423-0bc2fdae38e9 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
 	github.com/containerd/containerd v1.7.0 // indirect
@@ -54,7 +54,7 @@ require (
 	github.com/dsnet/compress v0.0.2-0.20210315054119-f66993602bf5 // indirect
 	github.com/emicklei/go-restful/v3 v3.10.2 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.0.2 // indirect
-	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
+	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
@@ -204,7 +204,7 @@ require (
 	google.golang.org/genproto v0.0.0-20230803162519-f966b187b2e5 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230803162519-f966b187b2e5 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
-	google.golang.org/grpc v1.58.0 // indirect
+	google.golang.org/grpc v1.58.2 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
