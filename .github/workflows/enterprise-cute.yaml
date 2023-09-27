@@ -301,7 +301,7 @@ jobs:
           cd ./${{ steps.vars.outputs.cute_dir }}
           cat > terraform.tfvars << EOF
           cluster_name="cute-${{ env.name }}"
-          owner="cute-ci-${{ env.name }}"
+          owner="ci"
           region="${{ steps.cute_props.outputs.region }}"
           cilium_helm_chart="$HELM_CHART"
           cilium_helm_version="$HELM_CHART_VERSION"
