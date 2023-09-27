@@ -1260,37 +1260,37 @@ handle_srv6(struct __ctx_buff *ctx)
 		return DROP_MISSED_TAIL_CALL;
 # ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
-		if (!revalidate_data(ctx, &data, &data_end, &ip4))
-			return DROP_INVALID;
-
-		outer_ips = srv6_lookup_state_entry4(ip4);
-		if (outer_ips) {
-			ep_tail_call(ctx, CILIUM_CALL_SRV6_REPLY);
-			return DROP_MISSED_TAIL_CALL;
-		}
-
-		ep = lookup_ip4_remote_endpoint(ip4->daddr, 0);
-		if (ep) {
-			dst_sec_identity = ep->sec_identity;
-		} else {
-			dst_sec_identity = WORLD_ID;
-		}
-
-		if (identity_is_cluster(dst_sec_identity))
-			return CTX_ACT_OK;
-
-		vrf_id = srv6_lookup_vrf4(ip4->saddr, ip4->daddr);
-		if (!vrf_id)
-			return CTX_ACT_OK;
-
-		sid = srv6_lookup_policy4(*vrf_id, ip4->daddr);
-		if (!sid)
-			return CTX_ACT_OK;
-
-		srv6_store_meta_sid(ctx, sid);
-		ctx_store_meta(ctx, CB_SRV6_VRF_ID, *vrf_id);
-		ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
-		return DROP_MISSED_TAIL_CALL;
+		// if (!revalidate_data(ctx, &data, &data_end, &ip4))
+		// 	return DROP_INVALID;
+		//
+		// outer_ips = srv6_lookup_state_entry4(ip4);
+		// if (outer_ips) {
+		// 	ep_tail_call(ctx, CILIUM_CALL_SRV6_REPLY);
+		// 	return DROP_MISSED_TAIL_CALL;
+		// }
+		//
+		// ep = lookup_ip4_remote_endpoint(ip4->daddr, 0);
+		// if (ep) {
+		// 	dst_sec_identity = ep->sec_identity;
+		// } else {
+		// 	dst_sec_identity = WORLD_ID;
+		// }
+		//
+		// if (identity_is_cluster(dst_sec_identity))
+		// 	return CTX_ACT_OK;
+		//
+		// vrf_id = srv6_lookup_vrf4(ip4->saddr, ip4->daddr);
+		// if (!vrf_id)
+		// 	return CTX_ACT_OK;
+		//
+		// sid = srv6_lookup_policy4(*vrf_id, ip4->daddr);
+		// if (!sid)
+		// 	return CTX_ACT_OK;
+		//
+		// srv6_store_meta_sid(ctx, sid);
+		// ctx_store_meta(ctx, CB_SRV6_VRF_ID, *vrf_id);
+		// ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+		// return DROP_MISSED_TAIL_CALL;
 		break;
 # endif
 	}

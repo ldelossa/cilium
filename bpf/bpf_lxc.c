@@ -16,7 +16,7 @@
 
 /* Controls the inclusion of the CILIUM_CALL_SRV6 section in the object file.
  */
-#define SKIP_SRV6_HANDLING
+// #define SKIP_SRV6_HANDLING
 
 #define EVENT_SOURCE LXC_ID
 
@@ -804,6 +804,10 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 #ifdef ENABLE_ROUTING
 	union macaddr router_mac = NODE_MAC;
 #endif
+#ifdef ENABLE_SRV6
+        __u32 vrf_id = 0;
+	union v6addr *sid;
+#endif
 	void *data, *data_end;
 	struct iphdr *ip4;
 	int ret, verdict, l4_off;
@@ -925,6 +929,27 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 		return verdict;
 
 skip_policy_enforcement:
+/* We may have stored a VRF ID in ctx->cb indicating this sk_buff belongs to
+ * a SRv6 VPN.
+ *
+ * If so, extract it and perform an h.encap, then drop to network stack for
+ * egress.
+ */
+#if ENABLE_SRV6
+    if (ctx->cb[CB_SRV6_VRF_MAGIC] & MARK_MAGIC_SRV6_VRF_ID) {
+        vrf_id = ctx->cb[CB_SRV6_VRF_ID];
+        ctx->cb[CB_SRV6_VRF_MAGIC] = 0;
+        cilium_dbg3(ctx, DBG_SRV6, DBG_SRV6_UNDEFINED, 2, 0);
+        sid = srv6_lookup_policy4(vrf_id, ip4->daddr);
+        if (sid) {
+                cilium_dbg3(ctx, DBG_SRV6, DBG_SRV6_WILL_ENCAP, vrf_id, 0);
+		srv6_store_meta_sid(ctx, sid);
+                ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+                return DROP_MISSED_TAIL_CALL;
+        }
+    }
+#endif 
+
 #if defined(ENABLE_L7_LB)
 	from_l7lb = ctx_load_meta(ctx, CB_FROM_HOST) == FROM_HOST_L7_LB;
 #endif
@@ -1289,6 +1314,9 @@ static __always_inline int __tail_handle_ipv4(struct __ctx_buff *ctx,
 {
 	void *data, *data_end;
 	struct iphdr *ip4;
+#ifdef ENABLE_SRV6
+	__u32 *vrf_id;
+#endif
 
 	if (!revalidate_data_pull(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -1304,6 +1332,24 @@ static __always_inline int __tail_handle_ipv4(struct __ctx_buff *ctx,
 
 	if (unlikely(!is_valid_lxc_src_ipv4(ip4)))
 		return DROP_INVALID_SIP;
+
+/* Determine if the egress traffic belongs in a VRF
+ * If it does, we want to stash the VRF ID in ctx->cb and go directly to
+ * conntrack.
+ */
+#ifdef ENABLE_SRV6
+	vrf_id = srv6_lookup_vrf4(ip4->saddr, ip4->daddr);
+	if (vrf_id) {
+		cilium_dbg3(ctx, DBG_SRV6, DBG_SRV6_VRF, *vrf_id, 0);
+		ctx_store_meta(ctx, CB_SRV6_VRF_MAGIC, MARK_MAGIC_SRV6_VRF_ID);
+		ctx_store_meta(ctx, CB_SRV6_VRF_ID, *vrf_id);
+#ifdef ENABLE_PER_PACKET_LB
+		ep_tail_call(ctx, CILIUM_CALL_IPV4_CT_EGRESS);
+#else
+		return tail_ipv4_ct_egress(ctx);
+#endif /* ENABLE_PER_PACKET_LB */
+	}
+#endif /* ENABLE_SRV6 */
 
 #ifdef ENABLE_PER_PACKET_LB
 	/* will tailcall internally or return error */

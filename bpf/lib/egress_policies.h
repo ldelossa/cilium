@@ -545,6 +545,8 @@ int tail_srv6_encap(struct __ctx_buff *ctx)
 	int ret = 0;
 	int __maybe_unused ext_err = 0;
 
+        cilium_dbg3(ctx, DBG_SRV6, DBG_SRV6_UNDEFINED, 3, 0);
+
 	srv6_load_meta_sid(ctx, &dst_sid);
 	vrf_id = ctx_load_meta(ctx, CB_SRV6_VRF_ID);
 

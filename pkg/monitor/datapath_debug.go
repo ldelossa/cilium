@@ -101,6 +101,7 @@ const (
 	DbgSkLookup6
 	DbgSkAssign
 	DbgL7LB
+	DbgSRv6
 )
 
 // must be in sync with <bpf/lib/conntrack.h>
@@ -379,9 +380,30 @@ func (n *DebugMsg) Message(linkMonitor getters.LinkGetter) string {
 		return fmt.Sprintf("Socket assign: %s", skAssignInfo(n))
 	case DbgL7LB:
 		return fmt.Sprintf("L7 LB from %s to %s: proxy port %d", ip4Str(n.Arg1), ip4Str(n.Arg2), n.Arg3)
+	case DbgSRv6:
+		return DbgSRv6Str(n.Arg1, n.Arg2, n.Arg3)
 	default:
 		return fmt.Sprintf("Unknown message type=%d arg1=%d arg2=%d", n.SubType, n.Arg1, n.Arg2)
 	}
+}
+
+const (
+	DbgSRv6Undefined = iota
+	DbgSRv6VRFID
+	DbgSRv6WillEncap
+)
+
+// DbgSRv6Str returns a human-readable string for SRv6 debug messages.
+func DbgSRv6Str(kind uint32, arg2 uint32, arg3 uint32) string {
+	switch kind {
+	case DbgSRv6Undefined:
+		return fmt.Sprintf("SRV6 undefined: arg2=%d arg3=%d", arg2, arg3)
+	case DbgSRv6VRFID:
+		return fmt.Sprintf("SRV6 VRFID: arg2=%d", arg2)
+	case DbgSRv6WillEncap:
+		return fmt.Sprintf("SRV6 will encap: arg2=%d", arg2)
+	}
+	return ""
 }
 
 func (n *DebugMsg) getJSON(cpuPrefix string, linkMonitor getters.LinkGetter) string {

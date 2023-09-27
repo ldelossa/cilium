@@ -677,6 +677,8 @@ enum metric_dir {
 #define MARK_MAGIC_IDENTITY		0x0F00 /* mark carries identity */
 #define MARK_MAGIC_TO_PROXY		0x0200
 #define MARK_MAGIC_SNAT_DONE		0x0300
+/* informs pod egress datapath that __sk_buff belongs to SRv6 VRF network */
+#define MARK_MAGIC_SRV6_VRF_ID		0x0400
 
 #define MARK_MAGIC_KEY_MASK		0xFF00
 
@@ -773,6 +775,7 @@ enum {
 #define	CB_ENCRYPT_MAGIC	CB_SRC_LABEL	/* Alias, non-overlapping */
 #define	CB_DST_ENDPOINT_ID	CB_SRC_LABEL    /* Alias, non-overlapping */
 #define CB_SRV6_SID_1		CB_SRC_LABEL	/* Alias, non-overlapping */
+#define CB_SRV6_VRF_MAGIC	CB_SRC_LABEL	/* Alias, non-overlapping */
 	CB_IFINDEX,
 #define	CB_NAT_46X64		CB_IFINDEX	/* Alias, non-overlapping */
 #define	CB_ADDR_V4		CB_IFINDEX	/* Alias, non-overlapping */
