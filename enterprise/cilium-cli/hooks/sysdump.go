@@ -26,6 +26,7 @@ const (
 	enterpriseAgentContainerName = "enterprise"
 	enterpriseBugtoolPrefix      = "hubble-enterprise-bugtool"
 	enterpriseCLICommand         = "hubble-enterprise"
+	timescapeNamespace           = "hubble-timescape" // FIXME: make it configurable
 )
 
 func addSysdumpTasks(collector *sysdump.Collector) error {
@@ -71,8 +72,8 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 			Description:     "Collecting logs from 'hubble-timescape' pods",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
-				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
-					LabelSelector: "app.kubernetes.io/instance=hubble-timescape",
+				p, err := collector.Client.ListPods(ctx, timescapeNamespace, metav1.ListOptions{
+					LabelSelector: "app.kubernetes.io/part-of=hubble-timescape",
 				})
 				if err != nil {
 					return fmt.Errorf("failed to get logs from 'hubble-timescape' pods")
