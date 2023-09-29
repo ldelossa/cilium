@@ -10,8 +10,8 @@ require (
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
-	k8s.io/api v0.28.0-rc.0
-	k8s.io/apimachinery v0.28.0-rc.0
+	k8s.io/api v0.28.1
+	k8s.io/apimachinery v0.28.1
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 )
 
@@ -211,15 +211,16 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.12.3 // indirect
-	k8s.io/apiextensions-apiserver v0.28.0-rc.0 // indirect
-	k8s.io/apiserver v0.28.0-rc.0 // indirect
+	k8s.io/apiextensions-apiserver v0.28.1 // indirect
+	k8s.io/apiserver v0.28.1 // indirect
 	k8s.io/cli-runtime v0.28.0-rc.0 // indirect
-	k8s.io/client-go v0.28.0-rc.0 // indirect
-	k8s.io/component-base v0.28.0-rc.0 // indirect
+	k8s.io/client-go v0.28.1 // indirect
+	k8s.io/component-base v0.28.1 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9 // indirect
 	k8s.io/kubectl v0.28.0-rc.0 // indirect
 	oras.land/oras-go v1.2.3 // indirect
+	sigs.k8s.io/controller-runtime v0.16.1 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.14.4-0.20230814161922-911ddcda40a8 // indirect
