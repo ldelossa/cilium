@@ -677,6 +677,7 @@ enum metric_dir {
 #define MARK_MAGIC_IDENTITY		0x0F00 /* mark carries identity */
 #define MARK_MAGIC_TO_PROXY		0x0200
 #define MARK_MAGIC_SNAT_DONE		0x0300
+#define MARK_MAGIC_SRV6_VRF		0x0400
 
 #define MARK_MAGIC_KEY_MASK		0xFF00
 
@@ -803,6 +804,10 @@ enum {
 						 */
 #define	CB_CUSTOM_CALLS		CB_CT_STATE	/* Alias, non-overlapping */
 #define	CB_SRV6_VRF_ID		CB_CT_STATE	/* Alias, non-overlapping */
+/* If set to 'MARK_MAGIC_SRV6_VRF', indicates the sk_buff is part of an
+ * SRv6 VRF and 'srv6_meta_load_sid' can be used to extract the SID.
+ */
+#define	CB_SRV6_VRF		CB_CT_STATE	/* Alias, non-overlapping */
 #define	CB_FROM_TUNNEL		CB_CT_STATE	/* Alias, non-overlapping */
 };
 

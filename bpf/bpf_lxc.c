@@ -14,10 +14,6 @@
 
 #define IS_BPF_LXC 1
 
-/* Controls the inclusion of the CILIUM_CALL_SRV6 section in the object file.
- */
-#define SKIP_SRV6_HANDLING
-
 #define EVENT_SOURCE LXC_ID
 
 #include "lib/auth.h"
@@ -559,6 +555,20 @@ ct_recreate6:
 		return DROP_UNKNOWN_CT;
 	}
 
+	if (!revalidate_data(ctx, &data, &data_end, &ip6))
+		return DROP_INVALID;
+
+#ifdef ENABLE_SRV6
+	/* Determine if packet belongs to a VRF, if it does the SID will
+	 * already be stashed inside ctx->cb and the following tailcall
+	 * will utilize it for h.encap.
+	 */
+	if (ctx->cb[CB_SRV6_VRF] & MARK_MAGIC_SRV6_VRF) {
+		ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+		return DROP_MISSED_TAIL_CALL;
+	}
+#endif /* ENABLE_SRV6 */
+
 	hairpin_flow |= ct_state->loopback;
 
 	/* L7 LB does L7 policy enforcement, so we only redirect packets
@@ -571,9 +581,6 @@ ct_recreate6:
 				  trace.reason, trace.monitor);
 		return ctx_redirect_to_proxy6(ctx, tuple, proxy_port, false);
 	}
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
 
 #if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
 	/* If the destination is the local host and per-endpoint routes are
@@ -748,6 +755,10 @@ static __always_inline int __tail_handle_ipv6(struct __ctx_buff *ctx,
 {
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
+#ifdef ENABLE_SRV6
+	__u32 *vrf_id = 0;
+	union v6addr *sid;
+#endif
 
 	if (!revalidate_data_pull(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
@@ -760,6 +771,26 @@ static __always_inline int __tail_handle_ipv6(struct __ctx_buff *ctx,
 
 	if (unlikely(!is_valid_lxc_src_ip(ip6)))
 		return DROP_INVALID_SIP;
+
+/* If egress traffic belongs to a VRF signal this and stash the VRFID
+ * in ctx->cb for encapsulation after policy lookup.
+ */
+#ifdef ENABLE_SRV6
+	vrf_id = srv6_lookup_vrf6(&ip6->saddr, &ip6->daddr);
+	if (vrf_id) {
+		sid = srv6_lookup_policy6(*vrf_id, &ip6->daddr);
+		if (sid) {
+			ctx_store_meta(ctx, CB_SRV6_VRF, MARK_MAGIC_SRV6_VRF);
+			srv6_store_meta_sid(ctx, sid);
+# ifdef ENABLE_PER_PACKET_LB
+			ep_tail_call(ctx, CILIUM_CALL_IPV6_CT_EGRESS);
+			return DROP_MISSED_TAIL_CALL;
+# else
+			return tail_ipv6_ct_egress(ctx);
+# endif /* ENABLE_PER_PACKET_LB */
+		}
+	}
+#endif /* ENABLE_SRV6 */
 
 #ifdef ENABLE_PER_PACKET_LB
 	/* will tailcall internally or return error */
@@ -1008,6 +1039,21 @@ ct_recreate4:
 		return DROP_UNKNOWN_CT;
 	}
 
+	/* After L4 write in port mapping: revalidate for direct packet access */
+	if (!revalidate_data(ctx, &data, &data_end, &ip4))
+		return DROP_INVALID;
+
+#ifdef ENABLE_SRV6
+	/* Determine if packet belongs to a VRF, if it does the SID will
+	 * already be stashed inside ctx->cb and the following tailcall
+	 * will utilize it for h.encap.
+	 */
+	if (ctx->cb[CB_SRV6_VRF] & MARK_MAGIC_SRV6_VRF) {
+		ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+		return DROP_MISSED_TAIL_CALL;
+	}
+#endif /* ENABLE_SRV6 */
+
 	hairpin_flow |= ct_state->loopback;
 
 	/* L7 LB does L7 policy enforcement, so we only redirect packets
@@ -1020,10 +1066,6 @@ ct_recreate4:
 				  trace.reason, trace.monitor);
 		return ctx_redirect_to_proxy4(ctx, tuple, proxy_port, false);
 	}
-
-	/* After L4 write in port mapping: revalidate for direct packet access */
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_INVALID;
 
 #if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
 	/* If the destination is the local host and per-endpoint routes are
@@ -1289,6 +1331,10 @@ static __always_inline int __tail_handle_ipv4(struct __ctx_buff *ctx,
 {
 	void *data, *data_end;
 	struct iphdr *ip4;
+#ifdef ENABLE_SRV6
+	__u32 *vrf_id = 0;
+	union v6addr *sid;
+#endif
 
 	if (!revalidate_data_pull(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -1304,6 +1350,27 @@ static __always_inline int __tail_handle_ipv4(struct __ctx_buff *ctx,
 
 	if (unlikely(!is_valid_lxc_src_ipv4(ip4)))
 		return DROP_INVALID_SIP;
+
+/* This egress packet maybe associated with a VRF.
+ * If it is, and a cooresponding SID exists stash this and signal that
+ * this packet needs to be encap'd after policy enforcement.
+ */
+#ifdef ENABLE_SRV6
+	vrf_id = srv6_lookup_vrf4(ip4->saddr, ip4->daddr);
+	if (vrf_id) {
+		sid = srv6_lookup_policy4(*vrf_id, ip4->daddr);
+		if (sid) {
+			ctx_store_meta(ctx, CB_SRV6_VRF, MARK_MAGIC_SRV6_VRF);
+			srv6_store_meta_sid(ctx, sid);
+# ifdef ENABLE_PER_PACKET_LB
+			ep_tail_call(ctx, CILIUM_CALL_IPV4_CT_EGRESS);
+			return DROP_MISSED_TAIL_CALL;
+# else
+			return tail_ipv4_ct_egress(ctx);
+# endif /* ENABLE_PER_PACKET_LB */
+		}
+	}
+#endif /* ENABLE_SRV6 */
 
 #ifdef ENABLE_PER_PACKET_LB
 	/* will tailcall internally or return error */
