@@ -803,7 +803,6 @@ enum {
 						 * Can be removed in v1.15.
 						 */
 #define	CB_CUSTOM_CALLS		CB_CT_STATE	/* Alias, non-overlapping */
-#define	CB_SRV6_VRF_ID		CB_CT_STATE	/* Alias, non-overlapping */
 /* If set to 'MARK_MAGIC_SRV6_VRF', indicates the sk_buff is part of an
  * SRv6 VRF and 'srv6_meta_load_sid' can be used to extract the SID.
  */
