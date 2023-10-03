@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	// gcRateLimitInterval is the minium interval between garbage collections
-	gcRateLimitInterval = time.Second
+	// defaultGCRateLimitInterval is the default minimum interval between garbage collections.
+	// Currently not configurable. Overwritten by tests to minimize test times.
+	defaultGCRateLimitInterval = time.Second
 )
 
-func graveyardWorker(db *DB) {
+func graveyardWorker(db *DB, gcRateLimitInterval time.Duration) {
 	limiter := rate.NewLimiter(gcRateLimitInterval, 1)
 	defer limiter.Stop()
 	defer close(db.gcExited)
@@ -42,8 +43,9 @@ func graveyardWorker(db *DB) {
 		// Do a lockless read transaction to find potential dead objects.
 		txn := db.ReadTxn().getTxn()
 		tableIter := txn.rootReadTxn.Root().Iterator()
-		for name, table, ok := tableIter.Next(); ok; name, table, ok = tableIter.Next() {
-			cleaningTimes[string(name)] = spanstat.Start()
+		for nameKey, table, ok := tableIter.Next(); ok; nameKey, table, ok = tableIter.Next() {
+			tableName := string(nameKey)
+			cleaningTimes[tableName] = spanstat.Start()
 
 			// Find the low watermark
 			lowWatermark := table.revision
@@ -56,15 +58,13 @@ func graveyardWorker(db *DB) {
 			}
 
 			db.metrics.TableGraveyardLowWatermark.With(prometheus.Labels{
-				"table": string(name),
+				"table": tableName,
 			}).Set(float64(lowWatermark))
 
 			// Find objects to be deleted by iterating over the graveyard revision index up
 			// to the low watermark.
-			indexTree, ok := txn.getTable(string(name)).indexes.Get([]byte(GraveyardRevisionIndex))
-			if !ok {
-				panic("BUG: Index " + GraveyardRevisionIndex + " not found")
-			}
+			indexTree := txn.indexReadTxn(tableName, GraveyardRevisionIndex)
+
 			objIter := indexTree.Root().Iterator()
 			for key, obj, ok := objIter.Next(); ok; key, obj, ok = objIter.Next() {
 				if obj.revision > lowWatermark {
@@ -72,8 +72,7 @@ func graveyardWorker(db *DB) {
 				}
 				toBeDeleted[table.meta] = append(toBeDeleted[table.meta], key)
 			}
-
-			cleaningTimes[string(name)].End(true)
+			cleaningTimes[tableName].End(true)
 		}
 
 		if len(toBeDeleted) == 0 {
@@ -97,7 +96,6 @@ func graveyardWorker(db *DB) {
 					// The dead object still existed (and wasn't replaced by a create->delete),
 					// delete it from the primary index.
 					txn.indexWriteTxn(tableName, GraveyardIndex).Delete(key[8:])
-					txn.pendingGraveyardDeltas[tableName]--
 				}
 			}
 			cleaningTimes[tableName].End(true)
@@ -109,6 +107,18 @@ func graveyardWorker(db *DB) {
 				"table": tableName,
 			}).Observe(stat.Total().Seconds())
 		}
+
+		// Update object count metrics.
+		txn = db.ReadTxn().getTxn()
+		tableIter = txn.rootReadTxn.Root().Iterator()
+		for name, table, ok := tableIter.Next(); ok; name, table, ok = tableIter.Next() {
+			db.metrics.TableGraveyardObjectCount.With(
+				prometheus.Labels{"table": string(name)},
+			).Set(float64(table.numDeletedObjects()))
+			db.metrics.TableObjectCount.With(
+				prometheus.Labels{"table": string(name)},
+			).Set(float64(table.numObjects()))
+		}
 	}
 }
 
@@ -117,10 +127,10 @@ func graveyardWorker(db *DB) {
 func (db *DB) graveyardIsEmpty() bool {
 	txn := db.ReadTxn().getTxn()
 	tableIter := txn.rootReadTxn.Root().Iterator()
-	for name, _, ok := tableIter.Next(); ok; name, _, ok = tableIter.Next() {
-		indexTree, ok := txn.getTable(string(name)).indexes.Get([]byte(GraveyardIndex))
+	for _, table, ok := tableIter.Next(); ok; _, table, ok = tableIter.Next() {
+		indexTree, ok := table.indexes.Get([]byte(GraveyardIndex))
 		if !ok {
-			panic("BUG: Index " + GraveyardIndex + " not found")
+			panic("BUG: GraveyardIndex not found from table")
 		}
 		if indexTree.Len() != 0 {
 			return false
