@@ -33,6 +33,7 @@ Dinan
 Dockerfile
 Dockerfiles
 Donenfeld
+ENI
 FIt
 Fastabend
 Fosdem
@@ -330,6 +331,7 @@ hashtable
 hashtables
 healthcheck
 healthz
+helloworld
 herokuapp
 hexData
 hostPath

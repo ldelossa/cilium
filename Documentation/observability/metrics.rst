@@ -37,8 +37,8 @@ Installation
 ------------
 
 You can enable metrics for ``cilium-agent`` (including Envoy) with the Helm value
-``prometheus.enabled=true``. To enable metrics for ``cilium-operator``,
-use ``operator.prometheus.enabled=true``.
+``prometheus.enabled=true``. ``cilium-operator`` metrics are enabled by default,
+if you want to disable them, set Helm value ``operator.prometheus.enabled=false``.
 
 .. parsed-literal::
 
@@ -358,6 +358,7 @@ Name                                       Labels                               
 ``bpf_syscall_duration_seconds``           ``operation``, ``outcome``                                            Disabled   Duration of eBPF system call performed
 ``bpf_map_ops_total``                      ``mapName`` (deprecated), ``map_name``, ``operation``, ``outcome``    Enabled    Number of eBPF map operations performed. ``mapName`` is deprecated and will be removed in 1.10. Use ``map_name`` instead.
 ``bpf_map_pressure``                       ``map_name``                                                          Enabled    Map pressure defined as a ratio of the map usage compared to its size. The policy map metric is the maximum policy map size on a node and is only reported when the ratio is over 0.1, ie 10% full.
+``bpf_map_capacity``                       ``map_group``                                                         Enabled    Maximum size of eBPF maps by group of maps (type of map that have the same max capacity size). Map types with size of 65536 are not emitted, missing map types can be assumed to be 65536.
 ``bpf_maps_virtual_memory_max_bytes``                                                                            Enabled    Max memory used by eBPF maps installed in the system
 ``bpf_progs_virtual_memory_max_bytes``                                                                           Enabled    Max memory used by eBPF programs installed in the system
 ========================================== ===================================================================== ========== ========================================================
