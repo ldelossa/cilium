@@ -326,6 +326,8 @@ Annotations:
   specify them as parameters.
   Generate the installation script using Cilium CLI >=v0.15.8 to automatically
   include these parameters.
+* ``enable-endpoint-routes`` now automatically sets ``enable-local-node-route``
+  to false, as local node routes are redundant when per-endpoint routes are enabled.
 
 .. _upgrade_cilium_cli_helm_mode:
 
@@ -361,6 +363,10 @@ Helm Options
 * Values ``authentication.mutual.spire.install.agent.image`` and ``authentication.mutual.spire.install.server.image``
   changed their type from a string to a structured definition that decouples repository and tag. This improves the
   usage in offline environments.
+
+* Prometheus metrics for cilium-operator and clustermesh's kvstore are now enabled by default.
+  If you want to disable these prometheus metrics, set ``operator.prometheus.enabled=false``
+  and ``clustermesh.apiserver.metrics.etcd.enabled=false`` respectively.
 
 Added Metrics
 ~~~~~~~~~~~~~

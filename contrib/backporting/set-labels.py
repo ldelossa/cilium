@@ -38,6 +38,18 @@ old_label_len = len(pr_labels)
 
 cilium_labels = cilium.get_labels()
 
+# After the introduction of the "Update labels of backported PRs" GH
+# workflow and all the workflows in the stable branches that calls it,
+# there is no need to use this script to update the backported PRs label.
+# Specifically, this script shouldn't be used with the `action` parameter
+# set to `done` anymore.
+# However, since there might still be in-flight backporting PRs relying on
+# the old backporting workflow (based on this script to update the labels),
+# we leave the code here.
+#
+# This can be updated once all the new workflows will be in place and the
+# "old" backport PRs will have their labels updated.
+
 print("Setting labels for PR {}... ".format(pr_number), end="")
 if action == "pending":
     pr_labels = [l for l in pr_labels
