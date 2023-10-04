@@ -17,6 +17,7 @@ import (
 	"github.com/blang/semver/v4"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium-cli/utils/features"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
@@ -56,7 +57,7 @@ func addHubbleVersionTests(ct *check.ConnectivityTest) error {
 
 func addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest, pods map[string]check.Pod) error {
 	ct.NewTest("external-cilium-dns-proxy").WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
-		WithFeatureRequirements(check.RequireFeatureEnabled(FeatureCiliumDNSProxyDeployed)).
+		WithFeatureRequirements(features.RequireEnabled(FeatureCiliumDNSProxyDeployed)).
 		WithScenarios(tests.ExternalCiliumDNSProxy(pods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
 		return check.ResultOK.ExpectMetricsIncrease(tests.ExternalCiliumDNSProxySource(pods), "isovalent_external_dns_proxy_policy_l7_total"),
 			check.ResultNone

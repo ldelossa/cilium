@@ -18,10 +18,11 @@ import (
 
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
+	"github.com/cilium/cilium-cli/utils/features"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const FeatureCiliumDNSProxyDeployed check.Feature = "cilium-dnsproxy-deployed"
+const FeatureCiliumDNSProxyDeployed features.Feature = "cilium-dnsproxy-deployed"
 
 func detectFeatures(ctx context.Context, ct *check.ConnectivityTest) error {
 	for range ct.CiliumPods() {
@@ -40,7 +41,7 @@ func extractExternalDNSProxyFeature(ctx context.Context, ct *check.ConnectivityT
 		return err
 	}
 
-	ct.Features[FeatureCiliumDNSProxyDeployed] = check.FeatureStatus{
+	ct.Features[FeatureCiliumDNSProxyDeployed] = features.Status{
 		Enabled: isDeployed,
 	}
 
