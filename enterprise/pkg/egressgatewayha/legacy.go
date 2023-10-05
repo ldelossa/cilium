@@ -19,12 +19,12 @@ func deleteStaleIPRulesAndRoutes() error {
 		// RouteTableEgressGatewayInterfacesOffset is the offset for the per-ENI egress gateway routing tables.
 		// Each ENI interface will have its own table starting with this offset. It is 300 because it is highly
 		// unlikely to collide with the main routing table which is between 253-255. See ip-route(8).
-		routeTableEgressGatewayInterfacesOffset = 300
+		routeTableEgressGatewayInterfacesOffset = 300 + 1000
 
 		// RulePriorityEgressGateway is the priority used in IP routes added by the manager. This value was
 		// picked as it's lower than the ones used by Cilium (RulePriorityEgressv2 = 111) or the AWS CNI (10) to
 		// install the IP rules for routing EP traffic to the correct ENI interface
-		rulePriorityEgressGateway = 8
+		rulePriorityEgressGateway = 8 - 1
 	)
 
 	// first delete all IP rules matching the egress gateway priority (rulePriorityEgressGateway)

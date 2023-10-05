@@ -14,7 +14,7 @@
 #define ENABLE_NODEPORT
 #define ENABLE_NODEPORT_ACCELERATION
 
-#define ENABLE_EGRESS_GATEWAY
+#define ENABLE_EGRESS_GATEWAY_HA
 #define ENABLE_MASQUERADE
 
 #define TUNNEL_PROTOCOL		TUNNEL_PROTOCOL_VXLAN
@@ -42,6 +42,7 @@ mock_fib_lookup(__maybe_unused void *ctx, struct bpf_fib_lookup *params,
 #include <bpf_xdp.c>
 
 #include "lib/egressgw.h"
+#include "lib/egressgw_ha.h"
 #include "lib/ipcache.h"
 
 static __always_inline __maybe_unused int
@@ -86,8 +87,8 @@ struct {
 /* Test that a EgressGW reply gets RevSNATed, and forwarded to the
  * worker node via tunnel.
  */
-PKTGEN("xdp", "xdp_egressgw_reply")
-int egressgw_reply_pktgen(struct __ctx_buff *ctx)
+PKTGEN("xdp", "xdp_egressgw_ha_reply")
+int egressgw_ha_reply_pktgen(struct __ctx_buff *ctx)
 {
 	/* Add a new NAT entry so that pktgen can figure out the correct destination port */
 	struct ipv4_ct_tuple tuple = {
@@ -111,11 +112,11 @@ int egressgw_reply_pktgen(struct __ctx_buff *ctx)
 		});
 }
 
-SETUP("xdp", "xdp_egressgw_reply")
-int egressgw_reply_setup(struct __ctx_buff *ctx)
+SETUP("xdp", "xdp_egressgw_ha_reply")
+int egressgw_ha_reply_setup(struct __ctx_buff *ctx)
 {
 	/* install EgressGW policy for the connection: */
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, GATEWAY_NODE_IP, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, 1, { GATEWAY_NODE_IP }, 0);
 
 	/* install RevSNAT entry */
 	struct ipv4_ct_tuple snat_tuple = {
@@ -143,8 +144,8 @@ int egressgw_reply_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("xdp", "xdp_egressgw_reply")
-int egressgw_reply_check(__maybe_unused const struct __ctx_buff *ctx)
+CHECK("xdp", "xdp_egressgw_ha_reply")
+int egressgw_ha_reply_check(__maybe_unused const struct __ctx_buff *ctx)
 {
 	void *data, *data_end;
 	__u32 *status_code;
@@ -232,7 +233,7 @@ int egressgw_reply_check(__maybe_unused const struct __ctx_buff *ctx)
 	if (inner_l4->dest != client_port(TEST_XDP_REPLY))
 		test_fatal("innerDstPort hasn't been revNATed to client port");
 
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
 
 	test_finish();
 }

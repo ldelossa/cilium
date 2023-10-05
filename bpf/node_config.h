@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
+#include "enterprise_node_config.h"
+
 #ifndef __NODE_CONFIG__
 #define __NODE_CONFIG__
 

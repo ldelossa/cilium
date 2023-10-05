@@ -320,4 +320,7 @@ static __always_inline void ep_tail_call(struct __ctx_buff *ctx __maybe_unused,
 	tail_call_static(ctx, &CALLS_MAP, index);
 }
 #endif /* SKIP_CALLS_MAP */
+
+#include "enterprise_maps.h"
+
 #endif

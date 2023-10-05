@@ -1,5 +1,12 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright Authors of Cilium
+//  Copyright (C) Isovalent, Inc. - All Rights Reserved.
+//
+//  NOTICE: All information contained herein is, and remains the property of
+//  Isovalent Inc and its suppliers, if any. The intellectual and technical
+//  concepts contained herein are proprietary to Isovalent Inc and its suppliers
+//  and may be covered by U.S. and Foreign Patents, patents in process, and are
+//  protected by trade secret or copyright law.  Dissemination of this information
+//  or reproduction of this material is strictly forbidden unless prior written
+//  permission is obtained from Isovalent Inc.
 
 package cmd
 
@@ -13,10 +20,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/command"
 	"github.com/cilium/cilium/pkg/common"
 	"github.com/cilium/cilium/pkg/egressgateway"
-	"github.com/cilium/cilium/pkg/maps/egressmap"
 )
 
 const (
@@ -24,10 +31,10 @@ const (
 )
 
 type egressPolicy struct {
-	SourceIP  string
-	DestCIDR  string
-	EgressIP  string
-	GatewayIP string
+	SourceIP   string
+	DestCIDR   string
+	EgressIP   string
+	GatewayIPs []string
 }
 
 var bpfEgressListCmd = &cobra.Command{
@@ -38,7 +45,7 @@ var bpfEgressListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		common.RequireRootPrivilege("cilium bpf egress list")
 
-		policyMap, err := egressmap.OpenPinnedPolicyMap()
+		policyMap, err := egressmapha.OpenPinnedPolicyMap()
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				fmt.Fprintln(os.Stderr, "Cannot find egress gateway bpf maps")
@@ -49,12 +56,17 @@ var bpfEgressListCmd = &cobra.Command{
 		}
 
 		bpfEgressList := []egressPolicy{}
-		parse := func(key *egressmap.EgressPolicyKey4, val *egressmap.EgressPolicyVal4) {
+		parse := func(key *egressmapha.EgressPolicyKey4, val *egressmapha.EgressPolicyVal4) {
+			gatewayIPs := []string{}
+			for _, gatewayIP := range val.GetGatewayIPs() {
+				gatewayIPs = append(gatewayIPs, mapGatewayIP(gatewayIP))
+			}
+
 			bpfEgressList = append(bpfEgressList, egressPolicy{
-				SourceIP:  key.GetSourceIP().String(),
-				DestCIDR:  key.GetDestCIDR().String(),
-				EgressIP:  val.GetEgressIP().String(),
-				GatewayIP: mapGatewayIP(val.GetGatewayIP()),
+				SourceIP:   key.GetSourceIP().String(),
+				DestCIDR:   key.GetDestCIDR().String(),
+				EgressIP:   val.GetEgressIP().String(),
+				GatewayIPs: gatewayIPs,
 			})
 		}
 
@@ -92,15 +104,23 @@ func mapGatewayIP(ip net.IP) string {
 func printEgressList(egressList []egressPolicy) {
 	w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
 
-	fmt.Fprintln(w, "Source IP\tDestination CIDR\tEgress IP\tGateway IP")
+	fmt.Fprintln(w, "Source IP\tDestination CIDR\tEgress IP\tGateway\t")
 	for _, ep := range egressList {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ep.SourceIP, ep.DestCIDR, ep.EgressIP, ep.GatewayIP)
+		gwZero := ""
+		if len(ep.GatewayIPs) > 0 {
+			gwZero = fmt.Sprintf("0 => %s", ep.GatewayIPs[0])
+		}
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ep.SourceIP, ep.DestCIDR, ep.EgressIP, gwZero)
+		for i := 1; i < len(ep.GatewayIPs); i++ {
+			fmt.Fprintf(w, "\t\t\t%d => %s\n", i, ep.GatewayIPs[i])
+		}
 	}
 
 	w.Flush()
 }
 
 func init() {
-	BPFEgressCmd.AddCommand(bpfEgressListCmd)
+	bpfEgressCmd.AddCommand(bpfEgressListCmd)
 	command.AddOutputOption(bpfEgressListCmd)
 }

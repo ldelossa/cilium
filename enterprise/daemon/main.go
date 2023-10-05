@@ -18,7 +18,9 @@ import (
 )
 
 func main() {
-	agentHive := hive.New(EnterpriseAgent)
+	agentHive := hive.New(
+		EnterpriseAgent,
+	)
 	vp := agentHive.Viper()
 
 	list, err := Initialize(vp, pluginInits)

@@ -30,6 +30,8 @@
 #define __expand(TYPE, N) __add_type(TYPE, N)
 #define add_type(TYPE) __expand(TYPE, __COUNTER__)
 
+#include "enterprise_bpf_alignchecker.h"
+
 add_type(struct ipv4_ct_tuple);
 add_type(struct ipv6_ct_tuple);
 add_type(struct ct_entry);

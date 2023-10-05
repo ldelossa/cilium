@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
+#include "enterprise_common.h"
+
 #ifndef __LIB_COMMON_H_
 #define __LIB_COMMON_H_
 
@@ -1223,5 +1225,7 @@ struct lpm_val {
 #define TUNNEL_KEY_WITHOUT_SRC_IP offsetof(struct bpf_tunnel_key, local_ipv4)
 
 #include "overloadable.h"
+
+
 
 #endif /* __LIB_COMMON_H_ */
