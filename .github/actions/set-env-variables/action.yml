@@ -10,4 +10,4 @@ runs:
         # no prod yet
         echo "QUAY_CHARTS_ORGANIZATION_DEV=isovalent-charts-dev" >> $GITHUB_ENV
         echo "BRANCH_SUFFIX=-ce" >> $GITHUB_ENV
-        echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true" >> $GITHUB_ENV
+        echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true --helm-set=enterprise.egressGatewayHA.enabled=true" >> $GITHUB_ENV
