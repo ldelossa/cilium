@@ -91,7 +91,7 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 			Quick:           false,
 			Task: func(ctx context.Context) error {
 				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
-					LabelSelector: "app.kubernetes.io/instance=hubble-ui",
+					LabelSelector: "app.kubernetes.io/name=hubble-ui",
 				})
 				if err != nil {
 					return fmt.Errorf("failed to get logs from 'hubble-ui' pods")
