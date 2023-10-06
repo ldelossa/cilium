@@ -29,7 +29,14 @@ func main() {
 
 	// Hide unwanted cfssl log messages
 	cfsslLog.Level = cfsslLog.LevelWarning
-	command := cli.NewCiliumCommand(&hooks.EnterpriseHooks{})
+	eeOpts := hooks.EnterpriseOptions{
+		HubbleTimescapeSelector:  "app.kubernetes.io/part-of=hubble-timescape",
+		HubbleTimescapeNamespace: "hubble-timescape",
+		HubbleUINamespace:        "hubble-ui",
+	}
+	command := cli.NewCiliumCommand(&hooks.EnterpriseHooks{
+		Opts: eeOpts,
+	})
 	command.Short = "CLI to collect troubleshooting information for Isovalent Enterprise for Cilium"
 	command.Long = ""
 	command.Example = `# Collect sysdump from the entire cluster.
@@ -40,6 +47,19 @@ cilium sysdump --node-list node-a,node-b,node-c`
 	for _, cmd := range command.Commands() {
 		if !slices.Contains(supportedCommands, cmd.Name()) {
 			cmd.Hidden = true
+		}
+		if cmd.Name() == "sysdump" {
+			cmd.Flags().StringVar(&eeOpts.HubbleUINamespace,
+				"hubble-ui-namespace", eeOpts.HubbleUINamespace,
+				"The namespace Hubble UI is running in")
+
+			cmd.Flags().StringVar(&eeOpts.HubbleTimescapeNamespace,
+				"hubble-timescape-namespace", eeOpts.HubbleTimescapeNamespace,
+				"The namespace Hubble Timescape is running in")
+			cmd.Flags().StringVar(&eeOpts.HubbleTimescapeSelector,
+				"hubble-timescape-selector", eeOpts.HubbleTimescapeSelector,
+				"The labels used to target Hubble Timescape pods")
+
 		}
 	}
 	if err := command.Execute(); err != nil {

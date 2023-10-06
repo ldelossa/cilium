@@ -26,6 +26,16 @@ import (
 type EnterpriseHooks struct {
 	cli.NopHooks
 	externalCiliumDNSProxyPods map[string]check.Pod
+
+	Opts EnterpriseOptions
+}
+
+// EnterpriseOptions are cilium enterprise specific options for tasks
+type EnterpriseOptions struct {
+	HubbleUINamespace string
+
+	HubbleTimescapeSelector  string
+	HubbleTimescapeNamespace string
 }
 
 // AddConnectivityTests registers connectivity tests that are specific to
@@ -37,7 +47,7 @@ func (eh *EnterpriseHooks) AddConnectivityTests(ct *check.ConnectivityTest) erro
 // AddSysdumpTasks registers sysdump tasks that are specific to Isovalent
 // Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddSysdumpTasks(collector *sysdump.Collector) error {
-	return addSysdumpTasks(collector)
+	return addSysdumpTasks(collector, eh.Opts)
 }
 
 func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.ConnectivityTest) error {

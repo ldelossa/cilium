@@ -26,10 +26,9 @@ const (
 	enterpriseAgentContainerName = "enterprise"
 	enterpriseBugtoolPrefix      = "hubble-enterprise-bugtool"
 	enterpriseCLICommand         = "hubble-enterprise"
-	timescapeNamespace           = "hubble-timescape" // FIXME: make it configurable
 )
 
-func addSysdumpTasks(collector *sysdump.Collector) error {
+func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error {
 	collector.AddTasks([]sysdump.Task{
 		{
 			CreatesSubtasks: true,
@@ -72,13 +71,24 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 			Description:     "Collecting logs from 'hubble-timescape' pods",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
-				p, err := collector.Client.ListPods(ctx, timescapeNamespace, metav1.ListOptions{
-					LabelSelector: "app.kubernetes.io/part-of=hubble-timescape",
-				})
-				if err != nil {
-					return fmt.Errorf("failed to get logs from 'hubble-timescape' pods")
+				pods := &corev1.PodList{}
+				var err error
+
+				namespaces := []string{collector.Options.CiliumNamespace}
+				if opts.HubbleTimescapeNamespace != collector.Options.CiliumNamespace {
+					namespaces = append(namespaces, opts.HubbleTimescapeNamespace)
 				}
-				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
+
+				for _, ns := range namespaces {
+					p, err := collector.Client.ListPods(ctx, ns, metav1.ListOptions{
+						LabelSelector: opts.HubbleTimescapeSelector,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to get logs from 'hubble-timescape' pods")
+					}
+					pods.Items = append(pods.Items, p.Items...)
+				}
+				if err = collector.SubmitLogsTasks(sysdump.FilterPods(pods, collector.NodeList),
 					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
 					return fmt.Errorf("failed to collect logs from 'hubble-timescape' pods")
 				}
@@ -87,11 +97,11 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 		},
 		{
 			CreatesSubtasks: true,
-			Description:     "Collecting logs from 'hubble-ui' pods",
+			Description:     "Collecting logs from 'hubble-ui' enterprise pods",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
-				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
-					LabelSelector: "app.kubernetes.io/name=hubble-ui",
+				p, err := collector.Client.ListPods(ctx, opts.HubbleUINamespace, metav1.ListOptions{
+					LabelSelector: collector.Options.HubbleUILabelSelector,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to get logs from 'hubble-ui' pods")
