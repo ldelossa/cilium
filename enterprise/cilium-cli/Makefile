@@ -7,7 +7,7 @@ GO_TAGS ?=
 TARGET=cilium
 INSTALL = $(QUIET)install
 BINDIR ?= /usr/local/bin
-VERSION=$(shell git describe --tags --always)
+VERSION=$(shell git describe --tags --always --match="enterprise/cilium-cli/v*")
 
 TEST_TIMEOUT ?= 5s
 RELEASE_UID ?= $(shell id -u)
