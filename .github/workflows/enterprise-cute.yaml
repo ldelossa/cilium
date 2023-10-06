@@ -10,6 +10,7 @@ on:
       context-ref:
         description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
         required: true
+        default: 'main-ce'
       SHA:
         description: "SHA under test (head of the PR branch). Not relevant for CuTEs."
         required: true
@@ -139,37 +140,19 @@ jobs:
           echo "CE branch: ${{ steps.cute_props.outputs.ce_branch }}"
           echo "CE umbrella chart: ${{ steps.cute_props.outputs.use_ce_chart }}"
 
-      - name: Checkout CE main-ce
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
-        with:
-          ref: main-ce
-          fetch-depth: 0
-          path: cilium_main_ce
-
-      - name: Install Go
-        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
-        with:
-          # renovate: datasource=golang-version depName=go
-          go-version: 1.21.0
-
-      - name: Build cilium-cli
-        working-directory: ./cilium_main_ce
+      - name: Install CE CLI
         run: |
-          cd enterprise/cilium-cli
-          go mod tidy
-          test -z "$(git status --porcelain)" || (echo "please run 'go mod tidy' and submit your changes"; exit 1)
-          make
-          echo $(pwd) >> $GITHUB_PATH
+          curl -LO https://github.com/isovalent/cilium-cli-releases/releases/download/v0.15.8-cee.1/cilium-linux-amd64.tar.gz
+          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+          rm cilium-linux-amd64.tar.gz
 
       - name: Install cfssl
         run: |
-          mkdir bin
-          curl -L https://github.com/cloudflare/cfssl/releases/download/v1.6.4/cfssl_1.6.4_linux_amd64 \
-               --output bin/cfssl --show-error --fail
-          curl -L https://github.com/cloudflare/cfssl/releases/download/v1.6.4/cfssljson_1.6.4_linux_amd64 \
-               --output bin/cfssljson --show-error --fail
-          chmod +x bin/cfssl*
-          echo $(pwd)/bin >> $GITHUB_PATH
+          sudo curl -L https://github.com/cloudflare/cfssl/releases/download/v1.6.4/cfssl_1.6.4_linux_amd64 \
+               --output /usr/local/bin/cfssl --show-error --fail
+          sudo curl -L https://github.com/cloudflare/cfssl/releases/download/v1.6.4/cfssljson_1.6.4_linux_amd64 \
+               --output /usr/local/bin/cfssljson --show-error --fail
+          sudo chmod +x /usr/local/bin/cfssl*
 
       # We configure Git SSH to use a private access token so that `terraform
       # get` commands ran as part of `terraform init` are able to download
@@ -257,6 +240,7 @@ jobs:
       - name: Wait for Helm dev chart to be available
         timeout-minutes: 30
         run: |
+          helm registry login quay.io -u ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_USERNAME }} -p ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_PASSWORD }}
           until helm pull oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium --version ${{ steps.cute_helm.outputs.version }} &> /dev/null;
             do sleep 15s;
           done
