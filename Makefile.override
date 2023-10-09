@@ -8,5 +8,5 @@
 # or reproduction of this material is strictly forbidden unless prior written
 # permission is obtained from Isovalent Inc.
 
-SUBDIRS_CILIUM_CONTAINER := envoy bpf enterprise/cilium enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix
+SUBDIRS_CILIUM_CONTAINER := envoy enterprise/cilium enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix
 SUBDIR_OPERATOR_CONTAINER := enterprise/operator
