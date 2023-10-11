@@ -557,9 +557,16 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
+/bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
+/bpf/test/*egress_gateway_ha_*.c @isovalent/egress-gateway
+/bpf/test/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /renovate.json5 @isovalent/void
 /enterprise @isovalent/void
 /vex-data.vex.json @isovalent/void
 *enterprise* @isovalent/void
+/enterprise/cilium-cli/hooks/tests/egressgateway.go @isovalent/egress-gateway
+/enterprise/cilium/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
+/enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
