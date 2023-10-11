@@ -24,13 +24,16 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive/hivetest"
+	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipam"
+	"github.com/cilium/cilium/pkg/k8s"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/k8s/client"
 	slimMetav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
-	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
+	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -40,8 +43,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/cache"
 )
 
 type fakeSIDAllocator struct {
@@ -145,54 +146,6 @@ func (fa *fakeIPAMAllocator) Capacity() uint64 {
 	return 0
 }
 
-var _ resource.Store[runtime.Object] = (*fakeStore[runtime.Object])(nil)
-
-type fakeStore[T runtime.Object] struct {
-	slice []T
-}
-
-func (fs *fakeStore[T]) List() []T {
-	return fs.slice
-}
-func (fs *fakeStore[T]) IterKeys() resource.KeyIter { return nil }
-func (fs *fakeStore[T]) Get(obj T) (item T, exists bool, err error) {
-	var def T
-	return def, false, nil
-}
-func (fs *fakeStore[T]) GetByKey(key resource.Key) (item T, exists bool, err error) {
-	var def T
-	return def, false, nil
-}
-func (fs *fakeStore[T]) IndexKeys(indexName, indexedValue string) ([]string, error) {
-	return []string{}, nil
-}
-func (fs *fakeStore[T]) ByIndex(indexName, indexedValue string) ([]T, error) {
-	return []T{}, nil
-}
-func (fs *fakeStore[T]) CacheStore() cache.Store { return nil }
-
-var _ resource.Resource[runtime.Object] = (*fakeResource[runtime.Object])(nil)
-
-type fakeResource[T runtime.Object] struct {
-	store resource.Store[T]
-}
-
-func (fr *fakeResource[T]) Observe(ctx context.Context, next func(event resource.Event[T]), complete func(error)) {
-
-}
-
-func (fr *fakeResource[T]) Events(ctx context.Context, opts ...resource.EventsOpt) <-chan resource.Event[T] {
-	return make(<-chan resource.Event[T])
-}
-
-func (fr *fakeResource[T]) Store(context.Context) (resource.Store[T], error) {
-	if fr.store != nil {
-		return fr.store, nil
-	}
-
-	return &fakeStore[T]{}, nil
-}
-
 type comparableObject[T any] interface {
 	metav1.Object
 	DeepEqual(obj T) bool
@@ -290,29 +243,38 @@ func bpfMapsEqual[T comparableKV[T]](a, b []T) bool {
 	return true
 }
 
+func allocateIdentity(t *testing.T, identityAllocator *testidentity.MockIdentityAllocator, ep *v2.CiliumEndpoint) {
+	labels := labels.NewLabelsFromModel(ep.Status.Identity.Labels)
+	id, _, err := identityAllocator.AllocateIdentity(context.TODO(), labels, false, identity.NumericIdentity(ep.Status.Identity.ID))
+	require.NoError(t, err)
+	ep.Status.Identity.ID = int64(id.ID)
+}
+
 func TestSRv6Manager(t *testing.T) {
 	testutils.PrivilegedTest(t)
 
 	log.Logger.SetLevel(logrus.DebugLevel)
 
 	// Fixtures
-	endpoint1 := &k8sTypes.CiliumEndpoint{
-		ObjectMeta: slimMetav1.ObjectMeta{
+	endpoint1 := &v2.CiliumEndpoint{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "pod1",
 			Labels: map[string]string{
 				"vrf": "vrf0",
 			},
 		},
-		Identity: &v2.EndpointIdentity{
-			Labels: []string{
-				"k8s:vrf=vrf0",
+		Status: v2.EndpointStatus{
+			Identity: &v2.EndpointIdentity{
+				Labels: []string{
+					"k8s:vrf=vrf0",
+				},
 			},
-		},
-		Networking: &v2.EndpointNetworking{
-			Addressing: v2.AddressPairList{
-				{
-					IPV4: "10.0.0.1",
+			Networking: &v2.EndpointNetworking{
+				Addressing: v2.AddressPairList{
+					{
+						IPV4: "10.0.0.1",
+					},
 				},
 			},
 		},
@@ -387,13 +349,13 @@ func TestSRv6Manager(t *testing.T) {
 
 	tests := []struct {
 		name                    string
-		initEndpoints           []*k8sTypes.CiliumEndpoint
+		initEndpoints           []*v2.CiliumEndpoint
 		initVRFs                []*v1alpha1.IsovalentVRF
 		initPolicies            []*v1alpha1.IsovalentSRv6EgressPolicy
 		initVRFMapEntries       []*vrfKV
 		initPolicyMapEntries    []*policyKV
 		initSIDMapEntries       []*sidKV
-		updatedEndpoints        []*k8sTypes.CiliumEndpoint
+		updatedEndpoints        []*v2.CiliumEndpoint
 		updatedVRFs             []*v1alpha1.IsovalentVRF
 		updatedPolicies         []*v1alpha1.IsovalentSRv6EgressPolicy
 		updatedVRFMapEntries    []*vrfKV
@@ -402,7 +364,7 @@ func TestSRv6Manager(t *testing.T) {
 	}{
 		{
 			name:             "Add VRF",
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -413,7 +375,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Update VRF VRFID",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -421,7 +383,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithVRFID2},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -432,7 +394,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Update VRF DestinationCIDR",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -440,7 +402,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithDestinationCIDR},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -451,7 +413,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Update VRF ExportRouteTarget",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -459,18 +421,18 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget2},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr2},
+					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
 		},
 		{
 			name:             "Allocate SID with default allocator",
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -487,7 +449,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Remove VRF ExportRouteTarget",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -501,7 +463,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.SIDValue{VRFID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -512,7 +474,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:             "Allocate SID with SIDManager",
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -529,7 +491,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Update SID allocation from default allocator to SIDManager",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -543,7 +505,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.SIDValue{VRFID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -560,7 +522,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Update SID allocation from SIDManager to default allocator",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -574,7 +536,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.SIDValue{VRFID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -591,7 +553,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Delete VRF",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -599,12 +561,12 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 		},
 		{
 			name:             "Add Endpoint",
 			initVRFs:         []*v1alpha1.IsovalentVRF{vrf0},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -615,7 +577,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Delete Endpoint",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
@@ -627,7 +589,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:             "Create Policy",
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0},
 			updatedVRFMapEntries: []*vrfKV{
@@ -645,7 +607,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Update Policy VRFID",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0},
 			initVRFMapEntries: []*vrfKV{
@@ -660,7 +622,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.PolicyValue{SID: types.IPv6(sid1IP.To16())},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0WithVRFID2},
 			updatedVRFMapEntries: []*vrfKV{
@@ -678,7 +640,7 @@ func TestSRv6Manager(t *testing.T) {
 		},
 		{
 			name:          "Delete Policy",
-			initEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0},
 			initVRFMapEntries: []*vrfKV{
@@ -693,7 +655,7 @@ func TestSRv6Manager(t *testing.T) {
 					v: &srv6map.PolicyValue{SID: types.IPv6(sid1IP.To16())},
 				},
 			},
-			updatedEndpoints: []*k8sTypes.CiliumEndpoint{endpoint1},
+			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
@@ -708,6 +670,9 @@ func TestSRv6Manager(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			srv6map.CreateMaps()
 			defer srv6map.DeleteMaps()
+
+			// Lifecycle for testing
+			lc := hivetest.Lifecycle(t)
 
 			// This allocator always returns fixed SID for AllocateNext
 			allocator := &fakeSIDAllocator{
@@ -731,13 +696,20 @@ func TestSRv6Manager(t *testing.T) {
 			// Dummy identity allocator
 			identityAllocator := testidentity.NewMockIdentityAllocator(nil)
 
-			// Fake CiliumEndpoint Resource & Store
-			cepResource := &fakeResource[*k8sTypes.CiliumEndpoint]{}
-			cepStore := &fakeStore[*k8sTypes.CiliumEndpoint]{}
-			cepResource.store = cepStore
+			// Trigger global LocalNodeStore initialization. k8s.CiliumSlimEndpointResource
+			// relies on it internally.
+			_, err := node.NewLocalNodeStore(node.LocalNodeStoreParams{
+				Lifecycle: lc,
+			})
+			require.NoError(t, err)
+
+			// Fake k8s resources
+			fakeClientSet, cs := client.NewFakeClientset()
+			cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
+			require.NoError(t, err)
 
 			manager := NewSRv6Manager(Params{
-				Lifecycle: hivetest.Lifecycle(t),
+				Lifecycle: lc,
 				DaemonConfig: &option.DaemonConfig{
 					EnableSRv6: true,
 				},
@@ -755,7 +727,10 @@ func TestSRv6Manager(t *testing.T) {
 
 			// Create initial CiliumEndpoints
 			for _, ep := range test.initEndpoints {
-				cepStore.slice = append(cepStore.slice, ep.DeepCopy())
+				copied := ep.DeepCopy()
+				allocateIdentity(t, identityAllocator, copied)
+				_, err = fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
+				require.NoError(t, err)
 			}
 
 			for _, vrf := range test.initVRFs {
@@ -770,25 +745,6 @@ func TestSRv6Manager(t *testing.T) {
 				manager.OnAddSRv6Policy(*p)
 			}
 
-			// Ensure all maps are initialized as expected
-			currentVRFMapEntries := []*vrfKV{}
-			srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
-				currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
-			})
-			bpfMapsEqual(currentVRFMapEntries, test.initVRFMapEntries)
-
-			currentPolicyMapEntries := []*policyKV{}
-			srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
-				currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
-			})
-			bpfMapsEqual(currentPolicyMapEntries, test.initPolicyMapEntries)
-
-			currentSIDMapEntries := []*sidKV{}
-			srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
-				currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
-			})
-			bpfMapsEqual(currentSIDMapEntries, test.initSIDMapEntries)
-
 			// Sync done. Close synced channel.
 			close(cacheStatus)
 
@@ -797,10 +753,56 @@ func TestSRv6Manager(t *testing.T) {
 				return manager.sidAllocatorIsSet()
 			}, time.Second*3, time.Millisecond*100)
 
-			// Update Endpoints
-			cepStore.slice = nil
-			for _, ep := range test.updatedEndpoints {
-				cepStore.slice = append(cepStore.slice, ep.DeepCopy())
+			// Ensure all maps are initialized as expected
+			require.Eventually(t, func() bool {
+				currentVRFMapEntries := []*vrfKV{}
+				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
+					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
+				})
+				if !bpfMapsEqual(currentVRFMapEntries, test.initVRFMapEntries) {
+					t.Log("VRF map entries are mismatched, retrying")
+					return false
+				}
+
+				currentPolicyMapEntries := []*policyKV{}
+				srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
+					currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
+				})
+				if !bpfMapsEqual(currentPolicyMapEntries, test.initPolicyMapEntries) {
+					t.Log("Policy map entries are mismatching, retrying")
+					return false
+				}
+
+				currentSIDMapEntries := []*sidKV{}
+				srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
+					currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
+				})
+				if !bpfMapsEqual(currentSIDMapEntries, test.initSIDMapEntries) {
+					t.Log("SID map entries are mismatched, retrying")
+					return false
+				}
+
+				return true
+			}, time.Second*3, time.Millisecond*100)
+
+			// Do CRUD for Endpoints
+			epsToAdd, epsToUpdate, epsToDelete := planK8sObj(test.initEndpoints, test.updatedEndpoints)
+
+			for _, ep := range epsToAdd {
+				copied := ep.DeepCopy()
+				allocateIdentity(t, identityAllocator, copied)
+				_, err = fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
+				require.NoError(t, err)
+			}
+
+			for _, ep := range epsToUpdate {
+				_, err := fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Update(context.TODO(), ep.DeepCopy(), metav1.UpdateOptions{})
+				require.NoError(t, err)
+			}
+
+			for _, ep := range epsToDelete {
+				err := fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Delete(context.TODO(), ep.Name, metav1.DeleteOptions{})
+				require.NoError(t, err)
 			}
 
 			// Do CRUD for VRFs
@@ -834,23 +836,36 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			// Make sure all maps are updated as expected
-			currentVRFMapEntries = []*vrfKV{}
-			srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
-				currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
-			})
-			bpfMapsEqual(currentVRFMapEntries, test.updatedVRFMapEntries)
+			require.Eventually(t, func() bool {
+				currentVRFMapEntries := []*vrfKV{}
+				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
+					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
+				})
+				if !bpfMapsEqual(currentVRFMapEntries, test.updatedVRFMapEntries) {
+					t.Log("VRF map entries are mismatched, retrying")
+					return false
+				}
 
-			currentPolicyMapEntries = []*policyKV{}
-			srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
-				currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
-			})
-			bpfMapsEqual(currentPolicyMapEntries, test.updatedPolicyMapEntries)
+				currentPolicyMapEntries := []*policyKV{}
+				srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
+					currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
+				})
+				if !bpfMapsEqual(currentPolicyMapEntries, test.updatedPolicyMapEntries) {
+					t.Log("Policy map entries are mismatched, retrying")
+					return false
+				}
 
-			currentSIDMapEntries = []*sidKV{}
-			srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
-				currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
-			})
-			bpfMapsEqual(currentSIDMapEntries, test.updatedSIDMapEntries)
+				currentSIDMapEntries := []*sidKV{}
+				srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
+					currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
+				})
+				if !bpfMapsEqual(currentSIDMapEntries, test.updatedSIDMapEntries) {
+					t.Log("SID map entries are mismatched, retrying")
+					return false
+				}
+
+				return true
+			}, time.Second*3, time.Millisecond*100)
 		})
 	}
 }
@@ -899,6 +914,8 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	srv6map.CreateMaps()
 	defer srv6map.DeleteMaps()
 
+	lc := hivetest.Lifecycle(t)
+
 	fsm := &fakeSIDManager{
 		// Start from an empty.
 		pools: map[string]sidmanager.SIDAllocator{},
@@ -915,13 +932,20 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	// Dummy identity allocator
 	identityAllocator := testidentity.NewMockIdentityAllocator(nil)
 
-	// Fake CiliumEndpoint Resource & Store
-	cepResource := &fakeResource[*k8sTypes.CiliumEndpoint]{}
-	cepStore := &fakeStore[*k8sTypes.CiliumEndpoint]{}
-	cepResource.store = cepStore
+	// Trigger global LocalNodeStore initialization. k8s.CiliumSlimEndpointResource
+	// relies on it internally.
+	_, err := node.NewLocalNodeStore(node.LocalNodeStoreParams{
+		Lifecycle: lc,
+	})
+	require.NoError(t, err)
+
+	// Fake resources
+	fakeClientSet, cs := client.NewFakeClientset()
+	cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
+	require.NoError(t, err)
 
 	manager := NewSRv6Manager(Params{
-		Lifecycle: hivetest.Lifecycle(t),
+		Lifecycle: lc,
 		DaemonConfig: &option.DaemonConfig{
 			EnableSRv6: true,
 		},
@@ -936,29 +960,36 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	manager.SetSIDAllocator(&fakeIPAMAllocator{})
 
 	// Create initial CiliumEndpoint
-	cepStore.slice = append(cepStore.slice, &k8sTypes.CiliumEndpoint{
-		ObjectMeta: slimMetav1.ObjectMeta{
+	ep := &v2.CiliumEndpoint{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "pod1",
 			Labels: map[string]string{
 				"vrf": "vrf0",
 			},
 		},
-		Identity: &v2.EndpointIdentity{
-			Labels: []string{
-				"k8s:vrf=vrf0",
+		Status: v2.EndpointStatus{
+			Identity: &v2.EndpointIdentity{
+				Labels: []string{
+					"k8s:vrf=vrf0",
+				},
 			},
-		},
-		Networking: &v2.EndpointNetworking{
-			Addressing: v2.AddressPairList{
-				{
-					IPV4: "10.0.0.1",
+			Networking: &v2.EndpointNetworking{
+				Addressing: v2.AddressPairList{
+					{
+						IPV4: "10.0.0.1",
+					},
 				},
 			},
 		},
-	})
+	}
 
 	// Emulate an initial sync
+	copied := ep.DeepCopy()
+	allocateIdentity(t, identityAllocator, copied)
+	_, err = fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
+	require.NoError(t, err)
+
 	v, err := ParseVRF(vrf0)
 	require.NoError(t, err)
 	manager.OnAddSRv6VRF(*v)
@@ -1259,6 +1290,8 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 
 			resolver, promise := promise.New[sidmanager.SIDManager]()
 
+			lc := hivetest.Lifecycle(t)
+
 			// We can resolve SIDManager immediately because the pool is ready
 			resolver.Resolve(fsm)
 
@@ -1268,13 +1301,20 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			// Dummy identity allocator
 			identityAllocator := testidentity.NewMockIdentityAllocator(nil)
 
-			// Fake CiliumEndpoint Resource & Store
-			cepResource := &fakeResource[*k8sTypes.CiliumEndpoint]{}
-			cepStore := &fakeStore[*k8sTypes.CiliumEndpoint]{}
-			cepResource.store = cepStore
+			// Trigger global LocalNodeStore initialization. k8s.CiliumSlimEndpointResource
+			// relies on it internally.
+			_, err := node.NewLocalNodeStore(node.LocalNodeStoreParams{
+				Lifecycle: lc,
+			})
+			require.NoError(t, err)
+
+			// Fake k8s resources
+			_, cs := client.NewFakeClientset()
+			cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
+			require.NoError(t, err)
 
 			manager := NewSRv6Manager(Params{
-				Lifecycle: hivetest.Lifecycle(t),
+				Lifecycle: lc,
 				DaemonConfig: &option.DaemonConfig{
 					EnableSRv6: true,
 				},
