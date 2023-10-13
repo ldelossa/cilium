@@ -22,6 +22,8 @@ jobs:
           { repo: sky, dir: ., region: us-west-1 },
           { repo: bloomberg, dir: ., region: us-west-2 },
           { repo: form3, dir: MAKS, region: westus2 },
+          { repo: form3, dir: FPS, region: us-east-1 },
+          { repo: zerohash, dir: ., region: us-east-2 },
         ]
     runs-on: ubuntu-latest
     steps:
