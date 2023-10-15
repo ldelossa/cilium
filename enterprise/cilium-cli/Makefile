@@ -43,10 +43,6 @@ local-release: clean
 			linux) \
 				ARCHS='386 amd64 arm arm64'; \
 				;; \
-			windows) \
-				ARCHS='386 amd64 arm64'; \
-				EXT=".exe"; \
-				;; \
 		esac; \
 		for ARCH in $$ARCHS; do \
 			echo Building release binary for $$OS/$$ARCH...; \
