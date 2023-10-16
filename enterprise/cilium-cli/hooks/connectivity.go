@@ -30,13 +30,8 @@ const (
 	testNoPolicies = "no-policies"
 )
 
-var (
-	//go:embed manifests/allow-all-dns-loookups-policy.yaml
-	allowAllDNSLookupsPolicyYAML string
-
-	//go:embed manifests/egress-gateway-policy.yaml
-	egressGatewayPolicyYAML string
-)
+//go:embed manifests/allow-all-dns-loookups-policy.yaml
+var allowAllDNSLookupsPolicyYAML string
 
 func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods map[string]check.Pod) error {
 	if err := addHubbleVersionTests(ct); err != nil {
@@ -111,12 +106,12 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
 		NewEnterpriseTest("egress-gateway-ha").
-		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML, enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
 			Name:            "iegp-sample-client",
 			PodSelectorKind: "client",
 			EgressGroup:     enterpriseCheck.SingleGateway,
 		}).
-		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML, enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
 			Name:            "iegp-sample-echo",
 			PodSelectorKind: "echo",
 			EgressGroup:     enterpriseCheck.SingleGateway,
@@ -128,13 +123,12 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 
 	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
 		NewEnterpriseTest("egress-gateway-ha-excluded-cidrs").
-		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML,
-			enterpriseCheck.IsovalentEgressGatewayPolicyParams{
-				Name:            "iegp-sample-client",
-				PodSelectorKind: "client",
-				EgressGroup:     enterpriseCheck.SingleGateway,
-				ExcludedCIDRs:   enterpriseCheck.ExternalNodeExcludedCIDRs,
-			}).
+		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+			Name:            "iegp-sample-client",
+			PodSelectorKind: "client",
+			EgressGroup:     enterpriseCheck.SingleGateway,
+			ExcludedCIDRs:   enterpriseCheck.ExternalNodeExcludedCIDRs,
+		}).
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
 			features.RequireEnabled(features.NodeWithoutCilium)).

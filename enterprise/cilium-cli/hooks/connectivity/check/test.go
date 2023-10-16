@@ -27,6 +27,9 @@ import (
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
 
+//go:embed manifests/egress-gateway-policy.yaml
+var egressGatewayPolicyYAML string
+
 type EnterpriseTest struct {
 	*check.Test
 
@@ -82,8 +85,8 @@ type IsovalentEgressGatewayPolicyParams struct {
 // Test, to be applied when the test starts running. When calling this method,
 // note that the egress gateway enabled feature requirement is applied directly
 // here.
-func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(policy string, params IsovalentEgressGatewayPolicyParams) *EnterpriseTest {
-	pl, err := parseIsovalentEgressGatewayPolicyYAML(policy)
+func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgressGatewayPolicyParams) *EnterpriseTest {
+	pl, err := parseIsovalentEgressGatewayPolicyYAML(egressGatewayPolicyYAML)
 	if err != nil {
 		t.Fatalf("Parsing policy YAML: %s", err)
 	}
