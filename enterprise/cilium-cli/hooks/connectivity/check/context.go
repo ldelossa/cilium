@@ -14,6 +14,7 @@ import (
 	"context"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium-cli/utils/features"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	enterpriseK8s "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/k8s"
 )
@@ -52,4 +53,9 @@ func (ect *EnterpriseConnectivityTest) NewEnterpriseTest(name string) *Enterpris
 	})
 
 	return &et
+}
+
+func (ect *EnterpriseTest) WithFeatureRequirements(reqs ...features.Requirement) *EnterpriseTest {
+	ect.Test.WithFeatureRequirements(reqs...)
+	return ect
 }

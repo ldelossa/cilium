@@ -104,8 +104,15 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 }
 
 func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
-	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
-		NewEnterpriseTest("egress-gateway-ha").
+	newTest := func(ct *check.ConnectivityTest, name string) *enterpriseCheck.EnterpriseTest {
+		return enterpriseCheck.NewEnterpriseConnectivityTest(ct).
+			NewEnterpriseTest(name).
+			WithFeatureRequirements(
+				features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
+				features.RequireEnabled(features.NodeWithoutCilium))
+	}
+
+	newTest(ct, "egress-gateway-ha").
 		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
 			Name:            "iegp-sample-client",
 			PodSelectorKind: "client",
@@ -117,12 +124,9 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 			EgressGroup:     enterpriseCheck.SingleGateway,
 		}).
 		WithIPRoutesFromOutsideToPodCIDRs().
-		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
-			features.RequireEnabled(features.NodeWithoutCilium)).
 		WithScenarios(enterpriseTests.EgressGatewayHA())
 
-	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
-		NewEnterpriseTest("egress-gateway-ha-excluded-cidrs").
+	newTest(ct, "egress-gateway-ha-excluded-cidrs").
 		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
 			Name:            "iegp-sample-client",
 			PodSelectorKind: "client",
@@ -130,8 +134,6 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 			ExcludedCIDRs:   enterpriseCheck.ExternalNodeExcludedCIDRs,
 		}).
 		WithIPRoutesFromOutsideToPodCIDRs().
-		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
-			features.RequireEnabled(features.NodeWithoutCilium)).
 		WithScenarios(enterpriseTests.EgressGatewayExcludedCIDRs())
 
 	return nil
