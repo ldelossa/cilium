@@ -551,6 +551,11 @@ Vagrantfile @cilium/ci-structure
 # Isovalent Teams
 # +++++++++++++++
 #
+# - @isovalent/cli:
+#   Provide user experience feedback on changes to Command-Line Interfaces.
+#   These owners are a stand-in for the user community to bring a user
+#   perspective to the review process. Consider how information is presented,
+#   consistency of flags and options.
 # - @isovalent/core-structure
 #   A team responsible for mindfulness of isovalent/cilium codebase.
 # - @isovalent/traffic-engineering
@@ -567,6 +572,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise @isovalent/void
 /vex-data.vex.json @isovalent/void
 *enterprise* @isovalent/void
+/enterprise/cilium-cli/ @isovalent/cli
 /enterprise/cilium-cli/hooks/tests/egressgateway.go @isovalent/egress-gateway
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
