@@ -10,10 +10,7 @@ spec:
         kind: client
   destinationCIDRs:
   - 0.0.0.0/0
-  egressGroups:
-  - nodeSelector:
-      matchLabels:
-        kubernetes.io/hostname: NODE_NAME_PLACEHOLDER
+  egressGroups: # set by the check package in WithIsovalentEgressGatewayPolicy()
 ---
 apiVersion: isovalent.com/v1
 kind: IsovalentEgressGatewayPolicy
@@ -26,7 +23,4 @@ spec:
         kind: echo
   destinationCIDRs:
   - 0.0.0.0/0
-  egressGroups:
-  - nodeSelector:
-      matchLabels:
-        kubernetes.io/hostname: NODE_NAME_PLACEHOLDER
+  egressGroups: # set by the check package in WithIsovalentEgressGatewayPolicy()

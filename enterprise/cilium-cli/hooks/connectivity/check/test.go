@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net"
 
+	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
@@ -23,6 +24,7 @@ import (
 	"github.com/cilium/cilium-cli/utils/features"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
 
 type EnterpriseTest struct {
@@ -38,6 +40,17 @@ func (t *EnterpriseTest) Context() *EnterpriseConnectivityTest {
 	return t.ctx
 }
 
+type EgressGroupKind int
+
+const (
+	// SingleGateway configures the egressGroup of the policy with a single gateway node, the one returned by (*Test)EgressGatewayNode().
+	// Currently the designated node is the one running the other=client client pod
+	SingleGateway EgressGroupKind = iota
+
+	// AllCiliumNodes configures the egressGroup of the policy with all nodes running Cilium as gateway nodes
+	AllCiliumNodes
+)
+
 type ExcludedCIDRsKind int
 
 const (
@@ -51,6 +64,9 @@ const (
 // IsovalentEgressGatewayPolicyParams is used to configure how an IsovalentEgressGatewayPolicy template should be
 // configured before being applied.
 type IsovalentEgressGatewayPolicyParams struct {
+	// EgressGroup controls how the egressGroup of the policy should be configured
+	EgressGroup EgressGroupKind
+
 	// ExcludedCIDRs controls how the ExcludedCIDRs property should be configured
 	ExcludedCIDRs ExcludedCIDRsKind
 }
@@ -81,14 +97,34 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(policy string, params 
 			}
 		}
 
-		// Set the egress gateway node
-		egressGatewayNode := t.EgressGatewayNode()
-		if egressGatewayNode == "" {
-			t.Fatalf("Cannot find egress gateway node")
+		// Set the egress group
+		var (
+			egressGroupKey   = ""
+			egressGroupValue = ""
+		)
+
+		switch params.EgressGroup {
+		case SingleGateway:
+			egressGatewayNodeName := t.EgressGatewayNode()
+			if egressGatewayNodeName == "" {
+				t.Fatalf("Cannot find egress gateway node")
+			}
+
+			egressGroupKey = "kubernetes.io/hostname"
+			egressGroupValue = egressGatewayNodeName
+		case AllCiliumNodes:
+			egressGroupKey = enterpriseTests.EgressGroupLabelKey
+			egressGroupValue = enterpriseTests.EgressGroupLabelValue
 		}
 
-		for j := range pl[i].Spec.EgressGroups {
-			pl[i].Spec.EgressGroups[j].NodeSelector.MatchLabels["kubernetes.io/hostname"] = egressGatewayNode
+		pl[i].Spec.EgressGroups = []isovalentv1.EgressGroup{
+			{
+				NodeSelector: &slimv1.LabelSelector{
+					MatchLabels: map[string]slimv1.MatchLabelsValue{
+						egressGroupKey: egressGroupValue,
+					},
+				},
+			},
 		}
 
 		// Set the excluded CIDRs

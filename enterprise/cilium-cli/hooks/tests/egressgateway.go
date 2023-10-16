@@ -23,6 +23,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	EgressGroupLabelKey   = "egress-group"
+	EgressGroupLabelValue = "test"
+)
+
 // bpfEgressGatewayPolicyEntry represents an entry in the BPF egress gateway policy map
 type bpfEgressGatewayPolicyEntry struct {
 	SourceIP   string

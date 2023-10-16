@@ -115,7 +115,9 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
 		NewEnterpriseTest("egress-gateway-ha").
 		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML,
-			enterpriseCheck.IsovalentEgressGatewayPolicyParams{}).
+			enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				EgressGroup: enterpriseCheck.SingleGateway,
+			}).
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
 			features.RequireEnabled(features.NodeWithoutCilium)).
@@ -125,7 +127,8 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 		NewEnterpriseTest("egress-gateway-ha-excluded-cidrs").
 		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyExcludedCIDRsYAML,
 			enterpriseCheck.IsovalentEgressGatewayPolicyParams{
-				ExcludedCIDRs: check.ExternalNodeExcludedCIDRs,
+				EgressGroup:   enterpriseCheck.SingleGateway,
+				ExcludedCIDRs: enterpriseCheck.ExternalNodeExcludedCIDRs,
 			}).
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
