@@ -64,6 +64,12 @@ const (
 // IsovalentEgressGatewayPolicyParams is used to configure how an IsovalentEgressGatewayPolicy template should be
 // configured before being applied.
 type IsovalentEgressGatewayPolicyParams struct {
+	// Name controls the name of the policy
+	Name string
+
+	// PodSelectorKind is used to select the client pods. The parameter is used to select pods with a matching "kind" label
+	PodSelectorKind string
+
 	// EgressGroup controls how the egressGroup of the policy should be configured
 	EgressGroup EgressGroupKind
 
@@ -96,6 +102,12 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(policy string, params 
 				}
 			}
 		}
+
+		// Set the policy name
+		pl[i].Name = params.Name
+
+		// Set the pod selector
+		pl[i].Spec.Selectors[0].PodSelector.MatchLabels["kind"] = params.PodSelectorKind
 
 		// Set the egress group
 		var (

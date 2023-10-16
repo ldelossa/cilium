@@ -36,9 +36,6 @@ var (
 
 	//go:embed manifests/egress-gateway-policy.yaml
 	egressGatewayPolicyYAML string
-
-	//go:embed manifests/egress-gateway-policy-excluded-cidrs.yaml
-	egressGatewayPolicyExcludedCIDRsYAML string
 )
 
 func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods map[string]check.Pod) error {
@@ -114,10 +111,16 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
 		NewEnterpriseTest("egress-gateway-ha").
-		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML,
-			enterpriseCheck.IsovalentEgressGatewayPolicyParams{
-				EgressGroup: enterpriseCheck.SingleGateway,
-			}).
+		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML, enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+			Name:            "iegp-sample-client",
+			PodSelectorKind: "client",
+			EgressGroup:     enterpriseCheck.SingleGateway,
+		}).
+		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML, enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+			Name:            "iegp-sample-echo",
+			PodSelectorKind: "echo",
+			EgressGroup:     enterpriseCheck.SingleGateway,
+		}).
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
 			features.RequireEnabled(features.NodeWithoutCilium)).
@@ -125,10 +128,12 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 
 	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
 		NewEnterpriseTest("egress-gateway-ha-excluded-cidrs").
-		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyExcludedCIDRsYAML,
+		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML,
 			enterpriseCheck.IsovalentEgressGatewayPolicyParams{
-				EgressGroup:   enterpriseCheck.SingleGateway,
-				ExcludedCIDRs: enterpriseCheck.ExternalNodeExcludedCIDRs,
+				Name:            "iegp-sample-client",
+				PodSelectorKind: "client",
+				EgressGroup:     enterpriseCheck.SingleGateway,
+				ExcludedCIDRs:   enterpriseCheck.ExternalNodeExcludedCIDRs,
 			}).
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
