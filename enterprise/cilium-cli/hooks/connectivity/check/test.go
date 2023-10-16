@@ -38,8 +38,13 @@ func (t *EnterpriseTest) Context() *EnterpriseConnectivityTest {
 	return t.ctx
 }
 
+type ExcludedCIDRsKind int
+
 const (
-	NoExcludedCIDRs = iota
+	// NoExcludedCIDRs does not configure any excluded CIDRs in the policy
+	NoExcludedCIDRs ExcludedCIDRsKind = iota
+
+	// ExternalNodeExcludedCIDRs adds the IPs of the external nodes (i.e the ones with the "cilium.io/no-schedule" label) to the list of excluded CIDRs
 	ExternalNodeExcludedCIDRs
 )
 
@@ -47,7 +52,7 @@ const (
 // configured before being applied.
 type IsovalentEgressGatewayPolicyParams struct {
 	// ExcludedCIDRs controls how the ExcludedCIDRs property should be configured
-	ExcludedCIDRs int
+	ExcludedCIDRs ExcludedCIDRsKind
 }
 
 // WithIsovalentEgressGatewayPolicy takes a string containing a YAML policy
