@@ -31,6 +31,7 @@ import (
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipam"
 	"github.com/cilium/cilium/pkg/k8s"
+	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
@@ -96,10 +97,6 @@ type SIDAllocation struct {
 type Manager struct {
 	lock.RWMutex
 
-	// k8sCacheSyncedChecker is used to check if the agent has synced its
-	// cache with the k8s API server
-	k8sCacheSyncedChecker k8s.CacheStatus
-
 	// policies stores egress policies indexed by policyID
 	policies map[policyID]*EgressPolicy
 
@@ -108,6 +105,12 @@ type Manager struct {
 
 	// cepResource provides access to events and read-only store of CiliumEndpoint resources
 	cepResource resource.Resource[*k8sTypes.CiliumEndpoint]
+
+	// vrfResource provides access to events and read-only store of IsovalentVRF resources
+	vrfResource resource.Resource[*iso_v1alpha1.IsovalentVRF]
+
+	// policyResource provides access to events and read-only store of IsovalentSRv6EgressPolicy resources
+	policyResource resource.Resource[*iso_v1alpha1.IsovalentSRv6EgressPolicy]
 
 	// cepStore is a read-only store of CiliumEndpoint resources
 	cepStore resource.Store[*k8sTypes.CiliumEndpoint]
@@ -143,13 +146,15 @@ type Manager struct {
 type Params struct {
 	cell.In
 
-	Lifecycle              hive.Lifecycle
-	DaemonConfig           *option.DaemonConfig
-	Sig                    *signaler.BGPCPSignaler
-	CacheIdentityAllocator cache.IdentityAllocator
-	CacheStatus            k8s.CacheStatus
-	SIDManagerPromise      promise.Promise[sidmanager.SIDManager]
-	CiliumEndpointResource resource.Resource[*k8sTypes.CiliumEndpoint]
+	Lifecycle                 hive.Lifecycle
+	DaemonConfig              *option.DaemonConfig
+	Sig                       *signaler.BGPCPSignaler
+	CacheIdentityAllocator    cache.IdentityAllocator
+	CacheStatus               k8s.CacheStatus
+	SIDManagerPromise         promise.Promise[sidmanager.SIDManager]
+	CiliumEndpointResource    resource.Resource[*k8sTypes.CiliumEndpoint]
+	IsovalentVRFResource      resource.Resource[*iso_v1alpha1.IsovalentVRF]
+	IsovalentSRv6EgressPolicy resource.Resource[*iso_v1alpha1.IsovalentSRv6EgressPolicy]
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
@@ -159,15 +164,16 @@ func NewSRv6Manager(p Params) *Manager {
 	}
 
 	manager := &Manager{
-		k8sCacheSyncedChecker: p.CacheStatus,
-		policies:              make(map[policyID]*EgressPolicy),
-		vrfs:                  make(map[vrfID]*VRF),
-		identityAllocator:     p.CacheIdentityAllocator,
-		allocatedSIDs:         make(map[uint32]*SIDAllocation),
-		bgp:                   p.Sig,
-		sidManagerPromise:     p.SIDManagerPromise,
-		asyncReconcileVRFCh:   make(chan struct{}, 1),
-		cepResource:           p.CiliumEndpointResource,
+		policies:            make(map[policyID]*EgressPolicy),
+		vrfs:                make(map[vrfID]*VRF),
+		identityAllocator:   p.CacheIdentityAllocator,
+		allocatedSIDs:       make(map[uint32]*SIDAllocation),
+		bgp:                 p.Sig,
+		sidManagerPromise:   p.SIDManagerPromise,
+		asyncReconcileVRFCh: make(chan struct{}, 1),
+		cepResource:         p.CiliumEndpointResource,
+		vrfResource:         p.IsovalentVRFResource,
+		policyResource:      p.IsovalentSRv6EgressPolicy,
 	}
 
 	p.Lifecycle.Append(manager)
@@ -210,6 +216,52 @@ func (manager *Manager) Start(hookCtx hive.HookContext) error {
 		}
 	}()
 
+	vrfSyncDone := make(chan struct{})
+	go func() {
+		for event := range manager.vrfResource.Events(context.Background()) {
+			// reconcile upon IsovalentVRF events
+			switch event.Kind {
+			case resource.Sync:
+				close(vrfSyncDone)
+			case resource.Upsert:
+				vrf, err := ParseVRF(event.Object)
+				if err != nil {
+					event.Done(err)
+					continue
+				}
+				manager.OnAddSRv6VRF(*vrf)
+			case resource.Delete:
+				manager.OnDeleteSRv6VRF(vrfID{
+					Namespace: event.Key.Namespace,
+					Name:      event.Key.Name,
+				})
+			}
+			event.Done(nil)
+		}
+	}()
+
+	go func() {
+		for event := range manager.policyResource.Events(context.Background()) {
+			// reconcile upon IsovalentSRv6EgressPolicy events
+			switch event.Kind {
+			case resource.Upsert:
+				policy, err := ParsePolicy(event.Object)
+				if err != nil {
+					manager.Unlock()
+					event.Done(err)
+					continue
+				}
+				manager.OnAddSRv6Policy(*policy)
+			case resource.Delete:
+				manager.OnDeleteSRv6Policy(policyID{
+					Namespace: event.Key.Namespace,
+					Name:      event.Key.Name,
+				})
+			}
+			event.Done(nil)
+		}
+	}()
+
 	// This goroutine handles asynchronous reconcileVRF
 	go func() {
 		for range manager.asyncReconcileVRFCh {
@@ -233,7 +285,7 @@ func (manager *Manager) Start(hookCtx hive.HookContext) error {
 		// SRv6Manager's Start hook since the Daemon depends on
 		// SRv6Manager to register it to k8s VRF event handler and it
 		// is called after this Start hook.
-		<-manager.k8sCacheSyncedChecker
+		<-vrfSyncDone
 
 		// Subscribe to the locator changes. At the same time, restore
 		// all existing SID allocations. After this call, all VRFs that

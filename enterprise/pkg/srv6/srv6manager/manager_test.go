@@ -674,6 +674,11 @@ func TestSRv6Manager(t *testing.T) {
 			// Lifecycle for testing
 			lc := hivetest.Lifecycle(t)
 
+			// Fake DaemonConfig
+			dc := &option.DaemonConfig{
+				EnableSRv6: true,
+			}
+
 			// This allocator always returns fixed SID for AllocateNext
 			allocator := &fakeSIDAllocator{
 				sid:          sid3,
@@ -708,16 +713,22 @@ func TestSRv6Manager(t *testing.T) {
 			cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
 			require.NoError(t, err)
 
+			vrfResource, err := newIsovalentVRFResource(lc, dc, cs)
+			require.NoError(t, err)
+
+			policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
+			require.NoError(t, err)
+
 			manager := NewSRv6Manager(Params{
-				Lifecycle: lc,
-				DaemonConfig: &option.DaemonConfig{
-					EnableSRv6: true,
-				},
-				Sig:                    signaler.NewBGPCPSignaler(),
-				CacheIdentityAllocator: identityAllocator,
-				CacheStatus:            cacheStatus,
-				SIDManagerPromise:      promise,
-				CiliumEndpointResource: cepResource,
+				Lifecycle:                 lc,
+				DaemonConfig:              dc,
+				Sig:                       signaler.NewBGPCPSignaler(),
+				CacheIdentityAllocator:    identityAllocator,
+				CacheStatus:               cacheStatus,
+				SIDManagerPromise:         promise,
+				CiliumEndpointResource:    cepResource,
+				IsovalentVRFResource:      vrfResource,
+				IsovalentSRv6EgressPolicy: policyResource,
 			})
 
 			// This allocator always returns fixed SID for AllocateNext
@@ -734,15 +745,13 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			for _, vrf := range test.initVRFs {
-				v, err := ParseVRF(vrf)
+				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
-				manager.OnAddSRv6VRF(*v)
 			}
 
 			for _, policy := range test.initPolicies {
-				p, err := ParsePolicy(policy)
+				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Create(context.TODO(), policy.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
-				manager.OnAddSRv6Policy(*p)
 			}
 
 			// Sync done. Close synced channel.
@@ -808,31 +817,37 @@ func TestSRv6Manager(t *testing.T) {
 			// Do CRUD for VRFs
 			vrfsToAdd, vrfsToUpdate, vrfsToDel := planK8sObj(test.initVRFs, test.updatedVRFs)
 
-			for _, vrf := range append(vrfsToAdd, vrfsToUpdate...) {
-				v, err := ParseVRF(vrf)
+			for _, vrf := range vrfsToAdd {
+				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
-				manager.OnAddSRv6VRF(*v)
+			}
+
+			for _, vrf := range vrfsToUpdate {
+				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Update(context.TODO(), vrf.DeepCopy(), metav1.UpdateOptions{})
+				require.NoError(t, err)
 			}
 
 			for _, vrf := range vrfsToDel {
-				v, err := ParseVRF(vrf)
+				err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Delete(context.TODO(), vrf.GetName(), metav1.DeleteOptions{})
 				require.NoError(t, err)
-				manager.OnDeleteSRv6VRF(v.id)
 			}
 
 			// Do CRUD for Policies
 			policiesToAdd, policiesToUpdate, policiesToDel := planK8sObj(test.initPolicies, test.updatedPolicies)
 
-			for _, policy := range append(policiesToAdd, policiesToUpdate...) {
-				p, err := ParsePolicy(policy)
+			for _, policy := range policiesToAdd {
+				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Create(context.TODO(), policy.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
-				manager.OnAddSRv6Policy(*p)
+			}
+
+			for _, policy := range policiesToUpdate {
+				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Update(context.TODO(), policy.DeepCopy(), metav1.UpdateOptions{})
+				require.NoError(t, err)
 			}
 
 			for _, policy := range policiesToDel {
-				p, err := ParsePolicy(policy)
+				err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Delete(context.TODO(), policy.GetName(), metav1.DeleteOptions{})
 				require.NoError(t, err)
-				manager.OnDeleteSRv6Policy(p.id)
 			}
 
 			// Make sure all maps are updated as expected
@@ -916,6 +931,10 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 
 	lc := hivetest.Lifecycle(t)
 
+	dc := &option.DaemonConfig{
+		EnableSRv6: true,
+	}
+
 	fsm := &fakeSIDManager{
 		// Start from an empty.
 		pools: map[string]sidmanager.SIDAllocator{},
@@ -944,16 +963,22 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
 	require.NoError(t, err)
 
+	vrfResource, err := newIsovalentVRFResource(lc, dc, cs)
+	require.NoError(t, err)
+
+	policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
+	require.NoError(t, err)
+
 	manager := NewSRv6Manager(Params{
-		Lifecycle: lc,
-		DaemonConfig: &option.DaemonConfig{
-			EnableSRv6: true,
-		},
-		Sig:                    signaler.NewBGPCPSignaler(),
-		CacheIdentityAllocator: identityAllocator,
-		CacheStatus:            cacheStatus,
-		SIDManagerPromise:      promise,
-		CiliumEndpointResource: cepResource,
+		Lifecycle:                 lc,
+		DaemonConfig:              dc,
+		Sig:                       signaler.NewBGPCPSignaler(),
+		CacheIdentityAllocator:    identityAllocator,
+		CacheStatus:               cacheStatus,
+		SIDManagerPromise:         promise,
+		CiliumEndpointResource:    cepResource,
+		IsovalentVRFResource:      vrfResource,
+		IsovalentSRv6EgressPolicy: policyResource,
 	})
 
 	// This allocator will never be used
@@ -1292,6 +1317,10 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 
 			lc := hivetest.Lifecycle(t)
 
+			dc := &option.DaemonConfig{
+				EnableSRv6: true,
+			}
+
 			// We can resolve SIDManager immediately because the pool is ready
 			resolver.Resolve(fsm)
 
@@ -1313,16 +1342,24 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
 			require.NoError(t, err)
 
+			vrfResource, err := newIsovalentVRFResource(lc, dc, cs)
+			require.NoError(t, err)
+
+			policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
+			require.NoError(t, err)
+
 			manager := NewSRv6Manager(Params{
 				Lifecycle: lc,
 				DaemonConfig: &option.DaemonConfig{
 					EnableSRv6: true,
 				},
-				Sig:                    signaler.NewBGPCPSignaler(),
-				CacheIdentityAllocator: identityAllocator,
-				CacheStatus:            cacheStatus,
-				SIDManagerPromise:      promise,
-				CiliumEndpointResource: cepResource,
+				Sig:                       signaler.NewBGPCPSignaler(),
+				CacheIdentityAllocator:    identityAllocator,
+				CacheStatus:               cacheStatus,
+				SIDManagerPromise:         promise,
+				CiliumEndpointResource:    cepResource,
+				IsovalentVRFResource:      vrfResource,
+				IsovalentSRv6EgressPolicy: policyResource,
 			})
 
 			// This allocator will never be used
