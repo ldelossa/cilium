@@ -16,6 +16,7 @@ rules:
   - isovalentsrv6sidmanagers
   - isovalentsrv6egresspolicies
   - isovalentvrfs
+  - isovalentmulticastgroups
   verbs:
   - list
   - watch
@@ -43,4 +44,17 @@ rules:
     - watch
     - get
 {{- end }}
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentmulticastnodes
+  - isovalentmulticastnodes/status
+  verbs:
+  - create
+  - update
+  - delete
+  - get
+  - watch
+  - list
+  - patch
 {{- end }}

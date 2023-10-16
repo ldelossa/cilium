@@ -49,6 +49,12 @@ const (
 
 	// IPNCRDName is the full name of the IsovalentPodNetwork CRD.
 	IPNCRDName = k8sconstv1alpha1.IPNKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// MulticastGroupCRDName is the full name of the MulticastGroup CRD.
+	MulticastGroupCRDName = k8sconstv1alpha1.MulticastGroupKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// MulticastNodeCRDName is the full name of the MulticastNode CRD.
+	MulticastNodeCRDName = k8sconstv1alpha1.MulticastNodeKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -69,6 +75,8 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv1alpha1.VRFName):              createVRFCRD,
 		synced.CRDResourceName(k8sconstv1.IEGPName):                   createIEGPCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IPNName):              createIPNCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):   createMulticastGroupCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):    createMulticastNodeCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -104,6 +112,12 @@ var (
 
 	//go:embed crds/v1alpha1/isovalentpodnetworks.yaml
 	crdsv2Alpha1IsovalentPodNetworks []byte
+
+	//go:embed crds/v1alpha1/isovalentmulticastgroups.yaml
+	crdsv1Alpha1IsovalentMulticastGroups []byte
+
+	//go:embed crds/v1alpha1/isovalentmulticastnodes.yaml
+	crdsv1Alpha1IsovalentMulticastNodes []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -133,6 +147,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1IsovalentEgressGatewayPolicies
 	case IPNCRDName:
 		crdBytes = crdsv2Alpha1IsovalentPodNetworks
+	case MulticastGroupCRDName:
+		crdBytes = crdsv1Alpha1IsovalentMulticastGroups
+	case MulticastNodeCRDName:
+		crdBytes = crdsv1Alpha1IsovalentMulticastNodes
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -231,6 +249,32 @@ func createIPNCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IPNName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createMulticastGroupCRD creates and updates the IsovalentMulticastGroup CRD.
+func createMulticastGroupCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(MulticastGroupCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.MulticastGroupName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createMulticastNodeCRD creates and updates the IsovalentMulticastNode CRD.
+func createMulticastNodeCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(MulticastNodeCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.MulticastNodeName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

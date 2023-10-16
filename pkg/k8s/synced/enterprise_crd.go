@@ -26,6 +26,8 @@ func AllIsovalentCRDResourceNames() []string {
 		CRDResourceName(v1alpha1.SRv6EgressPolicyName),
 		CRDResourceName(v1alpha1.VRFName),
 		CRDResourceName(v1alpha1.IPNName),
+		CRDResourceName(v1alpha1.MulticastGroupName),
+		CRDResourceName(v1alpha1.MulticastNodeName),
 	}
 
 	if option.Config.EnableIPv4EgressGatewayHA {

@@ -19,6 +19,14 @@ func (c *FakeIsovalentV1alpha1) IsovalentFQDNGroups() v1alpha1.IsovalentFQDNGrou
 	return &FakeIsovalentFQDNGroups{c}
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentMulticastGroups() v1alpha1.IsovalentMulticastGroupInterface {
+	return &FakeIsovalentMulticastGroups{c}
+}
+
+func (c *FakeIsovalentV1alpha1) IsovalentMulticastNodes() v1alpha1.IsovalentMulticastNodeInterface {
+	return &FakeIsovalentMulticastNodes{c}
+}
+
 func (c *FakeIsovalentV1alpha1) IsovalentPodNetworks() v1alpha1.IsovalentPodNetworkInterface {
 	return &FakeIsovalentPodNetworks{c}
 }

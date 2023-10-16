@@ -47,6 +47,16 @@ const (
 	IPNPluralName     = "isovalentpodnetworks"
 	IPNKindDefinition = "IsovalentPodNetwork"
 	IPNName           = IPNPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentMulticastGroup (MulticastGroup)
+	MulticastGroupPluralName     = "isovalentmulticastgroups"
+	MulticastGroupKindDefinition = "IsovalentMulticastGroup"
+	MulticastGroupName           = MulticastGroupPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentMulticastNode (MulticastNode)
+	MulticastNodePluralName     = "isovalentmulticastnodes"
+	MulticastNodeKindDefinition = "IsovalentMulticastNode"
+	MulticastNodeName           = MulticastNodePluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -102,6 +112,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentSRv6EgressPolicyList{},
 		&IsovalentPodNetwork{},
 		&IsovalentPodNetworkList{},
+		&IsovalentMulticastGroup{},
+		&IsovalentMulticastGroupList{},
+		&IsovalentMulticastNode{},
+		&IsovalentMulticastNodeList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
