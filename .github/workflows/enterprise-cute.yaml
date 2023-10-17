@@ -65,7 +65,7 @@ jobs:
           echo cute_region=$region >> $GITHUB_OUTPUT
 
       - name: Checkout CuTE repository
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           repository: isovalent/cute-${{ steps.vars.outputs.cute_repo }}
           ref: ${{ steps.vars.outputs.cute_ref }}
@@ -163,7 +163,7 @@ jobs:
 
       - name: Set up AWS CLI credentials
         if: steps.cute_props.outputs.provider == 'aws'
-        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838
+        uses: aws-actions/configure-aws-credentials@43312bc5458ebd121e1bfb5397ae6f13864d5794
         with:
           aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
           aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
@@ -172,13 +172,13 @@ jobs:
       - name: Set up gcloud credentials
         if: steps.cute_props.outputs.provider == 'gcp'
         id: auth
-        uses: google-github-actions/auth@dac4e13deb3640f22e3ffe758fd3f95e6e89f712
+        uses: google-github-actions/auth@e607103ba47e9d2221c6f81b7cf0b4699fa2f055
         with:
           credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
 
       - name: Set up gcloud CLI
         if: steps.cute_props.outputs.provider == 'gcp'
-        uses: google-github-actions/setup-gcloud@877d4953d2c70a0ba7ef3290ae968eb24af233bb
+        uses: google-github-actions/setup-gcloud@080181af0511f83ff0e69f454b3ea1f07e880446
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
@@ -221,7 +221,7 @@ jobs:
           echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
 
       - name: Checkout CE branch
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           # checkout pull request head ref so that print-chart-version.sh prints the correct chart version.
           ref: ${{ steps.cute_props.outputs.ce_branch }}
@@ -247,7 +247,7 @@ jobs:
 
       - name: Checkout enterprise helm repo
         if: steps.cute_props.outputs.use_ce_chart == 'true'
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           repository: isovalent/helm-charts
           token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
