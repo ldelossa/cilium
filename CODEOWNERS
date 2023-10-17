@@ -555,12 +555,14 @@ Vagrantfile @cilium/ci-structure
 #   A team responsible for mindfulness of isovalent/cilium codebase.
 # - @isovalent/traffic-engineering
 #   Responsible for maintaining features related to traffic engineering such as SRv6.
+# - @isovalent/egress-gateway
+#   Responsible for maintaining egress-gateway and egress-gateway-ha
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
-/bpf/test/*egress_gateway_ha_*.c @isovalent/egress-gateway
-/bpf/test/lib/egress_gateway_ha.h @isovalent/egress-gateway
+/bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
+/bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
 /renovate.json5 @isovalent/void
 /enterprise @isovalent/void
 /vex-data.vex.json @isovalent/void
