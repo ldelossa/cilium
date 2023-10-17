@@ -4,8 +4,8 @@
 package main
 
 import (
-	"github.com/cilium/cilium/cilium/cmd"
-	_ "github.com/cilium/cilium/enterprise/cilium/cmd"
+	"github.com/cilium/cilium/cilium-dbg/cmd"
+	_ "github.com/cilium/cilium/enterprise/cilium-dbg/cmd"
 )
 
 func main() {

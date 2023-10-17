@@ -13,7 +13,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/cilium/cilium/cilium/cmd"
+	"github.com/cilium/cilium/cilium-dbg/cmd"
 )
 
 var bpfEgressCmd = &cobra.Command{

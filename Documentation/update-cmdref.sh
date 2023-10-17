@@ -9,7 +9,7 @@ source_dir="$(cd "${script_dir}/.." && pwd)"
 cmdref_dir="${script_dir}/cmdref"
 
 generators=(
-    "enterprise/cilium/cilium cmdref -d"
+    "enterprise/cilium-dbg/cilium-dbg cmdref -d"
     "enterprise/daemon/cilium-agent cmdref"
     "bugtool/cilium-bugtool cmdref -d"
     "cilium-health/cilium-health --cmdref"

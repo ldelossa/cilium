@@ -7,7 +7,7 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source_dir="$(cd "${script_dir}/.." && pwd)"
 examples_dir="${source_dir}/examples"
-cilium="${source_dir}/enterprise/cilium/cilium"
+cilium="${source_dir}/enterprise/cilium-dbg/cilium-dbg"
 
 JSON_FILES=$(find ${examples_dir} \
              -wholename "*/policies/*.json" \

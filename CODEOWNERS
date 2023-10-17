@@ -566,7 +566,7 @@ Vagrantfile @cilium/ci-structure
 /vex-data.vex.json @isovalent/void
 *enterprise* @isovalent/void
 /enterprise/cilium-cli/hooks/tests/egressgateway.go @isovalent/egress-gateway
-/enterprise/cilium/cmd/bpf_egress* @isovalent/egress-gateway
+/enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
 /enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
