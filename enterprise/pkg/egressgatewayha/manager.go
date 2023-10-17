@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,7 +24,6 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
@@ -33,14 +32,13 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
-	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	nodeTypes "github.com/cilium/cilium/pkg/node/types"
+	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
@@ -58,12 +56,10 @@ var (
 
 // Cell provides a [Manager] for consumption with hive.
 var Cell = cell.Module(
-	"egressgateway",
+	"egressgatewayha",
 	"Egress Gateway allows originating traffic from specific IPv4 addresses",
 	cell.Config(defaultConfig),
 	cell.Provide(NewEgressGatewayManager),
-	cell.Provide(newPolicyResource),
-	cell.Invoke(func(*Manager) {}),
 )
 
 type eventType int
@@ -71,11 +67,8 @@ type eventType int
 const (
 	eventNone = eventType(1 << iota)
 	eventK8sSyncDone
-	eventHealthcheck
 	eventAddPolicy
 	eventDeletePolicy
-	eventUpdateNode
-	eventDeleteNode
 	eventUpdateEndpoint
 	eventDeleteEndpoint
 )
@@ -86,6 +79,11 @@ type Config struct {
 	// Deprecated, has no effect, and will removed in v1.16"
 	InstallEgressGatewayHARoutes bool
 
+	// Healthcheck timeout after which an egress gateway is marked not healthy.
+	// This also configures the frequency of probes to a value of healthcheckTimeout / 2
+	// Deprecated, has no effect, and will removed in v1.16"
+	EgressGatewayHAHealthcheckTimeout time.Duration
+
 	// Default amount of time between triggers of egress gateway state
 	// reconciliations are invoked
 	EgressGatewayHAReconciliationTriggerInterval time.Duration
@@ -93,12 +91,16 @@ type Config struct {
 
 var defaultConfig = Config{
 	InstallEgressGatewayHARoutes:                 false,
+	EgressGatewayHAHealthcheckTimeout:            1 * time.Second,
 	EgressGatewayHAReconciliationTriggerInterval: 1 * time.Second,
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.Bool("install-egress-gateway-ha-routes", def.InstallEgressGatewayHARoutes, "Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface")
 	flags.MarkDeprecated("install-egress-gateway-ha-routes", "This option is deprecated, has no effect, and will be removed in v1.16")
+	flags.Duration("egress-gateway-ha-healthcheck-timeout", def.EgressGatewayHAHealthcheckTimeout, "Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2")
+	flags.MarkDeprecated("egress-gateway-ha-healthcheck-timeout", "This option is deprecated, has no effect, and will be removed in v1.16")
+
 	flags.Duration("egress-gateway-ha-reconciliation-trigger-interval", def.EgressGatewayHAReconciliationTriggerInterval, "Time between triggers of egress gateway state reconciliations")
 }
 
@@ -112,20 +114,8 @@ type Manager struct {
 	// their initial state synced.
 	allCachesSynced bool
 
-	// nodeDataStore stores node name to node mapping
-	nodeDataStore map[string]nodeTypes.Node
-
-	// gatewayNodeDatatStore stores all nodes that are acting as a gateway
-	gatewayNodeDataStore map[string]nodeTypes.Node
-
-	// nodes stores nodes sorted by their name
-	nodes []nodeTypes.Node
-
 	// policies allows reading policy CRD from k8s.
 	policies resource.Resource[*Policy]
-
-	// nodesResource allows reading node CRD from k8s.
-	ciliumNodes resource.Resource[*cilium_api_v2.CiliumNode]
 
 	// endpoints allows reading endpoint CRD from k8s.
 	endpoints resource.Resource[*k8sTypes.CiliumEndpoint]
@@ -167,7 +157,7 @@ type Manager struct {
 	// events have occoured
 	reconciliationEventsCount atomic.Uint64
 
-	healthchecker healthcheck.Healthchecker
+	localNodeStore *node.LocalNodeStore
 }
 
 type Params struct {
@@ -178,10 +168,9 @@ type Params struct {
 	IdentityAllocator identityCache.IdentityAllocator
 	PolicyMap         egressmapha.PolicyMap
 	Policies          resource.Resource[*Policy]
-	Nodes             resource.Resource[*cilium_api_v2.CiliumNode]
 	Endpoints         resource.Resource[*k8sTypes.CiliumEndpoint]
 	CtMap             egressmapha.CtMap
-	Healthchecker     healthcheck.Healthchecker
+	LocalNodeStore    *node.LocalNodeStore
 
 	Lifecycle hive.Lifecycle
 }
@@ -249,7 +238,6 @@ func NewEgressGatewayManager(p Params) (out struct {
 
 func newEgressGatewayManager(p Params) (*Manager, error) {
 	manager := &Manager{
-		nodeDataStore:                 make(map[string]nodeTypes.Node),
 		policyConfigs:                 make(map[policyID]*PolicyConfig),
 		policyConfigsBySourceIP:       make(map[string][]*PolicyConfig),
 		epDataStore:                   make(map[endpointID]*endpointMetadata),
@@ -257,10 +245,9 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		reconciliationTriggerInterval: p.Config.EgressGatewayHAReconciliationTriggerInterval,
 		policyMap:                     p.PolicyMap,
 		policies:                      p.Policies,
-		ciliumNodes:                   p.Nodes,
 		endpoints:                     p.Endpoints,
 		ctMap:                         p.CtMap,
-		healthchecker:                 p.Healthchecker,
+		localNodeStore:                p.LocalNodeStore,
 	}
 
 	t, err := trigger.NewTrigger(trigger.Parameters{
@@ -292,7 +279,6 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 			}
 
 			go manager.processEvents(ctx)
-			manager.startHealthcheckingLoop()
 
 			return nil
 		},
@@ -342,9 +328,9 @@ func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Label
 // processEvents spawns a goroutine that waits for the agent to
 // sync with k8s and then runs the first reconciliation.
 func (manager *Manager) processEvents(ctx context.Context) {
-	var policySync, nodeSync, endpointSync bool
+	var policySync, endpointSync bool
 	maybeTriggerReconcile := func() {
-		if !policySync || !nodeSync || !endpointSync {
+		if !policySync || !endpointSync {
 			return
 		}
 
@@ -367,7 +353,6 @@ func (manager *Manager) processEvents(ctx context.Context) {
 	endpointsRateLimit := workqueue.NewItemExponentialFailureRateLimiter(time.Millisecond*20, time.Minute*20)
 
 	policyEvents := manager.policies.Events(ctx)
-	nodeEvents := manager.ciliumNodes.Events(ctx)
 	endpointEvents := manager.endpoints.Events(ctx, resource.WithRateLimiter(endpointsRateLimit))
 
 	for {
@@ -382,15 +367,6 @@ func (manager *Manager) processEvents(ctx context.Context) {
 				event.Done(nil)
 			} else {
 				manager.handlePolicyEvent(event)
-			}
-
-		case event := <-nodeEvents:
-			if event.Kind == resource.Sync {
-				nodeSync = true
-				maybeTriggerReconcile()
-				event.Done(nil)
-			} else {
-				manager.handleNodeEvent(event)
 			}
 
 		case event := <-endpointEvents:
@@ -416,26 +392,20 @@ func (manager *Manager) handlePolicyEvent(event resource.Event[*Policy]) {
 	}
 }
 
-// startHealthcheckingLoop spawns a goroutine that periodically checks if the
-// health status of any node has changed, and when that's the case, it re runs
-// the reconciliation.
-func (manager *Manager) startHealthcheckingLoop() {
-	go func() {
-		for range manager.healthchecker.Events() {
-			manager.Lock()
-			manager.setEventBitmap(eventHealthcheck)
-			manager.reconciliationTrigger.TriggerWithReason("healthcheck update")
-			manager.Unlock()
-		}
-	}()
-}
-
 // Event handlers
 
 // onAddEgressPolicy parses the given policy config, and updates internal state
 // with the config fields.
 func (manager *Manager) onAddEgressPolicy(policy *Policy) error {
-	logger := log.WithField(logfields.IsovalentEgressGatewayPolicyName, policy.Name)
+	logger := log.WithFields(logrus.Fields{
+		logfields.IsovalentEgressGatewayPolicyName: policy.Name,
+		logfields.K8sUID: policy.UID,
+	})
+
+	if policy.Status.ObservedGeneration != policy.GetGeneration() {
+		logger.Debug("Received policy whose GroupStatuses has not yet been updated by the operator, ignoring it")
+		return nil
+	}
 
 	config, err := ParseIEGP(policy)
 	if err != nil {
@@ -551,44 +521,6 @@ func (manager *Manager) handleEndpointEvent(event resource.Event[*k8sTypes.Ciliu
 	}
 }
 
-// handleNodeEvent takes care of node upserts and removals.
-func (manager *Manager) handleNodeEvent(event resource.Event[*cilium_api_v2.CiliumNode]) {
-	defer event.Done(nil)
-
-	node := nodeTypes.ParseCiliumNode(event.Object)
-
-	manager.Lock()
-	defer manager.Unlock()
-
-	if event.Kind == resource.Upsert {
-		manager.nodeDataStore[node.Name] = node
-		manager.onChangeNodeLocked(eventUpdateNode)
-	} else {
-		delete(manager.nodeDataStore, node.Name)
-		manager.onChangeNodeLocked(eventDeleteNode)
-	}
-}
-
-func (manager *Manager) onChangeNodeLocked(e eventType) {
-	manager.nodes = []nodeTypes.Node{}
-	for _, n := range manager.nodeDataStore {
-		manager.nodes = append(manager.nodes, n)
-	}
-	sort.Slice(manager.nodes, func(i, j int) bool {
-		return manager.nodes[i].Name < manager.nodes[j].Name
-	})
-
-	reason := ""
-	if e == eventUpdateNode {
-		reason = "node updated"
-	} else if e == eventDeleteNode {
-		reason = "node deleted"
-	}
-
-	manager.setEventBitmap(e)
-	manager.reconciliationTrigger.TriggerWithReason(reason)
-}
-
 func (manager *Manager) updatePoliciesMatchedEndpointIDs() {
 	for _, policy := range manager.policyConfigs {
 		policy.updateMatchedEndpointIDs(manager.epDataStore)
@@ -606,26 +538,6 @@ func (manager *Manager) updatePoliciesBySourceIP() {
 			}
 		}
 	}
-}
-
-func (manager *Manager) nodeIsHealthy(nodeName string) bool {
-	return manager.healthchecker.NodeIsHealthy(nodeName)
-}
-
-func (manager *Manager) regenerateGatewayNodesList() {
-	nodes := map[string]nodeTypes.Node{}
-
-	for _, policyConfig := range manager.policyConfigs {
-		for _, gc := range policyConfig.groupConfigs {
-			for _, n := range manager.nodes {
-				if gc.selectsNodeAsGateway(n) {
-					nodes[n.Name] = n
-				}
-			}
-		}
-	}
-
-	manager.gatewayNodeDataStore = nodes
 }
 
 // policyMatches returns true if there exists at least one policy matching the
@@ -764,6 +676,12 @@ func (manager *Manager) removeExpiredCtEntries() {
 		})
 
 	policyMatchesCtEntry := func(policy *PolicyConfig, ctKey *egressmapha.EgressCtKey4, ctVal *egressmapha.EgressCtVal4) bool {
+		gatewayIP, ok := ip.AddrFromIP(ctVal.Gateway.IP())
+		if !ok {
+			log.Error("Cannot parse CT entry's gateway IP while removing expired entries")
+			return false
+		}
+
 	nextDstCIDR:
 		for _, dstCIDR := range policy.dstCIDRs {
 			if !dstCIDR.Contains(ctKey.DestAddr.Addr()) {
@@ -779,7 +697,7 @@ func (manager *Manager) removeExpiredCtEntries() {
 			// no need to check also endpointIP.Equal(endpointIP) as we are iterating
 			// over the slice of policies returned by the
 			// policyConfigsBySourceIP[ipRule.Src.IP.String()] map
-			if ip.ListContainsIP(policy.gatewayConfig.healthyGatewayIPs, ctVal.Gateway.IP()) {
+			if slices.Contains(policy.gatewayConfig.healthyGatewayIPs, gatewayIP) {
 				return true
 			}
 		}
@@ -829,9 +747,6 @@ func (manager *Manager) reconcileLocked() {
 	case manager.eventBitmapIsSet(eventAddPolicy, eventDeletePolicy):
 		manager.updatePoliciesBySourceIP()
 	}
-
-	manager.regenerateGatewayNodesList()
-	manager.healthchecker.UpdateNodeList(manager.gatewayNodeDataStore)
 
 	manager.regenerateGatewayConfigs()
 

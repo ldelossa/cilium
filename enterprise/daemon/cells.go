@@ -13,7 +13,6 @@ package main
 import (
 	"github.com/cilium/cilium/daemon/cmd"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
-	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	"github.com/cilium/cilium/pkg/hive/cell"
@@ -42,7 +41,9 @@ var (
 		sidmanager.SIDManagerCell,
 		egressmapha.Cell,
 		egressgatewayha.Cell,
-		healthcheck.Cell,
+		egressgatewayha.PolicyCell,
+
+		cell.Invoke(func(*egressgatewayha.Manager) {}),
 	)
 
 	Datapath = cell.Module(

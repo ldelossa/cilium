@@ -15,6 +15,8 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/dnsresolver"
 	"github.com/cilium/cilium/enterprise/operator/k8s"
 	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/operator/cmd"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
@@ -42,6 +44,11 @@ var (
 
 			dnsclient.Cell,
 			dnsresolver.Cell,
+
+			egressgatewayha.OperatorCell,
+			egressgatewayha.PolicyCell,
+			healthcheck.Cell,
+			cell.Invoke(func(*egressgatewayha.OperatorManager) {}),
 		),
 	)
 )

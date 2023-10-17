@@ -18,12 +18,14 @@ import (
 
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy/api"
 
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -74,6 +76,12 @@ func addPolicy(tb testing.TB, policies fakeResource[*Policy], params *policyPara
 	tb.Helper()
 
 	policy, _ := newIEGP(params)
+	addIEGP(tb, policies, policy)
+}
+
+func addIEGP(tb testing.TB, policies fakeResource[*Policy], policy *v1.IsovalentEgressGatewayPolicy) {
+	tb.Helper()
+
 	policies.process(tb, resource.Event[*Policy]{
 		Kind:   resource.Upsert,
 		Object: policy,
@@ -81,14 +89,16 @@ func addPolicy(tb testing.TB, policies fakeResource[*Policy], params *policyPara
 }
 
 type policyParams struct {
-	name            string
-	endpointLabels  map[string]string
-	destinationCIDR string
-	excludedCIDRs   []string
-	nodeLabels      map[string]string
-	iface           string
-	egressIP        string
-	maxGatewayNodes int
+	name              string
+	endpointLabels    map[string]string
+	destinationCIDR   string
+	excludedCIDRs     []string
+	nodeLabels        map[string]string
+	iface             string
+	egressIP          string
+	maxGatewayNodes   int
+	activeGatewayIPs  []string
+	healthyGatewayIPs []string
 }
 
 func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
@@ -100,6 +110,16 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 	for _, excludedCIDR := range params.excludedCIDRs {
 		parsedExcludedCIDR, _ := netip.ParsePrefix(excludedCIDR)
 		parsedExcludedCIDRs = append(parsedExcludedCIDRs, parsedExcludedCIDR)
+	}
+
+	parsedActiveGatewayIPs := []netip.Addr{}
+	for _, activeGatewayIP := range params.activeGatewayIPs {
+		parsedActiveGatewayIPs = append(parsedActiveGatewayIPs, netip.MustParseAddr(activeGatewayIP))
+	}
+
+	parsedHealthyGatewayIPs := []netip.Addr{}
+	for _, healthyGatewayIP := range params.healthyGatewayIPs {
+		parsedHealthyGatewayIPs = append(parsedHealthyGatewayIPs, netip.MustParseAddr(healthyGatewayIP))
 	}
 
 	policy := &PolicyConfig{
@@ -124,6 +144,12 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 				},
 				iface:           params.iface,
 				maxGatewayNodes: params.maxGatewayNodes,
+			},
+		},
+		groupStatuses: []groupStatus{
+			{
+				activeGatewayIPs:  parsedActiveGatewayIPs,
+				healthyGatewayIPs: parsedHealthyGatewayIPs,
 			},
 		},
 	}
@@ -170,6 +196,14 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 				},
 			},
 		},
+		Status: v1.IsovalentEgressGatewayPolicyStatus{
+			GroupStatuses: []v1.IsovalentEgressGatewayPolicyGroupStatus{
+				{
+					ActiveGatewayIPs:  params.activeGatewayIPs,
+					HealthyGatewayIPs: params.healthyGatewayIPs,
+				},
+			},
+		},
 	}
 
 	return iegp, policy
@@ -194,4 +228,20 @@ func addNode(tb testing.TB, nodes fakeResource[*cilium_api_v2.CiliumNode], node 
 		Kind:   resource.Upsert,
 		Object: node.ToCiliumNode(),
 	})
+}
+
+type gatewayStatus struct {
+	activeGatewayIPs  []string
+	healthyGatewayIPs []string
+}
+
+func assertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset, policyName string, gs gatewayStatus) {
+	tb.Helper()
+
+	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), "policy-1", metav1.GetOptions{})
+	assert.Nil(tb, err)
+
+	iegpGs := iegp.Status.GroupStatuses[0]
+	assert.Equal(tb, gs.activeGatewayIPs, iegpGs.ActiveGatewayIPs)
+	assert.Equal(tb, gs.healthyGatewayIPs, iegpGs.HealthyGatewayIPs)
 }
