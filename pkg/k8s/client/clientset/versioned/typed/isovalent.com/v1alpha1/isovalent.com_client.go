@@ -16,6 +16,7 @@ import (
 type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	IsovalentFQDNGroupsGetter
+	IsovalentMeshEndpointsGetter
 	IsovalentMulticastGroupsGetter
 	IsovalentMulticastNodesGetter
 	IsovalentPodNetworksGetter
@@ -32,6 +33,10 @@ type IsovalentV1alpha1Client struct {
 
 func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterface {
 	return newIsovalentFQDNGroups(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentMeshEndpoints(namespace string) IsovalentMeshEndpointInterface {
+	return newIsovalentMeshEndpoints(c, namespace)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentMulticastGroups() IsovalentMulticastGroupInterface {

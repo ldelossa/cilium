@@ -177,3 +177,9 @@ annotations:
       displayName: Cilium Pod IP Pool
       description: |
         CiliumPodIPPool defines an IP pool that can be used for pooled IPAM (i.e. the multi-pool IPAM mode).
+    - kind: IsovalentMeshEndpoint
+      version: v2alpha1
+      name: isovalentmeshendpoints.cilium.io
+      displayName: Cilium CiliumMesh Endpoint
+      description: |
+        IsovalentMeshEndpoint defines a CiliumMesh endpoint

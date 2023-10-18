@@ -57,6 +57,12 @@ const (
 	MulticastNodePluralName     = "isovalentmulticastnodes"
 	MulticastNodeKindDefinition = "IsovalentMulticastNode"
 	MulticastNodeName           = MulticastNodePluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentMeshEndpoint (CiliumMesh)
+	IsovalentMeshEndpointSingularName   = "isovalentmeshendpoint"
+	IsovalentMeshEndpointPluralName     = "isovalentmeshendpoints"
+	IsovalentMeshEndpointKindDefinition = "IsovalentMeshEndpoint"
+	IsovalentMeshEndpointName           = IsovalentMeshEndpointPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -116,6 +122,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentMulticastGroupList{},
 		&IsovalentMulticastNode{},
 		&IsovalentMulticastNodeList{},
+		&IsovalentMeshEndpoint{},
+		&IsovalentMeshEndpointList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
+	// IsovalentMeshEndpoints returns a IsovalentMeshEndpointInformer.
+	IsovalentMeshEndpoints() IsovalentMeshEndpointInformer
 	// IsovalentMulticastGroups returns a IsovalentMulticastGroupInformer.
 	IsovalentMulticastGroups() IsovalentMulticastGroupInformer
 	// IsovalentMulticastNodes returns a IsovalentMulticastNodeInformer.
@@ -43,6 +45,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 func (v *version) IsovalentFQDNGroups() IsovalentFQDNGroupInformer {
 	return &isovalentFQDNGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentMeshEndpoints returns a IsovalentMeshEndpointInformer.
+func (v *version) IsovalentMeshEndpoints() IsovalentMeshEndpointInformer {
+	return &isovalentMeshEndpointInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentMulticastGroups returns a IsovalentMulticastGroupInformer.

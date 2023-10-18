@@ -9,6 +9,14 @@ package v1alpha1
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}
 
+// IsovalentMeshEndpointListerExpansion allows custom methods to be added to
+// IsovalentMeshEndpointLister.
+type IsovalentMeshEndpointListerExpansion interface{}
+
+// IsovalentMeshEndpointNamespaceListerExpansion allows custom methods to be added to
+// IsovalentMeshEndpointNamespaceLister.
+type IsovalentMeshEndpointNamespaceListerExpansion interface{}
+
 // IsovalentMulticastGroupListerExpansion allows custom methods to be added to
 // IsovalentMulticastGroupLister.
 type IsovalentMulticastGroupListerExpansion interface{}

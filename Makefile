@@ -270,7 +270,8 @@ CRDS_ISOVALENT_V1ALPHA1 := isovalentfqdngroups \
                            isovalentvrfs \
                            isovalentpodnetworks \
                            isovalentmulticastgroups \
-                           isovalentmulticastnodes
+                           isovalentmulticastnodes \
+                           isovalentmeshendpoints
 CRDS_ISOVALENT_V1 := isovalentegressgatewaypolicies
 manifests: ## Generate K8s manifests e.g. CRD, RBAC etc.
 	$(eval TMPDIR := $(shell mktemp -d -t cilium.tmpXXXXXXXX))

@@ -7,6 +7,8 @@ package v1alpha1
 
 type IsovalentFQDNGroupExpansion interface{}
 
+type IsovalentMeshEndpointExpansion interface{}
+
 type IsovalentMulticastGroupExpansion interface{}
 
 type IsovalentMulticastNodeExpansion interface{}

@@ -55,6 +55,9 @@ const (
 
 	// MulticastNodeCRDName is the full name of the MulticastNode CRD.
 	MulticastNodeCRDName = k8sconstv1alpha1.MulticastNodeKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentMeshEndpointCRDName is the full name of the IsovalentMeshEndpoint CRD.
+	IsovalentMeshEndpointCRDName = k8sconstv1alpha1.IsovalentMeshEndpointKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -68,15 +71,16 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv1alpha1.IFGName):              createIFGCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):   createSRv6SIDManagerCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):  createSRv6LocatorPoolCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName): createSRv6EgressPolicyCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.VRFName):              createVRFCRD,
-		synced.CRDResourceName(k8sconstv1.IEGPName):                   createIEGPCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IPNName):              createIPNCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):   createMulticastGroupCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):    createMulticastNodeCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IFGName):                   createIFGCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):        createSRv6SIDManagerCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):       createSRv6LocatorPoolCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName):      createSRv6EgressPolicyCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.VRFName):                   createVRFCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):                        createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IPNName):                   createIPNCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):        createMulticastGroupCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):         createMulticastNodeCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentMeshEndpointName): createIsovalentMeshEndpointCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -118,6 +122,9 @@ var (
 
 	//go:embed crds/v1alpha1/isovalentmulticastnodes.yaml
 	crdsv1Alpha1IsovalentMulticastNodes []byte
+
+	//go:embed crds/v1alpha1/isovalentmeshendpoints.yaml
+	crdsv2Alpha1Isovalentmeshendpoints []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -151,6 +158,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentMulticastGroups
 	case MulticastNodeCRDName:
 		crdBytes = crdsv1Alpha1IsovalentMulticastNodes
+	case IsovalentMeshEndpointCRDName:
+		crdBytes = crdsv2Alpha1Isovalentmeshendpoints
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -275,6 +284,19 @@ func createMulticastNodeCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.MulticastNodeName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createIsovalentMeshEndpointCRD creates and updates the IsovalentMeshEndpoint CRD.
+func createIsovalentMeshEndpointCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentMeshEndpointCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentMeshEndpointName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
