@@ -10,3 +10,57 @@
 
 SUBDIRS_CILIUM_CONTAINER := enterprise/cilium-dbg enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix
 SUBDIR_OPERATOR_CONTAINER := enterprise/operator
+
+.PHONY: build-enterprise-cli
+build-enterprise-cli: ## Build cilium-dbg daemon binary
+	$(QUIET)$(MAKE) -C enterprise/cilium-dbg
+
+.PHONY: build-enterprise-agent
+build-enterprise-agent: ## Build cilium daemon binary
+	$(QUIET)$(MAKE) -C enterprise/daemon
+
+.PHONY: build-enterprise-operator
+build-enterprise-operator: ## Build cilium operator binary
+	$(QUIET)$(MAKE) -C enterprise/operator cilium-operator-generic
+
+.PHONY: kind-image-fast-enterprise-agent
+kind-image-fast-enterprise-agent: kind-ready build-enterprise-cli build-enterprise-agent ## Build cilium cli and daemon binaries. Copy the bins and bpf files to kind nodes.
+	$(eval dst:=/cilium-binaries)
+	for cluster_name in $${KIND_CLUSTERS:-$(shell kind get clusters)}; do \
+		for node_name in $$(kind get nodes -n "$$cluster_name"); do \
+			docker exec -ti $${node_name} mkdir -p "${dst}"; \
+			\
+			docker exec -ti $${node_name} rm -rf "${dst}/var/lib/cilium"; \
+			docker exec -ti $${node_name} mkdir -p "${dst}/var/lib/cilium"; \
+			docker cp "./bpf/" $${node_name}:"${dst}/var/lib/cilium/bpf"; \
+			docker exec -ti $${node_name} find "${dst}/var/lib/cilium/bpf" -type f -exec chmod 0644 {} + ;\
+			\
+			docker exec -ti $${node_name} rm -f "${dst}/cilium-dbg"; \
+			docker cp "./enterprise/cilium-dbg/cilium-dbg" $${node_name}:"${dst}"; \
+			docker exec -ti $${node_name} chmod +x "${dst}/cilium-dbg"; \
+			\
+			docker exec -ti $${node_name} rm -f "${dst}/cilium-agent"; \
+			docker cp "./enterprise/daemon/cilium-agent" $${node_name}:"${dst}"; \
+			docker exec -ti $${node_name} chmod +x "${dst}/cilium-agent"; \
+			\
+			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l k8s-app=cilium --force; \
+		done; \
+	done
+
+.PHONY: kind-image-fast-enterprise-operator
+kind-image-fast-enterprise-operator: kind-ready build-enterprise-operator ## Build cilium operator binary and copy it to all kind nodes.
+	$(eval dst:=/cilium-binaries)
+	for cluster_name in $${KIND_CLUSTERS:-$(shell kind get clusters)}; do \
+		for node_name in $$(kind get nodes -n "$$cluster_name"); do \
+			docker exec -ti $${node_name} mkdir -p "${dst}"; \
+			\
+			docker exec -ti $${node_name} rm -f "${dst}/cilium-operator-generic"; \
+			docker cp "./enterprise/operator/cilium-operator-generic" $${node_name}:"${dst}"; \
+			docker exec -ti $${node_name} chmod +x "${dst}/cilium-operator-generic"; \
+			\
+			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l name=cilium-operator --force; \
+		done; \
+	done
+
+.PHONY: kind-image-enterprise-fast
+kind-image-enterprise-fast: kind-image-fast-enterprise-agent kind-image-fast-enterprise-operator kind-image-fast-clustermesh-apiserver ## Build all binaries and copy them to kind nodes.
