@@ -8,22 +8,12 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package maps
+package alignchecker
 
-import (
-	"github.com/cilium/cilium/pkg/hive/cell"
+import "github.com/cilium/cilium/enterprise/pkg/maps/ciliummeshpolicymap"
 
-	"github.com/cilium/cilium/enterprise/pkg/maps/ciliummeshpolicymap"
-	cectnat "github.com/cilium/cilium/enterprise/pkg/maps/ctnat"
-)
-
-var Cell = cell.Module(
-	"enterprise-maps",
-	"Isovalent Enterprise for Cilium BPF Maps",
-
-	// CT and NAT per-cluster maps.
-	cectnat.Cell,
-
-	// Cilium Mesh map
-	ciliummeshpolicymap.Cell,
-)
+func init() {
+	registerToCheckSizes(map[string][]any{
+		"int": {ciliummeshpolicymap.CiliumMeshPolicyValue{}},
+	})
+}

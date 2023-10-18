@@ -36,6 +36,7 @@ cilium-agent hive [flags]
       --enable-cilium-api-server-access strings                      List of cilium API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-enterprise-api-server-access strings           List of cilium enterprise API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-health-api-server-access strings               List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
+      --enable-cilium-mesh                                           Enables Cilium Mesh feature
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs
       --enable-gateway-api                                           Enables Envoy secret sync for Gateway API related TLS secrets
       --enable-ingress-controller                                    Enables Envoy secret sync for Ingress controller related TLS secrets

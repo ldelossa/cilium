@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
 	"github.com/cilium/cilium/pkg/hive/cell"
 
+	"github.com/cilium/cilium/enterprise/pkg/ciliummesh"
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 	multicastmaps "github.com/cilium/cilium/pkg/maps/multicast"
@@ -63,6 +64,8 @@ var (
 		egressgatewayha.Cell,
 		egressgatewayha.PolicyCell,
 		cell.Invoke(func(*egressgatewayha.Manager) {}),
+
+		ciliummesh.CiliumMeshCell,
 
 		mixedrouting.Cell,
 

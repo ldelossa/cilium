@@ -1100,6 +1100,10 @@
      - Enables BGP integration with service health-checking.
      - bool
      - ``false``
+   * - :spelling:ignore:`enterprise.ciliummesh.enabled`
+     - Enables Cilium Mesh
+     - bool
+     - ``false``
    * - :spelling:ignore:`enterprise.clustermesh.enableOverlappingPodCIDRSupport`
      - Enable overlapping PodCIDR support
      - bool

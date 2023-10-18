@@ -67,6 +67,10 @@ enterprise:
     # -- Enables multicast in cilium, multicast replication works only in tunnel mode.
     enabled: false
 
+  ciliummesh:
+    # -- Enables Cilium Mesh
+    enabled: false
+
 hubble:
   # -- Enables experimental support for using Hubble RBAC with Hubble Relay.
   # This is incompatible with Hubble RBAC installed via the Hubble Enterprise chart.
@@ -147,3 +151,4 @@ hubble:
             value: admins
             # -- Role to assign to identities with the matching claim
             role: admin
+

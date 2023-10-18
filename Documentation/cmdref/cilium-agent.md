@@ -108,6 +108,7 @@ cilium-agent [flags]
       --enable-cilium-endpoint-slice                                 Enable the CiliumEndpointSlice watcher in place of the CiliumEndpoint watcher (beta)
       --enable-cilium-enterprise-api-server-access strings           List of cilium enterprise API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-health-api-server-access strings               List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
+      --enable-cilium-mesh                                           Enables Cilium Mesh feature
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs
       --enable-custom-calls                                          Enable tail call hooks for custom eBPF programs
       --enable-encryption-strict-mode                                Enable encryption strict mode

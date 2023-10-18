@@ -8,22 +8,22 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package maps
+package ciliummesh
 
 import (
 	"github.com/cilium/cilium/pkg/hive/cell"
-
-	"github.com/cilium/cilium/enterprise/pkg/maps/ciliummeshpolicymap"
-	cectnat "github.com/cilium/cilium/enterprise/pkg/maps/ctnat"
 )
 
-var Cell = cell.Module(
-	"enterprise-maps",
-	"Isovalent Enterprise for Cilium BPF Maps",
+var (
+	CiliumMeshCell = cell.Module(
+		"cilium-mesh",
+		"Cilium Mesh is the feature that connects your past legacy into the future",
 
-	// CT and NAT per-cluster maps.
-	cectnat.Cell,
+		cell.Config(Config{}),
 
-	// Cilium Mesh map
-	ciliummeshpolicymap.Cell,
+		cell.Provide(
+			// Inject the extra datapath configs required for cilium mesh support.
+			datapathNodeHeaderConfigProvider,
+		),
+	)
 )

@@ -8,22 +8,6 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package maps
-
-import (
-	"github.com/cilium/cilium/pkg/hive/cell"
-
-	"github.com/cilium/cilium/enterprise/pkg/maps/ciliummeshpolicymap"
-	cectnat "github.com/cilium/cilium/enterprise/pkg/maps/ctnat"
-)
-
-var Cell = cell.Module(
-	"enterprise-maps",
-	"Isovalent Enterprise for Cilium BPF Maps",
-
-	// CT and NAT per-cluster maps.
-	cectnat.Cell,
-
-	// Cilium Mesh map
-	ciliummeshpolicymap.Cell,
-)
+// Blah-blah-blah
+// +groupName=maps
+package ciliummeshpolicymap
