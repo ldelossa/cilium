@@ -5,6 +5,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/cilium/cilium/pkg/node"
 )
 
 // +genclient
@@ -24,6 +26,25 @@ type IsovalentMeshEndpoint struct {
 	//
 	// +kubebuilder:validation:Required
 	Spec IsovalentMeshEndpointSpec `json:"spec,omitempty"`
+}
+
+func (in *IsovalentMeshEndpoint) GetHostIP() string {
+	// At the moment we will set the HostIP as the host that contains the
+	// IsovalentMeshEndpoint even though it's not this host that is actually
+	// running the VM behind the IsovalentMeshEndpoint.
+	return node.GetIPv4().String()
+}
+
+func (in *IsovalentMeshEndpoint) GetAPIVersion() string {
+	return SchemeGroupVersion.Version
+}
+
+func (in *IsovalentMeshEndpoint) GetKind() string {
+	return IsovalentMeshEndpointKindDefinition
+}
+
+func (in *IsovalentMeshEndpoint) IsNil() bool {
+	return in == nil
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

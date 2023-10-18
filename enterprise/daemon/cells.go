@@ -31,6 +31,7 @@ import (
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 	multicastmaps "github.com/cilium/cilium/pkg/maps/multicast"
+	"github.com/cilium/cilium/pkg/promise"
 )
 
 var (
@@ -39,6 +40,11 @@ var (
 		"Cilium Agent Enterprise",
 
 		cmd.Agent,
+
+		// Provide the endpoint API handlers the ability to create endpoints via the daemon.
+		cell.Provide(func(dp promise.Promise[*cmd.Daemon]) promise.Promise[ciliummesh.EndpointCreator] {
+			return promise.Map(dp, func(d *cmd.Daemon) ciliummesh.EndpointCreator { return d })
+		}),
 
 		// enterprise-only cells here
 		ControlPlane,

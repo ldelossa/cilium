@@ -22,8 +22,17 @@ var (
 		cell.Config(Config{}),
 
 		cell.Provide(
+			// Provide the MeshEndpoint resource watcher.
+			NewIsovalentMeshEndpointResource,
+
+			// Start the Cilium Mesh Controller.
+			newCiliumMeshController,
+
 			// Inject the extra datapath configs required for cilium mesh support.
 			datapathNodeHeaderConfigProvider,
 		),
+
+		// Invoke an empty function to force its construction.
+		cell.Invoke(func(*CiliumMeshController) {}),
 	)
 )

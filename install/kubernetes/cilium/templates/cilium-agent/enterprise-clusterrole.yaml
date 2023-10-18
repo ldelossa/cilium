@@ -17,6 +17,7 @@ rules:
   - isovalentsrv6egresspolicies
   - isovalentvrfs
   - isovalentmulticastgroups
+  - isovalentmeshendpoints
   verbs:
   - list
   - watch
