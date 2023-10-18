@@ -115,12 +115,12 @@ github.com/cilium/checkmate v1.0.3 h1:CQC5eOmlAZeEjPrVZY3ZwEBH64lHlx9mXYdUehEwI5
 github.com/cilium/checkmate v1.0.3/go.mod h1:KiBTasf39/F2hf2yAmHw21YFl3hcEyP4Yk6filxc12A=
 github.com/cilium/cilium-cli v0.15.11 h1:MNaNbju23GUmamnX8SEcvM67Lw/ogZfghcRDNgAwjLU=
 github.com/cilium/cilium-cli v0.15.11/go.mod h1:B/0VG2V5MBFu6n7MrYAXizk0GExzW2WEs5B2553TGnU=
-github.com/cilium/ebpf v0.11.0 h1:V8gS/bTCCjX9uUnkUFUpPsksM8n1lXBAvHcpiFk1X2Y=
-github.com/cilium/ebpf v0.11.0/go.mod h1:WE7CZAnqOL2RouJ4f1uyNhqr2P4CCvXFIqdRDUgWsVs=
+github.com/cilium/ebpf v0.12.0 h1:oQEuIQIXgYhe1v7sYUG0P9vtJTYZLLdA6tiQmrOB1mo=
+github.com/cilium/ebpf v0.12.0/go.mod h1:u9H29/Iq+8cy70YqI6p5pfADkFl3vdnV2qXDg5JL0Zo=
 github.com/cilium/hubble v0.12.2 h1:iSKm8Ezuonjke2APgMQ7vIOmUGj0L9Be7b/sRa7FuAs=
 github.com/cilium/hubble v0.12.2/go.mod h1:eKlcKF5Lynj+GXCCvqDCgu4UW9dUE1cAnYfQbFd0Bb0=
-github.com/cilium/proxy v0.0.0-20230928070035-6b9ff340bc40 h1:W4rmZzQl8Kf7ShlrJEotivf0sjetY73Y/eY8bIPtmyY=
-github.com/cilium/proxy v0.0.0-20230928070035-6b9ff340bc40/go.mod h1:p044XccCmONGIUbx3bJ7qvHXK0RcrdvIvbTGiu/RjUA=
+github.com/cilium/proxy v0.0.0-20231011084420-05c54001182b h1:0fiW6p1B6B7HC8fG5f2e+mTiMyVpGdHh1FO7RLgNk1Q=
+github.com/cilium/proxy v0.0.0-20231011084420-05c54001182b/go.mod h1:p044XccCmONGIUbx3bJ7qvHXK0RcrdvIvbTGiu/RjUA=
 github.com/cilium/tetragon/pkg/k8s v0.0.0-20231013170855-2ebcd9a562a0 h1:gcH9LJ6ImB0yanYG3DoHBiOcWRLFPtN/i+o4uu0K4Kk=
 github.com/cilium/tetragon/pkg/k8s v0.0.0-20231013170855-2ebcd9a562a0/go.mod h1:3e8vI8Sgm44MDo+mR9eWNm8JXYpWUnXznm2njgARtu0=
 github.com/cilium/workerpool v1.2.0 h1:Wc2iOPTvCgWKQXeq4L5tnx4QFEI+z5q1+bSpSS0cnAY=

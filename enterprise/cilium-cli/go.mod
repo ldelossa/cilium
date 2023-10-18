@@ -1,7 +1,7 @@
 module github.com/isovalent/cilium/enterprise/cilium-cli
 
 // renovate: datasource=golang-version depName=go
-go 1.21.1
+go 1.21.3
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -35,9 +35,9 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/cilium/charts v0.0.0-20230929223035-2315d5f72a74 // indirect
-	github.com/cilium/ebpf v0.11.0 // indirect
+	github.com/cilium/ebpf v0.12.0 // indirect
 	github.com/cilium/hubble v0.12.2 // indirect
-	github.com/cilium/proxy v0.0.0-20230928070035-6b9ff340bc40 // indirect
+	github.com/cilium/proxy v0.0.0-20231011084420-05c54001182b // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20231013170855-2ebcd9a562a0 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
