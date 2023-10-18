@@ -42,7 +42,8 @@ func (e *bpfEgressGatewayPolicyEntry) matches(t bpfEgressGatewayPolicyEntry) boo
 // waitForBpfPolicyEntries waits for the egress gateway policy maps on each node to be populated with the entries for
 // the cegp-sample CiliumEgressGatewayExcludedCIDRsPolicy
 func waitForBpfPolicyEntries(ctx context.Context, t *check.Test,
-	targetEntriesCallback func(ciliumPod check.Pod) []bpfEgressGatewayPolicyEntry) {
+	targetEntriesCallback func(ciliumPod check.Pod) []bpfEgressGatewayPolicyEntry,
+) {
 	ct := t.Context()
 
 	w := wait.NewObserver(ctx, wait.Parameters{Timeout: 10 * time.Second})
@@ -237,8 +238,10 @@ func (s *egressGatewayHA) Run(ctx context.Context, t *check.Test) {
 		client := client
 
 		for _, externalEcho := range ct.ExternalEchoPods() {
+			externalEcho := externalEcho.ToEchoIPPod()
+
 			t.NewAction(s, fmt.Sprintf("curl-external-echo-pod-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
-				a.ExecInPod(ctx, ct.CurlClientIPCommand(externalEcho, features.IPFamilyV4))
+				a.ExecInPod(ctx, ct.CurlCommandWithOutput(externalEcho, features.IPFamilyV4))
 				clientIP := extractClientIPFromResponse(a.CmdOutput())
 
 				if !clientIP.Equal(egressGatewayNodeInternalIP) {
@@ -369,8 +372,10 @@ func (s *egressGatewayExcludedCIDRs) Run(ctx context.Context, t *check.Test) {
 		client := client
 
 		for _, externalEcho := range ct.ExternalEchoPods() {
+			externalEcho := externalEcho.ToEchoIPPod()
+
 			t.NewAction(s, fmt.Sprintf("curl-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
-				a.ExecInPod(ctx, ct.CurlClientIPCommand(externalEcho, features.IPFamilyV4))
+				a.ExecInPod(ctx, ct.CurlCommandWithOutput(externalEcho, features.IPFamilyV4))
 				clientIP := extractClientIPFromResponse(a.CmdOutput())
 
 				if !clientIP.Equal(net.ParseIP(client.Pod.Status.HostIP)) {
