@@ -16,13 +16,20 @@ import "github.com/spf13/viper"
 const (
 	// EnableIPv4EgressGateway enables the IPv4 egress gateway
 	EnableIPv4EgressGatewayHA = "enable-ipv4-egress-gateway-ha"
+
+	// EnableCiliumMesh enables Cilium mesh mode
+	EnableCiliumMesh = "enable-cilium-mesh"
 )
 
 type EnterpriseDaemonConfig struct {
 	// Enable the HA egress gateway
 	EnableIPv4EgressGatewayHA bool
+
+	// EnableCiliumMesh enable CiliumMesh
+	EnableCiliumMesh bool
 }
 
 func (ec *EnterpriseDaemonConfig) Populate(vp *viper.Viper) {
 	ec.EnableIPv4EgressGatewayHA = vp.GetBool(EnableIPv4EgressGatewayHA)
+	ec.EnableCiliumMesh = vp.GetBool(EnableCiliumMesh)
 }

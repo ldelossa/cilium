@@ -22,6 +22,9 @@ rules:
   - isovalentsrv6sidmanagers.isovalent.com
   - isovalentsrv6locatorpools.isovalent.com
   - isovalentvrfs.isovalent.com
+{{- if .Values.enterprise.ciliummesh.enabled }}
+  - isovalentmeshendpoints.isovalent.com
+{{- end }}
 - apiGroups:
   - isovalent.com
   resources:
@@ -75,5 +78,28 @@ rules:
     - isovalentpodnetworks
   verbs:
     - create
+{{- end }}
+{{- if .Values.enterprise.ciliummesh.enabled }}
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentmeshendpoints
+  verbs:
+  # To perform garbage collection of such resources
+  - delete
+  - list
+  - watch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
 {{- end }}
 {{- end }}

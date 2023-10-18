@@ -27,6 +27,7 @@ cilium-operator-generic hive [flags]
       --dns-server-addresses strings                                 A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form "<ip>:<port>". When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.
       --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 2s)
+      --enable-cilium-mesh                                           Enable Cilium Mesh feature
       --enable-cilium-operator-server-access strings                 List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-gateway-api-proxy-protocol                            Enable proxy protocol for all GatewayAPI listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
       --enable-gateway-api-secrets-sync                              Enables fan-in TLS secrets sync from multiple namespaces to singular namespace (specified by gateway-api-secrets-namespace flag) (default true)

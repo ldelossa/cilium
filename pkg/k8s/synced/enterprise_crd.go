@@ -34,5 +34,9 @@ func AllIsovalentCRDResourceNames() []string {
 		result = append(result, CRDResourceName(isovalent_api_v1.IEGPName))
 	}
 
+	if option.Config.EnableCiliumMesh {
+		result = append(result, CRDResourceName(v1alpha1.IsovalentMeshEndpointName))
+	}
+
 	return result
 }

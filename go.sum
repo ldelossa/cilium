@@ -133,6 +133,10 @@ github.com/cilium/dns v1.1.51-0.20231120140355-729345173dc3 h1:3PErIjIq4DlOwNsQN
 github.com/cilium/dns v1.1.51-0.20231120140355-729345173dc3/go.mod h1:/7LC2GOgyXJ7maupZlaVIumYQiGPIgllSf6mA9sg6RU=
 github.com/cilium/ebpf v0.13.2 h1:uhLimLX+jF9BTPPvoCUYh/mBeoONkjgaJ9w9fn0mRj4=
 github.com/cilium/ebpf v0.13.2/go.mod h1:DHp1WyrLeiBh19Cf/tfiSMhqheEiK8fXFZ4No0P1Hso=
+github.com/cilium/endpointslice v0.29.2-0.20240122122034-af37abbc8721 h1:rMuXe88xsDEQRaa8C9w6ldZEiqCJ2TgK7ofFaz4xFoc=
+github.com/cilium/endpointslice v0.29.2-0.20240122122034-af37abbc8721/go.mod h1:cGS/cIkHXmX+kUGG9910n4CqBMYD+DCNBroihr1ajfY=
+github.com/cilium/endpointslice-controller v0.0.0-20240122133006-4c5454d11b81 h1:OxChld4TX80scmXpbp/x5CwTuPtBcjy0MT/6zVZMRa4=
+github.com/cilium/endpointslice-controller v0.0.0-20240122133006-4c5454d11b81/go.mod h1:gBVDygKRffXkG6g44x92+11eVK1dQAThJ9g2YUXjsFs=
 github.com/cilium/fake v0.6.1 h1:cLkNx1nkF0b0pPW79JaQxaI5oG2/rBzRKpp0YUg1fTA=
 github.com/cilium/fake v0.6.1/go.mod h1:V9lCbbcsnSf3vB6sdOP7Q0bsUUJ/jyHPZxnFAw5nPUc=
 github.com/cilium/linters v0.0.0-20240312194838-dd5dd9ef338b h1:FgxWcnTi+qhtRXqW0oepecedG60LrcB53dQUoQPLm0I=

@@ -48,6 +48,7 @@ cilium-operator-aws [flags]
       --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 2s)
       --enable-cilium-endpoint-slice                                 If set to true, the CiliumEndpointSlice feature is enabled. If any CiliumEndpoints resources are created, updated, or deleted in the cluster, all those changes are broadcast as CiliumEndpointSlice updates to all of the Cilium agents.
+      --enable-cilium-mesh                                           Enable Cilium Mesh feature
       --enable-cilium-operator-server-access strings                 List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-gateway-api-proxy-protocol                            Enable proxy protocol for all GatewayAPI listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
       --enable-gateway-api-secrets-sync                              Enables fan-in TLS secrets sync from multiple namespaces to singular namespace (specified by gateway-api-secrets-namespace flag) (default true)
