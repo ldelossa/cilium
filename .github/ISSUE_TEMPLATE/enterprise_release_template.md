@@ -102,7 +102,7 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
   - Example PR: https://github.com/isovalent/helm-charts/pull/389/files
   - [ ] Merge the PR
   - [ ] Create a release: https://github.com/isovalent/helm-charts/releases/new
-    - You can use Github's 'tag on publish' feature: Enter your desired tag in the tag field of the form (it should say something like 'create tag on publish'). Make sure you select the same branch you merged your PR into.
+    - You can use Github's 'tag on publish' feature: Enter your desired tag in the tag field of the form (it should say something like 'Create new tag: vX.Y.Z on publish'). Make sure you select the same branch you merged your PR into.
 - [ ] Update the version in the cilium enterprise docs.
   - If you are releasing the very first (non-beta) enterprise release for a minor version, you will have to create a new branch in the enterprise docs repo. The enterprise docs are structured so that the latest version is on the `master` branch, and older releases on `X.Y` branches. Example: If `1.12.3` is the latest OSS version, and so far only 1.12.2-cee.beta1 has been released, you'll have to create a branch `1.12` off `master` to release `1.12.3-cee.1`.
   - [ ] Create a PR which updates the toplevel VERSION file to your newly released version. Target the PR at the `X.Y` branch. If there is no such branch, and you are releasing the latest minor, target `master`. 
