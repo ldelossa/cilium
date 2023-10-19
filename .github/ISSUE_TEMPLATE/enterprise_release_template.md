@@ -57,10 +57,9 @@ _If you need help: ask in #enterprise-release._
         - [ ] `VERSION` file
         - [ ] `git checkout --ours install/kubernetes/cilium/{Chart.yaml,README.md,values.yaml}`
         - [ ] `make -C install/kubernetes`
-        - [ ] for `>=v1.11-ce` only:
-          - [ ] for `<v1.14-ce`:
-            - [ ] run `make MAKEFILE_VALUES=Makefile.enterprise.values cilium/values.yaml` and make sure the values.yaml points to the correct image tags.
-          - [ ] run `make -C Documentation update-helm-values`
+        - [ ] for `<v1.14-ce`:
+          - [ ] run `make -C install/kubernetes MAKEFILE_VALUES=Makefile.enterprise.values cilium/values.yaml` and make sure the values.yaml points to the correct image tags.
+        - [ ] run `make -C Documentation update-helm-values`
         - [ ] `git diff` and manually inspect that all of the changes make sense in the Cilium Enterprise tree. Digests will be removed (e.g. in `install/kubernetes/cilium/README`), the quay.io repositories will change to Isovalent, and the versions should have the `-cee.1` suffix.
         - [ ] `git cherry-pick --continue`
         - [ ] Update the commit message to reflect the correct enterprise version `vX.Y.Z-cee.1`
