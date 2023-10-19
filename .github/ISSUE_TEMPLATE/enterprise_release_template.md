@@ -113,7 +113,7 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
   - The release note PR targets main, but contains release notes for all versions you are releasing. (Otherwise, the release notes for previous minors would be buried under docs.isovalent/vX.Y/ and not visible on toplevel.)
   - Example PR: https://github.com/isovalent/cilium-enterprise-docs/pull/748 though do note that this PR should have also included release notes for `1.12.{0,1,2}-cee.beta1` since `1.12.3-cee.1` was the first stable CEE release of the `1.12` series.
   - [ ] Merge the PR
-- [ ] Update isogo.to/releases
+- [ ] Update https://isogo.to/releases
   - [ ] Move the entry for the current release from planned to past.
   - [ ] Add an entry for the next release and its planned date.
 - [ ] Announce release in [#release-announce](https://app.slack.com/client/T40ANG0TH/C043UEUA12T)
