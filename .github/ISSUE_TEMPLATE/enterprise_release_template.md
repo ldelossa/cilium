@@ -133,6 +133,5 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
 [release blockers]: https://github.com/isovalent/cilium/labels/release-blocker%2FX.Y-ce
 [The OG Cilium Enterprise release resource]: https://docs.google.com/document/d/1-VNR7IwdQecWCtIiEChvfvUyit-kkRt-LVkavIDjHDU/edit
 [this handy bash function]: https://github.com/isovalent/cilium/blob/default/create_release_issues.bash
-[`Next Release` customer support tickets]: https://github.com/orgs/isovalent/projects/9/views/11
 [quay-agent]: https://quay.io/repository/isovalent/cilium?tab=tags&tag=latest
 [quay-operator]: https://quay.io/repository/isovalent/operator?tab=tags&tag=latest
