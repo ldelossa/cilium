@@ -135,17 +135,6 @@ func getGatewayNodeInternalIP(ct *check.ConnectivityTest, egressGatewayNode stri
 	return nil
 }
 
-// extractClientIPFromResponse extracts the client IP from the response of the echo-external service
-func extractClientIPFromResponse(res string) net.IP {
-	var clientIP struct {
-		ClientIP string `json:"client-ip"`
-	}
-
-	json.Unmarshal([]byte(res), &clientIP)
-
-	return net.ParseIP(clientIP.ClientIP).To4()
-}
-
 // splitJSonBlobs takes a string encoding multiple json blobs, for example:
 //
 //	{
@@ -305,10 +294,12 @@ func (s *egressGatewayHA) Run(ctx context.Context, t *check.Test) {
 
 			t.NewAction(s, fmt.Sprintf("curl-external-echo-pod-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
 				a.ExecInPod(ctx, ct.CurlCommandWithOutput(externalEcho, features.IPFamilyV4))
-				clientIP := extractClientIPFromResponse(a.CmdOutput())
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
 
-				if !clientIP.Equal(egressGatewayNodeInternalIP) {
-					t.Fatal("Request reached external echo service with wrong source IP")
+				for _, clientIP := range clientIPs {
+					if !clientIP.Equal(egressGatewayNodeInternalIP) {
+						t.Fatal("Request reached external echo service with wrong source IP")
+					}
 				}
 			})
 			i++
@@ -436,11 +427,13 @@ func (s *egressGatewayExcludedCIDRs) Run(ctx context.Context, t *check.Test) {
 			externalEcho := externalEcho.ToEchoIPPod()
 
 			t.NewAction(s, fmt.Sprintf("curl-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
-				a.ExecInPod(ctx, ct.CurlCommandWithOutput(externalEcho, features.IPFamilyV4))
-				clientIP := extractClientIPFromResponse(a.CmdOutput())
+				a.ExecInPod(ctx, ct.CurlCommandParallelWithOutput(externalEcho, features.IPFamilyV4, 10))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
 
-				if !clientIP.Equal(net.ParseIP(client.Pod.Status.HostIP)) {
-					t.Fatal("Request reached external echo service with wrong source IP")
+				for _, clientIP := range clientIPs {
+					if !clientIP.Equal(net.ParseIP(client.Pod.Status.HostIP)) {
+						t.Fatal("Request reached external echo service with wrong source IP")
+					}
 				}
 			})
 			i++
