@@ -97,7 +97,8 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
 
 - [ ] Update the "umbrella" [helm-charts]
   - Install [kubeform] and [kubeval], which are required to run `test.sh`.
-  - Update `Chart.yaml`, and then run `test.sh`. Your PR should target `master` for the latest cilium version, and the `vX.Y` branch otherwise.
+  - Clone the [helm-charts] repository locally. Check out branch `master` for the latest Cilium version, or branch `vX.Y` otherwise.
+  - Update `cilium-enterprise/Chart.yaml`, and then run `test.sh`. Create a PR against your base branch: `master` (for the latest Cilium version) or `vX.Y`.
   - Example PR: https://github.com/isovalent/helm-charts/pull/389/files
   - [ ] Merge the PR
   - [ ] Create a release: https://github.com/isovalent/helm-charts/releases/new
