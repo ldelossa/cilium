@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -38,6 +41,9 @@ type bpfEgressGatewayPolicyEntry struct {
 
 // matches is an helper used to compare the receiver bpfEgressGatewayPolicyEntry with another entry
 func (e *bpfEgressGatewayPolicyEntry) matches(t bpfEgressGatewayPolicyEntry) bool {
+	sort.Strings(t.GatewayIPs)
+	sort.Strings(e.GatewayIPs)
+
 	return t.SourceIP == e.SourceIP &&
 		t.DestCIDR == e.DestCIDR &&
 		t.EgressIP == e.EgressIP &&
@@ -75,7 +81,7 @@ func waitForBpfPolicyEntries(ctx context.Context, t *check.Test,
 					}
 				}
 
-				return fmt.Errorf("Could not find egress gateway policy entry matching %+v", targetEntry)
+				return fmt.Errorf("could not find egress gateway policy entry matching %+v", targetEntry)
 			}
 
 		nextEntry:
@@ -86,7 +92,7 @@ func waitForBpfPolicyEntries(ctx context.Context, t *check.Test,
 					}
 				}
 
-				return fmt.Errorf("Untracked entry %+v in the egress gateway policy map", entry)
+				return fmt.Errorf("untracked entry %+v in the egress gateway policy map", entry)
 			}
 		}
 
@@ -138,6 +144,53 @@ func extractClientIPFromResponse(res string) net.IP {
 	json.Unmarshal([]byte(res), &clientIP)
 
 	return net.ParseIP(clientIP.ClientIP).To4()
+}
+
+// splitJSonBlobs takes a string encoding multiple json blobs, for example:
+//
+//	{
+//	"client-ip": "a"
+//	}{
+//	"client-ip": "b"
+//	}
+//
+// and returns a slice of individual blobls:
+//
+//	[{"client-ip": "a"}, {"client-ip": "b"}]
+func splitJsonBlobs(s string) []string {
+	re := regexp.MustCompile("(?s)}.*?{")
+	blobs := re.Split(s, -1)
+
+	for i, blob := range blobs {
+		blob = strings.TrimSpace(blob)
+		if !strings.HasPrefix(blob, "{") {
+			blob = "{" + blob
+		}
+		if !strings.HasSuffix(blob, "}") {
+			blob = blob + "}"
+		}
+		blobs[i] = blob
+	}
+
+	return blobs
+}
+
+// extractClientIPFromResponses extracts the client IPs from a string containing multiple responses of the echo-external service
+func extractClientIPsFromEchoServiceResponses(res string) []net.IP {
+	var clientIP struct {
+		ClientIP string `json:"client-ip"`
+	}
+
+	var clientIPs []net.IP
+
+	blobs := splitJsonBlobs(res)
+
+	for _, blob := range blobs {
+		json.Unmarshal([]byte(blob), &clientIP)
+		clientIPs = append(clientIPs, net.ParseIP(clientIP.ClientIP).To4())
+	}
+
+	return clientIPs
 }
 
 // EgressGateway is a test case which, given the iegp-sample-client IsovalentEgressGatewayPolicy targeting:
@@ -391,6 +444,138 @@ func (s *egressGatewayExcludedCIDRs) Run(ctx context.Context, t *check.Test) {
 				}
 			})
 			i++
+		}
+	}
+}
+
+// EgressGatewayMultipleGateways is a test case which, given the iegp-sample IsovalentEgressGatewayPolicy targeting:
+// - a couple of client pods (kind=client) as source
+// - the 0.0.0.0/0 destination CIDR
+// - the IP of the external node as excluded CIDR
+// - nodes with the egress-group=test label as gateways (usually kind-control-plane, kind-worker and kind-worker3)
+//
+// tests that requests from the kind=client pods are redirected to _all_ gateways of the egressGroup
+func EgressGatewayMultipleGateways() check.Scenario {
+	return &egressGatewayMultipleGateways{}
+}
+
+type egressGatewayMultipleGateways struct{}
+
+func (s *egressGatewayMultipleGateways) Name() string {
+	return "egress-gateway-multiple-gateway"
+}
+
+func (s *egressGatewayMultipleGateways) Run(ctx context.Context, t *check.Test) {
+	ct := t.Context()
+
+	// apply the egress-group=test label to all the nodes running Cilium and build a gatewayNodeName -> egressIP mapping for all such nodes
+	gatewayIPsToNames := map[string]string{}
+	addNodeLabelPatch := fmt.Sprintf(`[{"op":"add","path":"/metadata/labels/%s","value":"%s"}]`, EgressGroupLabelKey, EgressGroupLabelValue)
+	for _, node := range ct.Nodes() {
+		if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
+			continue
+		}
+
+		if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(addNodeLabelPatch)); err != nil {
+			t.Fatalf("cannot add %s=%s label to node %s: %w", EgressGroupLabelKey, EgressGroupLabelValue, node.Name, err)
+		}
+
+		gatewayIP := getGatewayNodeInternalIP(ct, node.Name)
+		if gatewayIP == nil {
+			t.Fatal("Cannot get egress gateway node internal IP")
+		}
+
+		gatewayIPsToNames[gatewayIP.String()] = node.Name
+	}
+
+	// remove the labels after the test is done
+	t.WithFinalizer(func() error {
+		for _, node := range ct.Nodes() {
+			removeNodeLabelPatch := fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, EgressGroupLabelKey)
+			if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
+				continue
+			}
+
+			if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(removeNodeLabelPatch)); err != nil {
+				return fmt.Errorf("cannot remove %s label from node %s: %w", EgressGroupLabelKey, node.Name, err)
+			}
+		}
+
+		return nil
+	})
+
+	// wait for the policy map to be populated
+	waitForBpfPolicyEntries(ctx, t, func(ciliumPod check.Pod) []bpfEgressGatewayPolicyEntry {
+		egressIP := "0.0.0.0"
+		egressGatewayNodeInternalIPs := []string{}
+
+		for gatewayIP, nodeName := range gatewayIPsToNames {
+			if ciliumPod.Pod.Spec.NodeName == nodeName {
+				egressIP = gatewayIP
+			}
+			egressGatewayNodeInternalIPs = append(egressGatewayNodeInternalIPs, gatewayIP)
+		}
+
+		targetEntries := []bpfEgressGatewayPolicyEntry{}
+
+		for _, client := range ct.ClientPods() {
+			for _, nodeWithoutCiliumName := range t.NodesWithoutCilium() {
+				if _, err := ciliumPod.K8sClient.GetNode(context.Background(), nodeWithoutCiliumName, metav1.GetOptions{}); err != nil {
+					if k8sErrors.IsNotFound(err) {
+						continue
+					}
+
+					t.Fatalf("Cannot retrieve external node: %w", err)
+				}
+
+				targetEntries = append(targetEntries, bpfEgressGatewayPolicyEntry{
+					SourceIP:   client.Pod.Status.PodIP,
+					DestCIDR:   "0.0.0.0/0",
+					EgressIP:   egressIP,
+					GatewayIPs: egressGatewayNodeInternalIPs,
+				})
+			}
+		}
+
+		return targetEntries
+	})
+
+	// run the test
+	responsesByClientIP := map[string]int{}
+
+	i := 0
+	for _, client := range ct.ClientPods() {
+		client := client
+
+		for _, externalEcho := range ct.ExternalEchoPods() {
+			externalEcho := externalEcho.ToEchoIPPod()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-pod-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandParallelWithOutput(externalEcho, features.IPFamilyV4, 100))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					if _, ok := responsesByClientIP[clientIP.String()]; !ok {
+						responsesByClientIP[clientIP.String()] = 0
+					}
+					responsesByClientIP[clientIP.String()]++
+				}
+			})
+		}
+		i++
+	}
+
+	// all client IPs should be egress IPs
+	for clientIP := range responsesByClientIP {
+		if _, ok := gatewayIPsToNames[clientIP]; !ok {
+			t.Fatalf("Request reached external echo service with wrong source IP %s", clientIP)
+		}
+	}
+
+	// and traffic should go through all gateways
+	for gatewayIP := range gatewayIPsToNames {
+		if _, ok := responsesByClientIP[gatewayIP]; !ok {
+			t.Fatalf("No request has gone through gateway %s", gatewayIP)
 		}
 	}
 }

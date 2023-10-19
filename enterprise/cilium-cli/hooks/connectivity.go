@@ -136,6 +136,14 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithScenarios(enterpriseTests.EgressGatewayExcludedCIDRs())
 
+	newTest(ct, "egress-gateway-ha-multiple-gateways").
+		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+			Name:            "iegp-sample-client",
+			PodSelectorKind: "client",
+			EgressGroup:     enterpriseCheck.AllCiliumNodes,
+		}).
+		WithScenarios(enterpriseTests.EgressGatewayMultipleGateways())
+
 	return nil
 }
 
