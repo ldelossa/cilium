@@ -22,8 +22,11 @@ jobs:
           { repo: sky, dir: ., region: us-west-1 },
           { repo: bloomberg, dir: ., region: us-west-2 },
           { repo: form3, dir: MAKS, region: westus2 },
-          { repo: form3, dir: FPS, region: us-east-1 },
+          { repo: form3, dir: FPS, region: eu-west-2 },
           { repo: zerohash, dir: ., region: us-east-2 },
+          { repo: postfinance, dir: ., region: eu-west-1 },
+          { repo: nationwide, dir: ., region: eu-central-1 },
+          { repo: motorola-solutions, dir: ., region: eu-west-3 },
         ]
     runs-on: ubuntu-latest
     steps:
