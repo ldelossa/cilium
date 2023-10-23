@@ -11,13 +11,18 @@
 package srv6manager
 
 import (
+	"fmt"
+
+	"github.com/cilium/cilium/daemon/cmd"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/ipam"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/promise"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,6 +35,7 @@ var Cell = cell.Module(
 	cell.Provide(NewSRv6Manager),
 
 	cell.ProvidePrivate(
+		newDaemonPromiseProvider,
 		newIsovalentVRFResource,
 		newIsovalentSRv6EgressPolicyResource,
 	),
@@ -44,6 +50,35 @@ var Cell = cell.Module(
 		}
 	}),
 )
+
+// daemon is an interface which minimize the surface of Daemon
+// and make it easy to mock out. It only covers a minimal usecase
+// necessary for SRv6 Manager.
+type daemon interface {
+	GetIPv6Allocator() ipam.Allocator
+}
+
+// daemonPromiseProvider converts raw Daemon promise to daemon promise
+func newDaemonPromiseProvider(lc hive.Lifecycle, dp promise.Promise[*cmd.Daemon], dc *option.DaemonConfig) promise.Promise[daemon] {
+	if !dc.EnableSRv6 {
+		return nil
+	}
+
+	r, p := promise.New[daemon]()
+
+	lc.Append(hive.Hook{
+		OnStart: func(hookCtx hive.HookContext) error {
+			d, err := dp.Await(hookCtx)
+			if err != nil {
+				return fmt.Errorf("failed to await for Daemon: %w", err)
+			}
+			r.Resolve(d)
+			return nil
+		},
+	})
+
+	return p
+}
 
 func newIsovalentVRFResource(lc hive.Lifecycle, dc *option.DaemonConfig, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentVRF], error) {
 	if !cs.IsEnabled() || !dc.EnableSRv6 {

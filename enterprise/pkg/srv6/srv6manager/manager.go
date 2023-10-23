@@ -135,6 +135,11 @@ type Manager struct {
 	// creation.
 	sidAlloc ipam.Allocator
 
+	// Promise to wait for the initialization of the Daemon. This is solely used
+	// for waiting for the IPAM initialization. Once the IPAM subsystem becomes
+	// modular, we can change this to inject IPAM cell.
+	daemonPromise promise.Promise[daemon]
+
 	// sidManager is an interface to interact with SIDManager
 	sidManagerPromise promise.Promise[sidmanager.SIDManager]
 	sidManager        sidmanager.SIDManager
@@ -151,6 +156,7 @@ type Params struct {
 	Sig                       *signaler.BGPCPSignaler
 	CacheIdentityAllocator    cache.IdentityAllocator
 	CacheStatus               k8s.CacheStatus
+	DaemonPromise             promise.Promise[daemon]
 	SIDManagerPromise         promise.Promise[sidmanager.SIDManager]
 	CiliumEndpointResource    resource.Resource[*k8sTypes.CiliumEndpoint]
 	IsovalentVRFResource      resource.Resource[*iso_v1alpha1.IsovalentVRF]
@@ -169,6 +175,7 @@ func NewSRv6Manager(p Params) *Manager {
 		identityAllocator:   p.CacheIdentityAllocator,
 		allocatedSIDs:       make(map[uint32]*SIDAllocation),
 		bgp:                 p.Sig,
+		daemonPromise:       p.DaemonPromise,
 		sidManagerPromise:   p.SIDManagerPromise,
 		asyncReconcileVRFCh: make(chan struct{}, 1),
 		cepResource:         p.CiliumEndpointResource,
@@ -185,6 +192,13 @@ func NewSRv6Manager(p Params) *Manager {
 // initialization of SRv6Manager. Some initialization logics like k8s event
 // handlers are still relying on the legacy Daemon-based initialization.
 func (manager *Manager) Start(hookCtx hive.HookContext) error {
+	// Wait for the IPAM to be initialized
+	daemon, err := manager.daemonPromise.Await(hookCtx)
+	if err != nil {
+		return fmt.Errorf("failed to await on Daemon (IPAM)")
+	}
+	manager.setSIDAllocator(daemon.GetIPv6Allocator())
+
 	// SIDManager's Start hook should already called and initial sync is
 	// running. So, it's safe to wait on it.
 	sidManager, err := manager.sidManagerPromise.Await(hookCtx)
@@ -531,7 +545,7 @@ func (manager *Manager) OnDeleteLocator(pool string, allocator sidmanager.SIDAll
 	manager.scheduleReconcileVRF()
 }
 
-func (manager *Manager) SetSIDAllocator(a ipam.Allocator) {
+func (manager *Manager) setSIDAllocator(a ipam.Allocator) {
 	manager.Lock()
 	defer manager.Unlock()
 	manager.sidAlloc = a

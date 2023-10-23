@@ -243,6 +243,14 @@ func bpfMapsEqual[T comparableKV[T]](a, b []T) bool {
 	return true
 }
 
+type fakeDaemon struct {
+	a ipam.Allocator
+}
+
+func (fd *fakeDaemon) GetIPv6Allocator() ipam.Allocator {
+	return fd.a
+}
+
 func allocateIdentity(t *testing.T, identityAllocator *testidentity.MockIdentityAllocator, ep *v2.CiliumEndpoint) {
 	labels := labels.NewLabelsFromModel(ep.Status.Identity.Labels)
 	id, _, err := identityAllocator.AllocateIdentity(context.TODO(), labels, false, identity.NumericIdentity(ep.Status.Identity.ID))
@@ -692,8 +700,8 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			// We can resolve SIDManager immediately because the pool is ready
-			resolver, promise := promise.New[sidmanager.SIDManager]()
-			resolver.Resolve(fsm)
+			smResolver, smPromise := promise.New[sidmanager.SIDManager]()
+			smResolver.Resolve(fsm)
 
 			// Channel to notify k8s cache sync
 			cacheStatus := make(chan struct{})
@@ -719,21 +727,22 @@ func TestSRv6Manager(t *testing.T) {
 			policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
 			require.NoError(t, err)
 
+			// Fake Daemon
+			fd := &fakeDaemon{a: &fakeIPAMAllocator{sid: sid2IP}}
+			daemonResolver, daemonPromise := promise.New[daemon]()
+			daemonResolver.Resolve(fd)
+
 			manager := NewSRv6Manager(Params{
 				Lifecycle:                 lc,
 				DaemonConfig:              dc,
 				Sig:                       signaler.NewBGPCPSignaler(),
 				CacheIdentityAllocator:    identityAllocator,
 				CacheStatus:               cacheStatus,
-				SIDManagerPromise:         promise,
+				SIDManagerPromise:         smPromise,
+				DaemonPromise:             daemonPromise,
 				CiliumEndpointResource:    cepResource,
 				IsovalentVRFResource:      vrfResource,
 				IsovalentSRv6EgressPolicy: policyResource,
-			})
-
-			// This allocator always returns fixed SID for AllocateNext
-			manager.SetSIDAllocator(&fakeIPAMAllocator{
-				sid: sid2IP,
 			})
 
 			// Create initial CiliumEndpoints
@@ -940,10 +949,10 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		pools: map[string]sidmanager.SIDAllocator{},
 	}
 
-	resolver, promise := promise.New[sidmanager.SIDManager]()
+	smResolver, smPromise := promise.New[sidmanager.SIDManager]()
 
 	// We can resolve SIDManager immediately because the pool is ready
-	resolver.Resolve(fsm)
+	smResolver.Resolve(fsm)
 
 	// Dummy channel to notify k8s cache sync
 	cacheStatus := make(chan struct{})
@@ -969,20 +978,23 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
 	require.NoError(t, err)
 
+	// Fake Daemon
+	fd := &fakeDaemon{a: &fakeIPAMAllocator{}}
+	daemonResolver, daemonPromise := promise.New[daemon]()
+	daemonResolver.Resolve(fd)
+
 	manager := NewSRv6Manager(Params{
 		Lifecycle:                 lc,
 		DaemonConfig:              dc,
 		Sig:                       signaler.NewBGPCPSignaler(),
 		CacheIdentityAllocator:    identityAllocator,
 		CacheStatus:               cacheStatus,
-		SIDManagerPromise:         promise,
+		SIDManagerPromise:         smPromise,
+		DaemonPromise:             daemonPromise,
 		CiliumEndpointResource:    cepResource,
 		IsovalentVRFResource:      vrfResource,
 		IsovalentSRv6EgressPolicy: policyResource,
 	})
-
-	// This allocator will never be used
-	manager.SetSIDAllocator(&fakeIPAMAllocator{})
 
 	// Create initial CiliumEndpoint
 	ep := &v2.CiliumEndpoint{
@@ -1313,7 +1325,7 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 				},
 			}
 
-			resolver, promise := promise.New[sidmanager.SIDManager]()
+			smResolver, smPromise := promise.New[sidmanager.SIDManager]()
 
 			lc := hivetest.Lifecycle(t)
 
@@ -1322,7 +1334,7 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			}
 
 			// We can resolve SIDManager immediately because the pool is ready
-			resolver.Resolve(fsm)
+			smResolver.Resolve(fsm)
 
 			// Dummy channel to notify k8s cache sync
 			cacheStatus := make(chan struct{})
@@ -1348,6 +1360,11 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
 			require.NoError(t, err)
 
+			// Fake Daemon
+			fd := &fakeDaemon{a: &fakeIPAMAllocator{}}
+			daemonResolver, daemonPromise := promise.New[daemon]()
+			daemonResolver.Resolve(fd)
+
 			manager := NewSRv6Manager(Params{
 				Lifecycle: lc,
 				DaemonConfig: &option.DaemonConfig{
@@ -1356,14 +1373,15 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 				Sig:                       signaler.NewBGPCPSignaler(),
 				CacheIdentityAllocator:    identityAllocator,
 				CacheStatus:               cacheStatus,
-				SIDManagerPromise:         promise,
+				SIDManagerPromise:         smPromise,
+				DaemonPromise:             daemonPromise,
 				CiliumEndpointResource:    cepResource,
 				IsovalentVRFResource:      vrfResource,
 				IsovalentSRv6EgressPolicy: policyResource,
 			})
 
 			// This allocator will never be used
-			manager.SetSIDAllocator(&fakeIPAMAllocator{})
+			manager.setSIDAllocator(&fakeIPAMAllocator{})
 
 			// Emulate an initial sync
 			if test.vrf != nil {
