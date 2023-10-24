@@ -47,6 +47,9 @@ func (eh *EnterpriseHooks) AddConnectivityTests(ct *check.ConnectivityTest) erro
 // AddSysdumpTasks registers sysdump tasks that are specific to Isovalent
 // Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddSysdumpTasks(collector *sysdump.Collector) error {
+	if err := enterpriseFeatures.ExtractFromSysdumpCollector(collector); err != nil {
+		return err
+	}
 	return addSysdumpTasks(collector, eh.Opts)
 }
 

@@ -18,6 +18,7 @@ import (
 
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
+	"github.com/cilium/cilium-cli/sysdump"
 	"github.com/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/versioncheck"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,9 @@ const (
 	CiliumDNSProxyDeployed features.Feature = "cilium-dnsproxy-deployed"
 
 	EgressGatewayHA features.Feature = "enable-ipv4-egress-gateway-ha"
+
+	SRv6            features.Feature = "enable-srv6"
+	SRv6LocatorPool features.Feature = "srv6-locator-pool-enabled"
 )
 
 func Detect(ctx context.Context, ct *check.ConnectivityTest) error {
@@ -103,6 +107,20 @@ func extractFromConfigMap(ctx context.Context, ct *check.ConnectivityTest) error
 		Enabled: cm.Data["enable-ipv4-egress-gateway-ha"] == "true" ||
 			// in Cilium v1.14-ce we auto opt into egress gateway HA in case the OSS feature is enabled, for backward compatibility with 1.13-ce
 			(versioncheck.MustCompile(">=1.14.0 <1.15.0")(ct.CiliumVersion) && cm.Data["enable-ipv4-egress-gateway"] == "true"),
+	}
+
+	return nil
+}
+
+func ExtractFromSysdumpCollector(collector *sysdump.Collector) error {
+	cm := collector.CiliumConfigMap
+
+	collector.FeatureSet[SRv6] = features.Status{
+		Enabled: cm.Data[string(SRv6)] == "true",
+	}
+
+	collector.FeatureSet[SRv6LocatorPool] = features.Status{
+		Enabled: cm.Data[string(SRv6LocatorPool)] == "true",
 	}
 
 	return nil

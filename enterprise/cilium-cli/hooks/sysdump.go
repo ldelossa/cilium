@@ -14,6 +14,8 @@ import (
 	"context"
 	"fmt"
 
+	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -232,41 +234,41 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 			},
 		},
 		{
-			Description: "Collecting Cilium SRV6 Egress Policies",
+			Description: "Collecting IsovalentVRF",
 			Quick:       true,
 			Task: func(ctx context.Context) error {
-				srv6EgressPolicies := schema.GroupVersionResource{
-					Group:    "cilium.io",
-					Resource: "ciliumsrv6egresspolicies",
-					Version:  "v2alpha1",
+				locatorPools := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentvrfs",
+					Version:  "v1alpha1",
 				}
 				n := corev1.NamespaceAll
-				v, err := collector.Client.ListUnstructured(ctx, srv6EgressPolicies, &n, metav1.ListOptions{})
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
 				if err != nil {
-					return fmt.Errorf("failed to collect Cilium SRV6 Egress Policies: %w", err)
+					return fmt.Errorf("failed to collect Isovalent VRFs: %w", err)
 				}
-				if err := collector.WriteYAML("cilium-enterprise-srv6egresspolicies-<ts>.yaml", v); err != nil {
-					return fmt.Errorf("failed to collect Cilium SRV6 Egress Policies: %w", err)
+				if err := collector.WriteYAML("cilium-enterprise-isovalentvrfs-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent VRFs: %w", err)
 				}
 				return nil
 			},
 		},
 		{
-			Description: "Collecting Cilium SRV6 VRFs",
+			Description: "Collecting IsovalentSRv6EgressPolicy",
 			Quick:       true,
 			Task: func(ctx context.Context) error {
-				srv6VRFs := schema.GroupVersionResource{
-					Group:    "cilium.io",
-					Resource: "ciliumsrv6vrfs",
-					Version:  "v2alpha1",
+				locatorPools := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentsrv6egresspolicies",
+					Version:  "v1alpha1",
 				}
 				n := corev1.NamespaceAll
-				v, err := collector.Client.ListUnstructured(ctx, srv6VRFs, &n, metav1.ListOptions{})
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
 				if err != nil {
-					return fmt.Errorf("failed to collect Cilium SRV6 VRFs: %w", err)
+					return fmt.Errorf("failed to collect Isovalent SRv6 Egress Policies: %w", err)
 				}
-				if err := collector.WriteYAML("cilium-enterprise-srv6vrfs-<ts>.yaml", v); err != nil {
-					return fmt.Errorf("failed to collect Cilium SRV6 VRFs: %w", err)
+				if err := collector.WriteYAML("cilium-enterprise-isovalentsrv6egresspolicies-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Egress Policies: %w", err)
 				}
 				return nil
 			},
@@ -394,5 +396,103 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 		},
 	})
 
+	if collector.FeatureSet[enterpriseFeatures.SRv6].Enabled {
+		addSRv6SysdumpTasks(collector)
+	}
+
+	if collector.FeatureSet[enterpriseFeatures.SRv6LocatorPool].Enabled {
+		addSRv6LocatorPoolSysdumpTasks(collector)
+	}
+
 	return nil
+}
+
+func addSRv6SysdumpTasks(collector *sysdump.Collector) {
+	collector.AddTasks([]sysdump.Task{
+		{
+			Description: "Collecting IsovalentVRF",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				locatorPools := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentvrfs",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent VRFs: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentvrfs-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent VRFs: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			Description: "Collecting IsovalentSRv6EgressPolicy",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				locatorPools := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentsrv6egresspolicies",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Egress Policies: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentsrv6egresspolicies-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Egress Policies: %w", err)
+				}
+				return nil
+			},
+		},
+	})
+}
+
+func addSRv6LocatorPoolSysdumpTasks(collector *sysdump.Collector) {
+	collector.AddTasks([]sysdump.Task{
+		{
+			Description: "Collecting IsovalentSRv6SIDManager",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				sidManagers := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentsrv6sidmanager",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, sidManagers, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 SID Managers: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentsrv6sidmanagers-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 SID Managers: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			Description: "Collecting IsovalentSRv6LocatorPool",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				locatorPools := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentsrv6locatorpool",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Locator Pools: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentsrv6locatorpools-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Locator Pools: %w", err)
+				}
+				return nil
+			},
+		},
+	})
 }
