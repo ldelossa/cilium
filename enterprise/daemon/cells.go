@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/mixedrouting"
+	"github.com/cilium/cilium/enterprise/pkg/multicast"
 	"github.com/cilium/cilium/enterprise/pkg/multinetwork"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
@@ -24,6 +25,7 @@ import (
 
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
+	multicastmaps "github.com/cilium/cilium/pkg/maps/multicast"
 )
 
 var (
@@ -52,12 +54,12 @@ var (
 		egressmapha.Cell,
 		egressgatewayha.Cell,
 		egressgatewayha.PolicyCell,
-
 		cell.Invoke(func(*egressgatewayha.Manager) {}),
 
 		mixedrouting.Cell,
 
 		multinetwork.Cell,
+		multicast.Cell,
 	)
 
 	Datapath = cell.Module(
@@ -65,5 +67,6 @@ var (
 		"Datapath Enterprise",
 
 		cemaps.Cell,
+		multicastmaps.Cell,
 	)
 )

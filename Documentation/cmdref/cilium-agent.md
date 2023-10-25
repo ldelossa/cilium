@@ -304,6 +304,7 @@ cilium-agent [flags]
       --monitor-queue-size int                                       Size of the event queue when reading monitor events
       --mtu int                                                      Overwrite auto-detected MTU of underlying network
       --multi-network-auto-direct-node-routes                        Enable multi-network aware automatic L2 routing between nodes (experimental) (default true)
+      --multicast-enabled                                            Enables multicast in Cilium
       --node-encryption-opt-out-labels string                        Label selector for nodes which will opt-out of node-to-node encryption (default "node-role.kubernetes.io/control-plane")
       --node-port-bind-protection                                    Reject application bind(2) requests to service ports in the NodePort range (default true)
       --node-port-range strings                                      Set the min/max NodePort port range (default [30000,32767])
