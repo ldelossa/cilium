@@ -6,6 +6,7 @@ package egressgatewayha
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,7 @@ func TestEgressGatewayOperatorManagerHAGroup(t *testing.T) {
 	healthcheckerMock := newHealthcheckerMock()
 
 	egressGatewayOperatorManager := newEgressGatewayOperatorManager(OperatorParams{
+		Config:        OperatorConfig{1 * time.Millisecond},
 		Clientset:     fakeSet,
 		Policies:      policies,
 		Nodes:         nodes,
@@ -101,7 +103,7 @@ func TestEgressGatewayOperatorManagerHAGroup(t *testing.T) {
 	healthcheckerMock.nodes = map[string]struct{}{
 		"k8s2": {},
 	}
-	egressGatewayOperatorManager.reconcile()
+	egressGatewayOperatorManager.reconciliationTrigger.Trigger()
 
 	assertIegpGatewayStatus(t, fakeSet, "policy-1", gatewayStatus{
 		activeGatewayIPs:  []string{node2IP},
@@ -113,7 +115,7 @@ func TestEgressGatewayOperatorManagerHAGroup(t *testing.T) {
 		"k8s1": {},
 		"k8s2": {},
 	}
-	egressGatewayOperatorManager.reconcile()
+	egressGatewayOperatorManager.reconciliationTrigger.Trigger()
 
 	assertIegpGatewayStatus(t, fakeSet, "policy-1", gatewayStatus{
 		activeGatewayIPs:  []string{node1IP, node2IP},
@@ -156,7 +158,7 @@ func TestEgressGatewayOperatorManagerHAGroup(t *testing.T) {
 	healthcheckerMock.nodes = map[string]struct{}{
 		"k8s2": {},
 	}
-	egressGatewayOperatorManager.reconcile()
+	egressGatewayOperatorManager.reconciliationTrigger.Trigger()
 
 	assertIegpGatewayStatus(t, fakeSet, "policy-1", gatewayStatus{
 		activeGatewayIPs:  []string{node2IP},
@@ -168,7 +170,7 @@ func TestEgressGatewayOperatorManagerHAGroup(t *testing.T) {
 		"k8s1": {},
 		"k8s2": {},
 	}
-	egressGatewayOperatorManager.reconcile()
+	egressGatewayOperatorManager.reconciliationTrigger.Trigger()
 
 	assertIegpGatewayStatus(t, fakeSet, "policy-1", gatewayStatus{
 		activeGatewayIPs:  []string{node1IP},
@@ -186,5 +188,57 @@ func TestEgressGatewayOperatorManagerHAGroup(t *testing.T) {
 	assertIegpGatewayStatus(t, fakeSet, "policy-1", gatewayStatus{
 		activeGatewayIPs:  []string{node1IP, node2IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
+	})
+}
+
+func TestEgressGatewayManagerWithoutNodeSelector(t *testing.T) {
+	fakeSet := &k8sClient.FakeClientset{CiliumFakeClientset: cilium_fake.NewSimpleClientset()}
+	policies := make(fakeResource[*Policy])
+	nodes := make(fakeResource[*cilium_api_v2.CiliumNode])
+	healthcheckerMock := newHealthcheckerMock()
+
+	egressGatewayOperatorManager := newEgressGatewayOperatorManager(OperatorParams{
+		Config:        OperatorConfig{1 * time.Millisecond},
+		Clientset:     fakeSet,
+		Policies:      policies,
+		Nodes:         nodes,
+		Healthchecker: healthcheckerMock,
+		Lifecycle:     hivetest.Lifecycle(t),
+	})
+
+	healthcheckerMock.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
+
+	policies.sync(t)
+	nodes.sync(t)
+
+	node1 := newCiliumNode(node1Name, node1IP, nodeGroup1Labels)
+	addNode(t, nodes, node1)
+
+	node2 := newCiliumNode(node2Name, node2IP, nodeGroup1Labels)
+	addNode(t, nodes, node2)
+
+	// Create a new policy without nodeSelector
+	iegp, _ := newIEGP(&policyParams{
+		name:            "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		egressIP:        egressIP1,
+	})
+
+	_, err := fakeSet.CiliumFakeClientset.IsovalentV1().
+		IsovalentEgressGatewayPolicies().
+		Create(context.TODO(), iegp, meta_v1.CreateOptions{})
+	assert.Nil(t, err)
+	addIEGP(t, policies, iegp)
+
+	egressGatewayOperatorManager.reconciliationTrigger.Trigger()
+
+	// Operator should select no active / healthy gateways for this policy
+	assertIegpGatewayStatus(t, fakeSet, "policy-1", gatewayStatus{
+		activeGatewayIPs:  []string{},
+		healthyGatewayIPs: []string{},
 	})
 }

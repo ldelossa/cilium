@@ -13,8 +13,10 @@ package egressgatewayha
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"testing"
+	"time"
 
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
@@ -25,6 +27,8 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy/api"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -236,12 +240,32 @@ type gatewayStatus struct {
 }
 
 func assertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset, policyName string, gs gatewayStatus) {
-	tb.Helper()
+	var err error
+	for i := 0; i < 10; i++ {
+		if err = tryAssertIegpGatewayStatus(tb, fakeSet, policyName, gs); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
-	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), "policy-1", metav1.GetOptions{})
 	assert.Nil(tb, err)
+}
+
+func tryAssertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset, policyName string, gs gatewayStatus) error {
+	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), "policy-1", metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
 
 	iegpGs := iegp.Status.GroupStatuses[0]
-	assert.Equal(tb, gs.activeGatewayIPs, iegpGs.ActiveGatewayIPs)
-	assert.Equal(tb, gs.healthyGatewayIPs, iegpGs.HealthyGatewayIPs)
+
+	if !cmp.Equal(gs.activeGatewayIPs, iegpGs.ActiveGatewayIPs, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("active gateway IPs don't match expected ones: %v vs expected %v", iegpGs.ActiveGatewayIPs, gs.activeGatewayIPs)
+	}
+
+	if !cmp.Equal(gs.healthyGatewayIPs, iegpGs.HealthyGatewayIPs, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("healthy gateway IPs don't match expected ones: %v vs expected %v", iegpGs.HealthyGatewayIPs, gs.healthyGatewayIPs)
+	}
+
+	return nil
 }

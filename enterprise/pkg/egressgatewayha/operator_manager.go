@@ -6,8 +6,10 @@ package egressgatewayha
 import (
 	"context"
 	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/pkg/hive"
@@ -19,18 +21,36 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/trigger"
 )
 
 // OperatorCell provides an [OperatorManager] for consumption with hive.
 var OperatorCell = cell.Module(
 	"egressgatewayha-operator",
 	"The Egress Gateway Operator manages cluster wide EGW state",
+	cell.Config(defaultOperatorConfig),
 	cell.Provide(NewEgressGatewayOperatorManager),
 )
+
+type OperatorConfig struct {
+	// Amount of time between triggers of egress gateway state
+	// reconciliations are invoked
+	EgressGatewayHAReconciliationTriggerInterval time.Duration
+}
+
+var defaultOperatorConfig = OperatorConfig{
+	2 * time.Second,
+}
+
+func (def OperatorConfig) Flags(flags *pflag.FlagSet) {
+	flags.Duration("egress-gateway-ha-reconciliation-trigger-interval", def.EgressGatewayHAReconciliationTriggerInterval, "Time between triggers of egress gateway state reconciliations")
+}
 
 type OperatorParams struct {
 	cell.In
 
+	Config        OperatorConfig
 	DaemonConfig  *option.DaemonConfig
 	Clientset     k8sClient.Clientset
 	Policies      resource.Resource[*Policy]
@@ -75,6 +95,12 @@ type OperatorManager struct {
 	// healthchecker checks the health status of the nodes configured as
 	// gateway by at least one policy
 	healthchecker healthcheck.Healthchecker
+
+	// reconciliationTrigger is the trigger used to reconcile the the egress
+	// gateway policies statuses with the list of active and healthy gateway
+	// IPs.
+	// The trigger is used to batch multiple updates together
+	reconciliationTrigger *trigger.Trigger
 }
 
 func NewEgressGatewayOperatorManager(p OperatorParams) (out struct {
@@ -108,6 +134,25 @@ func newEgressGatewayOperatorManager(p OperatorParams) *OperatorManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.Lifecycle.Append(hive.Hook{
 		OnStart: func(hc hive.HookContext) error {
+			t, err := trigger.NewTrigger(trigger.Parameters{
+				Name:        "egress_gateway_ha_operator_reconciliation",
+				MinInterval: p.Config.EgressGatewayHAReconciliationTriggerInterval,
+				TriggerFunc: func(reasons []string) {
+					reason := strings.Join(reasons, ", ")
+					log.WithField(logfields.Reason, reason).Debug("reconciliation triggered")
+
+					operatorManager.Lock()
+					defer operatorManager.Unlock()
+
+					operatorManager.reconcileLocked()
+				},
+			})
+			if err != nil {
+				return err
+			}
+
+			operatorManager.reconciliationTrigger = t
+
 			go operatorManager.processEvents(ctx)
 			operatorManager.startHealthcheckingLoop()
 
@@ -137,7 +182,7 @@ func (operatorManager *OperatorManager) processEvents(ctx context.Context) {
 		}
 
 		operatorManager.allCachesSynced = true
-		operatorManager.reconcile()
+		operatorManager.reconciliationTrigger.TriggerWithReason("k8s sync done")
 	}
 
 	policyEvents := operatorManager.policies.Events(ctx)
@@ -175,9 +220,7 @@ func (operatorManager *OperatorManager) processEvents(ctx context.Context) {
 func (operatorManager *OperatorManager) startHealthcheckingLoop() {
 	go func() {
 		for range operatorManager.healthchecker.Events() {
-			operatorManager.Lock()
-			operatorManager.reconcile()
-			operatorManager.Unlock()
+			operatorManager.reconciliationTrigger.TriggerWithReason("healthcheck event")
 		}
 	}()
 }
@@ -215,7 +258,7 @@ func (operatorManager *OperatorManager) onAddEgressPolicy(policy *Policy) error 
 
 	operatorManager.policyCache[config.id] = policy
 	operatorManager.policyConfigs[config.id] = config
-	operatorManager.reconcile()
+	operatorManager.reconciliationTrigger.TriggerWithReason("IsovalentEgressGatewayPolicy added")
 	return nil
 }
 
@@ -238,7 +281,7 @@ func (operatorManager *OperatorManager) onDeleteEgressPolicy(policy *Policy) {
 	delete(operatorManager.policyCache, configID)
 	delete(operatorManager.policyConfigs, configID)
 
-	operatorManager.reconcile()
+	operatorManager.reconciliationTrigger.TriggerWithReason("IsovalentEgressGatewayPolicy deleted")
 }
 
 // handleNodeEvent takes care of node upserts and removals.
@@ -252,14 +295,14 @@ func (operatorManager *OperatorManager) handleNodeEvent(event resource.Event[*ci
 
 	if event.Kind == resource.Upsert {
 		operatorManager.nodeDataStore[node.Name] = node
-		operatorManager.onChangeNodeLocked()
+		operatorManager.onChangeNodeLocked("CiliumNode updated")
 	} else {
 		delete(operatorManager.nodeDataStore, node.Name)
-		operatorManager.onChangeNodeLocked()
+		operatorManager.onChangeNodeLocked("CiliumNode deleted")
 	}
 }
 
-func (operatorManager *OperatorManager) onChangeNodeLocked() {
+func (operatorManager *OperatorManager) onChangeNodeLocked(event string) {
 	operatorManager.nodes = []nodeTypes.Node{}
 	for _, n := range operatorManager.nodeDataStore {
 		operatorManager.nodes = append(operatorManager.nodes, n)
@@ -268,7 +311,7 @@ func (operatorManager *OperatorManager) onChangeNodeLocked() {
 		return operatorManager.nodes[i].Name < operatorManager.nodes[j].Name
 	})
 
-	operatorManager.reconcile()
+	operatorManager.reconciliationTrigger.TriggerWithReason(event)
 }
 
 func (operatorManager *OperatorManager) nodeIsHealthy(nodeName string) bool {
@@ -302,7 +345,7 @@ func (operatorManager *OperatorManager) updatePolicesGroupStatuses() {
 
 // Whenever it encounters an error, it will just log it and move to the next
 // item, in order to reconcile as many states as possible.
-func (operatorManager *OperatorManager) reconcile() {
+func (operatorManager *OperatorManager) reconcileLocked() {
 	if !operatorManager.allCachesSynced {
 		return
 	}
