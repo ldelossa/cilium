@@ -394,6 +394,46 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 				return nil
 			},
 		},
+		{
+			Description: "Collecting IsovalentMulticastGroup",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				multicastGroups := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentmulticastgroups",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, multicastGroups, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent Multicast Groups: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentmulticastgroups-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent Multicast Groups: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			Description: "Collecting IsovalentMulticastNodes",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				multicastNodes := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentmulticastnodes",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, multicastNodes, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent Multicast Nodes: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentmulticastnodes-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent Multicast Nodes: %w", err)
+				}
+				return nil
+			},
+		},
 	})
 
 	if collector.FeatureSet[enterpriseFeatures.SRv6].Enabled {
