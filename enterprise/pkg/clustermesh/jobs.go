@@ -32,6 +32,7 @@ type jobParams struct {
 	Lifecycle   hive.Lifecycle
 	Logger      logrus.FieldLogger
 	JobRegistry job.Registry
+	Scope       cell.Scope
 
 	Config       cecmcfg.Config
 	ClusterMesh  *clustermesh.ClusterMesh
@@ -44,6 +45,7 @@ func registerJobs(params jobParams) {
 	}
 
 	group := params.JobRegistry.NewGroup(
+		params.Scope,
 		job.WithLogger(params.Logger),
 		job.WithPprofLabels(pprof.Labels("cell", "enterprise-clustermesh")),
 	)
@@ -59,7 +61,7 @@ func registerJobs(params jobParams) {
 }
 
 func cleanupStalePerClusterMapsJobFn(params jobParams) job.OneShotFunc {
-	return func(ctx context.Context) error {
+	return func(ctx context.Context, health cell.HealthReporter) error {
 		// We don't actually care that nodes are synchronized here, but we need
 		// to know that all ClusterIDs for existing clusters have been reserved.
 		if err := params.ClusterMesh.NodesSynced(ctx); err != nil {

@@ -29,7 +29,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.10
+  cilium_cli_version: v0.15.11
   # renovate: datasource=github-releases depName=kubernetes/kops
   kops_version: v1.28.0
   # renovate: datasource=golang-version depName=go
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout context ref (trusted)
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
@@ -87,7 +87,7 @@ jobs:
           go-version: ${{ env.go_version }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@43678f6c7289bafa8850b9234d99581e0c5f8f09 # v0.15.10
+        uses: cilium/cilium-cli@951eb9108277f4ffeb86d047bd492b6b96a52542 # v0.15.11
         with:
           release-version: ${{ env.cilium_cli_version }}
 
@@ -111,7 +111,7 @@ jobs:
           version: "405.0.0"
       
       - name: Clone ClusterLoader2
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           repository: learnitall/perf-tests
           ref: d7a97a6b7b9efc29ccb496f3ff54f42588006e96 # tinker/learnitall/100-node-scale-test
@@ -130,6 +130,8 @@ jobs:
           echo "--- gcloud ---"
           gcloud version
       
+      # Control plane node size corresponds to related test in k8s OSS:
+      # https://github.com/kubernetes/test-infra/blob/275098e2666698d7e78b39c3716f202ea62f4b80/config/jobs/kubernetes/sig-scalability/sig-scalability-presets.yaml#L269
       - name: Create cluster
         run: |
           ./kops create cluster \
@@ -140,6 +142,7 @@ jobs:
             --control-plane-count 1 \
             --control-plane-size n2-standard-4 \
             --node-count 1 \
+            --node-size e2-standard-8 \
             --networking cni \
             --yes
       
@@ -200,27 +203,47 @@ jobs:
         run: |
           cilium status --wait
       
-      - name: Display CL2 config
-        run: |
-          cat ${{ env.cl2_config }}
-      
       - name: Run CL2
+        id: run-cl2
         working-directory: ./perf-tests/clusterloader2
+        # --enable-exec-service=false to reduce number of pods so 100 pods can fit in node
+        # POD_STARTUP_LATENCY_THRESHOLD=60s so the test doesn't fail, currently we have ~30s pods startup latency
         run: |
           mkdir ./report
+          echo POD_STARTUP_LATENCY_THRESHOLD: 60s >> ./testoverrides.yaml
           go run ./cmd/clusterloader.go \
             -v=4 \
-            --testconfig=${{ env.cl2_config }} \
+            --testconfig=./testing/node-throughput/config.yaml \
+            --testoverrides=./testoverrides.yaml \
+            --enable-exec-service=false \
             --provider=gce \
             --enable-prometheus-server \
             --tear-down-prometheus-server=false \
             --report-dir=./report \
-            --kubeconfig=$HOME/.kube/config
+            --kubeconfig=$HOME/.kube/config \
+            2>&1 | tee cl2-output.txt
+
+      - name: Get sysdump
+        if: ${{ always() && steps.run-cl2.outcome != 'skipped' }}
+        run: |
+          cilium status
+          cilium sysdump --output-filename cilium-sysdump-final
 
       - name: Cleanup cluster
-        if: ${{ always() && steps.deploy.outcome != 'skipped' }}
+        if: ${{ always() && steps.deploy-cluster.outcome != 'skipped' }}
         run: |
           ./kops delete cluster \
             ${{ env.cluster_name }} \
             --state ${{ secrets.GCP_PERF_KOPS_STATE_STORE }} \
             --yes
+
+      - name: Export results and sysdump to GS bucket
+        if: ${{ always() && steps.run-cl2.outcome != 'skipped' }}
+        run: |
+          echo ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} >> ./run-url.txt
+          echo ${{ github.sha }} >> sha.txt
+          # BUILD_ID needs to be an integer
+          BUILD_ID="$(date +%s)"
+          EXPORT_DIR="${{ secrets.GCP_PERF_RESULTS_BUCKET }}/logs/scale-test-${{ github.ref_name }}/${BUILD_ID}"
+          gsutil -m cp -R cilium-sysdump-final.zip ./perf-tests/clusterloader2/report/* $EXPORT_DIR/artifacts/
+          gsutil -m cp sha.txt run-url.txt ./perf-tests/clusterloader2/cl2-output.txt  $EXPORT_DIR/

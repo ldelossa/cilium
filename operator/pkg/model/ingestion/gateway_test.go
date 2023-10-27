@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/cilium/cilium/operator/pkg/model"
 )
@@ -20,7 +20,7 @@ var basicHTTP = Input{
 	Gateway: gatewayv1beta1.Gateway{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Gateway",
-			APIVersion: "gateway.networking.k8s.io/v1beta1",
+			APIVersion: "gateway.networking.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-gateway",
@@ -92,7 +92,7 @@ var basicHTTPListeners = []model.HTTPListener{
 				Name:      "my-gateway",
 				Namespace: "default",
 				Group:     "gateway.networking.k8s.io",
-				Version:   "v1beta1",
+				Version:   "v1",
 				Kind:      "Gateway",
 			},
 		},
@@ -123,7 +123,7 @@ var basicTLS = Input{
 	Gateway: gatewayv1beta1.Gateway{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Gateway",
-			APIVersion: "gateway.networking.k8s.io/v1beta1",
+			APIVersion: "gateway.networking.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-gateway",
@@ -189,7 +189,7 @@ var simpleSameNamespaceTLSListeners = []model.TLSListener{
 				Name:      "gateway-tlsroute",
 				Namespace: "gateway-conformance-infra",
 				Group:     "gateway.networking.k8s.io",
-				Version:   "v1beta1",
+				Version:   "v1",
 				Kind:      "Gateway",
 			},
 		},
@@ -223,7 +223,7 @@ var basicTLSListeners = []model.TLSListener{
 				Name:      "my-gateway",
 				Namespace: "default",
 				Group:     "gateway.networking.k8s.io",
-				Version:   "v1beta1",
+				Version:   "v1",
 				Kind:      "Gateway",
 			},
 		},
@@ -1579,6 +1579,118 @@ var mirrorHTTPListeners = []model.HTTPListener{
 	},
 }
 
+var (
+	basicGRPC = Input{
+		GatewayClass: gatewayv1beta1.GatewayClass{},
+		Gateway: gatewayv1beta1.Gateway{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Gateway",
+				APIVersion: "gateway.networking.k8s.io/v1beta1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-gateway",
+				Namespace: "default",
+			},
+			Spec: gatewayv1beta1.GatewaySpec{
+				Listeners: []gatewayv1beta1.Listener{
+					{
+						Name:     "prod-web-gw",
+						Port:     80,
+						Protocol: gatewayv1beta1.HTTPProtocolType,
+					},
+				},
+			},
+		},
+		GRPCRoutes: []gatewayv1alpha2.GRPCRoute{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "grpc-route",
+					Namespace: "default",
+				},
+				Spec: gatewayv1alpha2.GRPCRouteSpec{
+					CommonRouteSpec: gatewayv1beta1.CommonRouteSpec{
+						ParentRefs: []gatewayv1beta1.ParentReference{
+							{
+								Name: "my-gateway",
+							},
+						},
+					},
+					Hostnames: []gatewayv1alpha2.Hostname{
+						"example.com",
+					},
+					Rules: []gatewayv1alpha2.GRPCRouteRule{
+						{
+							Matches: []gatewayv1alpha2.GRPCRouteMatch{
+								{
+									Method: &gatewayv1alpha2.GRPCMethodMatch{
+										Type:    model.AddressOf[gatewayv1alpha2.GRPCMethodMatchType](gatewayv1alpha2.GRPCMethodMatchExact),
+										Service: model.AddressOf("service.Echo"),
+										Method:  model.AddressOf("Ping"),
+									},
+								},
+							},
+							BackendRefs: []gatewayv1alpha2.GRPCBackendRef{
+								{
+									BackendRef: gatewayv1beta1.BackendRef{
+										BackendObjectReference: gatewayv1beta1.BackendObjectReference{
+											Name: "grp-service",
+											Port: model.AddressOf[gatewayv1beta1.PortNumber](8080),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Services: []corev1.Service{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "grp-service",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+
+	basicGRPCListeners = []model.HTTPListener{
+		{
+			Name: "prod-web-gw",
+			Sources: []model.FullyQualifiedResource{
+				{
+					Name:      "my-gateway",
+					Namespace: "default",
+					Group:     "gateway.networking.k8s.io",
+					Version:   "v1beta1",
+					Kind:      "Gateway",
+				},
+			},
+			Address:  "",
+			Port:     80,
+			Hostname: "*",
+			Routes: []model.HTTPRoute{
+				{
+					Hostnames: []string{"example.com"},
+					PathMatch: model.StringMatch{
+						Exact: "/service.Echo/Ping",
+					},
+					Backends: []model.Backend{
+						{
+							Name:      "grp-service",
+							Namespace: "default",
+							Port: &model.BackendPort{
+								Port: 8080,
+							},
+						},
+					},
+					IsGRPC: true,
+				},
+			},
+		},
+	}
+)
+
 func TestHTTPGatewayAPI(t *testing.T) {
 	tests := map[string]struct {
 		input Input
@@ -1680,6 +1792,25 @@ func TestTLSGatewayAPI(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			_, listeners := GatewayAPI(tc.input)
+			assert.Equal(t, tc.want, listeners, "Listeners did not match")
+		})
+	}
+}
+
+func TestGRPCGatewayAPI(t *testing.T) {
+	tests := map[string]struct {
+		input Input
+		want  []model.HTTPListener
+	}{
+		"basic grpc": {
+			input: basicGRPC,
+			want:  basicGRPCListeners,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			listeners, _ := GatewayAPI(tc.input)
 			assert.Equal(t, tc.want, listeners, "Listeners did not match")
 		})
 	}

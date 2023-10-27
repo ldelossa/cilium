@@ -189,6 +189,12 @@ static __always_inline __u32 ct_update_timeout(struct ct_entry *entry,
 				   CT_REPORT_FLAGS);
 }
 
+static __always_inline void ct_reset_seen_flags(struct ct_entry *entry)
+{
+	entry->rx_flags_seen = 0;
+	entry->tx_flags_seen = 0;
+}
+
 static __always_inline void ct_reset_closing(struct ct_entry *entry)
 {
 	entry->rx_closing = 0;
@@ -295,6 +301,9 @@ __ct_lookup(const void *map, struct __ctx_buff *ctx, const void *tuple,
 		case ACTION_CREATE:
 			if (unlikely(ct_entry_closing(entry))) {
 				ct_reset_closing(entry);
+				ct_reset_seen_flags(entry);
+				entry->seen_non_syn = false;
+
 				*monitor = ct_update_timeout(entry, is_tcp, dir, seen_flags);
 				return CT_REOPENED;
 			}
@@ -696,34 +705,6 @@ ipv4_ct_reverse_tuple_daddr(const struct ipv4_ct_tuple *rtuple)
 	return rtuple->saddr;
 }
 
-static __always_inline int ipv4_ct_extract_l4_ports(struct __ctx_buff *ctx,
-						    int off,
-						    enum ct_dir dir __maybe_unused,
-						    struct ipv4_ct_tuple *tuple,
-						    bool *has_l4_header __maybe_unused)
-{
-#ifdef ENABLE_IPV4_FRAGMENTS
-	void *data, *data_end;
-	struct iphdr *ip4;
-
-	/* This function is called from ct_lookup4(), which is sometimes called
-	 * after data has been invalidated (see handle_ipv4_from_lxc())
-	 */
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_CT_INVALID_HDR;
-
-	return ipv4_handle_fragmentation(ctx, ip4, off, dir,
-				    (struct ipv4_frag_l4ports *)&tuple->dport,
-				    has_l4_header);
-#else
-	/* load sport + dport into tuple */
-	if (ctx_load_bytes(ctx, off, &tuple->dport, 4) < 0)
-		return DROP_CT_INVALID_HDR;
-#endif
-
-	return CTX_ACT_OK;
-}
-
 static __always_inline int
 ct_extract_ports4(struct __ctx_buff *ctx, int off, enum ct_dir dir,
 		  struct ipv4_ct_tuple *tuple, bool *has_l4_header)
@@ -771,7 +752,8 @@ ct_extract_ports4(struct __ctx_buff *ctx, int off, enum ct_dir dir,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		err = ipv4_ct_extract_l4_ports(ctx, off, dir, tuple, has_l4_header);
+		err = ipv4_load_l4_ports(ctx, NULL, off, dir, &tuple->dport,
+					 has_l4_header);
 		if (err < 0)
 			return err;
 

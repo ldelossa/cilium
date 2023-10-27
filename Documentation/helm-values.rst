@@ -860,12 +860,12 @@
      - The maximum time the DNS proxy holds an allowed DNS response before sending it along. Responses are sent as soon as the datapath is updated with the new IP information.
      - string
      - ``"100ms"``
-   * - :spelling:ignore:`egressGateway`
+   * - :spelling:ignore:`egressGateway.enabled`
      - Enables egress gateway to redirect and SNAT the traffic that leaves the cluster.
-     - object
-     - ``{"enabled":false,"installRoutes":false,"reconciliationTriggerInterval":"1s"}``
+     - bool
+     - ``false``
    * - :spelling:ignore:`egressGateway.installRoutes`
-     - Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface
+     - Deprecated without a replacement necessary.
      - bool
      - ``false``
    * - :spelling:ignore:`egressGateway.reconciliationTriggerInterval`
@@ -1131,7 +1131,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:24091122211d39db39cec78cbf4adc90208716a6acc27c39a72ba325d7ff71ab","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.1-6eb501b537c53c76ab146d0fc868ec9357bd9593","useDigest":true}``
+     - ``{"digest":"sha256:2b590be37624547d638a578a3f31278d3be53a1a2649ba888a9f15771628521e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.2-ab187719b71b513150f30209569695adf16ec869","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1533,9 +1533,25 @@
      - bool
      - ``false``
    * - :spelling:ignore:`hubble.redact`
-     - Configures the redact options for Hubble. Example:    redact:     enabled: true     http:       urlQuery: true     kafka:       apiKey: false  You can specify the options from the helm CLI:    --set hubble.redact.enabled="true"   --set hubble.redact.http.urlQuery="true"   --set hubble.redact.kafka.apiKey="false"
+     - Enables redacting sensitive information present in Layer 7 flows.
      - object
-     - ``{"enabled":false,"http":{"urlQuery":false},"kafka":{"apiKey":false}}``
+     - ``{"enabled":false,"http":{"headers":{"allow":[],"deny":[]},"urlQuery":false},"kafka":{"apiKey":false}}``
+   * - :spelling:ignore:`hubble.redact.http.headers.allow`
+     - List of HTTP headers to allow: headers not matching will be redacted. Note: ``allow`` and ``deny`` lists cannot be used both at the same time, only one can be present. Example:   redact:     enabled: true     http:       headers:         allow:           - traceparent           - tracestate           - Cache-Control  You can specify the options from the helm CLI:   --set hubble.redact.enabled="true"   --set hubble.redact.http.headers.allow="traceparent,tracestate,Cache-Control"
+     - list
+     - ``[]``
+   * - :spelling:ignore:`hubble.redact.http.headers.deny`
+     - List of HTTP headers to deny: matching headers will be redacted. Note: ``allow`` and ``deny`` lists cannot be used both at the same time, only one can be present. Example:   redact:     enabled: true     http:       headers:         deny:           - Authorization           - Proxy-Authorization  You can specify the options from the helm CLI:   --set hubble.redact.enabled="true"   --set hubble.redact.http.headers.deny="Authorization,Proxy-Authorization"
+     - list
+     - ``[]``
+   * - :spelling:ignore:`hubble.redact.http.urlQuery`
+     - Enables redacting URL query (GET) parameters. Example:    redact:     enabled: true     http:       urlQuery: true  You can specify the options from the helm CLI:    --set hubble.redact.enabled="true"   --set hubble.redact.http.urlQuery="true"
+     - bool
+     - ``false``
+   * - :spelling:ignore:`hubble.redact.kafka.apiKey`
+     - Enables redacting Kafka's API key. Example:    redact:     enabled: true     kafka:       apiKey: true  You can specify the options from the helm CLI:    --set hubble.redact.enabled="true"   --set hubble.redact.kafka.apiKey="true"
+     - bool
+     - ``false``
    * - :spelling:ignore:`hubble.relay.affinity`
      - Affinity for hubble-replay
      - object
@@ -1964,6 +1980,10 @@
      - Default secret namespace for ingresses without .spec.tls[].secretName set.
      - string
      - ``nil``
+   * - :spelling:ignore:`ingressController.enableProxyProtocol`
+     - Enable proxy protocol for all Ingress listeners. Note that *only* Proxy protocol traffic will be accepted once this is enabled.
+     - bool
+     - ``false``
    * - :spelling:ignore:`ingressController.enabled`
      - Enable cilium ingress controller This will automatically set enable-envoy-config as well.
      - bool

@@ -23,6 +23,8 @@ IPs.
 LB IPAM is always enabled but dormant. The controller is awoken when the first
 IP Pool is added to the cluster.
 
+.. _lb_ipam_pools:
+
 Pools
 #####
 
@@ -38,9 +40,12 @@ A basic IP Pools with both an IPv4 and IPv6 range looks like this:
     metadata:
       name: "blue-pool"
     spec:
-      cidrs:
+      blocks:
       - cidr: "10.0.10.0/24"
       - cidr: "2004::0/64"
+      - start: "20.0.20.100"
+        stop: "20.0.20.200"
+      - start: "1.2.3.4"
 
 After adding the pool to the cluster, it appears like so.
 
@@ -50,11 +55,32 @@ After adding the pool to the cluster, it appears like so.
     NAME        DISABLED   CONFLICTING   IPS AVAILABLE   AGE
     blue-pool   false      False         65788           2s
 
-.. note::
-    The amount of available IPs in the pool is lower than the actual sum of all
-    usable IPs in the CIDRs because the allocation logic is limited to 65536 IPs
-    per CIDR. CIDRs containing more than 65536 IPs can be broken down into multiple
-    smaller CIDRs to achieve full utilization.
+CIDRs, Ranges and reserved IPs
+------------------------------
+
+An IP pool can have multiple blocks of IPs. A block can be specified with CIDR
+notation (<prefix>/<bits>) or a range notation with a start and stop IP. As
+pictured in :ref:`lb_ipam_pools`.
+
+CIDRs are often used to specify routable IP ranges. By convention, the first
+and the last IP of a CIDR are reserved. The first IP is the 
+"network address" and the last IP is the "broadcast address". In some networks
+these IPs are not usable and they do not always play well with all network 
+equipment. LB-IPAM will not assign these by default. Exceptions are /32 and 
+/31 IPv4 CIDRs and /128 and /127 IPv6 CIDRs since these only have 1 or 2 IPs 
+respectively.
+
+If you wish to use the first and last IPs of CIDRs, you can set the 
+``.spec.allowFirstLastIPs`` field to ``yes``.
+
+Since Ranges are typically used to indicate subsections of routable IP ranges,
+no IPs are reserved.
+
+.. warning::
+
+  In v1.15, ``.spec.allowFirstLastIPs`` defaults to ``no``. This will change to
+  ``yes`` in v1.16. Please set this field explicitly if you rely on the field
+  being set to ``no``.
 
 Service Selectors
 -----------------
@@ -70,7 +96,7 @@ The pool will allocate to any service if no service selector is specified.
     metadata:
       name: "blue-pool"
     spec:
-      cidrs:
+      blocks:
       - cidr: "20.0.10.0/24"
       serviceSelector:
         matchExpressions:
@@ -81,7 +107,7 @@ The pool will allocate to any service if no service selector is specified.
     metadata:
       name: "red-pool"
     spec:
-      cidrs:
+      blocks:
       - cidr: "20.0.10.0/24"
       serviceSelector:
         matchLabels:
@@ -106,7 +132,7 @@ For example:
     metadata:
       name: "blue-pool"
     spec:
-      cidrs:
+      blocks:
       - cidr: "20.0.10.0/24"
       serviceSelector:
         matchLabels:
@@ -170,7 +196,7 @@ an administrator to slowly drain pool or reserve a pool for future use.
     metadata:
       name: "blue-pool"
     spec:
-      cidrs:
+      blocks:
       - cidr: "20.0.10.0/24"
       disabled: true
 

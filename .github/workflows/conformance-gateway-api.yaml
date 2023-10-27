@@ -57,13 +57,13 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.10
+  cilium_cli_version: v0.15.11
   cilium_cli_ci_version:
   CILIUM_CLI_MODE: helm
   # renovate: datasource=github-releases depName=kubernetes-sigs/kind
   kind_version: v0.20.0
   kind_config: .github/kind-config.yaml
-  gateway_api_version: v0.8.1
+  gateway_api_version: v1.0.0-rc1
   metallb_version: 0.12.1
   timeout: 5m
 
@@ -93,7 +93,7 @@ jobs:
           conformance-profile: true
     steps:
       - name: Checkout context ref (trusted)
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
@@ -102,7 +102,7 @@ jobs:
         uses: ./.github/actions/set-env-variables
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@43678f6c7289bafa8850b9234d99581e0c5f8f09 # v0.15.10
+        uses: cilium/cilium-cli@951eb9108277f4ffeb86d047bd492b6b96a52542 # v0.15.11
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -135,7 +135,7 @@ jobs:
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
       - name: Checkout pull request branch (NOT TRUSTED)
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -169,12 +169,14 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/${{ matrix.crd-channel }}/gateway.networking.k8s.io_referencegrants.yaml
           ## TLSRoute is only available in experimental channel in v0.7.0
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/experimental/gateway.networking.k8s.io_grpcroutes.yaml
 
           # To make sure that Gateway API CRs are available
           kubectl wait --for condition=Established crd/gatewayclasses.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/gateways.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/httproutes.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/tlsroutes.gateway.networking.k8s.io --timeout=${{ env.timeout }}
+          kubectl wait --for condition=Established crd/grpcroutes.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/referencegrants.gateway.networking.k8s.io --timeout=${{ env.timeout }}
 
       - name: Install Cilium
@@ -213,18 +215,27 @@ jobs:
             --values metallb_values.yaml \
             --wait
 
+      - name: Run simple Gateway API GRPCRoute test (temporary till upstream conformance tests)
+        timeout-minutes: 10
+        run: |
+          kubectl apply -f examples/kubernetes/gateway/grpc-route.yaml
+          # Install grpcurl binary
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          
+          # Wait for the deployment
+          kubectl wait --for=condition=Available --all deployment --timeout=${{ env.timeout }}
+          lb=$(kubectl get services cilium-gateway-grpc -o json | jq '.status.loadBalancer.ingress[0].ip' | jq -r .)
+          grpcurl -plaintext -authority=my-grpc-service.foo.com $lb:80 yages.Echo/Ping
+          curl -s -v --fail $lb/yages.Echo/Ping \
+            -XPOST \
+            -H 'Host: my-grpc-service.foo.com' \
+            -H 'Content-Type: application/grpc-web-text' \
+            -H 'Accept: application/grpc-web-text' \
+            -d'AAAAAAA='
+
       - name: Run Gateway API conformance test
         timeout-minutes: 30
         run: |
-          cat << EOF | kubectl apply -f -
-          apiVersion: gateway.networking.k8s.io/v1beta1
-          kind: GatewayClass
-          metadata:
-            name: cilium
-          spec:
-            controllerName: io.cilium/gateway-controller
-          EOF
-          
           if [ ${{ matrix.conformance-profile }} == "true" ]; then
             GATEWAY_API_CONFORMANCE_TESTS=1 go test \
               -p 4 \

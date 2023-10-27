@@ -45,6 +45,7 @@ type LocatorPoolManagerParams struct {
 	Logger      logrus.FieldLogger
 	LC          hive.Lifecycle
 	JobRegistry job.Registry
+	Scope       cell.Scope
 
 	Clientset k8sClient.Clientset
 
@@ -87,6 +88,7 @@ func newLocPoolManager(p LocatorPoolManagerParams) (*LocatorPoolManager, error) 
 	}
 
 	jobGroup := p.JobRegistry.NewGroup(
+		p.Scope,
 		job.WithLogger(p.Logger),
 		job.WithPprofLabels(pprof.Labels("cell", "locatorpool")),
 	)
@@ -102,7 +104,7 @@ func newLocPoolManager(p LocatorPoolManagerParams) (*LocatorPoolManager, error) 
 	}
 
 	jobGroup.Add(
-		job.OneShot("locatorpool main", func(ctx context.Context) error {
+		job.OneShot("locatorpool main", func(ctx context.Context, health cell.HealthReporter) error {
 			lpm.Run(ctx)
 			return nil
 		}),

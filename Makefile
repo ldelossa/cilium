@@ -469,6 +469,10 @@ microk8s: check-microk8s ## Build cilium-dev docker image and import to microk8s
 kind: ## Create a kind cluster for Cilium development.
 	$(QUIET)SED=$(SED) ./contrib/scripts/kind.sh
 
+kind-egressgw: ## Create a kind cluster for egress gateway Cilium development.
+	$(QUIET)SED=$(SED) WORKERS=3 ./contrib/scripts/kind.sh
+	kubectl patch node kind-worker3 --type=json -p='[{"op":"add","path":"/metadata/labels/cilium.io~1no-schedule","value":"true"}]'
+
 kind-down: ## Destroy a kind cluster for Cilium development.
 	$(QUIET)./contrib/scripts/kind-down.sh
 
@@ -580,13 +584,12 @@ kind-install-cilium-clustermesh: kind-clustermesh-ready ## Install a local Ciliu
 	$(CILIUM_CLI) clustermesh status --context kind-clustermesh1 --wait
 	$(CILIUM_CLI) clustermesh status --context kind-clustermesh2 --wait
 
-KIND_CLUSTER_NAME ?= kind
+KIND_CLUSTER_NAME ?= $(shell kind get clusters -q | head -n1)
 
 .PHONY: kind-ready
 kind-ready:
-	@$(ECHO_CHECK) kind is ready...
-	@kind get clusters 2>&1 | grep "$(KIND_CLUSTER_NAME)" \
-		&& exit 0 || exit 1
+	@$(ECHO_CHECK) kind-ready
+	@if [ -n "$(shell kind get clusters -q)" ]; then echo "kind is ready"; else echo "kind not ready"; exit 1; fi
 
 $(eval $(call KIND_ENV,kind-build-image-agent))
 kind-build-image-agent: ## Build cilium-dev docker image
@@ -639,19 +642,19 @@ kind-install-cilium-fast: kind-ready ## Install a local Cilium version into the 
 
 .PHONY: build-cli
 build-cli: ## Build cilium cli binary
-	$(QUIET)$(MAKE) -C cilium-dbg
+	$(QUIET)$(MAKE) -C cilium-dbg GOOS=linux
 
 .PHONY: build-agent
 build-agent: ## Build cilium daemon binary
-	$(QUIET)$(MAKE) -C daemon
+	$(QUIET)$(MAKE) -C daemon GOOS=linux
 
 .PHONY: build-operator
 build-operator: ## Build cilium operator binary
-	$(QUIET)$(MAKE) -C operator cilium-operator-generic
+	$(QUIET)$(MAKE) -C operator cilium-operator-generic GOOS=linux
 
 .PHONY: build-clustermesh-apiserver
 build-clustermesh-apiserver: ## Build cilium clustermesh-apiserver binary
-	$(QUIET)$(MAKE) -C clustermesh-apiserver
+	$(QUIET)$(MAKE) -C clustermesh-apiserver  GOOS=linux
 
 .PHONY: kind-image-fast-agent
 kind-image-fast-agent: kind-ready build-cli build-agent ## Build cilium cli and daemon binaries. Copy the bins and bpf files to kind nodes.
@@ -732,6 +735,25 @@ kind-install-cilium: kind-ready ## Install a local Cilium version into the clust
 	$(CILIUM_CLI) install \
 		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
 		$(KIND_VALUES_FILES) \
+		--version= \
+		>/dev/null 2>&1 &
+
+
+.PHONY: kind-egressgw-install-cilium
+kind-egressgw-install-cilium: kind-ready ## Install a local Cilium version into the cluster.
+	@echo "  INSTALL cilium"
+	# cilium-cli doesn't support idempotent installs, so we uninstall and
+	# reinstall here. https://github.com/cilium/cilium-cli/issues/205
+	-@$(CILIUM_CLI) uninstall >/dev/null 2>&1 || true
+
+	# cilium-cli's --wait flag doesn't work, so we just force it to run
+	# in the background instead and wait for the resources to be available.
+	# https://github.com/cilium/cilium-cli/issues/1070
+	$(CILIUM_CLI) install \
+		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
+		$(KIND_VALUES_FILES) \
+		--helm-values=$(ROOT_DIR)/contrib/testing/kind-egressgw-values.yaml \
+		--nodes-without-cilium=kind-worker3 \
 		--version= \
 		>/dev/null 2>&1 &
 
