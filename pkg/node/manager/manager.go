@@ -11,10 +11,11 @@ import (
 	"net/netip"
 	"time"
 
+	"slices"
+
 	"github.com/cilium/workerpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 
 	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/controller"
@@ -28,7 +29,6 @@ import (
 	"github.com/cilium/cilium/pkg/ipcache"
 	ipcacheTypes "github.com/cilium/cilium/pkg/ipcache/types"
 	"github.com/cilium/cilium/pkg/labels"
-	cidrlabels "github.com/cilium/cilium/pkg/labels/cidr"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/metrics/metric"
@@ -130,8 +130,8 @@ type manager struct {
 	// Manager.
 	controllerManager *controller.Manager
 
-	// healthReporter reports on the current health status of the node manager module.
-	healthReporter cell.HealthReporter
+	// healthScope reports on the current health status of the node manager module.
+	healthScope cell.Scope
 }
 
 // Subscribe subscribes the given node handler to node events.
@@ -239,7 +239,7 @@ func NewNodeMetrics() *nodeMetrics {
 }
 
 // New returns a new node manager
-func New(c Configuration, ipCache IPCache, nodeMetrics *nodeMetrics, healthReporter cell.HealthReporter) (*manager, error) {
+func New(c Configuration, ipCache IPCache, nodeMetrics *nodeMetrics, healthScope cell.Scope) (*manager, error) {
 	m := &manager{
 		nodes:             map[nodeTypes.Identity]*nodeEntry{},
 		conf:              c,
@@ -247,7 +247,7 @@ func New(c Configuration, ipCache IPCache, nodeMetrics *nodeMetrics, healthRepor
 		nodeHandlers:      map[datapath.NodeHandler]struct{}{},
 		ipcache:           ipCache,
 		metrics:           nodeMetrics,
-		healthReporter:    healthReporter,
+		healthScope:       healthScope,
 	}
 
 	return m, nil
@@ -348,10 +348,11 @@ func (m *manager) backgroundSync(ctx context.Context) error {
 			m.metrics.DatapathValidations.Inc()
 		}
 
+		hr := cell.GetHealthReporter(m.healthScope, "background-sync")
 		if errs != nil {
-			m.healthReporter.Degraded("Failed to apply node validation", errs)
+			hr.Degraded("Failed to apply node validation", errs)
 		} else {
-			m.healthReporter.OK("Node validation successful")
+			hr.OK("Node validation successful")
 		}
 
 		select {
@@ -416,10 +417,14 @@ func (m *manager) nodeIdentityLabels(n nodeTypes.Node) (nodeLabels labels.Labels
 				for _, address := range n.IPAddresses {
 					addr, ok := ip.AddrFromIP(address.IP)
 					if ok {
-						prefix, err := addr.Prefix(addr.BitLen())
-						if err == nil {
-							cidrLabels := cidrlabels.GetCIDRLabels(prefix)
-							nodeLabels.MergeLabels(cidrLabels)
+						bitLen := addr.BitLen()
+						if option.Config.EnableIPv4 && bitLen == net.IPv4len*8 ||
+							option.Config.EnableIPv6 && bitLen == net.IPv6len*8 {
+							prefix, err := addr.Prefix(bitLen)
+							if err == nil {
+								cidrLabels := labels.GetCIDRLabels(prefix)
+								nodeLabels.MergeLabels(cidrLabels)
+							}
 						}
 					}
 				}
@@ -498,7 +503,7 @@ func (m *manager) NodeUpdated(n nodeTypes.Node) {
 		// Add the CIDR labels for this node, if we allow selecting nodes by CIDR
 		if option.Config.PolicyCIDRMatchesNodes() {
 			lbls = labels.NewFrom(nodeLabels)
-			lbls.MergeLabels(cidrlabels.GetCIDRLabels(prefix))
+			lbls.MergeLabels(labels.GetCIDRLabels(prefix))
 		}
 
 		// Always associate the prefix with metadata, even though this may not

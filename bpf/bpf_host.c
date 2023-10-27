@@ -62,8 +62,7 @@ static __always_inline bool allow_vlan(__u32 __maybe_unused ifindex, __u32 __may
 }
 
 #if defined(ENABLE_IPV4) || defined(ENABLE_IPV6)
-static __always_inline int rewrite_dmac_to_host(struct __ctx_buff *ctx,
-						__u32 src_sec_identity)
+static __always_inline int rewrite_dmac_to_host(struct __ctx_buff *ctx)
 {
 	/* When attached to cilium_host, we rewrite the DMAC to the mac of
 	 * cilium_host (peer) to ensure the packet is being considered to be
@@ -73,8 +72,7 @@ static __always_inline int rewrite_dmac_to_host(struct __ctx_buff *ctx,
 
 	/* Rewrite to destination MAC of cilium_net (remote peer) */
 	if (eth_store_daddr(ctx, (__u8 *) &cilium_net_mac.addr, 0) < 0)
-		return send_drop_notify_error(ctx, src_sec_identity, DROP_WRITE_ERROR,
-					      CTX_ACT_OK, METRIC_INGRESS);
+		return DROP_WRITE_ERROR;
 
 	return CTX_ACT_OK;
 }
@@ -293,8 +291,7 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 		/* If we are attached to cilium_host at egress, this will
 		 * rewrite the destination MAC address to the MAC of cilium_net.
 		 */
-		ret = rewrite_dmac_to_host(ctx, secctx);
-		/* DIRECT PACKET READ INVALID */
+		ret = rewrite_dmac_to_host(ctx);
 		if (IS_ERR(ret))
 			return ret;
 
@@ -672,8 +669,7 @@ handle_ipv4_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 		/* If we are attached to cilium_host at egress, this will
 		 * rewrite the destination MAC address to the MAC of cilium_net.
 		 */
-		ret = rewrite_dmac_to_host(ctx, secctx);
-		/* DIRECT PACKET READ INVALID */
+		ret = rewrite_dmac_to_host(ctx);
 		if (IS_ERR(ret))
 			return ret;
 
@@ -1247,7 +1243,7 @@ handle_srv6(struct __ctx_buff *ctx)
 __section_entry
 int cil_from_netdev(struct __ctx_buff *ctx)
 {
-	__u32 __maybe_unused src_id = 0;
+	__u32 src_id = 0;
 
 #ifdef ENABLE_NODEPORT_ACCELERATION
 	__u32 flags = ctx_get_xfer(ctx, XFER_FLAGS);
@@ -1284,8 +1280,8 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 #ifdef ENABLE_HIGH_SCALE_IPCACHE
 	ret = decapsulate_overlay(ctx, &src_id);
 	if (IS_ERR(ret))
-		return send_drop_notify_error(ctx, src_id, ret, CTX_ACT_DROP,
-				       METRIC_INGRESS);
+		goto drop_err;
+
 	if (ret == CTX_ACT_REDIRECT)
 		return ret;
 #endif /* ENABLE_HIGH_SCALE_IPCACHE */
@@ -1293,7 +1289,7 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 	return handle_netdev(ctx, false);
 
 drop_err:
-	return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP, METRIC_INGRESS);
+	return send_drop_notify_error(ctx, src_id, ret, CTX_ACT_DROP, METRIC_INGRESS);
 }
 
 /*

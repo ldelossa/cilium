@@ -745,6 +745,9 @@ ingressController:
   # Incoming traffic to http listener will return 308 http error code with respective location in header.
   enforceHttps: true
 
+  # -- Enable proxy protocol for all Ingress listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
+  enableProxyProtocol: false
+
   # -- IngressLBAnnotations are the annotation prefixes, which are used to filter annotations to propagate
   # from Ingress to the Load Balancer service
   ingressLBAnnotationPrefixes: ['service.beta.kubernetes.io', 'service.kubernetes.io', 'cloud.google.com']
@@ -1083,28 +1086,67 @@ hubble:
   # -- Unix domain socket path to listen to when Hubble is enabled.
   socketPath: /var/run/cilium/hubble.sock
 
-  # -- Configures the redact options for Hubble.
-  # Example:
-  #
-  #   redact:
-  #     enabled: true
-  #     http:
-  #       urlQuery: true
-  #     kafka:
-  #       apiKey: false
-  #
-  # You can specify the options from the helm CLI:
-  #
-  #   --set hubble.redact.enabled="true"
-  #   --set hubble.redact.http.urlQuery="true"
-  #   --set hubble.redact.kafka.apiKey="false"
-  #
+  # -- Enables redacting sensitive information present in Layer 7 flows.
   redact:
     enabled: false
     http:
-        urlQuery: false
+      # -- Enables redacting URL query (GET) parameters.
+      # Example:
+      #
+      #   redact:
+      #     enabled: true
+      #     http:
+      #       urlQuery: true
+      #
+      # You can specify the options from the helm CLI:
+      #
+      #   --set hubble.redact.enabled="true"
+      #   --set hubble.redact.http.urlQuery="true"
+      urlQuery: false
+      headers:
+        # -- List of HTTP headers to allow: headers not matching will be redacted. Note: `allow` and `deny` lists cannot be used both at the same time, only one can be present.
+        # Example:
+        #   redact:
+        #     enabled: true
+        #     http:
+        #       headers:
+        #         allow:
+        #           - traceparent
+        #           - tracestate
+        #           - Cache-Control
+        #
+        # You can specify the options from the helm CLI:
+        #   --set hubble.redact.enabled="true"
+        #   --set hubble.redact.http.headers.allow="traceparent,tracestate,Cache-Control"
+        allow: []
+        # -- List of HTTP headers to deny: matching headers will be redacted. Note: `allow` and `deny` lists cannot be used both at the same time, only one can be present.
+        # Example:
+        #   redact:
+        #     enabled: true
+        #     http:
+        #       headers:
+        #         deny:
+        #           - Authorization
+        #           - Proxy-Authorization
+        #
+        # You can specify the options from the helm CLI:
+        #   --set hubble.redact.enabled="true"
+        #   --set hubble.redact.http.headers.deny="Authorization,Proxy-Authorization"
+        deny: []
     kafka:
-        apiKey: false
+      # -- Enables redacting Kafka's API key.
+      # Example:
+      #
+      #   redact:
+      #     enabled: true
+      #     kafka:
+      #       apiKey: true
+      #
+      # You can specify the options from the helm CLI:
+      #
+      #   --set hubble.redact.enabled="true"
+      #   --set hubble.redact.kafka.apiKey="true"
+      apiKey: false
 
   # -- An additional address for Hubble to listen to.
   # Set this field ":4244" if you are enabling Hubble Relay, as it assumes that
@@ -1729,12 +1771,11 @@ enableIPv4BIGTCP: false
 # -- Enables IPv6 BIG TCP support which increases maximum IPv6 GSO/GRO limits for nodes and pods
 enableIPv6BIGTCP: false
 
-# -- Enables egress gateway to redirect and SNAT the traffic that leaves the
-# cluster.
 egressGateway:
+  # -- Enables egress gateway to redirect and SNAT the traffic that leaves the
+  # cluster.
   enabled: false
-  # -- Install egress gateway IP rules and routes in order to properly steer
-  # egress gateway traffic to the correct ENI interface
+  # -- Deprecated without a replacement necessary.
   installRoutes: false
   # -- Time between triggers of egress gateway state reconciliations
   reconciliationTriggerInterval: 1s
@@ -1964,9 +2005,9 @@ envoy:
   image:
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.27.1-6eb501b537c53c76ab146d0fc868ec9357bd9593"
+    tag: "v1.27.2-ab187719b71b513150f30209569695adf16ec869"
     pullPolicy: "Always"
-    digest: "sha256:24091122211d39db39cec78cbf4adc90208716a6acc27c39a72ba325d7ff71ab"
+    digest: "sha256:2b590be37624547d638a578a3f31278d3be53a1a2649ba888a9f15771628521e"
     useDigest: true
 
   # -- Additional containers added to the cilium Envoy DaemonSet.
@@ -3282,9 +3323,9 @@ authentication:
             create: true
             name: spire-agent
           # -- SPIRE agent annotations
-          annotations: { }
+          annotations: {}
           # -- SPIRE agent labels
-          labels: { }
+          labels: {}
           # -- SPIRE Workload Attestor kubelet verification.
           skipKubeletVerification: true
           # -- SPIRE agent tolerations configuration

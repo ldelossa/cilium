@@ -11,7 +11,10 @@ import (
 	envoy_config_core_v3 "github.com/cilium/proxy/go/envoy/config/core/v3"
 	envoy_config_listener "github.com/cilium/proxy/go/envoy/config/listener/v3"
 	envoy_config_route_v3 "github.com/cilium/proxy/go/envoy/config/route/v3"
+	grpc_stats_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/http/grpc_stats/v3"
+	grpc_web_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/http/grpc_web/v3"
 	envoy_extensions_filters_http_router_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/http/router/v3"
+	envoy_extensions_listener_proxy_protocol_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/listener/proxy_protocol/v3"
 	envoy_extensions_listener_tls_inspector_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/listener/tls_inspector/v3"
 	http_connection_manager_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_extensions_transport_sockets_tls_v3 "github.com/cilium/proxy/go/envoy/extensions/transport_sockets/tls/v3"
@@ -154,6 +157,21 @@ func toListenerFilter(name string) *envoy_config_listener.Filter {
 				SkipXffAppend:    false,
 				HttpFilters: []*http_connection_manager_v3.HttpFilter{
 					{
+						Name: "envoy.filters.http.grpc_web",
+						ConfigType: &http_connection_manager_v3.HttpFilter_TypedConfig{
+							TypedConfig: toAny(&grpc_web_v3.GrpcWeb{}),
+						},
+					},
+					{
+						Name: "envoy.filters.http.grpc_stats",
+						ConfigType: &http_connection_manager_v3.HttpFilter_TypedConfig{
+							TypedConfig: toAny(&grpc_stats_v3.FilterConfig{
+								EmitFilterState:     true,
+								EnableUpstreamStats: true,
+							}),
+						},
+					},
+					{
 						Name: "envoy.filters.http.router",
 						ConfigType: &http_connection_manager_v3.HttpFilter_TypedConfig{
 							TypedConfig: toAny(&envoy_extensions_filters_http_router_v3.Router{}),
@@ -202,21 +220,32 @@ func toInsecureListenerFilterChain() *envoy_config_listener.FilterChain {
 	}
 }
 
-func toHTTPListenerXDSResource() *anypb.Any {
+func toHTTPListenerXDSResource(proxyProtocol bool) *anypb.Any {
+	listenerFilters := []*envoy_config_listener.ListenerFilter{
+		{
+			Name: "envoy.filters.listener.tls_inspector",
+			ConfigType: &envoy_config_listener.ListenerFilter_TypedConfig{
+				TypedConfig: toAny(&envoy_extensions_listener_tls_inspector_v3.TlsInspector{}),
+			},
+		},
+	}
+	if proxyProtocol {
+		proxyListener := &envoy_config_listener.ListenerFilter{
+			Name: "envoy.filters.listener.proxy_protocol",
+			ConfigType: &envoy_config_listener.ListenerFilter_TypedConfig{
+				TypedConfig: toAny(&envoy_extensions_listener_proxy_protocol_v3.ProxyProtocol{}),
+			},
+		}
+		listenerFilters = append([]*envoy_config_listener.ListenerFilter{proxyListener}, listenerFilters...)
+	}
+
 	return toAny(&envoy_config_listener.Listener{
 		Name: "listener",
 		FilterChains: []*envoy_config_listener.FilterChain{
 			toInsecureListenerFilterChain(),
 		},
-		ListenerFilters: []*envoy_config_listener.ListenerFilter{
-			{
-				Name: "envoy.filters.listener.tls_inspector",
-				ConfigType: &envoy_config_listener.ListenerFilter_TypedConfig{
-					TypedConfig: toAny(&envoy_extensions_listener_tls_inspector_v3.TlsInspector{}),
-				},
-			},
-		},
-		SocketOptions: socketOptions,
+		ListenerFilters: listenerFilters,
+		SocketOptions:   socketOptions,
 	})
 }
 
@@ -297,7 +326,7 @@ var defaultBackendListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 			},
 		},
 		Resources: []ciliumv2.XDSResource{
-			{Any: toHTTPListenerXDSResource()},
+			{Any: toHTTPListenerXDSResource(false)},
 			{
 				Any: toAny(&envoy_config_route_v3.RouteConfiguration{
 					Name: "listener-insecure",
@@ -762,7 +791,7 @@ var pathRulesListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 			},
 		},
 		Resources: []ciliumv2.XDSResource{
-			{Any: toHTTPListenerXDSResource()},
+			{Any: toHTTPListenerXDSResource(false)},
 			{
 				Any: toAny(&envoy_config_route_v3.RouteConfiguration{
 					Name: "listener-insecure",
@@ -864,6 +893,89 @@ var pathRulesListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 			{Any: toAny(toEnvoyCluster("random-namespace", "foo-exact", "8080"))},
 			{Any: toAny(toEnvoyCluster("random-namespace", "foo-prefix", "8080"))},
 			{Any: toAny(toEnvoyCluster("random-namespace", "foo-slash-exact", "8080"))},
+		},
+	},
+}
+
+// Conformance/ProxyProtocol test
+var proxyProtocolListeners = []model.HTTPListener{
+	{
+		Sources: []model.FullyQualifiedResource{
+			{
+				Name:      "load-balancing",
+				Namespace: "random-namespace",
+				Version:   "networking.k8s.io/v1",
+				Kind:      "Ingress",
+			},
+		},
+		Port:     80,
+		Hostname: "*",
+		Routes: []model.HTTPRoute{
+			{
+				Backends: []model.Backend{
+					{
+						Name:      "default-backend",
+						Namespace: "random-namespace",
+						Port: &model.BackendPort{
+							Port: 8080,
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+var proxyProtoListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "cilium-ingress-random-namespace-load-balancing",
+		Namespace: "random-namespace",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "networking.k8s.io/v1",
+				Kind:       "Ingress",
+				Name:       "load-balancing",
+			},
+		},
+	},
+	Spec: ciliumv2.CiliumEnvoyConfigSpec{
+		Services: []*ciliumv2.ServiceListener{
+			{
+				Name:      "cilium-ingress-load-balancing",
+				Namespace: "random-namespace",
+			},
+		},
+		BackendServices: []*ciliumv2.Service{
+			{
+				Name:      "default-backend",
+				Namespace: "random-namespace",
+				Ports:     []string{"8080"},
+			},
+		},
+		Resources: []ciliumv2.XDSResource{
+			{Any: toHTTPListenerXDSResource(true)},
+			{
+				Any: toAny(&envoy_config_route_v3.RouteConfiguration{
+					Name: "listener-insecure",
+					VirtualHosts: []*envoy_config_route_v3.VirtualHost{
+						{
+							Name:    "*",
+							Domains: []string{"*"},
+							Routes: []*envoy_config_route_v3.Route{
+								{
+									Match: &envoy_config_route_v3.RouteMatch{
+										PathSpecifier: &envoy_config_route_v3.RouteMatch_Prefix{
+											Prefix: "/",
+										},
+									},
+									Action: toRouteAction("random-namespace", "default-backend", "8080"),
+								},
+							},
+						},
+					},
+				}),
+			},
+			{Any: toAny(toEnvoyCluster("random-namespace", "default-backend", "8080"))},
 		},
 	},
 }

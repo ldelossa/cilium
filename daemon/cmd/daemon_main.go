@@ -1009,6 +1009,12 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.HubbleRedactKafkaApiKey, defaults.HubbleRedactKafkaApiKey, "Hubble redact Kafka API key from flows")
 	option.BindEnv(vp, option.HubbleRedactKafkaApiKey)
 
+	flags.StringSlice(option.HubbleRedactHttpHeadersAllow, []string{}, "HTTP headers to keep visible in flows")
+	option.BindEnv(vp, option.HubbleRedactHttpHeadersAllow)
+
+	flags.StringSlice(option.HubbleRedactHttpHeadersDeny, []string{}, "HTTP headers to redact from flows")
+	option.BindEnv(vp, option.HubbleRedactHttpHeadersDeny)
+
 	flags.StringSlice(option.DisableIptablesFeederRules, []string{}, "Chains to ignore when installing feeder rules.")
 	option.BindEnv(vp, option.DisableIptablesFeederRules)
 
@@ -1514,9 +1520,6 @@ func initEnv(vp *viper.Viper) {
 		if option.Config.EnableIPSec {
 			log.Fatalf("Cannot specify IPAM mode %s with %s.", option.Config.IPAM, option.EnableIPSecName)
 		}
-		if option.Config.IdentityAllocationMode != option.IdentityAllocationModeCRD {
-			log.Fatalf("IPAM mode %s does not support %s=%s", option.Config.IPAM, option.IdentityAllocationMode, option.Config.IdentityAllocationMode)
-		}
 	}
 
 	if option.Config.InstallNoConntrackIptRules {
@@ -1665,7 +1668,7 @@ type daemonParams struct {
 	AuthManager          *auth.AuthManager
 	Settings             cellSettings
 	HealthProvider       cell.Health
-	HealthReporter       cell.HealthReporter
+	HealthScope          cell.Scope
 	DeviceManager        *linuxdatapath.DeviceManager `optional:"true"`
 	// Grab the GC object so that we can start the CT/NAT map garbage collection.
 	// This is currently necessary because these maps have not yet been modularized,
