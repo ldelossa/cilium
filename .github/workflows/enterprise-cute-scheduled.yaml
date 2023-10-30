@@ -27,6 +27,8 @@ jobs:
           { repo: postfinance, dir: ., region: eu-west-1 },
           { repo: nationwide, dir: ., region: eu-central-1 },
           { repo: motorola-solutions, dir: ., region: eu-west-3 },
+          { repo: swiss-post, dir: aws-eks-vpc-cni-chaining, region: ap-south-1 },
+          { repo: swiss-post, dir: azure-aks-byocni, region: eastus2 },
         ]
     runs-on: ubuntu-latest
     steps:

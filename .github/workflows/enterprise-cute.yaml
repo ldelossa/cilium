@@ -29,6 +29,8 @@ env:
   regions: '{"aws": "us-west-2", "azure": "westus2", "gcp": "us-west2-a"}'
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
+  # renovate: datasource=github-releases depName=isovalent/cilium-cli-releases
+  cilium_cli_version: v0.15.11-cee.1
 
 jobs:
   cute-ci:
@@ -142,7 +144,7 @@ jobs:
 
       - name: Install CE CLI
         run: |
-          curl -LO https://github.com/isovalent/cilium-cli-releases/releases/download/v0.15.8-cee.1/cilium-linux-amd64.tar.gz
+          curl -LO https://github.com/isovalent/cilium-cli-releases/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
