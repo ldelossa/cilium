@@ -22,6 +22,10 @@ on:
         description: "Arbitrary argument that indicates if CuTE should run on top of CE stable branch."
         required: true
         default: 'false'
+      helm-override-file:
+        description: "Helm override Cilium values file."
+        required: false
+        default: ''
 
 env:
   helm_registry: quay.io
@@ -141,6 +145,7 @@ jobs:
           echo "Region: ${{ steps.cute_props.outputs.region }}"
           echo "CE branch: ${{ steps.cute_props.outputs.ce_branch }}"
           echo "CE umbrella chart: ${{ steps.cute_props.outputs.use_ce_chart }}"
+          echo "Helm override file: ${{ inputs.helm-override-file }}"
 
       - name: Install CE CLI
         run: |
@@ -295,7 +300,9 @@ jobs:
           cilium_helm_version_1="$HELM_CHART_VERSION"
           cilium_helm_version_2="$HELM_CHART_VERSION"
           EOF
-
+          if [[ "${{ inputs.helm-override-file }}" != "" ]]; then
+            echo "cilium_helm_values_override_file_path=\"${{ inputs.helm-override-file }}\"" >> terraform.tfvars
+          fi
           if [[ "$ARM_SUBSCRIPTION_ID" != "" ]]; then
             echo "subscription_id=\"$ARM_SUBSCRIPTION_ID\"" >> terraform.tfvars
           fi
