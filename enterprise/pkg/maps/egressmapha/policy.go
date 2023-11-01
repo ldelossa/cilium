@@ -92,7 +92,7 @@ func createPolicyMapFromDaemonConfig(in struct {
 		"EGRESS_GW_HA_POLICY_MAP_SIZE": fmt.Sprint(in.EgressGatewayHAPolicyMapMax),
 	}
 
-	if !in.EgressGatewayHAEnabled() {
+	if !in.EnableIPv4EgressGatewayHA {
 		return
 	}
 

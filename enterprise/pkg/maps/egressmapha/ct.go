@@ -69,7 +69,7 @@ func createCtMapFromDaemonConfig(in struct {
 		"EGRESS_GW_HA_CT_MAP_SIZE": fmt.Sprint(MaxCtEntries),
 	}
 
-	if !in.EgressGatewayHAEnabled() {
+	if !in.EnableIPv4EgressGatewayHA {
 		return
 	}
 

@@ -195,7 +195,7 @@ func NewEgressGatewayManager(p Params) (out struct {
 }, err error) {
 	dcfg := p.DaemonConfig
 
-	if !dcfg.EgressGatewayHAEnabled() {
+	if !dcfg.EnableIPv4EgressGatewayHA {
 		return out, nil
 	}
 
