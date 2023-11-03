@@ -66,6 +66,16 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": "CVE-2023-39325",
+      "products": [
+        "cilium:v1.14-ce",
+        "cilium:v1.13-ce",
+        "cilium:v1.12-ce"
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
