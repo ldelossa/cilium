@@ -213,12 +213,13 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 
 	policyMap := k.manager.policyMap
 	egressGatewayManager := k.manager
+	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
 
 	k.policies.sync(c)
 	k.nodes.sync(c)
 	k.endpoints.sync(c)
 
-	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	node1 := newCiliumNode(node1, node1IP, nodeGroup1Labels)
 	k.nodes.process(c, resource.Event[*cilium_api_v2.CiliumNode]{
@@ -313,7 +314,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Test excluded CIDRs by adding one to policy-1
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-1",
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		excludedCIDRs:   []string{excludedCIDR1},
@@ -329,7 +331,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Add a second excluded CIDR to policy-1
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-1",
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		excludedCIDRs:   []string{excludedCIDR1, excludedCIDR2},
@@ -346,7 +349,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Remove the first excluded CIDR from policy-1
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-1",
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		excludedCIDRs:   []string{excludedCIDR2},
@@ -362,7 +366,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Remove the second excluded CIDR
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-1",
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup1Labels,
@@ -376,7 +381,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	})
 
 	// Test matching no gateway
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
+	addPolicy(c, k.policies, &policyParams{
+		name:            "policy-1",
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroupNotFoundLabels,
