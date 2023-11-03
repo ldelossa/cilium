@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/cilium/dns"
 	"github.com/go-openapi/runtime/middleware"
@@ -43,6 +42,7 @@ import (
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/proxy/logger"
 	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
 
@@ -378,7 +378,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 		return fmt.Errorf("could not initialize regex LRU cache: %w", err)
 	}
 	proxy.DefaultDNSProxy, err = dnsproxy.StartDNSProxy("", port, option.Config.ToFQDNsEnableDNSCompression,
-		option.Config.DNSMaxIPsPerRestoredRule, d.lookupEPByIP, d.LookupSecIDByIP, d.lookupIPsBySecID,
+		option.Config.DNSMaxIPsPerRestoredRule, d.lookupEPByIP, d.ipcache.LookupSecIDByIP, d.lookupIPsBySecID,
 		d.notifyOnDNSMsg, option.Config.DNSProxyConcurrencyLimit, option.Config.DNSProxyConcurrencyProcessingGracePeriod)
 	if err == nil {
 		// Increase the ProxyPort reference count so that it will never get released.
@@ -425,14 +425,10 @@ func (d *Daemon) updateSelectors(ctx context.Context, selectorWithIPsToUpdate ma
 }
 
 // lookupEPByIP returns the endpoint that this IP belongs to
-func (d *Daemon) lookupEPByIP(endpointIP net.IP) (endpoint *endpoint.Endpoint, err error) {
-	endpointAddr, ok := ippkg.AddrFromIP(endpointIP)
-	if !ok {
-		return nil, fmt.Errorf("invalid IP %s for endpoint lookup", endpointIP)
-	}
+func (d *Daemon) lookupEPByIP(endpointAddr netip.Addr) (endpoint *endpoint.Endpoint, err error) {
 	e := d.endpointManager.LookupIP(endpointAddr)
 	if e == nil {
-		return nil, fmt.Errorf("Cannot find endpoint with IP %s", endpointIP.String())
+		return nil, fmt.Errorf("cannot find endpoint with IP %s", endpointAddr)
 	}
 
 	return e, nil

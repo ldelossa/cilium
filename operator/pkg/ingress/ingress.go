@@ -101,7 +101,6 @@ type Controller struct {
 
 // NewController returns a controller for ingress objects having ingressClassName as cilium
 func NewController(
-	ctx context.Context,
 	clientset k8sClient.Clientset,
 	ingressClasses resource.Resource[*slim_networkingv1.IngressClass],
 	options ...Option,
@@ -162,46 +161,46 @@ func NewController(
 		nil,
 	)
 
-	ingressClassManager := newIngressClassManager(ctx, ic.queue, ingressClasses)
-	ic.ingressClassManager = ingressClassManager
-
-	serviceManager, err := newServiceManager(clientset, ic.queue, opts.MaxRetries)
-	if err != nil {
-		return nil, err
-	}
-	ic.serviceManager = serviceManager
-
-	endpointManager, err := newEndpointManager(clientset, opts.MaxRetries)
-	if err != nil {
-		return nil, err
-	}
-	ic.endpointManager = endpointManager
-
-	envoyConfigManager, err := newEnvoyConfigManager(clientset, opts.MaxRetries)
-	if err != nil {
-		return nil, err
-	}
-	ic.envoyConfigManager = envoyConfigManager
+	ic.ingressClassManager = newIngressClassManager(ic.queue, ingressClasses)
+	ic.serviceManager = newServiceManager(clientset, ic.queue, opts.MaxRetries)
+	ic.endpointManager = newEndpointManager(clientset, opts.MaxRetries)
+	ic.envoyConfigManager = newEnvoyConfigManager(clientset, opts.MaxRetries)
 
 	ic.secretManager = newNoOpsSecretManager()
 	if ic.enabledSecretsSync {
-		secretManager, err := newSyncSecretsManager(clientset, opts.SecretsNamespace, opts.MaxRetries, ic.defaultSecretNamespace, ic.defaultSecretName)
-		if err != nil {
-			return nil, err
-		}
-		ic.secretManager = secretManager
+		ic.secretManager = newSyncSecretsManager(clientset, opts.SecretsNamespace, opts.MaxRetries, ic.defaultSecretNamespace, ic.defaultSecretName)
 	}
 	ic.sharedLBStatus = ic.retrieveSharedLBServiceStatus()
 
 	return ic, nil
 }
 
-// Run kicks off the controlled loop
+// Run starts the informers and kicks off the controlled loop
 func (ic *Controller) Run(ctx context.Context) error {
 	defer ic.queue.ShutDown()
 
-	go ic.ingressClassManager.Run(ctx)
+	go ic.serviceManager.informer.Run(wait.NeverStop)
+	if !cache.WaitForCacheSync(wait.NeverStop, ic.serviceManager.informer.HasSynced) {
+		return fmt.Errorf("unable to sync service")
+	}
+	log.WithField("existing-services", ic.serviceManager.store.ListKeys()).Debug("services synced")
 
+	go ic.endpointManager.informer.Run(wait.NeverStop)
+	if !cache.WaitForCacheSync(wait.NeverStop, ic.endpointManager.informer.HasSynced) {
+		return fmt.Errorf("unable to sync ingress endpoint")
+	}
+
+	go ic.envoyConfigManager.informer.Run(wait.NeverStop)
+	if !cache.WaitForCacheSync(wait.NeverStop, ic.envoyConfigManager.informer.HasSynced) {
+		return fmt.Errorf("unable to sync envoy configs")
+	}
+
+	go ic.secretManager.RunInformer(wait.NeverStop)
+	if !ic.secretManager.WaitForCacheSync() {
+		return fmt.Errorf("unable to sync secrets")
+	}
+
+	go ic.ingressClassManager.Run(ctx)
 	// This should only return an error if the context is canceled.
 	if err := ic.ingressClassManager.WaitForSync(ctx); err != nil {
 		return err
@@ -589,11 +588,20 @@ func (ic *Controller) regenerate(ing *slim_networkingv1.Ingress, forceShared boo
 		logfields.Ingress:      ing.GetName(),
 	})
 
+	// Used for logging the effective LB mode for this Ingress.
+	var loadbalancerMode string = "shared"
+
 	var translator translation.Translator
 	m := &model.Model{}
 	if !forceShared && ic.isEffectiveLoadbalancerModeDedicated(ing) {
+		loadbalancerMode = "dedicated"
 		translator = ic.dedicatedTranslator
-		m.HTTP = ingestion.Ingress(*ing, ic.defaultSecretNamespace, ic.defaultSecretName)
+		if annotations.GetAnnotationTLSPassthroughEnabled(ing) {
+			m.TLS = append(m.TLS, ingestion.IngressPassthrough(*ing, ic.defaultSecretNamespace, ic.defaultSecretName)...)
+		} else {
+			m.HTTP = append(m.HTTP, ingestion.Ingress(*ing, ic.defaultSecretNamespace, ic.defaultSecretName)...)
+		}
+
 	} else {
 		translator = ic.sharedTranslator
 		for _, k := range ic.ingressStore.ListKeys() {
@@ -602,13 +610,18 @@ func (ic *Controller) regenerate(ing *slim_networkingv1.Ingress, forceShared boo
 				ing.GetDeletionTimestamp() != nil {
 				continue
 			}
-			m.HTTP = append(m.HTTP, ingestion.Ingress(*item, ic.defaultSecretNamespace, ic.defaultSecretName)...)
+			if annotations.GetAnnotationTLSPassthroughEnabled(item) {
+				m.TLS = append(m.TLS, ingestion.IngressPassthrough(*item, ic.defaultSecretNamespace, ic.defaultSecretName)...)
+			} else {
+				m.HTTP = append(m.HTTP, ingestion.Ingress(*item, ic.defaultSecretNamespace, ic.defaultSecretName)...)
+			}
 		}
 	}
 
 	scopedLog.WithFields(logrus.Fields{
 		"forcedShared": forceShared,
 		"model":        m,
+		"loadbalancer": loadbalancerMode,
 	}).Debug("Generated model for ingress")
 	cec, svc, ep, err := translator.Translate(m)
 	// Propagate Ingress annotation if required. This is applicable only for dedicated LB mode.
@@ -629,6 +642,7 @@ func (ic *Controller) regenerate(ing *slim_networkingv1.Ingress, forceShared boo
 		"ciliumEnvoyConfig": cec,
 		"service":           svc,
 		logfields.Endpoint:  ep,
+		"loadbalancer":      loadbalancerMode,
 	}).Debugf("Translated resources for ingress")
 	return cec, svc, ep, err
 }

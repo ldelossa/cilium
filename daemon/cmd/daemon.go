@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -34,7 +33,6 @@ import (
 	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/controller"
-	"github.com/cilium/cilium/pkg/counter"
 	"github.com/cilium/cilium/pkg/datapath/link"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/linux/bigtcp"
@@ -94,6 +92,7 @@ import (
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/status"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
 )
 
@@ -115,7 +114,7 @@ type Daemon struct {
 	clientset        k8sClient.Clientset
 	buildEndpointSem *semaphore.Weighted
 	l7Proxy          *proxy.Proxy
-	svc              *service.Service
+	svc              service.ServiceManager
 	rec              *recorder.Recorder
 	policy           *policy.Repository
 	policyUpdater    *policy.Updater
@@ -141,10 +140,6 @@ type Daemon struct {
 	// Used to synchronize generation of daemon's BPF programs and endpoint BPF
 	// programs.
 	compilationMutex *lock.RWMutex
-
-	// prefixLengths tracks a mapping from CIDR prefix length to the count
-	// of rules that refer to that prefix length.
-	prefixLengths *counter.PrefixLengthCounter
 
 	clustermesh *clustermesh.ClusterMesh
 
@@ -210,7 +205,7 @@ type Daemon struct {
 	controllers *controller.Manager
 
 	// BIG-TCP config values
-	bigTCPConfig bigtcp.Configuration
+	bigTCPConfig *bigtcp.Configuration
 
 	// just used to tie together some status reporting
 	cniConfigManager cni.CNIConfigManager
@@ -258,12 +253,6 @@ func (d *Daemon) DebugEnabled() bool {
 	return option.Config.Opts.IsEnabled(option.Debug)
 }
 
-// GetCIDRPrefixLengths returns the sorted list of unique prefix lengths used
-// by CIDR policies.
-func (d *Daemon) GetCIDRPrefixLengths() (s6, s4 []int) {
-	return d.prefixLengths.ToBPFData()
-}
-
 // GetOptions returns the datapath configuration options of the daemon.
 func (d *Daemon) GetOptions() *option.IntOptions {
 	return option.Config.Opts
@@ -300,13 +289,6 @@ func (d *Daemon) init() error {
 	}
 
 	return nil
-}
-
-// createPrefixLengthCounter wraps around the counter library, providing
-// references to prefix lengths that will always be present.
-func createPrefixLengthCounter() *counter.PrefixLengthCounter {
-	max6, max4 := ipcachemap.IPCacheMap().GetMaxPrefixLengths()
-	return counter.DefaultPrefixLengthCounter(max6, max4)
 }
 
 // restoreCiliumHostIPs completes the `cilium_host` IP restoration process
@@ -501,7 +483,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	d := Daemon{
 		ctx:               ctx,
 		clientset:         params.Clientset,
-		prefixLengths:     createPrefixLengthCounter(),
 		buildEndpointSem:  semaphore.NewWeighted(int64(numWorkerThreads())),
 		compilationMutex:  new(lock.RWMutex),
 		mtuConfig:         mtuConfig,
@@ -525,10 +506,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		clustermesh:          params.ClusterMesh,
 		monitorAgent:         params.MonitorAgent,
 		l2announcer:          params.L2Announcer,
+		svc:                  params.ServiceManager,
 		l7Proxy:              params.L7Proxy,
 		authManager:          params.AuthManager,
 		settings:             params.Settings,
 		healthProvider:       params.HealthProvider,
+		bigTCPConfig:         params.BigTCPConfig,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
@@ -603,8 +586,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	d.endpointManager = params.EndpointManager
-
-	d.svc = service.NewService(&d, d.l7Proxy, d.datapath.LBMap())
 
 	d.redirectPolicyManager = redirectpolicy.NewRedirectPolicyManager(d.svc, params.Resources.LocalPods)
 	if option.Config.BGPAnnounceLBIP || option.Config.BGPAnnouncePodCIDR {
@@ -980,8 +961,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			return nil, nil, fmt.Errorf("SCTP support needs kernel 5.2 or newer")
 		}
 	}
-
-	bigtcp.InitBIGTCP(&d.bigTCPConfig)
 
 	// Some of the k8s watchers rely on option flags set above (specifically
 	// EnableBPFMasquerade), so we should only start them once the flag values

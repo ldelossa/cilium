@@ -235,37 +235,6 @@ const (
 	// LoadBalancerL7 enables loadbalancer capabilities for services via envoy proxy
 	LoadBalancerL7 = "loadbalancer-l7"
 
-	// LoadBalancerL7Ports is a list of service ports that will be automatically redirected to backend.
-	LoadBalancerL7Ports = "loadbalancer-l7-ports"
-
-	// LoadBalancerL7Algorithm is a default LB algorithm for services that do not specify related annotation
-	LoadBalancerL7Algorithm = "loadbalancer-l7-algorithm"
-
-	// EnableIngressController enables cilium ingress controller
-	// This must be enabled along with enable-envoy-config in cilium agent.
-	EnableIngressController = "enable-ingress-controller"
-
-	// EnforceIngressHttps enforces https for host having matching TLS host in Ingress.
-	// Incoming traffic to http listener will return 308 http error code with respective location in header.
-	EnforceIngressHttps = "enforce-ingress-https"
-
-	// EnableIngressProxyProtocol enable proxy protocol for all Ingress listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
-	EnableIngressProxyProtocol = "enable-ingress-proxy-protocol"
-
-	// EnableIngressSecretsSync enables fan-in TLS secrets from multiple namespaces to singular namespace (specified
-	// by ingress-secrets-namespace flag
-	EnableIngressSecretsSync = "enable-ingress-secrets-sync"
-
-	// EnableGatewayAPISecretsSync enables fan-in TLS secrets from multiple namespaces to singular namespace (specified
-	// by gateway-api-secrets-namespace flag
-	EnableGatewayAPISecretsSync = "enable-gateway-api-secrets-sync"
-
-	// IngressSecretsNamespace is the namespace having tls secrets used by Ingress and CEC.
-	IngressSecretsNamespace = "ingress-secrets-namespace"
-
-	// GatewayAPISecretsNamespace is the namespace having tls secrets used by GatewayAPI and CEC.
-	GatewayAPISecretsNamespace = "gateway-api-secrets-namespace"
-
 	// ProxyIdleTimeoutSeconds is the idle timeout for proxy connections to upstream clusters
 	ProxyIdleTimeoutSeconds = "proxy-idle-timeout-seconds"
 
@@ -291,23 +260,6 @@ const (
 	// SetCiliumIsUpCondition sets the CiliumIsUp node condition in Kubernetes
 	// nodes.
 	SetCiliumIsUpCondition = "set-cilium-is-up-condition"
-
-	// IngressLBAnnotationPrefixes are the annotations which are needed to propagate
-	// from Ingress to the Load Balancer
-	IngressLBAnnotationPrefixes = "ingress-lb-annotation-prefixes"
-
-	// IngressSharedLBServiceName is the name of shared LB service name for Ingress.
-	IngressSharedLBServiceName = "ingress-shared-lb-service-name"
-
-	// IngressDefaultLoadbalancerMode is the default loadbalancer mode for Ingress.
-	// Applicable values: dedicated, shared
-	IngressDefaultLoadbalancerMode = "ingress-default-lb-mode"
-
-	// IngressDefaultSecretNamespace is the default secret namespace for Ingress.
-	IngressDefaultSecretNamespace = "ingress-default-secret-namespace"
-
-	// IngressDefaultSecretName is the default secret name for Ingress.
-	IngressDefaultSecretName = "ingress-default-secret-name"
 
 	// IngressDefaultXffNumTrustedHops is the default XffNumTrustedHops value for Ingress.
 	IngressDefaultXffNumTrustedHops = "ingress-default-xff-num-trusted-hops"
@@ -495,35 +447,8 @@ type OperatorConfig struct {
 	// LoadBalancerL7 enables loadbalancer capabilities for services.
 	LoadBalancerL7 string
 
-	// EnvoyLoadBalancerPorts is a list of service ports that will be automatically redirected to Envoy
-	LoadBalancerL7Ports []string
-
-	// LoadBalancerL7Algorithm is a default LB algorithm for services that do not specify related annotation
-	LoadBalancerL7Algorithm string
-
-	// EnableIngressController enables cilium ingress controller
-	EnableIngressController bool
-
 	// EnableGatewayAPI enables support of Gateway API
 	EnableGatewayAPI bool
-
-	// EnforceIngressHTTPS enforces https if required
-	EnforceIngressHTTPS bool
-
-	// EnableIngressProxyProtocol uses proxy protocol in listeners
-	EnableIngressProxyProtocol bool
-
-	// EnableIngressSecretsSync enables background TLS secret sync for Ingress
-	EnableIngressSecretsSync bool
-
-	// EnableGatewayAPISecretsSync enables background TLS secret sync for Gateway API
-	EnableGatewayAPISecretsSync bool
-
-	// IngressSecretsNamespace is the namespace having tls secrets used by CEC for Ingress.
-	IngressSecretsNamespace string
-
-	// GatewayAPISecretsNamespace is the namespace having tls secrets used by CEC for Gateway API.
-	GatewayAPISecretsNamespace string
 
 	// ProxyIdleTimeoutSeconds is the idle timeout for the proxy to upstream cluster
 	ProxyIdleTimeoutSeconds int
@@ -547,26 +472,9 @@ type OperatorConfig struct {
 	// nodes.
 	SetCiliumIsUpCondition bool
 
-	// IngressLBAnnotationPrefixes IngressLBAnnotations are the annotation prefixes,
-	// which are used to filter annotations to propagate from Ingress to the Load Balancer
-	IngressLBAnnotationPrefixes []string
-
-	// IngressSharedLBServiceName is the name of shared LB service name for Ingress.
-	IngressSharedLBServiceName string
-
-	// IngressDefaultLoadbalancerMode is the default loadbalancer mode for Ingress.
-	// Applicable values: dedicated, shared
-	IngressDefaultLoadbalancerMode string
-
-	// IngressDefaultLSecretNamespace is the default secret namespace for Ingress.
-	IngressDefaultSecretNamespace string
-
-	// IngressDefaultLSecretName is the default secret name for Ingress.
-	IngressDefaultSecretName string
-
 	// IngressProxyXffNumTrustedHops The number of additional ingress proxy hops from the right side of the
 	// HTTP header to trust when determining the origin client's IP address.
-	//The default is zero if this option is not specified.
+	// The default is zero if this option is not specified.
 	IngressProxyXffNumTrustedHops uint32
 
 	// PodRestartSelector specify the labels contained in the pod that needs to be restarted before the node can be de-stained
@@ -596,29 +504,15 @@ func (c *OperatorConfig) Populate(vp *viper.Viper) {
 	c.BGPAnnounceLBIP = vp.GetBool(BGPAnnounceLBIP)
 	c.BGPConfigPath = vp.GetString(BGPConfigPath)
 	c.LoadBalancerL7 = vp.GetString(LoadBalancerL7)
-	c.LoadBalancerL7Ports = vp.GetStringSlice(LoadBalancerL7Ports)
-	c.LoadBalancerL7Algorithm = vp.GetString(LoadBalancerL7Algorithm)
-	c.EnableIngressController = vp.GetBool(EnableIngressController)
 	c.EnableGatewayAPI = vp.GetBool(EnableGatewayAPI)
-	c.EnforceIngressHTTPS = vp.GetBool(EnforceIngressHttps)
-	c.EnableIngressProxyProtocol = vp.GetBool(EnableIngressProxyProtocol)
-	c.IngressSecretsNamespace = vp.GetString(IngressSecretsNamespace)
-	c.GatewayAPISecretsNamespace = vp.GetString(GatewayAPISecretsNamespace)
 	c.ProxyIdleTimeoutSeconds = vp.GetInt(ProxyIdleTimeoutSeconds)
 	if c.ProxyIdleTimeoutSeconds == 0 {
 		c.ProxyIdleTimeoutSeconds = DefaultProxyIdleTimeoutSeconds
 	}
-	c.EnableIngressSecretsSync = vp.GetBool(EnableIngressSecretsSync)
-	c.EnableGatewayAPISecretsSync = vp.GetBool(EnableGatewayAPISecretsSync)
 	c.CiliumPodLabels = vp.GetString(CiliumPodLabels)
 	c.RemoveCiliumNodeTaints = vp.GetBool(RemoveCiliumNodeTaints)
 	c.SetCiliumNodeTaints = vp.GetBool(SetCiliumNodeTaints)
 	c.SetCiliumIsUpCondition = vp.GetBool(SetCiliumIsUpCondition)
-	c.IngressLBAnnotationPrefixes = vp.GetStringSlice(IngressLBAnnotationPrefixes)
-	c.IngressSharedLBServiceName = vp.GetString(IngressSharedLBServiceName)
-	c.IngressDefaultLoadbalancerMode = vp.GetString(IngressDefaultLoadbalancerMode)
-	c.IngressDefaultSecretNamespace = vp.GetString(IngressDefaultSecretNamespace)
-	c.IngressDefaultSecretName = vp.GetString(IngressDefaultSecretName)
 	c.IngressProxyXffNumTrustedHops = vp.GetUint32(IngressDefaultXffNumTrustedHops)
 	c.PodRestartSelector = vp.GetString(PodRestartSelector)
 

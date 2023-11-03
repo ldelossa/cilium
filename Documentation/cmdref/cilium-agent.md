@@ -214,6 +214,7 @@ cilium-agent [flags]
       --hubble-redact-http-headers-allow strings                     HTTP headers to keep visible in flows
       --hubble-redact-http-headers-deny strings                      HTTP headers to redact from flows
       --hubble-redact-http-urlquery                                  Hubble redact http URL query from flows
+      --hubble-redact-http-userinfo                                  Hubble redact http user info from flows (default true)
       --hubble-redact-kafka-apikey                                   Hubble redact Kafka API key from flows
       --hubble-skip-unknown-cgroup-ids                               Skip Hubble events with unknown cgroup ids (default true)
       --hubble-socket-path string                                    Set hubble's socket path to listen for connections (default "/var/run/cilium/hubble.sock")
@@ -228,6 +229,7 @@ cilium-agent [flags]
       --ip-masq-agent-config-path string                             ip-masq-agent configuration file path (default "/etc/config/ip-masq-agent")
       --ipam string                                                  Backend to use for IPAM (default "cluster-pool")
       --ipam-cilium-node-update-rate duration                        Maximum rate at which the CiliumNode custom resource is updated (default 15s)
+      --ipam-default-ip-pool string                                  Name of the default IP Pool when using multi-pool (default "default")
       --ipam-multi-pool-pre-allocation map                           Defines the minimum number of IPs a node should pre-allocate from each pool (default default=8)
       --ipsec-key-file string                                        Path to IPSec key file
       --ipsec-key-rotation-duration duration                         Maximum duration of the IPsec key rotation. The previous key will be removed after that delay. (default 5m0s)

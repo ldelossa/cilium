@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/blang/semver/v4"
 	"github.com/mattn/go-shellwords"
@@ -24,6 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/command/exec"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
+	"github.com/cilium/cilium/pkg/datapath/linux/modules"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -33,10 +33,10 @@ import (
 	lb "github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/modules"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/sysctl"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/versioncheck"
 )
 
@@ -162,24 +162,6 @@ func skipPodTrafficConntrack(ipv6 bool) bool {
 	return !ipv6 && option.Config.InstallNoConntrackIptRules
 }
 
-// KernelHasNetfilter probes whether iptables related modules are present in
-// the kernel and returns true if indeed the case, else false.
-func KernelHasNetfilter() bool {
-	modulesManager := &modules.ModulesManager{}
-	if err := modulesManager.Init(); err != nil {
-		return true
-	}
-	if found, _ := modulesManager.FindModules(
-		"ip_tables", "iptable_mangle", "iptable_raw", "iptable_filter"); found {
-		return true
-	}
-	if found, _ := modulesManager.FindModules(
-		"ip6_tables", "ip6table_mangle", "ip6table_raw", "ip6table_filter"); found {
-		return true
-	}
-	return false
-}
-
 func reverseRule(rule string) ([]string, error) {
 	if strings.HasPrefix(rule, "-A") {
 		// From: -A POSTROUTING -m comment [...]
@@ -287,13 +269,8 @@ type IptablesManager struct {
 
 // Init initializes the iptables manager and checks for iptables kernel modules
 // availability.
-func (m *IptablesManager) Init() {
-	modulesManager := &modules.ModulesManager{}
+func (m *IptablesManager) Init(modulesManager *modules.Manager) {
 	haveIp6tables := true
-	if err := modulesManager.Init(); err != nil {
-		log.WithError(err).Fatal(
-			"Unable to get information about kernel modules")
-	}
 	if err := modulesManager.FindOrLoadModules(
 		"ip_tables", "iptable_nat", "iptable_mangle", "iptable_raw",
 		"iptable_filter"); err != nil {

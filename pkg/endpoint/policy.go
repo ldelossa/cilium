@@ -12,7 +12,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/sirupsen/logrus"
@@ -36,6 +35,7 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/revert"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/types"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
@@ -908,12 +908,6 @@ func (e *Endpoint) SetIdentity(identity *identityPkg.Identity, newEndpoint bool)
 	e.UpdateLogger(map[string]interface{}{
 		logfields.Identity: identity.StringID(),
 	})
-}
-
-// GetCIDRPrefixLengths returns the sorted list of unique prefix lengths used
-// for CIDR policy or IPcache lookup from this endpoint.
-func (e *Endpoint) GetCIDRPrefixLengths() (s6, s4 []int) {
-	return e.owner.GetCIDRPrefixLengths()
 }
 
 // AnnotationsResolverCB provides an implementation for resolving the pod

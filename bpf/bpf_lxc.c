@@ -14,10 +14,6 @@
 
 #define IS_BPF_LXC 1
 
-/* Controls the inclusion of the CILIUM_CALL_SRV6 section in the object file.
- */
-#define SKIP_SRV6_HANDLING
-
 #define EVENT_SOURCE LXC_ID
 
 #include "lib/auth.h"
@@ -540,6 +536,29 @@ ct_recreate6:
 		return DROP_UNKNOWN_CT;
 	}
 
+	if (!revalidate_data(ctx, &data, &data_end, &ip6))
+		return DROP_INVALID;
+
+#ifdef ENABLE_SRV6
+	{
+		__u32 *vrf_id;
+		union v6addr *sid;
+
+		/* Determine if packet belongs to a VRF */
+		vrf_id = srv6_lookup_vrf6(&ip6->saddr, &ip6->daddr);
+		if (vrf_id) {
+			/* Do policy lookup if it belongs to a VRF */
+			sid = srv6_lookup_policy6(*vrf_id, &ip6->daddr);
+			if (sid) {
+				/* If there's a policy, tailcall to the H.Encaps logic */
+				srv6_store_meta_sid(ctx, sid);
+				ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+				return DROP_MISSED_TAIL_CALL;
+			}
+		}
+	}
+#endif /* ENABLE_SRV6 */
+
 	/* L7 LB does L7 policy enforcement, so we only redirect packets
 	 * NOT from L7 LB.
 	 */
@@ -550,9 +569,6 @@ ct_recreate6:
 				  trace.reason, trace.monitor);
 		return ctx_redirect_to_proxy6(ctx, tuple, proxy_port, false);
 	}
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
 
 #if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
 	/* If the destination is the local host and per-endpoint routes are
@@ -982,6 +998,30 @@ ct_recreate4:
 		return DROP_UNKNOWN_CT;
 	}
 
+	/* After L4 write in port mapping: revalidate for direct packet access */
+	if (!revalidate_data(ctx, &data, &data_end, &ip4))
+		return DROP_INVALID;
+
+#ifdef ENABLE_SRV6
+	{
+		__u32 *vrf_id;
+		union v6addr *sid;
+
+		/* Determine if packet belongs to a VRF */
+		vrf_id = srv6_lookup_vrf4(ip4->saddr, ip4->daddr);
+		if (vrf_id) {
+			/* Do policy lookup if it belongs to a VRF */
+			sid = srv6_lookup_policy4(*vrf_id, ip4->daddr);
+			if (sid) {
+				/* If there's a policy, tailcall to the H.Encaps logic */
+				srv6_store_meta_sid(ctx, sid);
+				ep_tail_call(ctx, CILIUM_CALL_SRV6_ENCAP);
+				return DROP_MISSED_TAIL_CALL;
+			}
+		}
+	}
+#endif /* ENABLE_SRV6 */
+
 	hairpin_flow |= ct_state->loopback;
 
 	/* L7 LB does L7 policy enforcement, so we only redirect packets
@@ -994,10 +1034,6 @@ ct_recreate4:
 				  trace.reason, trace.monitor);
 		return ctx_redirect_to_proxy4(ctx, tuple, proxy_port, false);
 	}
-
-	/* After L4 write in port mapping: revalidate for direct packet access */
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_INVALID;
 
 #if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
 	/* If the destination is the local host and per-endpoint routes are
@@ -1392,24 +1428,19 @@ out:
 
 #ifdef ENABLE_IPV6
 static __always_inline int
-ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
+ipv6_policy(struct __ctx_buff *ctx, struct ipv6hdr *ip6, int ifindex, __u32 src_label,
 	    struct ipv6_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port)
 {
 	struct ct_state *ct_state, ct_state_new = {};
 	struct ipv6_ct_tuple *tuple;
 	int ret, verdict, l4_off, zero = 0;
 	struct ct_buffer6 *ct_buffer;
-	void *data, *data_end;
-	struct ipv6hdr *ip6;
 	bool skip_ingress_proxy = false;
 	struct trace_ctx trace;
 	union v6addr orig_sip;
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
 	__u8 auth_type = 0;
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
 
 	policy_clear_mark(ctx);
 
@@ -1550,13 +1581,21 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 	__u32 src_label = ctx_load_meta(ctx, CB_SRC_LABEL);
 	bool from_host = ctx_load_meta(ctx, CB_FROM_HOST);
 	bool proxy_redirect __maybe_unused = false;
+	void *data, *data_end;
 	__u16 proxy_port = 0;
+	struct ipv6hdr *ip6;
 	__s8 ext_err = 0;
 
 	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
 	ctx_store_meta(ctx, CB_FROM_HOST, 0);
 
-	ret = ipv6_policy(ctx, ifindex, src_label, &tuple, &ext_err, &proxy_port);
+	if (!revalidate_data(ctx, &data, &data_end, &ip6)) {
+		ret = DROP_INVALID;
+		goto drop_err;
+	}
+
+	ret = ipv6_policy(ctx, ip6, ifindex, src_label, &tuple, &ext_err,
+			  &proxy_port);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy6(ctx, &tuple, proxy_port, from_host);
@@ -1576,8 +1615,7 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 	}
 
 	if (IS_ERR(ret))
-		return send_drop_notify_ext(ctx, src_label, SECLABEL_IPV6, LXC_ID,
-					ret, ext_err, CTX_ACT_DROP, METRIC_INGRESS);
+		goto drop_err;
 
 	/* Store meta: essential for proxy ingress, see bpf_host.c */
 	ctx_store_meta(ctx, CB_PROXY_MAGIC, ctx->mark);
@@ -1597,6 +1635,10 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 #endif
 
 	return ret;
+
+drop_err:
+	return send_drop_notify_ext(ctx, src_label, SECLABEL_IPV6, LXC_ID,
+				    ret, ext_err, CTX_ACT_DROP, METRIC_INGRESS);
 }
 
 __section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_TO_ENDPOINT)
@@ -1653,7 +1695,8 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 #endif
 	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
 
-	ret = ipv6_policy(ctx, 0, src_sec_identity, NULL, &ext_err, &proxy_port);
+	ret = ipv6_policy(ctx, ip6, 0, src_sec_identity, NULL, &ext_err,
+			  &proxy_port);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy_hairpin_ipv6(ctx, proxy_port);
@@ -1702,14 +1745,12 @@ TAIL_CT_LOOKUP6(CILIUM_CALL_IPV6_CT_INGRESS, tail_ipv6_ct_ingress, CT_INGRESS,
 
 #ifdef ENABLE_IPV4
 static __always_inline int
-ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
+ipv4_policy(struct __ctx_buff *ctx, struct iphdr *ip4, int ifindex, __u32 src_label,
 	    struct ipv4_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port,
 	    bool from_tunnel)
 {
 	struct ct_state *ct_state, ct_state_new = {};
 	struct ipv4_ct_tuple *tuple;
-	void *data, *data_end;
-	struct iphdr *ip4;
 	bool skip_ingress_proxy = false;
 	bool is_untracked_fragment = false;
 	struct ct_buffer4 *ct_buffer;
@@ -1720,9 +1761,6 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 	__u8 audited = 0;
 	__u8 auth_type = 0;
 	__u32 zero = 0;
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_INVALID;
 
 	policy_clear_mark(ctx);
 
@@ -1902,7 +1940,9 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 	bool from_host = ctx_load_meta(ctx, CB_FROM_HOST);
 	bool from_tunnel = ctx_load_meta(ctx, CB_FROM_TUNNEL);
 	bool proxy_redirect __maybe_unused = false;
+	void *data, *data_end;
 	__u16 proxy_port = 0;
+	struct iphdr *ip4;
 	__s8 ext_err = 0;
 
 	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
@@ -1910,8 +1950,13 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 	ctx_store_meta(ctx, CB_FROM_HOST, 0);
 	ctx_store_meta(ctx, CB_FROM_TUNNEL, 0);
 
-	ret = ipv4_policy(ctx, ifindex, src_label, &tuple, &ext_err, &proxy_port,
-			  from_tunnel);
+	if (!revalidate_data(ctx, &data, &data_end, &ip4)) {
+		ret = DROP_INVALID;
+		goto drop_err;
+	}
+
+	ret = ipv4_policy(ctx, ip4, ifindex, src_label, &tuple, &ext_err,
+			  &proxy_port, from_tunnel);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy4(ctx, &tuple, proxy_port, from_host);
@@ -1938,8 +1983,7 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 	}
 
 	if (IS_ERR(ret))
-		return send_drop_notify_ext(ctx, src_label, SECLABEL_IPV4, LXC_ID,
-					ret, ext_err, CTX_ACT_DROP, METRIC_INGRESS);
+		goto drop_err;
 
 	/* Store meta: essential for proxy ingress, see bpf_host.c */
 	ctx_store_meta(ctx, CB_PROXY_MAGIC, ctx->mark);
@@ -1959,6 +2003,10 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 #endif
 
 	return ret;
+
+drop_err:
+	return send_drop_notify_ext(ctx, src_label, SECLABEL_IPV4, LXC_ID,
+				    ret, ext_err, CTX_ACT_DROP, METRIC_INGRESS);
 }
 
 static __always_inline bool
@@ -2097,11 +2145,16 @@ int tail_ipv4_to_endpoint(struct __ctx_buff *ctx)
 		goto out;
 	}
 
-	ret = ipv4_policy(ctx, 0, src_sec_identity, NULL, &ext_err, &proxy_port,
-			  false);
+	ret = ipv4_policy(ctx, ip4, 0, src_sec_identity, NULL, &ext_err,
+			  &proxy_port, false);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
-		ret = ctx_redirect_to_proxy_hairpin_ipv4(ctx, proxy_port);
+		if (!revalidate_data(ctx, &data, &data_end, &ip4)) {
+			ret = DROP_INVALID;
+			goto out;
+		}
+
+		ret = ctx_redirect_to_proxy_hairpin_ipv4(ctx, ip4, proxy_port);
 		proxy_redirect = true;
 		break;
 	case CTX_ACT_OK:

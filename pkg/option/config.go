@@ -18,7 +18,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/sirupsen/logrus"
@@ -40,6 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/mac"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -360,12 +360,6 @@ const (
 	// EnableIPv6Masquerade masquerades IPv6 packets from endpoints leaving the host.
 	EnableIPv6Masquerade = "enable-ipv6-masquerade"
 
-	// EnableIPv6BIGTCP enables IPv6 BIG TCP (larger GSO/GRO limits) for the node including pods.
-	EnableIPv6BIGTCP = "enable-ipv6-big-tcp"
-
-	// EnableIPv4BIGTCP enables IPv4 BIG TCP (larger GSO/GRO limits) for the node including pods.
-	EnableIPv4BIGTCP = "enable-ipv4-big-tcp"
-
 	// EnableBPFClockProbe selects a more efficient source clock (jiffies vs ktime)
 	EnableBPFClockProbe = "enable-bpf-clock-probe"
 
@@ -537,6 +531,10 @@ const (
 	// a separate route for each cluster node CIDR. This option is not
 	// compatible with Tunnel=TunnelDisabled
 	SingleClusterRouteName = "single-cluster-route"
+
+	// MaxInternalTimerDelay sets a maximum on all periodic timers in
+	// the agent in order to flush out timer-related bugs in the agent.
+	MaxInternalTimerDelay = "max-internal-timer-delay"
 
 	// MonitorAggregationName specifies the MonitorAggregationLevel on the
 	// comandline.
@@ -878,6 +876,9 @@ const (
 	// IPAMMultiPoolPreAllocation defines the pre-allocation value for each IPAM pool
 	IPAMMultiPoolPreAllocation = "ipam-multi-pool-pre-allocation"
 
+	// IPAMDefaultIPPool defines the default IP Pool when using multi-pool
+	IPAMDefaultIPPool = "ipam-default-ip-pool"
+
 	// XDPModeNative for loading progs with XDPModeLinkDriver
 	XDPModeNative = "native"
 
@@ -1041,6 +1042,9 @@ const (
 
 	// HubbleRedactHttpURLQuery controls if the URL query will be redacted from flows
 	HubbleRedactHttpURLQuery = "hubble-redact-http-urlquery"
+
+	// HubbleRedactHttpUserInfo controls if the user info will be redacted from flows
+	HubbleRedactHttpUserInfo = "hubble-redact-http-userinfo"
 
 	// HubbleRedactKafkaApiKey controls if the Kafka API key will be redacted from flows
 	HubbleRedactKafkaApiKey = "hubble-redact-kafka-apikey"
@@ -1565,6 +1569,10 @@ type DaemonConfig struct {
 	CTMapEntriesTimeoutSYN         time.Duration
 	CTMapEntriesTimeoutFIN         time.Duration
 
+	// MaxInternalTimerDelay sets a maximum on all periodic timers in
+	// the agent in order to flush out timer-related bugs in the agent.
+	MaxInternalTimerDelay time.Duration
+
 	// MonitorAggregationInterval configures the interval between monitor
 	// messages when monitor aggregation is enabled.
 	MonitorAggregationInterval time.Duration
@@ -1708,12 +1716,6 @@ type DaemonConfig struct {
 
 	// EnableIPv6NDP is true when NDP is enabled for IPv6
 	EnableIPv6NDP bool
-
-	// EnableIPv6BIGTCP enables IPv6 BIG TCP (larger GSO/GRO limits) for the node including pods.
-	EnableIPv6BIGTCP bool
-
-	// EnableIPv4BIGTCP enables IPv4 BIG TCP (larger GSO/GRO limits) for the node including pods.
-	EnableIPv4BIGTCP bool
 
 	// EnableSRv6 is true when SRv6 encapsulation support is enabled
 	EnableSRv6 bool
@@ -2164,7 +2166,8 @@ type DaemonConfig struct {
 
 	// IPAMMultiPoolPreAllocation defines the pre-allocation value for each IPAM pool
 	IPAMMultiPoolPreAllocation map[string]string
-
+	// IPAMDefaultIPPool the default IP Pool when using multi-pool
+	IPAMDefaultIPPool string
 	// AutoCreateCiliumNodeResource enables automatic creation of a
 	// CiliumNode resource for the local node
 	AutoCreateCiliumNodeResource bool
@@ -2303,6 +2306,9 @@ type DaemonConfig struct {
 
 	// HubbleRedactURLQuery controls if the URL query will be redacted from flows
 	HubbleRedactHttpURLQuery bool
+
+	// HubbleRedactUserInfo controls if the user info will be redacted from flows
+	HubbleRedactHttpUserInfo bool
 
 	// HubbleRedactKafkaApiKey controls if Kafka API key will be redacted from flows
 	HubbleRedactKafkaApiKey bool
@@ -2494,6 +2500,7 @@ var (
 		Monitor:                         &models.MonitorStatus{Cpus: int64(runtime.NumCPU()), Npages: 64, Pagesize: int64(os.Getpagesize()), Lost: 0, Unknown: 0},
 		IPv6ClusterAllocCIDR:            defaults.IPv6ClusterAllocCIDR,
 		IPv6ClusterAllocCIDRBase:        defaults.IPv6ClusterAllocCIDRBase,
+		IPAMDefaultIPPool:               defaults.IPAMDefaultIPPool,
 		EnableHostIPRestore:             defaults.EnableHostIPRestore,
 		EnableHealthChecking:            defaults.EnableHealthChecking,
 		EnableEndpointHealthChecking:    defaults.EnableEndpointHealthChecking,
@@ -3090,8 +3097,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableIPv4 = vp.GetBool(EnableIPv4Name)
 	c.EnableIPv6 = vp.GetBool(EnableIPv6Name)
 	c.EnableIPv6NDP = vp.GetBool(EnableIPv6NDPName)
-	c.EnableIPv6BIGTCP = vp.GetBool(EnableIPv6BIGTCP)
-	c.EnableIPv4BIGTCP = vp.GetBool(EnableIPv4BIGTCP)
 	c.EnableSRv6 = vp.GetBool(EnableSRv6)
 	c.SRv6EncapMode = vp.GetString(SRv6EncapModeName)
 	c.EnableSCTP = vp.GetBool(EnableSCTPName)
@@ -3157,6 +3162,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.IdentityChangeGracePeriod = vp.GetDuration(IdentityChangeGracePeriod)
 	c.IdentityRestoreGracePeriod = vp.GetDuration(IdentityRestoreGracePeriod)
 	c.IPAM = vp.GetString(IPAM)
+	c.IPAMDefaultIPPool = vp.GetString(IPAMDefaultIPPool)
 	c.IPv4Range = vp.GetString(IPv4Range)
 	c.IPv4NodeAddr = vp.GetString(IPv4NodeAddr)
 	c.IPv4ServiceRange = vp.GetString(IPv4ServiceRange)
@@ -3550,7 +3556,10 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	} else {
 		c.IPAMMultiPoolPreAllocation = m
 	}
-
+	if len(c.IPAMMultiPoolPreAllocation) == 0 {
+		// Default to the same value as IPAMDefaultIPPool
+		c.IPAMMultiPoolPreAllocation = map[string]string{c.IPAMDefaultIPPool: "8"}
+	}
 	c.KubeProxyReplacementHealthzBindAddr = vp.GetString(KubeProxyReplacementHealthzBindAddr)
 
 	// Hubble options.
@@ -3614,6 +3623,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.HubbleMonitorEvents = vp.GetStringSlice(HubbleMonitorEvents)
 	c.HubbleRedactEnabled = vp.GetBool(HubbleRedactEnabled)
 	c.HubbleRedactHttpURLQuery = vp.GetBool(HubbleRedactHttpURLQuery)
+	c.HubbleRedactHttpUserInfo = vp.GetBool(HubbleRedactHttpUserInfo)
 	c.HubbleRedactKafkaApiKey = vp.GetBool(HubbleRedactKafkaApiKey)
 	c.HubbleRedactHttpHeadersAllow = vp.GetStringSlice(HubbleRedactHttpHeadersAllow)
 	c.HubbleRedactHttpHeadersDeny = vp.GetStringSlice(HubbleRedactHttpHeadersDeny)

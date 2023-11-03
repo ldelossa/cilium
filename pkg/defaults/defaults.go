@@ -92,6 +92,9 @@ const (
 	// HubbleRedactHttpURLQuery controls if the URL query will be redacted from flows
 	HubbleRedactHttpURLQuery = false
 
+	// HubbleRedactHttpUserInfo controls if the user info will be redacted from flows
+	HubbleRedactHttpUserInfo = true
+
 	// HubbleRedactKafkaApiKey controls if the Kafka API key will be redacted from flows
 	HubbleRedactKafkaApiKey = false
 
@@ -177,6 +180,10 @@ const (
 
 	// ExecTimeout is a timeout for executing commands.
 	ExecTimeout = 300 * time.Second
+
+	// MaxInternalTimerDelay does not enforce a maximum on timer values in
+	// the agent by default.
+	MaxInternalTimerDelay = 0 * time.Second
 
 	// StatusCollectorInterval is the interval between a probe invocations
 	StatusCollectorInterval = 5 * time.Second
@@ -380,9 +387,8 @@ const (
 	// CiliumNode.Spec.IPAM.PreAllocate if no value is set
 	IPAMPreAllocation = 8
 
-	// IPAMMultiPoolPreAllocation is the default value for multi-pool IPAM
-	// pre-allocations
-	IPAMMultiPoolPreAllocation = "default=8"
+	// IPAMDefaultIPPool is the default value for the multi-pool default pool name.
+	IPAMDefaultIPPool = "default"
 
 	// ENIFirstInterfaceIndex is the default value for
 	// CiliumNode.Spec.ENI.FirstInterfaceIndex if no value is set.

@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bombsimon/logrusr/v4"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -23,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	ctrlRuntime "sigs.k8s.io/controller-runtime"
 
 	operatorApi "github.com/cilium/cilium/api/v1/operator/server"
 	"github.com/cilium/cilium/operator/api"
@@ -34,6 +32,7 @@ import (
 	operatorMetrics "github.com/cilium/cilium/operator/metrics"
 	operatorOption "github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/operator/pkg/ciliumendpointslice"
+	"github.com/cilium/cilium/operator/pkg/ciliumenvoyconfig"
 	gatewayapi "github.com/cilium/cilium/operator/pkg/gateway-api"
 	"github.com/cilium/cilium/operator/pkg/ingress"
 	"github.com/cilium/cilium/operator/pkg/lbipam"
@@ -203,6 +202,15 @@ var (
 			// Endpoints. Either once or periodically it validates all the present
 			// Cilium Endpoints and delete the ones that should be deleted.
 			endpointgc.Cell,
+
+			// Cilium Gateway API controller that manages the Gateway API related CRDs.
+			gatewayapi.Cell,
+
+			// Cilium Ingress controller that manages the Kubernetes Ingress related CRDs.
+			ingress.Cell,
+
+			// Cilium L7 LoadBalancing with Envoy.
+			ciliumenvoyconfig.Cell,
 		),
 	)
 
@@ -709,55 +717,6 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 			log.WithError(err).WithField(logfields.LogSubsys, "CCNPWatcher").Fatal(
 				"Cannot connect to Kubernetes apiserver ")
 		}
-	}
-
-	if operatorOption.Config.EnableIngressController {
-		ingressController, err := ingress.NewController(
-			legacy.ctx,
-			legacy.clientset,
-			legacy.resources.IngressClasses,
-			ingress.WithHTTPSEnforced(operatorOption.Config.EnforceIngressHTTPS),
-			ingress.WithProxyProtocol(operatorOption.Config.EnableIngressProxyProtocol),
-			ingress.WithSecretsSyncEnabled(operatorOption.Config.EnableIngressSecretsSync),
-			ingress.WithSecretsNamespace(operatorOption.Config.IngressSecretsNamespace),
-			ingress.WithLBAnnotationPrefixes(operatorOption.Config.IngressLBAnnotationPrefixes),
-			ingress.WithCiliumNamespace(operatorOption.Config.CiliumK8sNamespace),
-			ingress.WithSharedLBServiceName(operatorOption.Config.IngressSharedLBServiceName),
-			ingress.WithDefaultLoadbalancerMode(operatorOption.Config.IngressDefaultLoadbalancerMode),
-			ingress.WithDefaultSecretNamespace(operatorOption.Config.IngressDefaultSecretNamespace),
-			ingress.WithDefaultSecretName(operatorOption.Config.IngressDefaultSecretName),
-			ingress.WithIdleTimeoutSeconds(operatorOption.Config.ProxyIdleTimeoutSeconds),
-		)
-		if err != nil {
-			log.WithError(err).WithField(logfields.LogSubsys, ingress.Subsys).Fatal(
-				"Failed to start ingress controller")
-		}
-		go ingressController.Run(legacy.ctx)
-	}
-
-	if operatorOption.Config.EnableGatewayAPI {
-		// Setting global logger for controller-runtime
-		ctrlRuntime.SetLogger(logrusr.New(log, logrusr.WithName("controller-runtime")))
-
-		gatewayController, err := gatewayapi.NewController(
-			operatorOption.Config.EnableGatewayAPISecretsSync,
-			operatorOption.Config.GatewayAPISecretsNamespace,
-			operatorOption.Config.ProxyIdleTimeoutSeconds,
-		)
-		if err != nil {
-			log.WithError(err).WithField(logfields.LogSubsys, gatewayapi.Subsys).Fatal(
-				"Failed to create gateway controller")
-		}
-		go gatewayController.Run()
-	}
-
-	if operatorOption.Config.LoadBalancerL7 == "envoy" {
-		log.Info("Starting Envoy load balancer controller")
-		operatorWatchers.StartCECController(legacy.ctx, legacy.clientset, legacy.resources.Services,
-			operatorOption.Config.LoadBalancerL7Ports,
-			operatorOption.Config.LoadBalancerL7Algorithm,
-			operatorOption.Config.ProxyIdleTimeoutSeconds,
-		)
 	}
 
 	log.Info("Initialization complete")

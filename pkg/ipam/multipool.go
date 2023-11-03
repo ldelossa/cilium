@@ -10,7 +10,6 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
 )
 
@@ -586,7 +586,7 @@ func (m *multiPoolManager) dump(family Family) (allocated map[Pool]map[string]st
 		}
 
 		if poolName == "" {
-			poolName = PoolDefault
+			poolName = PoolDefault()
 		}
 
 		if _, ok := allocated[poolName]; !ok {

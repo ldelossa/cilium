@@ -261,7 +261,7 @@ jobs:
           test-name: runtime-tests
           install-dependencies: true
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          image-version: "bpf-next-20231020.080527@sha256:18f4fc44149d0bd8bc5117679ca30a195212f55c8fcc810787e3a371dd4d4157"
+          image-version: "bpf-next-20231030.012704@sha256:1b69d3a852cc36eabb3b563ef1d0a26a8293d8b72bb954dbf34da63531d917e2"
           host-mount: ./
           cpu: 4
           mem: 12G
@@ -369,7 +369,7 @@ jobs:
 
       - name: Runtime privileged tests
         if: ${{ matrix.focus == 'privileged' }}
-        timeout-minutes: 20
+        timeout-minutes: 30
         uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44c3f906d # v0.0.12
         with:
           provision: 'false'
