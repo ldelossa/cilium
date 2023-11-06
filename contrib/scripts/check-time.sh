@@ -26,6 +26,7 @@ EXCLUDED_DIRS=(
 
   # Not for cilium-agent
   "bugtool"
+  "cilium-cli"
   "cilium-dbg"
   "clustermesh"
   "clustermesh-apiserver"
