@@ -16,16 +16,22 @@ import (
 	"net/netip"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
+	"github.com/cilium/cilium/pkg/k8s"
+	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
+	client_v2 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2"
 	isovalent_client_v1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
+	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	maps_multicast "github.com/cilium/cilium/pkg/maps/multicast"
 	"github.com/cilium/cilium/pkg/node"
@@ -46,6 +52,7 @@ type fixture struct {
 	fakeClientSet    *k8sClient.FakeClientset
 	mcastGroupClient isovalent_client_v1alpha1.IsovalentMulticastGroupInterface
 	mcastNodeClient  isovalent_client_v1alpha1.IsovalentMulticastNodeInterface
+	endpointClient   client_v2.CiliumEndpointInterface
 	bpfMap           maps_multicast.GroupV4Map
 }
 
@@ -57,6 +64,7 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 	f.fakeClientSet, _ = k8sClient.NewFakeClientset()
 	f.mcastGroupClient = f.fakeClientSet.CiliumFakeClientset.IsovalentV1alpha1().IsovalentMulticastGroups()
 	f.mcastNodeClient = f.fakeClientSet.CiliumFakeClientset.IsovalentV1alpha1().IsovalentMulticastNodes()
+	f.endpointClient = f.fakeClientSet.CiliumV2().CiliumEndpoints(slim_corev1.NamespaceAll)
 
 	// initialize BPF map
 	f.bpfMap = newFakeMaps()
@@ -87,6 +95,15 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 				lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentMulticastNodeList](
 					c.IsovalentV1alpha1().IsovalentMulticastNodes(),
 				),
+			)
+		}),
+
+		cell.Provide(func(lc hive.Lifecycle, c k8sClient.Clientset) resource.Resource[*k8sTypes.CiliumEndpoint] {
+			lw := utils.ListerWatcherFromTyped[*cilium_api_v2.CiliumEndpointList](c.CiliumV2().CiliumEndpoints(slim_corev1.NamespaceAll))
+			return resource.New[*k8sTypes.CiliumEndpoint](lc, lw,
+				resource.WithLazyTransform(func() runtime.Object {
+					return &cilium_api_v2.CiliumEndpoint{}
+				}, k8s.TransformToCiliumEndpoint),
 			)
 		}),
 

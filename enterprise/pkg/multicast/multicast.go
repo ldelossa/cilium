@@ -22,6 +22,8 @@ import (
 	"github.com/vishvananda/netlink"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	ciliumDefaults "github.com/cilium/cilium/pkg/defaults"
@@ -33,6 +35,7 @@ import (
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	isovalent_client_v1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	maps_multicast "github.com/cilium/cilium/pkg/maps/multicast"
 	"github.com/cilium/cilium/pkg/node"
@@ -45,6 +48,7 @@ const (
 
 	groupAddrField = "groupAddress"
 	remoteSubField = "remoteSubscriber"
+	localSubField  = "localSubscriber"
 )
 
 // addrMapType generic map definition for multicast group addresses and node IP addresses.
@@ -64,6 +68,7 @@ type MulticastManagerParams struct {
 	MulticastNodeResource  resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode]
 	LocalNodeStore         *node.LocalNodeStore
 	Scope                  cell.Scope
+	EndpointResource       resource.Resource[*k8sTypes.CiliumEndpoint]
 }
 
 type MulticastManager struct {
@@ -82,15 +87,23 @@ type MulticastManager struct {
 	MulticastNodeClient    isovalent_client_v1alpha1.IsovalentMulticastNodeInterface
 	MulticastNodeResource  resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode]
 	MulticastNodeStore     resource.Store[*isovalent_api_v1alpha1.IsovalentMulticastNode]
+	EndpointResource       resource.Resource[*k8sTypes.CiliumEndpoint]
 
 	// local state
 	reconcileCh  chan struct{}
 	groupsSyncCh chan struct{}
 
 	// node metadata
-	nodeName           string
-	nodeIP             string
+	nodeName string
+	nodeIP   string
+
+	// ifindex of vxlan device
 	ciliumVxlanIfIndex int
+
+	// nodeEndpoints is node local endpoint metadata.
+	// This state is populated from k8sTypes.CiliumEndpoint events.
+	// Key is namespaced name of resource object and value is map of IPv4 addresses associated with that endpoint.
+	nodeEndpoints map[types.NamespacedName]map[netip.Addr]struct{}
 }
 
 func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
@@ -118,8 +131,10 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		MulticastNodeClient:    p.Clientset.IsovalentV1alpha1().IsovalentMulticastNodes(),
 		MulticastNodeResource:  p.MulticastNodeResource,
 		LocalNodeStore:         p.LocalNodeStore,
+		EndpointResource:       p.EndpointResource,
 		reconcileCh:            make(chan struct{}, 1),
 		groupsSyncCh:           make(chan struct{}, 1),
+		nodeEndpoints:          make(map[types.NamespacedName]map[netip.Addr]struct{}),
 	}
 
 	jobGroup.Add(
@@ -142,6 +157,9 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 
 			mm.nodeName = localNode.Name
 			mm.nodeIP = localNode.GetNodeIP(false).String() // Get IPv4 node IP
+			if mm.nodeIP == "" {
+				return fmt.Errorf("failed to get node IP")
+			}
 
 			// store initialized, trigger first reconcile
 			mm.triggerReconciler()
@@ -150,7 +168,7 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 			mm.Run(ctx)
 
 			return nil
-		}),
+		}, job.WithRetry(3, workqueue.DefaultControllerRateLimiter())),
 
 		job.OneShot("multicast-group-observer", func(ctx context.Context, health cell.HealthReporter) error {
 			for e := range mm.MulticastGroupResource.Events(ctx) {
@@ -211,8 +229,13 @@ func (m *MulticastManager) Run(ctx context.Context) {
 	m.Logger.Info("Starting multicast manager")
 	defer m.Logger.Info("Stopping multicast manager")
 
+	// sync endpoints
+	endpointEvents := m.syncEndpoints(ctx)
+
 	// wait for groups to sync
 	<-m.groupsSyncCh
+
+	m.Logger.Info("Initial sync completed")
 
 	for {
 		select {
@@ -224,8 +247,128 @@ func (m *MulticastManager) Run(ctx context.Context) {
 			if err != nil {
 				m.Logger.WithError(err).Error("Failed to reconcile multicast groups")
 			}
+
+		case e, ok := <-endpointEvents:
+			if !ok {
+				return
+			}
+			err := m.updateEndpoint(e)
+			if err != nil {
+				m.Logger.WithError(err).Error("Failed to update endpoints")
+			}
+			e.Done(err)
 		}
 	}
+}
+
+// syncEndpoints gets all endpoints till sync is done from CiliumEndpoint resource.
+func (m *MulticastManager) syncEndpoints(ctx context.Context) <-chan resource.Event[*k8sTypes.CiliumEndpoint] {
+	endpointEvents := m.EndpointResource.Events(ctx)
+
+loop:
+	for e := range endpointEvents {
+		switch e.Kind {
+		case resource.Sync:
+			e.Done(nil)
+			break loop
+
+		case resource.Upsert:
+			if e.Object.Networking == nil || e.Object.Networking.NodeIP != m.nodeIP {
+				// skip endpoints of other nodes or if networking field is not set.
+				e.Done(nil)
+				continue loop
+			}
+
+			namespacedName := GetEndpointNamespacedName(e.Object)
+
+			_, exist := m.nodeEndpoints[namespacedName]
+			if !exist {
+				m.nodeEndpoints[namespacedName] = make(map[netip.Addr]struct{})
+			}
+
+			for _, addr := range e.Object.Networking.Addressing {
+				v4addr, err := netip.ParseAddr(addr.IPV4)
+				if err != nil {
+					continue
+				}
+
+				if v4addr.Is4() {
+					m.nodeEndpoints[namespacedName][v4addr] = struct{}{}
+					m.Logger.WithField("IP", v4addr).Debug("Adding endpoint IP to multicast manager")
+				}
+			}
+		}
+
+		e.Done(nil)
+	}
+
+	return endpointEvents
+}
+
+func (m *MulticastManager) updateEndpoint(e resource.Event[*k8sTypes.CiliumEndpoint]) error {
+	if e.Kind == resource.Sync || e.Object == nil {
+		return nil
+	}
+
+	if e.Object.Networking == nil || e.Object.Networking.NodeIP != m.nodeIP {
+		return nil
+	}
+
+	// endpoint is identified by namespace and name of the object
+	namespacedName := GetEndpointNamespacedName(e.Object)
+
+	switch e.Kind {
+	case resource.Upsert:
+		existingIPs, exists := m.nodeEndpoints[namespacedName]
+		if !exists {
+			m.nodeEndpoints[namespacedName] = make(map[netip.Addr]struct{})
+		}
+
+		for _, addr := range e.Object.Networking.Addressing {
+			v4addr, err := netip.ParseAddr(addr.IPV4)
+			if err != nil {
+				continue
+			}
+
+			if v4addr.Is4() {
+				m.nodeEndpoints[namespacedName][v4addr] = struct{}{}
+				m.Logger.WithField("IP", v4addr).Debug("Adding endpoint IP to multicast manager")
+			}
+		}
+
+		for prevIP := range existingIPs {
+			found := false
+			for _, addr := range e.Object.Networking.Addressing {
+				v4addr, err := netip.ParseAddr(addr.IPV4)
+				if err != nil {
+					continue
+				}
+
+				if v4addr.Compare(prevIP) == 0 {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				delete(m.nodeEndpoints[namespacedName], prevIP)
+				m.Logger.WithField("IP", prevIP).Debug("Removing endpoint IP from multicast manager")
+			}
+		}
+
+	case resource.Delete:
+		// log deleted endpoints
+		for addr := range m.nodeEndpoints[namespacedName] {
+			m.Logger.WithField("IP", addr).Debug("Removing endpoint IP from multicast manager")
+		}
+
+		delete(m.nodeEndpoints, namespacedName)
+
+		// some local endpoints are deleted, we should reconcile to remove any local subscribers
+		m.triggerReconciler()
+	}
+
+	return nil
 }
 
 func (m *MulticastManager) reconcile(ctx context.Context) (err error) {
@@ -249,7 +392,13 @@ func (m *MulticastManager) reconcile(ctx context.Context) (err error) {
 		return err
 	}
 
-	// 3. update node status with groups which have local subscribers
+	// 3. remove any stale local subscribers
+	err = m.removeStaleLocalSubscribers()
+	if err != nil {
+		return err
+	}
+
+	// 4. update node status with groups which have local subscribers
 	return m.updateNodeStatus(ctx)
 }
 
@@ -455,9 +604,14 @@ func (m *MulticastManager) updateNodeStatus(ctx context.Context) (err error) {
 
 func (m *MulticastManager) getNodeStatusFromBPF() (isovalent_api_v1alpha1.IsovalentMulticastNodeStatus, error) {
 	// get local groups from BPF maps
-	localGroups, err := m.getLocalGroupsFromBPF()
+	localGroupAndSubs, err := m.getLocalSubscribersFromBPF()
 	if err != nil {
 		return isovalent_api_v1alpha1.IsovalentMulticastNodeStatus{}, err
+	}
+
+	var localGroups []netip.Addr
+	for groupAddr := range localGroupAndSubs {
+		localGroups = append(localGroups, groupAddr)
 	}
 
 	// sort groups
@@ -582,9 +736,9 @@ func (m *MulticastManager) getRemoteSubscribersFromBPF(groupAddr netip.Addr) (ad
 	return res, nil
 }
 
-// getLocalGroupsFromBPF returns a list of multicast group addresses which have local subscribers from BPF maps.
-func (m *MulticastManager) getLocalGroupsFromBPF() ([]netip.Addr, error) {
-	var res []netip.Addr
+// getLocalSubscribersFromBPF returns a list of multicast group addresses and local subscribers from BPF maps.
+func (m *MulticastManager) getLocalSubscribersFromBPF() (map[netip.Addr][]netip.Addr, error) {
+	var res = make(map[netip.Addr][]netip.Addr)
 
 	groupAddrs, err := m.MulticastMaps.List()
 	if err != nil {
@@ -604,10 +758,7 @@ func (m *MulticastManager) getLocalGroupsFromBPF() ([]netip.Addr, error) {
 
 		for _, subscriber := range subscribers {
 			if !subscriber.IsRemote {
-				// BPF map has local subscriber to this group.
-				// we only need to add group once.
-				res = append(res, groupAddr)
-				break
+				res[groupAddr] = append(res[groupAddr], subscriber.SAddr)
 			}
 		}
 	}
@@ -636,4 +787,53 @@ func GetIfIndex(name string) (int, error) {
 	}
 
 	return link.Attrs().Index, nil
+}
+
+// GetEndpointNamespacedName returns key for CiliumEndpoint object.
+func GetEndpointNamespacedName(obj *k8sTypes.CiliumEndpoint) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: obj.Namespace,
+		Name:      obj.Name,
+	}
+}
+
+// removeStaleLocalSubscribers removes any local subscribers from BPF maps which are not present in nodeEndpoints.
+func (m *MulticastManager) removeStaleLocalSubscribers() error {
+	// get local subscribers from BPF maps
+	localGroupAndSubs, err := m.getLocalSubscribersFromBPF()
+	if err != nil {
+		return err
+	}
+
+	for groupAddr, subscribers := range localGroupAndSubs {
+		subscriberMap, err := m.MulticastMaps.Lookup(groupAddr)
+		if err != nil {
+			return err
+		}
+
+		for _, subAddr := range subscribers {
+			found := false
+
+			for _, endpointIPs := range m.nodeEndpoints {
+				_, exists := endpointIPs[subAddr]
+				if exists {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				err = subscriberMap.Delete(subAddr)
+				if err != nil {
+					return err
+				}
+				m.Logger.WithFields(logrus.Fields{
+					groupAddrField: groupAddr,
+					localSubField:  subAddr,
+				}).Info("Local subscriber deleted")
+			}
+		}
+	}
+
+	return nil
 }
