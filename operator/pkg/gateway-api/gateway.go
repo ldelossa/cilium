@@ -40,7 +40,16 @@ type gatewayReconciler struct {
 	IdleTimeoutSeconds int
 
 	controllerName string
-	Model          *internalModel
+}
+
+func newGatewayReconciler(mgr ctrl.Manager, secretsNamespace string, idleTimeoutSeconds int) *gatewayReconciler {
+	return &gatewayReconciler{
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		SecretsNamespace:   secretsNamespace,
+		controllerName:     controllerName,
+		IdleTimeoutSeconds: idleTimeoutSeconds,
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

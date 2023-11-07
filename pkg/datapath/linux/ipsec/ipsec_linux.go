@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/cilium/cilium/pkg/common/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -58,10 +59,6 @@ const (
 	offsetEncKey   = 4
 	offsetIP       = 5
 	maxOffset      = offsetIP
-
-	// ipSecXfrmMarkSPIShift defines how many bits the SPI is shifted when
-	// encoded in a XfrmMark
-	ipSecXfrmMarkSPIShift = 12
 
 	defaultDropPriority      = 100
 	oldXFRMOutPolicyPriority = 50
@@ -505,31 +502,11 @@ func deprioritizeOldOutPolicy(family int) {
 // ipSecXfrmMarkSetSPI takes a XfrmMark base value, an SPI, returns the mark
 // value with the SPI value encoded in it
 func ipSecXfrmMarkSetSPI(markValue uint32, spi uint8) uint32 {
-	return markValue | (uint32(spi) << ipSecXfrmMarkSPIShift)
-}
-
-// ipSecXfrmMarkGetSPI extracts from a XfrmMark value the encoded SPI
-func ipSecXfrmMarkGetSPI(markValue uint32) uint8 {
-	return uint8(markValue >> ipSecXfrmMarkSPIShift & 0xF)
-}
-
-func getSPIFromXfrmPolicy(policy *netlink.XfrmPolicy) uint8 {
-	if policy.Mark == nil {
-		return 0
-	}
-
-	return ipSecXfrmMarkGetSPI(policy.Mark.Value)
-}
-
-func getNodeIDFromXfrmMark(mark *netlink.XfrmMark) uint16 {
-	if mark == nil {
-		return 0
-	}
-	return uint16(mark.Value >> 16)
+	return markValue | (uint32(spi) << linux_defaults.IPsecXFRMMarkSPIShift)
 }
 
 func getNodeIDAsHexFromXfrmMark(mark *netlink.XfrmMark) string {
-	return fmt.Sprintf("0x%x", getNodeIDFromXfrmMark(mark))
+	return fmt.Sprintf("0x%x", ipsec.GetNodeIDFromXfrmMark(mark))
 }
 
 func getDirFromXfrmMark(mark *netlink.XfrmMark) dir {
@@ -594,7 +571,7 @@ func ipsecDeleteXfrmState(nodeID uint16) error {
 
 	errs := resiliency.NewErrorSet(fmt.Sprintf("failed to delete node (%d) xfrm states", nodeID), len(xfrmStateList))
 	for _, s := range xfrmStateList {
-		if matchesOnNodeID(s.Mark) && getNodeIDFromXfrmMark(s.Mark) == nodeID {
+		if matchesOnNodeID(s.Mark) && ipsec.GetNodeIDFromXfrmMark(s.Mark) == nodeID {
 			if err := netlink.XfrmStateDel(&s); err != nil {
 				errs.Add(fmt.Errorf("failed to delete xfrm state (%s): %w", s.String(), err))
 			}
@@ -616,7 +593,7 @@ func ipsecDeleteXfrmPolicy(nodeID uint16) error {
 	}
 	errs := resiliency.NewErrorSet("failed to delete xfrm policies", len(xfrmPolicyList))
 	for _, p := range xfrmPolicyList {
-		if matchesOnNodeID(p.Mark) && getNodeIDFromXfrmMark(p.Mark) == nodeID {
+		if matchesOnNodeID(p.Mark) && ipsec.GetNodeIDFromXfrmMark(p.Mark) == nodeID {
 			if err := netlink.XfrmPolicyDel(&p); err != nil {
 				errs.Add(fmt.Errorf("unable to delete xfrm policy %s: %w", p.String(), err))
 			}
@@ -1108,7 +1085,7 @@ func deleteStaleXfrmPolicies(reclaimTimestamp time.Time) error {
 
 	errs := resiliency.NewErrorSet("failed to delete stale xfrm policies", len(xfrmPolicyList))
 	for _, p := range xfrmPolicyList {
-		policySPI := getSPIFromXfrmPolicy(&p)
+		policySPI := ipsec.GetSPIFromXfrmPolicy(&p)
 		if !ipSecSPICanBeReclaimed(policySPI, reclaimTimestamp) {
 			continue
 		}

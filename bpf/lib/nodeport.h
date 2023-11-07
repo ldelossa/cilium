@@ -1035,21 +1035,7 @@ int tail_nodeport_rev_dnat_ingress_ipv6(struct __ctx_buff *ctx)
 	};
 	__s8 ext_err = 0;
 	int ret = 0;
-#if defined(ENABLE_HOST_FIREWALL) && defined(IS_BPF_HOST)
-	/* We only enforce the host policies if nodeport.h is included from
-	 * bpf_host.
-	 */
-	__u32 src_id = 0;
 
-	ret = ipv6_host_policy_ingress(ctx, &src_id, &trace, &ext_err);
-	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, src_id, ret, ext_err,
-						  CTX_ACT_DROP, METRIC_INGRESS);
-	/* We don't want to enforce host policies a second time if we jump back to
-	 * bpf_host's handle_ipv6.
-	 */
-	ctx_skip_host_fw_set(ctx);
-#endif
 	ret = nodeport_rev_dnat_ingress_ipv6(ctx, &trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop;
@@ -1086,6 +1072,7 @@ int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 		.reason = TRACE_REASON_CT_REPLY,
 		.monitor = TRACE_PAYLOAD_LEN,
 	};
+	__u32 src_id = 0;
 	__s8 ext_err = 0;
 	int ret;
 
@@ -1113,6 +1100,15 @@ int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 	ctx_snat_done_set(ctx);
 
 #if !defined(ENABLE_DSR) || (defined(ENABLE_DSR) && defined(ENABLE_DSR_HYBRID))
+
+# if defined(ENABLE_HOST_FIREWALL) && defined(IS_BPF_HOST)
+	ret = ipv6_host_policy_ingress(ctx, &src_id, &trace, &ext_err);
+	if (IS_ERR(ret))
+		goto drop_err;
+
+	ctx_skip_host_fw_set(ctx);
+# endif
+
 	ret = invoke_traced_tailcall_if(__not(is_defined(HAVE_LARGE_INSN_LIMIT)),
 					CILIUM_CALL_IPV6_NODEPORT_REVNAT,
 					nodeport_rev_dnat_ingress_ipv6,
@@ -1133,8 +1129,8 @@ recircle:
 	ep_tail_call(ctx, CILIUM_CALL_IPV6_FROM_NETDEV);
 	ret = DROP_MISSED_TAIL_CALL;
 
- drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP,
+drop_err:
+	return send_drop_notify_error_ext(ctx, src_id, ret, ext_err, CTX_ACT_DROP,
 					  METRIC_INGRESS);
 }
 
@@ -2493,21 +2489,7 @@ int tail_nodeport_rev_dnat_ingress_ipv4(struct __ctx_buff *ctx)
 	};
 	__s8 ext_err = 0;
 	int ret = 0;
-#if defined(ENABLE_HOST_FIREWALL) && defined(IS_BPF_HOST)
-	/* We only enforce the host policies if nodeport.h is included from
-	 * bpf_host.
-	 */
-	__u32 src_id = 0;
 
-	ret = ipv4_host_policy_ingress(ctx, &src_id, &trace, &ext_err);
-	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, src_id, ret, ext_err,
-						  CTX_ACT_DROP, METRIC_INGRESS);
-	/* We don't want to enforce host policies a second time if we jump back to
-	 * bpf_host's handle_ipv6.
-	 */
-	ctx_skip_host_fw_set(ctx);
-#endif
 	ret = nodeport_rev_dnat_ingress_ipv4(ctx, &trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop_err;
@@ -2546,6 +2528,7 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 		.reason = TRACE_REASON_UNKNOWN,
 		.monitor = TRACE_PAYLOAD_LEN,
 	};
+	__u32 src_id = 0;
 	__s8 ext_err = 0;
 	int ret;
 
@@ -2578,6 +2561,18 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 	 */
 #if !defined(ENABLE_DSR) || (defined(ENABLE_DSR) && defined(ENABLE_DSR_HYBRID)) ||	\
     (defined(ENABLE_EGRESS_GATEWAY_COMMON) && !defined(IS_BPF_OVERLAY) && !defined(TUNNEL_MODE))
+
+# if defined(ENABLE_HOST_FIREWALL) && defined(IS_BPF_HOST)
+	ret = ipv4_host_policy_ingress(ctx, &src_id, &trace, &ext_err);
+	if (IS_ERR(ret))
+		goto drop_err;
+
+	/* We don't want to enforce host policies a second time,
+	 * on recircle / after RevDNAT.
+	 */
+	ctx_skip_host_fw_set(ctx);
+# endif
+
 	/* If we're not in full DSR mode, reply traffic from remote backends
 	 * might pass back through the LB node and requires revDNAT.
 	 *
@@ -2588,17 +2583,17 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 					CILIUM_CALL_IPV4_NODEPORT_REVNAT,
 					nodeport_rev_dnat_ingress_ipv4,
 					&trace, &ext_err);
-		if (IS_ERR(ret))
-			goto drop_err;
+	if (IS_ERR(ret))
+		goto drop_err;
 
-		/* No redirect needed: */
-		if (ret == CTX_ACT_OK)
-			goto recircle;
+	/* No redirect needed: */
+	if (ret == CTX_ACT_OK)
+		goto recircle;
 
-		/* Redirected to egress interface: */
-		edt_set_aggregate(ctx, 0);
-		cilium_capture_out(ctx);
-		return ret;
+	/* Redirected to egress interface: */
+	edt_set_aggregate(ctx, 0);
+	cilium_capture_out(ctx);
+	return ret;
 #endif
 
 recircle:
@@ -2606,8 +2601,8 @@ recircle:
 	ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_NETDEV);
 	ret = DROP_MISSED_TAIL_CALL;
 
- drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP,
+drop_err:
+	return send_drop_notify_error_ext(ctx, src_id, ret, ext_err, CTX_ACT_DROP,
 					  METRIC_INGRESS);
 }
 

@@ -89,7 +89,7 @@ l3_local_delivery(struct __ctx_buff *ctx, __u32 seclabel,
 	!defined(FORCE_LOCAL_POLICY_EVAL_AT_SOURCE)
 	set_identity_mark(ctx, seclabel);
 
-# if defined(IS_BPF_OVERLAY) && !defined(ENABLE_NODEPORT)
+# if !defined(ENABLE_NODEPORT)
 	/* In tunneling mode, we execute this code to send the packet from
 	 * cilium_vxlan to lxc*. If we're using kube-proxy, we don't want to use
 	 * redirect() because that would bypass conntrack and the reverse DNAT.
@@ -97,11 +97,13 @@ l3_local_delivery(struct __ctx_buff *ctx, __u32 seclabel,
 	 * Ethernet addresses, we need to mark them as PACKET_HOST or the kernel
 	 * will drop them.
 	 */
-	ctx_change_type(ctx, PACKET_HOST);
-	return CTX_ACT_OK;
-# else
-	return redirect_ep(ctx, ep->ifindex, from_host);
-# endif /* IS_BPF_OVERLAY && !ENABLE_NODEPORT */
+	if (from_tunnel) {
+		ctx_change_type(ctx, PACKET_HOST);
+		return CTX_ACT_OK;
+	}
+# endif /* !ENABLE_NODEPORT */
+
+	return redirect_ep(ctx, ep->ifindex, from_host, from_tunnel);
 #else
 # ifndef DISABLE_LOOPBACK_LB
 	/* Skip ingress policy enforcement for hairpin traffic. As the hairpin
@@ -110,7 +112,7 @@ l3_local_delivery(struct __ctx_buff *ctx, __u32 seclabel,
 	 * enforcement, and directly redirect it to the endpoint.
 	 */
 	if (unlikely(hairpin_flow))
-		return redirect_ep(ctx, ep->ifindex, from_host);
+		return redirect_ep(ctx, ep->ifindex, from_host, from_tunnel);
 # endif /* DISABLE_LOOPBACK_LB */
 
 	/* Jumps to destination pod's BPF program to enforce ingress policies. */
@@ -134,7 +136,8 @@ l3_local_delivery(struct __ctx_buff *ctx, __u32 seclabel,
 static __always_inline int ipv6_local_delivery(struct __ctx_buff *ctx, int l3_off,
 					       __u32 seclabel,
 					       const struct endpoint_info *ep,
-					       __u8 direction, bool from_host)
+					       __u8 direction, bool from_host,
+					       bool from_tunnel)
 {
 	mac_t router_mac = ep->node_mac;
 	mac_t lxc_mac = ep->mac;
@@ -147,7 +150,7 @@ static __always_inline int ipv6_local_delivery(struct __ctx_buff *ctx, int l3_of
 		return ret;
 
 	return l3_local_delivery(ctx, seclabel, ep, direction, from_host, false,
-				 false, 0);
+				 from_tunnel, 0);
 }
 #endif /* ENABLE_IPV6 */
 
@@ -177,35 +180,5 @@ static __always_inline int ipv4_local_delivery(struct __ctx_buff *ctx, int l3_of
 				 from_tunnel, cluster_id);
 }
 #endif /* SKIP_POLICY_MAP */
-
-static __always_inline __u8 get_min_encrypt_key(__u8 peer_key __maybe_unused)
-{
-#ifdef ENABLE_IPSEC
-	__u8 local_key = 0;
-	__u32 encrypt_key = 0;
-	struct encrypt_config *cfg;
-
-	cfg = map_lookup_elem(&ENCRYPT_MAP, &encrypt_key);
-	/* Having no key info for a context is the same as no encryption */
-	if (cfg)
-		local_key = cfg->encrypt_key;
-
-	/* If both ends can encrypt/decrypt use smaller of the two this
-	 * way both ends will have keys installed assuming key IDs are
-	 * always increasing. However, we have to handle roll-over case
-	 * and to do this safely we assume keys are no more than one ahead.
-	 * We expect user/control-place to accomplish this. Notice zero
-	 * will always be returned if either local or peer have the zero
-	 * key indicating no encryption.
-	 */
-	if (peer_key == MAX_KEY_INDEX)
-		return local_key == 1 ? peer_key : local_key;
-	if (local_key == MAX_KEY_INDEX)
-		return peer_key == 1 ? local_key : peer_key;
-	return local_key < peer_key ? local_key : peer_key;
-#else
-	return 0;
-#endif /* ENABLE_IPSEC */
-}
 
 #endif

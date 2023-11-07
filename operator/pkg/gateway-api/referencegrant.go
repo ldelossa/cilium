@@ -14,8 +14,13 @@ import (
 type referenceGrantReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+}
 
-	Model *internalModel
+func newReferenceGrantReconciler(mgr ctrl.Manager) *referenceGrantReconciler {
+	return &referenceGrantReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
