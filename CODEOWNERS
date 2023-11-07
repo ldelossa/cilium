@@ -328,6 +328,7 @@ Makefile* @cilium/build
 /Documentation/network/kubernetes/bandwidth-manager.rst @cilium/sig-datapath @cilium/docs-structure
 /Documentation/network/kubernetes/ipam* @cilium/sig-ipam @cilium/docs-structure
 /Documentation/network/kubernetes/kubeproxy-free.rst @cilium/sig-lb @cilium/docs-structure
+/Documentation/network/lb-ipam.rst @cilium/sig-lb @cilium/docs-structure
 /Documentation/network/servicemesh/ @cilium/sig-servicemesh @cilium/docs-structure
 /Documentation/observability/ @cilium/sig-policy @cilium/docs-structure
 /Documentation/operations/performance/ @cilium/sig-datapath @cilium/docs-structure
@@ -366,7 +367,6 @@ Makefile* @cilium/build
 /install/kubernetes/cilium/**/cilium-envoy @cilium/sig-k8s @cilium/helm @cilium/sig-servicemesh
 /install/kubernetes/cilium/**/spire @cilium/sig-k8s @cilium/helm @cilium/sig-servicemesh
 /install/kubernetes/cilium/templates/hubble* @cilium/sig-k8s @cilium/helm @cilium/sig-hubble
-/kvstoremesh @cilium/sig-clustermesh
 /LICENSE @cilium/tophat
 /MAINTAINERS.md @cilium/contributing
 /netlify.toml @cilium/ci-structure
@@ -431,6 +431,7 @@ Makefile* @cilium/build
 /pkg/hubble/metrics @cilium/sig-hubble @cilium/sig-hubble-api
 /pkg/identity @cilium/sig-policy
 /pkg/idpool/ @cilium/kvstore
+/pkg/ipalloc/ @cilium/sig-ipam
 /pkg/ipam/ @cilium/sig-ipam
 /pkg/ipam/allocator/alibabacloud/ @cilium/sig-ipam @cilium/alibabacloud
 /pkg/ipam/allocator/aws/ @cilium/sig-ipam @cilium/aws
@@ -460,7 +461,6 @@ Makefile* @cilium/build
 /pkg/maps/egressmap @cilium/egress-gateway
 /pkg/mcastmanager @cilium/sig-datapath
 /pkg/metrics @cilium/metrics
-/pkg/modules/ @cilium/sig-datapath
 /pkg/monitor @cilium/sig-datapath
 /pkg/monitor/api @cilium/api @cilium/sig-datapath
 /pkg/monitor/format @cilium/cli @cilium/sig-datapath
@@ -494,6 +494,7 @@ Makefile* @cilium/build
 /pkg/stream @cilium/sig-foundations
 /pkg/sysctl @cilium/sig-datapath
 /pkg/testutils/ @cilium/ci-structure
+/pkg/time @cilium/sig-agent
 /pkg/tuple @cilium/sig-datapath
 /pkg/types/ @cilium/sig-datapath
 /pkg/wireguard @cilium/wireguard

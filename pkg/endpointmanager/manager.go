@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/netip"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 var (
@@ -89,13 +89,6 @@ type endpointManager struct {
 	controllers *controller.Manager
 
 	policyMapPressure *policyMapPressure
-}
-
-// EndpointResourceSynchronizer is an interface which synchronizes CiliumEndpoint
-// resources with Kubernetes.
-type EndpointResourceSynchronizer interface {
-	RunK8sCiliumEndpointSync(ep *endpoint.Endpoint, conf endpoint.EndpointStatusConfiguration, hr cell.HealthReporter)
-	DeleteK8sCiliumEndpointSync(e *endpoint.Endpoint)
 }
 
 // endpointDeleteFunc is used to abstract away concrete Endpoint Delete

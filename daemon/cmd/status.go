@@ -6,8 +6,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/go-openapi/strfmt"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/cilium/cilium/api/v1/models"
 	. "github.com/cilium/cilium/api/v1/server/restapi/daemon"
+	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/controller"
 	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
@@ -37,6 +38,7 @@ import (
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/rand"
 	"github.com/cilium/cilium/pkg/status"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -143,9 +145,16 @@ func (d *Daemon) getMasqueradingStatus() *models.Masquerading {
 	return s
 }
 
+func (d *Daemon) getSRv6Status() *models.Srv6 {
+	return &models.Srv6{
+		Enabled:       option.Config.EnableSRv6,
+		Srv6EncapMode: option.Config.SRv6EncapMode,
+	}
+}
+
 func (d *Daemon) getIPV6BigTCPStatus() *models.IPV6BigTCP {
 	s := &models.IPV6BigTCP{
-		Enabled: option.Config.EnableIPv6BIGTCP,
+		Enabled: d.bigTCPConfig.EnableIPv6BIGTCP,
 		MaxGRO:  int64(d.bigTCPConfig.GetGROIPv6MaxSize()),
 		MaxGSO:  int64(d.bigTCPConfig.GetGSOIPv6MaxSize()),
 	}
@@ -155,7 +164,7 @@ func (d *Daemon) getIPV6BigTCPStatus() *models.IPV6BigTCP {
 
 func (d *Daemon) getIPV4BigTCPStatus() *models.IPV4BigTCP {
 	s := &models.IPV4BigTCP{
-		Enabled: option.Config.EnableIPv4BIGTCP,
+		Enabled: d.bigTCPConfig.EnableIPv4BIGTCP,
 		MaxGRO:  int64(d.bigTCPConfig.GetGROIPv4MaxSize()),
 		MaxGSO:  int64(d.bigTCPConfig.GetGSOIPv4MaxSize()),
 	}
@@ -423,7 +432,10 @@ func getHealthzHandler(d *Daemon, params GetHealthzParams) middleware.Responder 
 }
 
 func getHealthHandler(d *Daemon, params GetHealthParams) middleware.Responder {
-	sr := d.getHealthReport()
+	sr, err := d.getHealthReport()
+	if err != nil {
+		return api.Error(http.StatusInternalServerError, err)
+	}
 	return NewGetHealthOK().WithPayload(&sr)
 }
 
@@ -1080,6 +1092,7 @@ func (d *Daemon) startStatusCollector(cleaner *daemonCleanup) {
 	d.statusResponse.BpfMaps = d.getBPFMapStatus()
 	d.statusResponse.CniChaining = d.getCNIChainingStatus()
 	d.statusResponse.IdentityRange = d.getIdentityRange()
+	d.statusResponse.Srv6 = d.getSRv6Status()
 
 	d.statusCollector = status.NewCollector(probes, status.Config{StackdumpPath: "/run/cilium/state/agent.stack.gz"})
 

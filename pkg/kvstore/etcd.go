@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/blang/semver/v4"
 	"github.com/sirupsen/logrus"
@@ -41,6 +40,7 @@ import (
 	ciliumrate "github.com/cilium/cilium/pkg/rate"
 	ciliumratemetrics "github.com/cilium/cilium/pkg/rate/metrics"
 	"github.com/cilium/cilium/pkg/spanstat"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/versioncheck"
 )
 
@@ -394,21 +394,9 @@ type etcdClient struct {
 	lastHeartbeat time.Time
 
 	leaseExpiredObservers sync.Map
-}
 
-func (e *etcdClient) getLogger() *logrus.Entry {
-	endpoints, path := []string{""}, ""
-	if e != nil {
-		if e.config != nil {
-			endpoints = e.config.Endpoints
-		}
-		path = e.configPath
-	}
-
-	return log.WithFields(logrus.Fields{
-		"endpoints": endpoints,
-		"config":    path,
-	})
+	// logger is the scoped logger associated with this client
+	logger logrus.FieldLogger
 }
 
 type etcdMutex struct {
@@ -487,7 +475,7 @@ func (e *etcdClient) waitForInitLock(ctx context.Context) <-chan error {
 			if err == nil {
 				locker.Unlock(context.Background())
 				close(initLockSucceeded)
-				e.getLogger().Debug("Distributed lock successful, etcd has quorum")
+				e.logger.Debug("Distributed lock successful, etcd has quorum")
 				return
 			}
 
@@ -628,7 +616,7 @@ func (e *etcdClient) renewLockSession(ctx context.Context) error {
 	e.lockSessionCancel = sessionCancel
 	e.UnlockIgnoreTime()
 
-	e.getLogger().WithField(fieldSession, newSession).Debug("Renewing etcd lock session")
+	e.logger.WithField(fieldSession, newSession).Debug("Renewing etcd lock session")
 
 	if err := e.checkMinVersion(ctx, versionCheckTimeout); err != nil {
 		return err
@@ -680,11 +668,6 @@ func connectEtcdClient(ctx context.Context, config *client.Config, cfgPath strin
 		return nil, err
 	}
 
-	log.WithFields(logrus.Fields{
-		"endpoints": config.Endpoints,
-		"config":    cfgPath,
-	}).Info("Connecting to etcd server...")
-
 	var ls concurrency.Session
 	errorChan := make(chan error)
 
@@ -707,14 +690,20 @@ func connectEtcdClient(ctx context.Context, config *client.Config, cfgPath strin
 		limiter:              limiter,
 		listBatchSize:        clientOptions.ListBatchSize,
 		statusCheckErrors:    make(chan error, 128),
+		logger: log.WithFields(logrus.Fields{
+			"endpoints": config.Endpoints,
+			"config":    cfgPath,
+		}),
 	}
+
+	ec.logger.Info("Connecting to etcd server...")
 
 	leaseTTL := option.Config.KVstoreLeaseTTL
 	if option.Config.KVstoreLeaseTTL == 0 {
 		leaseTTL = defaults.KVstoreLeaseTTL
 	}
 
-	ec.leaseManager = newEtcdLeaseManager(c, leaseTTL, etcdMaxKeysPerLease, ec.expiredLeaseObserver, ec.getLogger())
+	ec.leaseManager = newEtcdLeaseManager(c, leaseTTL, etcdMaxKeysPerLease, ec.expiredLeaseObserver, ec.logger)
 
 	// create session in parallel as this is a blocking operation
 	go func() {
@@ -759,7 +748,7 @@ func connectEtcdClient(ctx context.Context, config *client.Config, cfgPath strin
 				return fmt.Errorf("timed out while waiting for etcd session. Ensure that etcd is running on %s", config.Endpoints)
 			}
 
-			ec.getLogger().Info("Initial etcd session established")
+			ec.logger.Info("Initial etcd session established")
 
 			if err = ec.checkMinVersion(ctx, versionCheckTimeout); err != nil {
 				return fmt.Errorf("unable to validate etcd version: %s", err)
@@ -781,7 +770,7 @@ func connectEtcdClient(ctx context.Context, config *client.Config, cfgPath strin
 
 		go ec.statusChecker()
 
-		watcher := ec.ListAndWatch(ctx, HeartbeatPath, HeartbeatPath, 128)
+		watcher := ec.ListAndWatch(ctx, HeartbeatPath, 128)
 
 		for {
 			select {
@@ -863,7 +852,7 @@ func (e *etcdClient) checkMinVersion(ctx context.Context, timeout time.Duration)
 	for _, ep := range eps {
 		v, err := getEPVersion(ctx, e.client.Maintenance, ep, timeout)
 		if err != nil {
-			e.getLogger().WithError(Hint(err)).WithField(fieldEtcdEndpoint, ep).
+			e.logger.WithError(Hint(err)).WithField(fieldEtcdEndpoint, ep).
 				Warn("Unable to verify version of etcd endpoint")
 			continue
 		}
@@ -873,14 +862,14 @@ func (e *etcdClient) checkMinVersion(ctx context.Context, timeout time.Duration)
 				ep, minRequiredVersionStr, v.String())
 		}
 
-		e.getLogger().WithFields(logrus.Fields{
+		e.logger.WithFields(logrus.Fields{
 			fieldEtcdEndpoint: ep,
 			"version":         v,
 		}).Info("Successfully verified version of etcd endpoint")
 	}
 
 	if len(eps) == 0 {
-		e.getLogger().Warn("Minimal etcd version unknown: No etcd endpoints available")
+		e.logger.Warn("Minimal etcd version unknown: No etcd endpoints available")
 	}
 
 	return nil
@@ -966,10 +955,8 @@ func (e *etcdClient) Watch(ctx context.Context, w *Watcher) {
 		w.Stop()
 	}()
 
-	scopedLog := e.getLogger().WithFields(logrus.Fields{
-		fieldWatcher: w,
-		fieldPrefix:  w.Prefix,
-	})
+	scopedLog := e.logger.WithField(fieldPrefix, w.Prefix)
+	scopedLog.Debug("Starting watcher...")
 
 	err := <-e.Connected(ctx)
 	if err != nil {
@@ -1022,7 +1009,10 @@ reList:
 			}
 
 			localCache.MarkInUse(key.Key)
-			scopedLog.Debugf("Emitting list result as %s event for %s=%s", t, key.Key, key.Value)
+
+			if traceEnabled {
+				scopedLog.Debugf("Emitting list result as %s event for %s=%s", t, key.Key, key.Value)
+			}
 
 			queueStart := spanstat.Start()
 			w.Events <- KeyValueEvent{
@@ -1044,7 +1034,10 @@ reList:
 				Typ: EventTypeDelete,
 			}
 
-			scopedLog.Debugf("Emitting EventTypeDelete event for %s", k)
+			if traceEnabled {
+				scopedLog.Debugf("Emitting EventTypeDelete event for %s", k)
+			}
+
 			queueStart := spanstat.Start()
 			w.Events <- event
 			trackEventQueued(k, EventTypeDelete, queueStart.End(true).Total())
@@ -1109,7 +1102,9 @@ reList:
 				}
 
 				nextRev = r.Header.Revision + 1
-				scopedLog.Debugf("Received event from etcd: %+v", r)
+				if traceEnabled {
+					scopedLog.Debugf("Received event from etcd: %+v", r)
+				}
 
 				for _, ev := range r.Events {
 					event := KeyValueEvent{
@@ -1129,7 +1124,9 @@ reList:
 						localCache.MarkInUse(ev.Kv.Key)
 					}
 
-					scopedLog.Debugf("Emitting %s event for %s=%s", event.Typ, event.Key, event.Value)
+					if traceEnabled {
+						scopedLog.Debugf("Emitting %s event for %s=%s", event.Typ, event.Key, event.Value)
+					}
 
 					queueStart := spanstat.Start()
 					w.Events <- event
@@ -1177,7 +1174,7 @@ func (e *etcdClient) determineEndpointStatus(ctx context.Context, endpointAddres
 	ctxTimeout, cancel := context.WithTimeout(ctx, statusCheckTimeout)
 	defer cancel()
 
-	e.getLogger().Debugf("Checking status to etcd endpoint %s", endpointAddress)
+	e.logger.Debugf("Checking status to etcd endpoint %s", endpointAddress)
 
 	status, err := e.client.Status(ctxTimeout, endpointAddress)
 	if err != nil {
@@ -1867,12 +1864,12 @@ func (e *etcdClient) Close(ctx context.Context) {
 	// Only close e.lockSession if the initial session was successful
 	if sessionErr == nil {
 		if err := e.lockSession.Close(); err != nil {
-			e.getLogger().WithError(err).Warning("Failed to revoke lock session while closing etcd client")
+			e.logger.WithError(err).Warning("Failed to revoke lock session while closing etcd client")
 		}
 	}
 	if e.client != nil {
 		if err := e.client.Close(); err != nil {
-			e.getLogger().WithError(err).Warning("Failed to close etcd client")
+			e.logger.WithError(err).Warning("Failed to close etcd client")
 		}
 	}
 
@@ -1889,21 +1886,17 @@ func (e *etcdClient) GetCapabilities() Capabilities {
 
 // Encode encodes a binary slice into a character set that the backend supports
 func (e *etcdClient) Encode(in []byte) (out string) {
-	defer func() { Trace("Encode", nil, logrus.Fields{"in": in, "out": out}) }()
 	return string(in)
 }
 
 // Decode decodes a key previously encoded back into the original binary slice
 func (e *etcdClient) Decode(in string) (out []byte, err error) {
-	defer func() { Trace("Decode", err, logrus.Fields{"in": in, "out": out}) }()
 	return []byte(in), nil
 }
 
 // ListAndWatch implements the BackendOperations.ListAndWatch using etcd
-func (e *etcdClient) ListAndWatch(ctx context.Context, name, prefix string, chanSize int) *Watcher {
-	w := newWatcher(name, prefix, chanSize)
-
-	e.getLogger().WithField(fieldWatcher, w).Debug("Starting watcher...")
+func (e *etcdClient) ListAndWatch(ctx context.Context, prefix string, chanSize int) *Watcher {
+	w := newWatcher(prefix, chanSize)
 
 	go e.Watch(ctx, w)
 
@@ -1932,7 +1925,7 @@ func (e *etcdClient) expiredLeaseObserver(key string) {
 
 // UserEnforcePresence creates a user in etcd if not already present, and grants the specified roles.
 func (e *etcdClient) UserEnforcePresence(ctx context.Context, name string, roles []string) error {
-	scopedLog := e.getLogger().WithField(FieldUser, name)
+	scopedLog := e.logger.WithField(FieldUser, name)
 
 	scopedLog.Debug("Creating user")
 	_, err := e.client.Auth.UserAddWithOptions(ctx, name, "", &client.UserAddOptions{NoPassword: true})
@@ -1958,7 +1951,7 @@ func (e *etcdClient) UserEnforcePresence(ctx context.Context, name string, roles
 
 // UserEnforcePresence deletes a user from etcd, if present.
 func (e *etcdClient) UserEnforceAbsence(ctx context.Context, name string) error {
-	scopedLog := e.getLogger().WithField(FieldUser, name)
+	scopedLog := e.logger.WithField(FieldUser, name)
 
 	scopedLog.Debug("Deleting user")
 	_, err := e.client.Auth.UserDelete(ctx, name)

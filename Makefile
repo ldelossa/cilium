@@ -538,19 +538,16 @@ $(1): export DOCKER_REGISTRY=localhost:5000
 $(1): export LOCAL_AGENT_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/cilium-dev:$$(LOCAL_IMAGE_TAG)
 $(1): export LOCAL_OPERATOR_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/operator-generic:$$(LOCAL_IMAGE_TAG)
 $(1): export LOCAL_CLUSTERMESH_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/clustermesh-apiserver:$$(LOCAL_IMAGE_TAG)
-$(1): export LOCAL_KVSTOREMESH_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/kvstoremesh:$$(LOCAL_IMAGE_TAG)
 endef
 
 $(eval $(call KIND_ENV,kind-clustermesh-images))
-kind-clustermesh-images: kind-clustermesh-ready kind-build-clustermesh-apiserver kind-build-kvstoremesh kind-build-image-agent kind-build-image-operator ## Builds images and imports them into clustermesh clusters
+kind-clustermesh-images: kind-clustermesh-ready kind-build-clustermesh-apiserver kind-build-image-agent kind-build-image-operator ## Builds images and imports them into clustermesh clusters
 	$(QUIET)kind load docker-image $(LOCAL_CLUSTERMESH_IMAGE) --name clustermesh1
 	$(QUIET)kind load docker-image $(LOCAL_CLUSTERMESH_IMAGE) --name clustermesh2
 	$(QUIET)kind load docker-image $(LOCAL_AGENT_IMAGE) --name clustermesh1
 	$(QUIET)kind load docker-image $(LOCAL_AGENT_IMAGE) --name clustermesh2
 	$(QUIET)kind load docker-image $(LOCAL_OPERATOR_IMAGE) --name clustermesh1
 	$(QUIET)kind load docker-image $(LOCAL_OPERATOR_IMAGE) --name clustermesh2
-	$(QUIET)kind load docker-image $(LOCAL_KVSTOREMESH_IMAGE) --name clustermesh1
-	$(QUIET)kind load docker-image $(LOCAL_KVSTOREMESH_IMAGE) --name clustermesh2
 
 ENABLE_KVSTOREMESH ?= false
 $(eval $(call KIND_ENV,kind-install-cilium-clustermesh))
@@ -563,7 +560,6 @@ kind-install-cilium-clustermesh: kind-clustermesh-ready ## Install a local Ciliu
 		--set=image.override=$(LOCAL_AGENT_IMAGE) \
 		--set=operator.image.override=$(LOCAL_OPERATOR_IMAGE) \
 		--set=clustermesh.apiserver.image.override=$(LOCAL_CLUSTERMESH_IMAGE) \
-		--set=clustermesh.apiserver.kvstoremesh.image.override=$(LOCAL_KVSTOREMESH_IMAGE) \
 		--set=clustermesh.apiserver.kvstoremesh.enabled=$(ENABLE_KVSTOREMESH)
 
 	@echo "  INSTALL cilium on clustermesh2 cluster"
@@ -576,7 +572,6 @@ kind-install-cilium-clustermesh: kind-clustermesh-ready ## Install a local Ciliu
 		--set=image.override=$(LOCAL_AGENT_IMAGE) \
 		--set=operator.image.override=$(LOCAL_OPERATOR_IMAGE) \
 		--set=clustermesh.apiserver.image.override=$(LOCAL_CLUSTERMESH_IMAGE) \
-		--set=clustermesh.apiserver.kvstoremesh.image.override=$(LOCAL_KVSTOREMESH_IMAGE) \
 		--set=clustermesh.apiserver.kvstoremesh.enabled=$(ENABLE_KVSTOREMESH)
 
 	@echo "  CONNECT the two clusters"
@@ -610,10 +605,6 @@ kind-image-operator: kind-ready kind-build-image-operator ## Build cilium-operat
 $(eval $(call KIND_ENV,kind-build-clustermesh-apiserver))
 kind-build-clustermesh-apiserver: ## Build cilium-clustermesh-apiserver docker image
 	$(QUIET)$(MAKE) docker-clustermesh-apiserver-image DOCKER_IMAGE_TAG=$(LOCAL_IMAGE_TAG)
-
-$(eval $(call KIND_ENV,kind-build-kvstoremesh))
-kind-build-kvstoremesh: ## Build cilium-kvstoremesh docker image
-	$(QUIET)$(MAKE) docker-kvstoremesh-image DOCKER_IMAGE_TAG=$(LOCAL_IMAGE_TAG)
 
 .PHONY: kind-image
 kind-image: ## Build cilium and operator images and import them into kind.
@@ -834,6 +825,8 @@ ifeq ($(SKIP_CUSTOMVET_CHECK),"false")
 endif
 	@$(ECHO_CHECK) contrib/scripts/rand-check.sh
 	$(QUIET) contrib/scripts/rand-check.sh
+	@$(ECHO_CHECK) contrib/scripts/check-time.sh
+	$(QUIET) contrib/scripts/check-time.sh
 
 check-sources:
 	@$(ECHO_CHECK) pkg/datapath/loader/check-sources.sh
@@ -911,3 +904,6 @@ force :;
 CILIUM_BUILDER_IMAGE=$(shell cat images/cilium/Dockerfile | grep "ARG CILIUM_BUILDER_IMAGE=" | cut -d"=" -f2)
 run_bpf_tests:
 	docker run -v $$(pwd):/src --privileged -w /src -e RUN_WITH_SUDO=false $(CILIUM_BUILDER_IMAGE) "make" "-C" "test/" "run_bpf_tests"
+
+run-builder:
+	docker run -it --rm -v $$(pwd):/go/src/github.com/cilium/cilium $(CILIUM_BUILDER_IMAGE) bash

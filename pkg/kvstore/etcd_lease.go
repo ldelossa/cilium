@@ -8,7 +8,6 @@ import (
 	"errors"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	v3rpcErrors "go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/spanstat"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 // etcdLeaseClient represents the subset of the etcd client methods used to handle the leases lifecycle.
@@ -34,7 +34,7 @@ type leaseInfo struct {
 // which lease is attached to which etcd key.
 type etcdLeaseManager struct {
 	client etcdLeaseClient
-	log    *logrus.Entry
+	log    logrus.FieldLogger
 
 	ttl     time.Duration
 	limit   uint32
@@ -50,7 +50,7 @@ type etcdLeaseManager struct {
 }
 
 // newEtcdLeaseManager builds and returns a new lease manager instance.
-func newEtcdLeaseManager(cl etcdLeaseClient, ttl time.Duration, limit uint32, expired func(key string), log *logrus.Entry) *etcdLeaseManager {
+func newEtcdLeaseManager(cl etcdLeaseClient, ttl time.Duration, limit uint32, expired func(key string), log logrus.FieldLogger) *etcdLeaseManager {
 	return &etcdLeaseManager{
 		client: cl,
 		log:    log,

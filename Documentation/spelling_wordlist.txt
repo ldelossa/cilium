@@ -535,6 +535,7 @@ pluggable
 pmdabcc
 png
 podCIDR
+podippool
 policyCIDRMatchMode
 policymap
 poller
@@ -703,6 +704,7 @@ uptime
 uretprobes
 url
 urlQuery
+userInfo
 userspace
 uuid
 vCPU
@@ -727,6 +729,7 @@ webhook
 webhooks
 webservice
 whitespace
+wildcarded
 workqueue
 www
 xDS
