@@ -372,6 +372,7 @@ Makefile* @cilium/build
 /netlify.toml @cilium/ci-structure
 /operator/ @cilium/operator
 /operator/pkg/ciliumenvoyconfig @cilium/sig-servicemesh
+/operator/pkg/controller-runtime @cilium/sig-servicemesh
 /operator/pkg/gateway-api @cilium/sig-servicemesh
 /operator/pkg/ingress @cilium/sig-servicemesh
 /operator/pkg/lbipam @cilium/sig-lb
@@ -398,6 +399,7 @@ Makefile* @cilium/build
 /pkg/client @cilium/api
 /pkg/clustermesh @cilium/sig-clustermesh
 /pkg/command/ @cilium/cli
+/pkg/common/ipsec/ @cilium/ipsec
 /pkg/completion/ @cilium/proxy
 /pkg/components/ @cilium/sig-agent
 /pkg/contexthelpers/ @cilium/kvstore
@@ -408,7 +410,8 @@ Makefile* @cilium/build
 /pkg/datapath/linux/config/ @cilium/loader
 /pkg/datapath/linux/ipsec/ @cilium/ipsec
 /pkg/datapath/linux/ipsec/xfrm_collector* @cilium/ipsec @cilium/metrics
-/pkg/datapath/linux/node.go @cilium/ipsec @cilium/sig-datapath
+/pkg/datapath/linux/ipsec.go @cilium/ipsec 
+/pkg/datapath/linux/node.go @cilium/sig-datapath
 /pkg/datapath/linux/probes/ @cilium/loader
 /pkg/datapath/linux/requirements.go @cilium/loader
 /pkg/datapath/types/loader.go @cilium/loader

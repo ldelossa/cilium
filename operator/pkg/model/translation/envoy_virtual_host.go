@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	envoy_config_core_v3 "github.com/cilium/proxy/go/envoy/config/core/v3"
 	envoy_config_route_v3 "github.com/cilium/proxy/go/envoy/config/route/v3"
@@ -32,22 +33,6 @@ const (
 )
 
 type VirtualHostMutator func(*envoy_config_route_v3.VirtualHost) *envoy_config_route_v3.VirtualHost
-
-func WithMaxStreamDuration(seconds int64) VirtualHostMutator {
-	return func(vh *envoy_config_route_v3.VirtualHost) *envoy_config_route_v3.VirtualHost {
-		for _, route := range vh.Routes {
-			if route.GetRoute() == nil {
-				continue
-			}
-			route.GetRoute().MaxStreamDuration = &envoy_config_route_v3.RouteAction_MaxStreamDuration{
-				MaxStreamDuration: &durationpb.Duration{
-					Seconds: seconds,
-				},
-			}
-		}
-		return vh
-	}
-}
 
 // SortableRoute is a slice of envoy Route, which can be sorted based on
 // matching order as per Ingress requirement.
@@ -128,10 +113,7 @@ type VirtualHostParameter struct {
 // the same path matching (e.g. exact, prefix or regex), the incoming
 // request will be load-balanced to multiple backends equally.
 func NewVirtualHostWithDefaults(httpRoutes []model.HTTPRoute, param VirtualHostParameter, mutators ...VirtualHostMutator) (*envoy_config_route_v3.VirtualHost, error) {
-	fns := append(mutators,
-		WithMaxStreamDuration(0),
-	)
-	return NewVirtualHost(httpRoutes, param, fns...)
+	return NewVirtualHost(httpRoutes, param, mutators...)
 }
 
 // NewVirtualHost creates a new VirtualHost with the given host and routes.
@@ -279,7 +261,6 @@ func pathPrefixMutation(rewrite *model.HTTPURLRewriteFilter, httpRoute *model.HT
 		// Refer to: https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1beta1.HTTPPathModifier
 		// ReplacePrefix is allowed to be empty.
 		if len(rewrite.Path.Prefix) == 0 || rewrite.Path.Prefix == "/" {
-
 			route.Route.RegexRewrite = &envoy_type_matcher_v3.RegexMatchAndSubstitute{
 				Pattern: &envoy_type_matcher_v3.RegexMatcher{
 					Regex: fmt.Sprintf(`^%s(/?)(.*)`, regexp.QuoteMeta(httpRoute.PathMatch.Prefix)),
@@ -287,7 +268,6 @@ func pathPrefixMutation(rewrite *model.HTTPURLRewriteFilter, httpRoute *model.HT
 				// hold `/` in case the entire path is removed
 				Substitution: `/\2`,
 			}
-
 		} else {
 			route.Route.PrefixRewrite = rewrite.Path.Prefix
 		}
@@ -321,7 +301,7 @@ func requestMirrorMutation(mirrors []*model.HTTPRequestMirror) routeActionMutati
 				continue
 			}
 			action = append(action, &envoy_config_route_v3.RouteAction_RequestMirrorPolicy{
-				Cluster: fmt.Sprintf("%s/%s:%s", m.Backend.Namespace, m.Backend.Name, m.Backend.Port.GetPort()),
+				Cluster: fmt.Sprintf("%s:%s:%s", m.Backend.Namespace, m.Backend.Name, m.Backend.Port.GetPort()),
 				RuntimeFraction: &envoy_config_core_v3.RuntimeFractionalPercent{
 					DefaultValue: &envoy_type_v3.FractionalPercent{
 						Numerator: 100,
@@ -334,21 +314,36 @@ func requestMirrorMutation(mirrors []*model.HTTPRequestMirror) routeActionMutati
 	}
 }
 
+func timeoutMutation(backend *time.Duration, request *time.Duration) routeActionMutation {
+	return func(route *envoy_config_route_v3.Route_Route) *envoy_config_route_v3.Route_Route {
+		if backend == nil && request == nil {
+			return route
+		}
+		minTimeout := backend
+		if request != nil && (minTimeout == nil || *request < *minTimeout) {
+			minTimeout = request
+		}
+		route.Route.Timeout = durationpb.New(*minTimeout)
+		return route
+	}
+}
+
 func getRouteAction(route *model.HTTPRoute, backends []model.Backend, rewrite *model.HTTPURLRewriteFilter, mirrors []*model.HTTPRequestMirror) *envoy_config_route_v3.Route_Route {
 	var routeAction *envoy_config_route_v3.Route_Route
 
-	var mutators = []routeActionMutation{
+	mutators := []routeActionMutation{
 		hostRewriteMutation(rewrite),
 		pathPrefixMutation(rewrite, route),
 		pathFullReplaceMutation(rewrite),
 		requestMirrorMutation(mirrors),
+		timeoutMutation(route.Timeout.Backend, route.Timeout.Request),
 	}
 
 	if len(backends) == 1 {
 		r := &envoy_config_route_v3.Route_Route{
 			Route: &envoy_config_route_v3.RouteAction{
 				ClusterSpecifier: &envoy_config_route_v3.RouteAction_Cluster{
-					Cluster: fmt.Sprintf("%s/%s:%s", backends[0].Namespace, backends[0].Name, backends[0].Port.GetPort()),
+					Cluster: getClusterName(backends[0].Namespace, backends[0].Name, backends[0].Port.GetPort()),
 				},
 			},
 		}
@@ -366,7 +361,7 @@ func getRouteAction(route *model.HTTPRoute, backends []model.Backend, rewrite *m
 			weight = *be.Weight
 		}
 		weightedClusters = append(weightedClusters, &envoy_config_route_v3.WeightedCluster_ClusterWeight{
-			Name:   fmt.Sprintf("%s/%s:%s", be.Namespace, be.Name, be.Port.GetPort()),
+			Name:   getClusterName(be.Namespace, be.Name, be.Port.GetPort()),
 			Weight: wrapperspb.UInt32(uint32(weight)),
 		})
 	}

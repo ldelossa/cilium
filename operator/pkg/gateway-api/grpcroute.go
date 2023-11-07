@@ -28,8 +28,13 @@ import (
 type grpcRouteReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+}
 
-	Model *internalModel
+func newGRPCRouteReconciler(mgr ctrl.Manager) *grpcRouteReconciler {
+	return &grpcRouteReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

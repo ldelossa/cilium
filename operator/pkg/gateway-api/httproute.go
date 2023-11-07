@@ -28,8 +28,13 @@ import (
 type httpRouteReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+}
 
-	Model *internalModel
+func newHTTPRouteReconciler(mgr ctrl.Manager) *httpRouteReconciler {
+	return &httpRouteReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
