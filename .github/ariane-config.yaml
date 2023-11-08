@@ -15,6 +15,7 @@ triggers:
     - conformance-multi-pool.yaml
     - conformance-runtime.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
+    - enterprise-multi-network.yaml
     - integration-test.yaml
     - tests-clustermesh-upgrade.yaml
     - tests-datapath-verifier.yaml
@@ -81,6 +82,9 @@ triggers:
   /cute (.+):
     workflows:
     - enterprise-cute.yaml
+  /ci-multi-network:
+    workflows:
+    - enterprise-multi-network.yaml
 
 workflows:
   conformance-aks.yaml:
@@ -110,6 +114,8 @@ workflows:
   conformance-runtime.yaml:
     paths-ignore-regex: Documentation/
   enterprise-clustermesh-overlapping-podcidr.yaml:
+    paths-ignore-regex: (test|Documentation)/
+  enterprise-multi-network.yaml:
     paths-ignore-regex: (test|Documentation)/
   integration-test.yaml:
     paths-ignore-regex: Documentation/
