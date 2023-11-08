@@ -11,6 +11,7 @@ cilium-operator-aws hive [flags]
 ### Options
 
 ```
+      --auto-create-default-pod-network                              Automatically creates the default IsovalentPodNetwork on startup (default true)
       --ces-max-ciliumendpoints-per-ces int                          Maximum number of CiliumEndpoints allowed in a CES (default 100)
       --ces-slice-mode string                                        Slicing mode define how ceps are grouped into a CES (default "cesSliceModeIdentity")
       --ces-write-qps-burst int                                      CES work queue burst rate (default 20)
@@ -29,6 +30,7 @@ cilium-operator-aws hive [flags]
       --enable-k8s                                                   Enable the k8s clientset (default true)
       --enable-k8s-api-discovery                                     Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
+      --enable-multi-network                                         Enable support for multiple pod networks
       --enforce-ingress-https                                        Enforces https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. (default true)
       --fqdn-group-min-query-interval duration                       Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gateway-api-secrets-namespace string                         Namespace having tls secrets used by CEC for Gateway API (default "cilium-secrets")

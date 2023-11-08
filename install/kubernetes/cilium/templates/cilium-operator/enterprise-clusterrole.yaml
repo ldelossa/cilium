@@ -62,4 +62,12 @@ rules:
   verbs:
   # to allow IEGPs status.groupStatus updates
   - update
+{{- if .Values.enterprise.multiNetwork.enabled }}
+- apiGroups:
+    - isovalent.com
+  resources:
+    - isovalentpodnetworks
+  verbs:
+    - create
+{{- end }}
 {{- end }}

@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	"github.com/cilium/cilium/enterprise/operator/dnsresolver"
 	"github.com/cilium/cilium/enterprise/operator/k8s"
+	"github.com/cilium/cilium/enterprise/operator/pkg/multinetwork"
 	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
@@ -49,6 +50,8 @@ var (
 			egressgatewayha.PolicyCell,
 			healthcheck.Cell,
 			cell.Invoke(func(*egressgatewayha.OperatorManager) {}),
+
+			multinetwork.Cell,
 		),
 	)
 )

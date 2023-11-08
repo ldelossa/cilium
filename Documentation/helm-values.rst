@@ -1103,7 +1103,11 @@
    * - :spelling:ignore:`enterprise.multiNetwork`
      - Multi-network support (preview feature)
      - object
-     - ``{"autoDirectNodeRoutes":true,"enabled":false}``
+     - ``{"autoCreateDefaultPodNetwork":true,"autoDirectNodeRoutes":true,"enabled":false}``
+   * - :spelling:ignore:`enterprise.multiNetwork.autoCreateDefaultPodNetwork`
+     - Automatically creates a "default" IsovalentPodNetwork on operator startup
+     - bool
+     - ``true``
    * - :spelling:ignore:`enterprise.multiNetwork.autoDirectNodeRoutes`
      - Enable multi-network aware automatic L2 routing between nodes
      - bool
