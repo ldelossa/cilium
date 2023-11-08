@@ -7,6 +7,8 @@ package v1alpha1
 
 type IsovalentFQDNGroupExpansion interface{}
 
+type IsovalentPodNetworkExpansion interface{}
+
 type IsovalentSRv6EgressPolicyExpansion interface{}
 
 type IsovalentSRv6LocatorPoolExpansion interface{}

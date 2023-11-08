@@ -42,6 +42,11 @@ const (
 	VRFPluralName     = "isovalentvrfs"
 	VRFKindDefinition = "IsovalentVRF"
 	VRFName           = VRFPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentPodNetwork (IPN)
+	IPNPluralName     = "isovalentpodnetworks"
+	IPNKindDefinition = "IsovalentPodNetwork"
+	IPNName           = IPNPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -95,6 +100,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentVRFList{},
 		&IsovalentSRv6EgressPolicy{},
 		&IsovalentSRv6EgressPolicyList{},
+		&IsovalentPodNetwork{},
+		&IsovalentPodNetworkList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

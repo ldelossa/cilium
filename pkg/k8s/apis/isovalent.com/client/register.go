@@ -46,6 +46,9 @@ const (
 
 	// VRFName is the full name of the IsovalentSRv6EgressPolicy CRD.
 	VRFName = k8sconstv1alpha1.VRFKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IPNCRDName is the full name of the IsovalentPodNetwork CRD.
+	IPNCRDName = k8sconstv1alpha1.IPNKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -65,6 +68,7 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName): createSRv6EgressPolicyCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.VRFName):              createVRFCRD,
 		synced.CRDResourceName(k8sconstv1.IEGPName):                   createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IPNName):              createIPNCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -97,6 +101,9 @@ var (
 
 	//go:embed crds/v1/isovalentegressgatewaypolicies.yaml
 	crdsv1IsovalentEgressGatewayPolicies []byte
+
+	//go:embed crds/v1alpha1/isovalentpodnetworks.yaml
+	crdsv2Alpha1IsovalentPodNetworks []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -124,6 +131,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentVRFs
 	case IEGPCRDName:
 		crdBytes = crdsv1IsovalentEgressGatewayPolicies
+	case IPNCRDName:
+		crdBytes = crdsv2Alpha1IsovalentPodNetworks
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -209,6 +218,19 @@ func createVRFCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.VRFName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createIPNCRD creates and updates the IsovalentPodNetwork CRD.
+func createIPNCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IPNCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IPNName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

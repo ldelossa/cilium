@@ -15,6 +15,7 @@ rules:
   resourceNames:
   - isovalentegressgatewaypolicies.isovalent.com
   - isovalentfqdngroups.isovalent.com
+  - isovalentpodnetworks.isovalent.com
 - apiGroups:
   - isovalent.com
   resources:
