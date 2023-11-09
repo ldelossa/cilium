@@ -111,6 +111,11 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		return nil, nil
 	}
 
+	// check if maps initialized properly.
+	if p.MulticastMaps == nil {
+		return nil, fmt.Errorf("multicast maps failed to initialize, cannot continue")
+	}
+
 	// check if vxlan is enabled
 	if p.TunnelConfig.Protocol() != tunnel.VXLAN {
 		return nil, fmt.Errorf("unsupported tunnel protocol for multicast. Expected vxlan, got %q", p.TunnelConfig.Protocol().String())
