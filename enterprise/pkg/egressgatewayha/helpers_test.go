@@ -182,6 +182,13 @@ func addEndpoint(tb testing.TB, endpoints fakeResource[*k8sTypes.CiliumEndpoint]
 	})
 }
 
+func deleteEndpoint(tb testing.TB, endpoints fakeResource[*k8sTypes.CiliumEndpoint], ep *k8sTypes.CiliumEndpoint) {
+	endpoints.process(tb, resource.Event[*k8sTypes.CiliumEndpoint]{
+		Kind:   resource.Delete,
+		Object: ep,
+	})
+}
+
 func addNode(tb testing.TB, nodes fakeResource[*cilium_api_v2.CiliumNode], node nodeTypes.Node) {
 	nodes.process(tb, resource.Event[*cilium_api_v2.CiliumNode]{
 		Kind:   resource.Upsert,
