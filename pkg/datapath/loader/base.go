@@ -14,6 +14,7 @@ import (
 
 	"github.com/vishvananda/netlink"
 
+	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/alignchecker"
 	"github.com/cilium/cilium/pkg/datapath/connector"
 	"github.com/cilium/cilium/pkg/datapath/linux/ethtool"
@@ -21,6 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/datapath/prefilter"
+	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/identity"
@@ -197,14 +199,14 @@ func (l *Loader) reinitializeIPSec(ctx context.Context) error {
 	return nil
 }
 
-func (l *Loader) reinitializeOverlay(ctx context.Context, encapProto string) error {
-	// encapProto can be one of option.[TunnelDisabled, TunnelVXLAN, TunnelGeneve]
+func (l *Loader) reinitializeOverlay(ctx context.Context, tunnelConfig tunnel.Config) error {
+	// tunnelConfig.Protocol() can be one of tunnel.[Disabled, VXLAN, Geneve]
 	// if it is disabled, the overlay network programs don't have to be (re)initialized
-	if encapProto == option.TunnelDisabled {
+	if tunnelConfig.Protocol() == tunnel.Disabled {
 		return nil
 	}
 
-	iface := fmt.Sprintf("cilium_%s", encapProto)
+	iface := tunnelConfig.DeviceName()
 	link, err := netlink.LinkByName(iface)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve link for interface %s: %w", iface, err)
@@ -235,7 +237,7 @@ func (l *Loader) reinitializeOverlay(ctx context.Context, encapProto string) err
 }
 
 func (l *Loader) reinitializeXDPLocked(ctx context.Context, extraCArgs []string) error {
-	maybeUnloadObsoleteXDPPrograms(option.Config.GetDevices(), option.Config.XDPMode)
+	maybeUnloadObsoleteXDPPrograms(option.Config.GetDevices(), option.Config.XDPMode, bpf.CiliumPath())
 	if option.Config.XDPMode == option.XDPModeDisabled {
 		return nil
 	}
@@ -267,7 +269,7 @@ func (l *Loader) ReinitializeXDP(ctx context.Context, o datapath.BaseProgramOwne
 // BPF programs, netfilter rule configuration and reserving routes in IPAM for
 // locally detected prefixes. It may be run upon initial Cilium startup, after
 // restore from a previous Cilium run, or during regular Cilium operation.
-func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, deviceMTU int, iptMgr datapath.IptablesManager, p datapath.Proxy) error {
+func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, tunnelConfig tunnel.Config, deviceMTU int, iptMgr datapath.IptablesManager, p datapath.Proxy) error {
 	sysSettings := []sysctl.Setting{
 		{Name: "net.core.bpf_jit_enable", Val: "1", IgnoreErr: true, Warn: "Unable to ensure that BPF JIT compilation is enabled. This can be ignored when Cilium is running inside non-host network namespace (e.g. with kind or minikube)"},
 		{Name: "net.ipv4.conf.all.rp_filter", Val: "0", IgnoreErr: false},
@@ -282,11 +284,6 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 	defer func() { firstInitialization = false }()
 
 	l.init(o.Datapath(), o.LocalConfig())
-
-	encapProto := option.TunnelDisabled
-	if option.Config.TunnelingEnabled() {
-		encapProto = option.Config.TunnelProtocol
-	}
 
 	var nodeIPv4, nodeIPv6 net.IP
 	if option.Config.EnableIPv4 {
@@ -319,21 +316,8 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 		}
 	}
 
-	if !option.Config.TunnelingEnabled() {
-		if option.Config.EgressGatewayCommonEnabled() || option.Config.EnableHighScaleIPcache {
-			// Tunnel is required for egress traffic under this config
-			encapProto = option.Config.TunnelProtocol
-		}
-	}
-	if !option.Config.TunnelingEnabled() &&
-		option.Config.EnableNodePort &&
-		option.Config.NodePortMode != option.NodePortModeSNAT &&
-		option.Config.LoadBalancerDSRDispatch == option.DSRDispatchGeneve {
-		encapProto = option.TunnelGeneve
-	}
-
-	if err := setupTunnelDevice(encapProto, option.Config.TunnelPort, deviceMTU); err != nil {
-		return fmt.Errorf("failed to setup %s tunnel device: %w", encapProto, err)
+	if err := setupTunnelDevice(tunnelConfig.Protocol(), tunnelConfig.Port(), deviceMTU); err != nil {
+		return fmt.Errorf("failed to setup %s tunnel device: %w", tunnelConfig.Protocol(), err)
 	}
 
 	if option.Config.IPAM == ipamOption.IPAMENI {
@@ -426,7 +410,7 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 		}
 	}
 
-	if err := l.reinitializeOverlay(ctx, encapProto); err != nil {
+	if err := l.reinitializeOverlay(ctx, tunnelConfig); err != nil {
 		return err
 	}
 

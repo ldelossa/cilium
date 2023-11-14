@@ -23,6 +23,7 @@ cilium-agent hive [flags]
       --cni-exclusive                                                Whether to remove other CNI configurations
       --cni-log-file string                                          Path where the CNI plugin should write logs (default "/var/run/cilium/cilium-cni.log")
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
+      --disable-iptables-feeder-rules strings                        Chains to ignore when installing feeder rules.
       --egress-gateway-ha-policy-map-max int                         Maximum number of entries in egress gatewa HA policy map (default 16384)
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
       --egress-gateway-policy-map-max int                            Maximum number of entries in egress gateway policy map (default 16384)
@@ -41,6 +42,8 @@ cilium-agent hive [flags]
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
   -h, --help                                                         help for hive
+      --iptables-lock-timeout duration                               Time to pass to each iptables invocation to wait for xtables lock acquisition (default 5s)
+      --iptables-random-fully                                        Set iptables flag random-fully on masquerading rules
       --k8s-api-server string                                        Kubernetes API server URL
       --k8s-client-burst int                                         Burst value allowed for the K8s client
       --k8s-client-qps float32                                       Queries per second limit for the K8s client
@@ -48,6 +51,7 @@ cilium-agent hive [flags]
       --k8s-kubeconfig-path string                                   Absolute path of the kubernetes kubeconfig file
       --k8s-service-proxy-name string                                Value of K8s service-proxy-name label for which Cilium handles the services (empty = all services without service.kubernetes.io/service-proxy-name label)
       --l2-pod-announcements-interface string                        Interface used for sending gratuitous arp messages
+      --max-connected-clusters uint32                                Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
       --mesh-auth-enabled                                            Enable authentication processing & garbage collection (beta) (default true)
       --mesh-auth-gc-interval duration                               Interval in which auth entries are attempted to be garbage collected (default 5m0s)
       --mesh-auth-mutual-connect-timeout duration                    Timeout for connecting to the remote node TCP socket (default 5s)
@@ -58,11 +62,14 @@ cilium-agent hive [flags]
       --mesh-auth-spire-admin-socket string                          The path for the SPIRE admin agent Unix socket.
       --metrics strings                                              Metrics that should be enabled or disabled from the default metric list. (+metric_foo to enable metric_foo, -metric_bar to disable metric_bar)
       --monitor-queue-size int                                       Size of the event queue when reading monitor events
+      --nodeport-addresses strings                                   A whitelist of CIDRs to limit which IPs are used for NodePort. If not set, primary IPv4 and/or IPv6 address of each native device is used.
       --pprof                                                        Enable serving pprof debugging API
       --pprof-address string                                         Address that pprof listens on (default "localhost")
       --pprof-port uint16                                            Port that pprof listens on (default 6060)
       --prometheus-serve-addr string                                 IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off) (default ":9962")
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
+      --tunnel-port uint16                                           Tunnel port (default 8472 for "vxlan" and 6081 for "geneve")
+      --tunnel-protocol string                                       Encapsulation protocol to use for the overlay ("vxlan" or "geneve") (default "vxlan")
       --write-cni-conf-when-ready string                             Write the CNI configuration to the specified path when agent is ready
 ```
 

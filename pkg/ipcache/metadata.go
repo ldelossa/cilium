@@ -223,7 +223,7 @@ func (ipc *IPCache) InjectLabels(ctx context.Context, modifiedPrefixes []netip.P
 			} // else continue below to remove the old entry
 		} else {
 			// Insert to propagate the updated set of labels after removal.
-			newID, _, err = ipc.resolveIdentity(ctx, prefix, prefixInfo, identity.InvalidIdentity)
+			newID, _, err = ipc.resolveIdentity(ctx, prefix, prefixInfo, prefixInfo.RequestedIdentity().ID())
 			if err != nil {
 				// NOTE: This may fail during a 2nd or later
 				// iteration of the loop. To handle this, break
@@ -454,16 +454,6 @@ func (ipc *IPCache) resolveIdentity(ctx context.Context, prefix netip.Prefix, in
 	}
 
 	lbls := info.ToLabels()
-
-	// If we are restoring an identity in the remote-node identity scope, we need to
-	// unconditionally add remote-node and cidr labels back. We do not need to check
-	// if CIDR selection for nodes is enabled here, as we explicitly check further down
-	// when we remove CIDR labels for identities that should not have them.
-	if restoredIdentity.Scope() == identity.IdentityScopeRemoteNode {
-		lbls.MergeLabels(labels.LabelRemoteNode)
-		cidrLabels := labels.GetCIDRLabels(prefix)
-		lbls.MergeLabels(cidrLabels)
-	}
 
 	// If we are restoring a host identity and policy-cidr-match-mode includes "nodes"
 	// then merge the CIDR-label.

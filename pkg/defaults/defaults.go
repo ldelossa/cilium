@@ -531,9 +531,9 @@ const (
 	UseCiliumInternalIPForIPsec = false
 
 	// TunnelPortVXLAN is the default VXLAN port
-	TunnelPortVXLAN = 8472
+	TunnelPortVXLAN uint16 = 8472
 	// TunnelPortGeneve is the default Geneve port
-	TunnelPortGeneve = 6081
+	TunnelPortGeneve uint16 = 6081
 
 	// ARPBaseReachableTime resembles the kernel's NEIGH_VAR_BASE_REACHABLE_TIME which defaults to 30 seconds.
 	ARPBaseReachableTime = 30 * time.Second
@@ -547,6 +547,13 @@ const (
 
 	// EnableK8sNetworkPolicy enables support for K8s NetworkPolicy.
 	EnableK8sNetworkPolicy = true
+
+	// MaxConnectedClusters sets the maximum number of clusters that can be
+	// connected in a clustermesh.
+	// The value is used to determine the bit allocation for cluster ID and
+	// identity in a numeric identity. Values > 255 will decrease the number of
+	// allocatable identities.
+	MaxConnectedClusters = 255
 )
 
 var (

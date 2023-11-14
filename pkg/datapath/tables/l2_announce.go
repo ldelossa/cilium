@@ -60,10 +60,26 @@ var (
 			return index.Stringer(id)
 		},
 	}
+)
 
-	L2AnnounceTableCell = statedb.NewTableCell[*L2AnnounceEntry](
+func NewL2AnnounceTable() (statedb.RWTable[*L2AnnounceEntry], error) {
+	return statedb.NewTable[*L2AnnounceEntry](
 		"l2-announce",
 		L2AnnounceIDIndex,
 		L2AnnounceOriginIndex,
 	)
-)
+}
+
+func (*L2AnnounceEntry) TableHeader() []string {
+	return []string{
+		"IP",
+		"NetworkInterface",
+	}
+}
+
+func (e *L2AnnounceEntry) TableRow() []string {
+	return []string{
+		e.IP.String(),
+		e.NetworkInterface,
+	}
+}

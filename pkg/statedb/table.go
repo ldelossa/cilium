@@ -13,6 +13,17 @@ import (
 	"github.com/cilium/cilium/pkg/statedb/index"
 )
 
+// NewTable creates a new table with given name and indexes.
+// Can fail if the indexes are malformed.
+//
+// To provide access to the table via Hive:
+//
+//	cell.Provide(
+//		// Provide statedb.RWTable[*MyObject]. Often only provided to the module with ProvidePrivate.
+//		statedb.NewTable[*MyObject]("my-objects", MyObjectIDIndex, MyObjectNameIndex),
+//		// Provide the read-only statedb.Table[*MyObject].
+//		statedb.RWTable[*MyObject].ToTable,
+//	)
 func NewTable[Obj any](
 	tableName TableName,
 	primaryIndexer Indexer[Obj],
@@ -49,16 +60,29 @@ func NewTable[Obj any](
 	indexNames.Insert(primaryIndexer.indexName())
 	for _, indexer := range secondaryIndexers {
 		if indexNames.Has(indexer.indexName()) {
-			return nil, fmt.Errorf("index %q: %w", indexer.indexName(), ErrDuplicateIndex)
+			return nil, tableError(tableName, fmt.Errorf("index %q: %w", indexer.indexName(), ErrDuplicateIndex))
 		}
 		indexNames.Insert(indexer.indexName())
 	}
 	for name := range indexNames {
 		if strings.HasPrefix(name, reservedIndexPrefix) {
-			return nil, fmt.Errorf("index %q: %w", name, ErrReservedPrefix)
+			return nil, tableError(tableName, fmt.Errorf("index %q: %w", name, ErrReservedPrefix))
 		}
 	}
 	return table, nil
+}
+
+// MustNewTable creates a new table with given name and indexes.
+// Panics if indexes are malformed.
+func MustNewTable[Obj any](
+	tableName TableName,
+	primaryIndexer Indexer[Obj],
+	secondaryIndexers ...Indexer[Obj]) RWTable[Obj] {
+	t, err := NewTable[Obj](tableName, primaryIndexer, secondaryIndexers...)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 type genTable[Obj any] struct {
@@ -84,6 +108,10 @@ func (t *genTable[Obj]) Name() string {
 	return t.table
 }
 
+func (t *genTable[Obj]) ToTable() Table[Obj] {
+	return t
+}
+
 func (t *genTable[Obj]) Revision(txn ReadTxn) Revision {
 	return txn.getTxn().GetRevision(t.table)
 }
@@ -94,10 +122,7 @@ func (t *genTable[Obj]) First(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint
 }
 
 func (t *genTable[Obj]) FirstWatch(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint64, watch <-chan struct{}, ok bool) {
-	indexTxn := txn.getTxn().indexReadTxn(t.table, q.index)
-	if indexTxn == nil {
-		panic("BUG: No index for " + q.index)
-	}
+	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
 	iter := indexTxn.Root().Iterator()
 	watch = iter.SeekPrefixWatch(q.key)
 	_, iobj, ok := iter.Next()
@@ -114,11 +139,7 @@ func (t *genTable[Obj]) Last(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint6
 }
 
 func (t *genTable[Obj]) LastWatch(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint64, watch <-chan struct{}, ok bool) {
-	indexTxn := txn.getTxn().indexReadTxn(t.table, q.index)
-	if indexTxn == nil {
-		panic("BUG: No index for " + q.index)
-	}
-
+	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
 	iter := indexTxn.Root().ReverseIterator()
 	watch = iter.SeekPrefixWatch(q.key)
 	_, iobj, ok := iter.Previous()
@@ -130,7 +151,7 @@ func (t *genTable[Obj]) LastWatch(txn ReadTxn, q Query[Obj]) (obj Obj, revision 
 }
 
 func (t *genTable[Obj]) LowerBound(txn ReadTxn, q Query[Obj]) (Iterator[Obj], <-chan struct{}) {
-	indexTxn := txn.getTxn().indexReadTxn(t.table, q.index)
+	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
 	root := indexTxn.Root()
 
 	// Since LowerBound query may be invalidated by changes in another branch
@@ -143,10 +164,7 @@ func (t *genTable[Obj]) LowerBound(txn ReadTxn, q Query[Obj]) (Iterator[Obj], <-
 }
 
 func (t *genTable[Obj]) All(txn ReadTxn) (Iterator[Obj], <-chan struct{}) {
-	indexTxn := txn.getTxn().indexReadTxn(t.table, t.primaryAnyIndexer.name)
-	if indexTxn == nil {
-		panic("BUG: Missing primary index " + t.primaryAnyIndexer.name)
-	}
+	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, t.primaryAnyIndexer.name)
 	root := indexTxn.Root()
 	// Grab the watch channel for the root node
 	watchCh, _, _ := root.GetWatch(nil)
@@ -154,10 +172,7 @@ func (t *genTable[Obj]) All(txn ReadTxn) (Iterator[Obj], <-chan struct{}) {
 }
 
 func (t *genTable[Obj]) Get(txn ReadTxn, q Query[Obj]) (Iterator[Obj], <-chan struct{}) {
-	indexTxn := txn.getTxn().indexReadTxn(t.table, q.index)
-	if indexTxn == nil {
-		panic("BUG: Missing index " + q.index)
-	}
+	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
 	iter := indexTxn.Root().Iterator()
 	watchCh := iter.SeekPrefixWatch(q.key)
 	return &iterator[Obj]{iter}, watchCh

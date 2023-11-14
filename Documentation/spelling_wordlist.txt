@@ -126,6 +126,7 @@ Zannoni
 Zhou
 aarch
 alibabacloud
+allocatable
 allocateLoadBalancerNodePorts
 allocator
 allocators
@@ -317,6 +318,7 @@ getpeername
 gettingstarted
 github
 gke
+glibc
 gluecon
 gobpf
 golang

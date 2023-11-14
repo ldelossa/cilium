@@ -40,13 +40,15 @@ var (
 			return index.Int(linkIndex)
 		},
 	}
+)
 
-	RouteTableCell = statedb.NewPrivateRWTableCell[*Route](
+func NewRouteTable() (statedb.RWTable[*Route], error) {
+	return statedb.NewTable[*Route](
 		"routes",
 		RouteIDIndex,
 		RouteLinkIndex,
 	)
-)
+}
 
 type RouteID struct {
 	Table     int
@@ -80,6 +82,37 @@ func (r *Route) DeepCopy() *Route {
 func (r *Route) String() string {
 	return fmt.Sprintf("Route{Dst: %s, Src: %s, Table: %d, LinkIndex: %d}",
 		r.Dst, r.Src, r.Table, r.LinkIndex)
+}
+
+func (*Route) TableHeader() []string {
+	return []string{
+		"Destination",
+		"Source",
+		"Gateway",
+		"LinkIndex",
+		"Table",
+		"Scope",
+	}
+}
+
+func (r *Route) TableRow() []string {
+	// Addr.String() shows "invalid IP" for zero value, but here
+	// we're expecting absence of IPs, so return empty string for
+	// invalid IPs.
+	showAddr := func(addr netip.Addr) string {
+		if !addr.IsValid() {
+			return ""
+		}
+		return addr.String()
+	}
+	return []string{
+		r.Dst.String(),
+		showAddr(r.Src),
+		showAddr(r.Gw),
+		fmt.Sprintf("%d", r.LinkIndex),
+		fmt.Sprintf("%d", r.Table),
+		fmt.Sprintf("%d", r.Scope),
+	}
 }
 
 func HasDefaultRoute(tbl statedb.Table[*Route], rxn statedb.ReadTxn, linkIndex int) bool {

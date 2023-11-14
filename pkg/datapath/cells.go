@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/modules"
 	"github.com/cilium/cilium/pkg/datapath/linux/utime"
 	"github.com/cilium/cilium/pkg/datapath/tables"
+	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/hive"
@@ -57,10 +58,16 @@ var Cell = cell.Module(
 	// The modules manager to search and load kernel modules.
 	modules.Cell,
 
+	// Manages Cilium-specific iptables rules.
+	iptables.Cell,
+
 	cell.Provide(
 		newWireguardAgent,
 		newDatapath,
 	),
+
+	// Provides the Table[NodeAddress] and the controller that populates it from Table[*Device]
+	tables.NodeAddressCell,
 
 	// This cell periodically updates the agent liveness value in configmap.Map to inform
 	// the datapath of the liveness of the agent.
@@ -70,10 +77,6 @@ var Cell = cell.Module(
 	// it to the BPF L2 responder map.
 	l2responder.Cell,
 
-	// This cell defines StateDB tables and their schemas for tables which are used to transfer information
-	// between datapath components and more high-level components.
-	tables.Cell,
-
 	// Gratuitous ARP event processor emits GARP packets on k8s pod creation events.
 	garp.Cell,
 
@@ -82,6 +85,9 @@ var Cell = cell.Module(
 
 	// BIG TCP increases GSO/GRO limits when enabled.
 	bigtcp.Cell,
+
+	// Tunnel protocol configuration and alike.
+	tunnel.Cell,
 
 	cell.Provide(func(dp types.Datapath) types.NodeIDHandler {
 		return dp.NodeIDs()
@@ -127,24 +133,12 @@ func newWireguardAgent(lc hive.Lifecycle, localNodeStore *node.LocalNodeStore) *
 
 func newDatapath(params datapathParams) types.Datapath {
 	datapathConfig := linuxdatapath.DatapathConfiguration{
-		HostDevice: defaults.HostDevice,
-		ProcFs:     option.Config.ProcFs,
+		HostDevice:   defaults.HostDevice,
+		TunnelDevice: params.TunnelConfig.DeviceName(),
+		ProcFs:       option.Config.ProcFs,
 	}
 
-	iptablesManager := &iptables.IptablesManager{}
-
-	params.LC.Append(hive.Hook{
-		OnStart: func(hive.HookContext) error {
-			// FIXME enableIPForwarding should not live here
-			if err := enableIPForwarding(); err != nil {
-				log.Fatalf("enabling IP forwarding via sysctl failed: %s", err)
-			}
-
-			iptablesManager.Init(params.ModulesManager)
-			return nil
-		}})
-
-	datapath := linuxdatapath.NewDatapath(datapathConfig, iptablesManager, params.WgAgent, params.NodeMap, params.ConfigWriter)
+	datapath := linuxdatapath.NewDatapath(datapathConfig, params.IptablesManager, params.WgAgent, params.NodeMap, params.ConfigWriter)
 
 	params.LC.Append(hive.Hook{
 		OnStart: func(hive.HookContext) error {
@@ -175,5 +169,9 @@ type datapathParams struct {
 
 	ModulesManager *modules.Manager
 
+	IptablesManager *iptables.Manager
+
 	ConfigWriter types.ConfigWriter
+
+	TunnelConfig tunnel.Config
 }

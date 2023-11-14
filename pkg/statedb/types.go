@@ -72,6 +72,19 @@ type RWTable[Obj any] interface {
 	// write transaction return the fresh uncommitted modifications if any.
 	Table[Obj]
 
+	// ToTable returns the Table[Obj] interface. Useful with cell.Provide
+	// to avoid the anonymous function:
+	//
+	//   cell.ProvidePrivate(NewMyTable), // RWTable
+	//   cell.Invoke(statedb.Register[statedb.RWTable[Foo])
+	//
+	//   // with anononymous function:
+	//   cell.Provide(func(t statedb.RWTable[Foo]) statedb.Table[Foo] { return t })
+	//
+	//   // with ToTable:
+	//   cell.Provide(statedb.RWTable[Foo].ToTable),
+	ToTable() Table[Obj]
+
 	// Insert an object into the table. Returns the object that was
 	// replaced if there was one.
 	//
@@ -228,6 +241,17 @@ type Indexer[Obj any] interface {
 	indexName() string
 	isUnique() bool
 	fromObject(obj Obj) index.KeySet
+}
+
+// TableWritable is a constraint for objects that implement tabular
+// pretty-printing. Used in "cilium-dbg statedb" sub-commands.
+type TableWritable interface {
+	// TableHeader returns the header columns that are independent of the
+	// object.
+	TableHeader() []string
+
+	// TableRow returns the row columns for this object.
+	TableRow() []string
 }
 
 //
