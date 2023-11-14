@@ -167,9 +167,9 @@ rollOutCiliumPods: false
 # -- Agent container image.
 image:
   override: ~
-  repository: "quay.io/isovalent-dev/cilium-ci"
-  tag: "latest"
-  pullPolicy: "Always"
+  repository: "quay.io/isovalent/cilium"
+  tag: "v1.15.0-cee.pre.1"
+  pullPolicy: "IfNotPresent"
   # cilium-digest
   digest: ""
   useDigest: false
@@ -989,7 +989,7 @@ certgen:
     tag: "v0.1.9"
     digest: "sha256:89a0847753686444daabde9474b48340993bd19c7bea66a46e45b2974b82041f"
     useDigest: true
-    pullPolicy: "Always"
+    pullPolicy: "IfNotPresent"
   # -- Seconds after which the completed job pod will be deleted
   ttlSecondsAfterFinished: 1800
   # -- Labels to be added to hubble-certgen pods
@@ -1244,12 +1244,12 @@ hubble:
     # -- Hubble-relay container image.
     image:
       override: ~
-      repository: "quay.io/isovalent-dev/hubble-relay-ci"
-      tag: "latest"
+      repository: "quay.io/isovalent/hubble-relay"
+      tag: "v1.15.0-cee.pre.1"
        # hubble-relay-digest
       digest: ""
       useDigest: false
-      pullPolicy: "Always"
+      pullPolicy: "IfNotPresent"
 
     # -- Specifies the resources for the hubble-relay pods
     resources: {}
@@ -1479,7 +1479,7 @@ hubble:
         tag: "v0.12.1"
         digest: "sha256:1f86f3400827a0451e6332262467f894eeb7caf0eb8779bd951e2caa9d027cbe"
         useDigest: true
-        pullPolicy: "Always"
+        pullPolicy: "IfNotPresent"
 
       # -- Hubble-ui backend security context.
       securityContext: {}
@@ -1518,7 +1518,7 @@ hubble:
         tag: "v0.12.1"
         digest: "sha256:9e5f81ee747866480ea1ac4630eb6975ff9227f9782b7c93919c081c33f38267"
         useDigest: true
-        pullPolicy: "Always"
+        pullPolicy: "IfNotPresent"
 
       # -- Hubble-ui frontend security context.
       securityContext: {}
@@ -2028,7 +2028,7 @@ envoy:
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
     tag: "v1.27.2-ab187719b71b513150f30209569695adf16ec869"
-    pullPolicy: "Always"
+    pullPolicy: "IfNotPresent"
     digest: "sha256:2b590be37624547d638a578a3f31278d3be53a1a2649ba888a9f15771628521e"
     useDigest: true
 
@@ -2325,7 +2325,7 @@ etcd:
     tag: "v2.0.7"
     digest: "sha256:04b8327f7f992693c2cb483b999041ed8f92efc8e14f2a5f3ab95574a65ea2dc"
     useDigest: true
-    pullPolicy: "Always"
+    pullPolicy: "IfNotPresent"
 
   # -- The priority class to use for cilium-etcd-operator
   priorityClassName: ""
@@ -2429,8 +2429,8 @@ operator:
   # -- cilium-operator image.
   image:
     override: ~
-    repository: "quay.io/isovalent-dev/operator"
-    tag: "latest"
+    repository: "quay.io/isovalent/operator"
+    tag: "v1.15.0-cee.pre.1"
     # operator-generic-digest
     genericDigest: ""
     # operator-azure-digest
@@ -2440,8 +2440,8 @@ operator:
     # operator-alibabacloud-digest
     alibabacloudDigest: ""
     useDigest: false
-    pullPolicy: "Always"
-    suffix: "-ci"
+    pullPolicy: "IfNotPresent"
+    suffix: ""
 
   # -- Number of replicas to run for the cilium-operator deployment
   replicas: 2
@@ -2634,7 +2634,7 @@ nodeinit:
     override: ~
     repository: "quay.io/cilium/startup-script"
     tag: "62093c5c233ea914bfa26a10ba41f8780d9b737f"
-    pullPolicy: "Always"
+    pullPolicy: "IfNotPresent"
 
   # -- The priority class to use for the nodeinit pod.
   priorityClassName: ""
@@ -2724,12 +2724,12 @@ preflight:
   # -- Cilium pre-flight image.
   image:
     override: ~
-    repository: "quay.io/isovalent-dev/cilium-ci"
-    tag: "latest"
+    repository: "quay.io/isovalent/cilium"
+    tag: "v1.15.0-cee.pre.1"
     # cilium-digest
     digest: ""
     useDigest: false
-    pullPolicy: "Always"
+    pullPolicy: "IfNotPresent"
 
   # -- The priority class to use for the preflight pod.
   priorityClassName: ""
@@ -2880,12 +2880,12 @@ clustermesh:
     # -- Clustermesh API server image.
     image:
       override: ~
-      repository: "quay.io/isovalent-dev/clustermesh-apiserver-ci"
-      tag: "latest"
+      repository: "quay.io/isovalent/clustermesh-apiserver"
+      tag: "v1.15.0-cee.pre.1"
       # clustermesh-apiserver-digest
       digest: ""
       useDigest: false
-      pullPolicy: "Always"
+      pullPolicy: "IfNotPresent"
 
     etcd:
       # -- Clustermesh API server etcd image.
@@ -2895,7 +2895,7 @@ clustermesh:
         tag: "v3.5.4"
         digest: "sha256:795d8660c48c439a7c3764c2330ed9222ab5db5bb524d8d0607cac76f7ba82a3"
         useDigest: true
-        pullPolicy: "Always"
+        pullPolicy: "IfNotPresent"
 
       # -- Specifies the resources for etcd container in the apiserver
       resources: {}
@@ -3319,7 +3319,7 @@ authentication:
           tag: "1.35.0"
           digest: "sha256:223ae047b1065bd069aac01ae3ac8088b3ca4a527827e283b85112f29385fb1b"
           useDigest: true
-          pullPolicy: "Always"
+          pullPolicy: "IfNotPresent"
         # SPIRE agent configuration
         agent:
           # -- SPIRE agent image
@@ -3329,7 +3329,7 @@ authentication:
             tag: "1.6.3"
             digest: "sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823"
             useDigest: true
-            pullPolicy: "Always"
+            pullPolicy: "IfNotPresent"
           # -- SPIRE agent service account
           serviceAccount:
             create: true
@@ -3351,7 +3351,7 @@ authentication:
             tag: "1.6.3"
             digest: "sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f"
             useDigest: true
-            pullPolicy: "Always"
+            pullPolicy: "IfNotPresent"
           # -- SPIRE server service account
           serviceAccount:
             create: true
