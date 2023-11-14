@@ -32,6 +32,7 @@ cilium-agent hive [flags]
       --enable-bandwidth-manager                                     Enable BPF bandwidth manager
       --enable-bbr                                                   Enable BBR for the bandwidth manager
       --enable-cilium-api-server-access strings                      List of cilium API APIs which are administratively enabled. Supports '*'. (default [*])
+      --enable-cilium-enterprise-api-server-access strings           List of cilium enterprise API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-health-api-server-access strings               List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs
       --enable-inter-cluster-snat                                    Enable inter-cluster SNAT, to support overlapping PodCIDRs

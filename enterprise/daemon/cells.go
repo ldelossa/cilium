@@ -12,6 +12,8 @@ package main
 
 import (
 	"github.com/cilium/cilium/daemon/cmd"
+	"github.com/cilium/cilium/enterprise/api/v1/server"
+	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
@@ -37,6 +39,10 @@ var (
 	ControlPlane = cell.Module(
 		"enterprise-controlplane",
 		"Control Plane Enterprise",
+
+		api.Cell,
+		server.SpecCell,
+		server.APICell,
 
 		cecm.Cell,
 		sidmanager.SIDManagerCell,
