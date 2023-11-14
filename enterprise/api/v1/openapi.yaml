@@ -1,0 +1,32 @@
+---
+swagger: '2.0'
+info:
+  title: Cilium Enterprise API
+  description: Cilium Enterprise
+  version: v1alpha1
+x-schemes:
+- unix
+basePath: "/v1enterprise"
+produces:
+- application/json
+consumes:
+- application/json
+paths:
+  "/healthz":
+    get:
+      summary: Retrieve Cilium Enterprise health
+      responses:
+        '200':
+          description: Success
+        '500':
+          description: Internal server error
+          x-go-name: Failure
+          schema:
+            "$ref": "#/definitions/Error"
+        '404':
+          description: Cilium Enterprise API is not available
+          x-go-name: Disabled
+parameters: {}
+definitions:
+  Error:
+    type: string
