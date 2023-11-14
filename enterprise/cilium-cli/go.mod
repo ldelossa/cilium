@@ -1,11 +1,11 @@
 module github.com/isovalent/cilium/enterprise/cilium-cli
 
 // renovate: datasource=golang-version depName=go
-go 1.21.3
+go 1.21.4
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cilium/cilium v1.15.0-pre.1.0.20231025133600-0a8f3f91f109
+	github.com/cilium/cilium v1.15.0-pre.2
 	github.com/cilium/cilium-cli v0.15.13
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/google/go-cmp v0.6.0
@@ -222,16 +222,20 @@ require (
 	k8s.io/apiserver v0.28.3 // indirect
 	k8s.io/cli-runtime v0.28.2 // indirect
 	k8s.io/component-base v0.28.3 // indirect
-	k8s.io/klog/v2 v2.100.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
+	k8s.io/klog/v2 v2.110.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e // indirect
 	k8s.io/kubectl v0.28.2 // indirect
 	oras.land/oras-go v1.2.4 // indirect
 	sigs.k8s.io/controller-runtime v0.16.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.14.4-0.20230814161922-911ddcda40a8 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/cilium/cilium => ../../
+replace (
+	github.com/cilium/cilium => ../../
+
+	github.com/cilium/tetragon/pkg/k8s => ./tetragon/
+)
