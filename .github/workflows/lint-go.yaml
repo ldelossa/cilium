@@ -32,6 +32,8 @@ jobs:
           persist-credentials: false
       - name: Check module vendoring
         run: |
+          git config --global url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "git@github.com:"
           go mod tidy
           go mod vendor
           test -z "$(git status --porcelain)" || (echo "please run 'go mod tidy && go mod vendor', and submit your changes"; exit 1)
