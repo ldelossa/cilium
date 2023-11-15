@@ -54,9 +54,9 @@ env:
   # renovate: datasource=github-releases depName=kubernetes-sigs/kind
   kind_version: v0.20.0
   # renovate: datasource=docker depName=quay.io/cilium/kindest-node
-  k8s_version: v1.28.2
+  k8s_version: v1.28.3
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.11
+  cilium_cli_version: v0.15.13
   cilium_cli_ci_version:
   CILIUM_CLI_MODE: helm
   clusterName1: cluster1-${{ github.run_id }}
@@ -67,11 +67,11 @@ env:
 
 jobs:
   commit-status-start:
-    name: Commmit Status Start
+    name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
-        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0  
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
         with:
           sha: ${{ inputs.SHA || github.sha }}
 
@@ -94,6 +94,7 @@ jobs:
             kvstoremesh: true
             cm-auth-mode-1: 'legacy'
             cm-auth-mode-2: 'legacy'
+            maxConnectedClusters: '255'
 
           - name: '2'
             tunnel: 'disabled'
@@ -103,6 +104,7 @@ jobs:
             kvstoremesh: false
             cm-auth-mode-1: 'migration'
             cm-auth-mode-2: 'migration'
+            maxConnectedClusters: '511'
 
           # IPsec encryption cannot be used with BPF NodePort.
           - name: '3'
@@ -113,6 +115,7 @@ jobs:
             kvstoremesh: true
             cm-auth-mode-1: 'cluster'
             cm-auth-mode-2: 'cluster'
+            maxConnectedClusters: '255'
 
           # IPsec encryption is currently not supported in case of ipv6-only clusters (#23553)
           # Wireguard encryption is currently affected by a bug in case of ipv6-only clusters (#23917)
@@ -124,6 +127,7 @@ jobs:
             kvstoremesh: false
             cm-auth-mode-1: 'legacy'
             cm-auth-mode-2: 'migration'
+            maxConnectedClusters: '255'
 
           # IPsec encryption cannot be used with BPF NodePort.
           - name: '5'
@@ -134,6 +138,7 @@ jobs:
             kvstoremesh: true
             cm-auth-mode-1: 'migration'
             cm-auth-mode-2: 'cluster'
+            maxConnectedClusters: '255'
 
           - name: '6'
             tunnel: 'vxlan'
@@ -143,6 +148,7 @@ jobs:
             kvstoremesh: false
             cm-auth-mode-1: 'cluster'
             cm-auth-mode-2: 'cluster'
+            maxConnectedClusters: '511'
 
           - name: '7'
             tunnel: 'geneve'
@@ -152,6 +158,7 @@ jobs:
             kvstoremesh: true
             cm-auth-mode-1: 'cluster'
             cm-auth-mode-2: 'cluster'
+            maxConnectedClusters: '255'
 
           # IPsec encryption cannot be used with BPF NodePort.
           - name: '8'
@@ -162,6 +169,7 @@ jobs:
             kvstoremesh: false
             cm-auth-mode-1: 'cluster'
             cm-auth-mode-2: 'cluster'
+            maxConnectedClusters: '255'
 
         # Tunneling is currently not supported in case of ipv6-only clusters (#17240)
         #  - name: '9'
@@ -181,6 +189,7 @@ jobs:
             kvstoremesh: false
             cm-auth-mode-1: 'cluster'
             cm-auth-mode-2: 'cluster'
+            maxConnectedClusters: '255'
 
     steps:
       - name: Checkout context ref (trusted)
@@ -210,6 +219,7 @@ jobs:
             --helm-set=hubble.relay.enabled=true \
             --helm-set=clustermesh.useAPIServer=true \
             --helm-set=clustermesh.apiserver.kvstoremesh.enabled=${{ matrix.kvstoremesh }} \
+            --helm-set=clustermesh.maxConnectedClusters=${{ matrix.maxConnectedClusters }} \
             "
 
           CILIUM_INSTALL_TUNNEL="--helm-set=tunnelProtocol=${{ matrix.tunnel }}"
@@ -278,7 +288,7 @@ jobs:
           echo kind_svc_cidr_2=${KIND_SVC_CIDR_2} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@951eb9108277f4ffeb86d047bd492b6b96a52542 # v0.15.11
+        uses: cilium/cilium-cli@6361bfd0c291800e6c1041ea3c6ed6d178242e6a # v0.15.13
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -468,7 +478,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set final commit status
-        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0  
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
         with:
           sha: ${{ inputs.SHA || github.sha }}
           status: ${{ needs.installation-and-connectivity.result }}

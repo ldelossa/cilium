@@ -171,7 +171,7 @@ struct ipv4_nat_entry *snat_v4_lookup(const struct ipv4_ct_tuple *tuple)
 	return __snat_lookup(&SNAT_MAPPING_IPV4, tuple);
 }
 
-static __always_inline int snat_v4_new_mapping(struct __ctx_buff *ctx,
+static __always_inline int snat_v4_new_mapping(struct __ctx_buff *ctx, void *map,
 					       struct ipv4_ct_tuple *otuple,
 					       struct ipv4_nat_entry *ostate,
 					       const struct ipv4_nat_target *target,
@@ -181,7 +181,6 @@ static __always_inline int snat_v4_new_mapping(struct __ctx_buff *ctx,
 	struct ipv4_nat_entry rstate;
 	int ret, retries;
 	__u16 port;
-	void *map;
 
 	memset(&rstate, 0, sizeof(rstate));
 	memset(ostate, 0, sizeof(*ostate));
@@ -206,10 +205,6 @@ static __always_inline int snat_v4_new_mapping(struct __ctx_buff *ctx,
 
 	ostate->common.needs_ct = needs_ct;
 	rstate.common.needs_ct = needs_ct;
-
-	map = get_cluster_snat_map_v4(target->cluster_id);
-	if (!map)
-		return DROP_SNAT_NO_MAP_FOUND;
 
 #pragma unroll
 	for (retries = 0; retries < SNAT_COLLISION_RETRIES; retries++) {
@@ -263,7 +258,7 @@ snat_v4_nat_handle_mapping(struct __ctx_buff *ctx,
 			   bool has_l4_header,
 			   struct ipv4_nat_entry **state,
 			   struct ipv4_nat_entry *tmp,
-			   __u32 off,
+			   struct iphdr *ip4, __u32 off,
 			   const struct ipv4_nat_target *target,
 			   struct trace_ctx *trace,
 			   __s8 *ext_err)
@@ -287,8 +282,8 @@ snat_v4_nat_handle_mapping(struct __ctx_buff *ctx,
 		ipv4_ct_tuple_swap_addrs(&tuple_snat);
 
 		ret = ct_lazy_lookup4(get_ct_map4(&tuple_snat), &tuple_snat,
-				      ctx, off, has_l4_header, CT_EGRESS,
-				      SCOPE_FORWARD, CT_ENTRY_ANY,
+				      ctx, ipv4_is_fragment(ip4), off, has_l4_header,
+				      CT_EGRESS, SCOPE_FORWARD, CT_ENTRY_ANY,
 				      &ct_state, &trace->monitor);
 		if (ret < 0)
 			return ret;
@@ -306,8 +301,8 @@ snat_v4_nat_handle_mapping(struct __ctx_buff *ctx,
 	if (*state)
 		return 0;
 	else
-		return snat_v4_new_mapping(ctx, tuple, (*state = tmp), target, needs_ct,
-					   ext_err);
+		return snat_v4_new_mapping(ctx, map, tuple, (*state = tmp),
+					   target, needs_ct, ext_err);
 }
 
 static __always_inline int
@@ -315,7 +310,7 @@ snat_v4_rev_nat_handle_mapping(struct __ctx_buff *ctx,
 			       struct ipv4_ct_tuple *tuple,
 			       bool has_l4_header,
 			       struct ipv4_nat_entry **state,
-			       __u32 off,
+			       struct iphdr *ip4, __u32 off,
 			       const struct ipv4_nat_target *target,
 			       struct trace_ctx *trace)
 {
@@ -342,8 +337,8 @@ snat_v4_rev_nat_handle_mapping(struct __ctx_buff *ctx,
 		ipv4_ct_tuple_swap_ports(&tuple_revsnat);
 
 		ret = ct_lazy_lookup4(get_ct_map4(&tuple_revsnat), &tuple_revsnat,
-				      ctx, off, has_l4_header, CT_INGRESS,
-				      SCOPE_REVERSE, CT_ENTRY_ANY,
+				      ctx, ipv4_is_fragment(ip4), off, has_l4_header,
+				      CT_INGRESS, SCOPE_REVERSE, CT_ENTRY_ANY,
 				      &ct_state, &trace->monitor);
 		if (ret < 0)
 			return ret;
@@ -480,68 +475,6 @@ snat_v4_icmp_rewrite_egress_embedded(struct __ctx_buff *ctx,
 		return DROP_CSUM_L3;
 	if (csum.offset &&
 	    csum_l4_replace(ctx, inner_l4_off, &csum, 0, sum, flags) < 0)
-		return DROP_CSUM_L4;
-	return 0;
-}
-
-static __always_inline int snat_v4_rewrite_ingress(struct __ctx_buff *ctx,
-						   struct ipv4_ct_tuple *tuple,
-						   struct ipv4_nat_entry *state,
-						   __u32 off)
-{
-	int ret, flags = BPF_F_PSEUDO_HDR;
-	struct csum_offset csum = {};
-	__be32 sum;
-
-	if (state->to_daddr == tuple->daddr &&
-	    state->to_dport == tuple->dport)
-		return 0;
-	sum = csum_diff(&tuple->daddr, 4, &state->to_daddr, 4, 0);
-	csum_l4_offset_and_flags(tuple->nexthdr, &csum);
-	if (state->to_dport != tuple->dport) {
-		switch (tuple->nexthdr) {
-		case IPPROTO_TCP:
-		case IPPROTO_UDP:
-			ret = l4_modify_port(ctx, off,
-					     offsetof(struct tcphdr, dest),
-					     &csum, state->to_dport,
-					     tuple->dport);
-			if (ret < 0)
-				return ret;
-			break;
-#ifdef ENABLE_SCTP
-		case IPPROTO_SCTP:
-			return DROP_CSUM_L4;
-#endif  /* ENABLE_SCTP */
-		case IPPROTO_ICMP: {
-			__u8 type = 0;
-
-			if (ctx_load_bytes(ctx, off +
-					   offsetof(struct icmphdr, type),
-					   &type, 1) < 0)
-				return DROP_INVALID;
-			if (type == ICMP_ECHOREPLY) {
-				if (ctx_store_bytes(ctx, off +
-						    offsetof(struct icmphdr, un.echo.id),
-						    &state->to_dport,
-						    sizeof(state->to_dport), 0) < 0)
-					return DROP_WRITE_ERROR;
-				if (l4_csum_replace(ctx, off + offsetof(struct icmphdr, checksum),
-						    tuple->dport,
-						    state->to_dport,
-						    sizeof(tuple->dport)) < 0)
-					return DROP_CSUM_L4;
-			}
-			break;
-		}}
-	}
-	if (ctx_store_bytes(ctx, ETH_HLEN + offsetof(struct iphdr, daddr),
-			    &state->to_daddr, 4, 0) < 0)
-		return DROP_WRITE_ERROR;
-	if (ipv4_csum_update_by_diff(ctx, ETH_HLEN, sum) < 0)
-		return DROP_CSUM_L3;
-	if (csum.offset &&
-	    csum_l4_replace(ctx, off, &csum, 0, sum, flags) < 0)
 		return DROP_CSUM_L4;
 	return 0;
 }
@@ -842,15 +775,15 @@ snat_v4_nat_handle_icmp_frag_needed(struct __ctx_buff *ctx, __u64 off,
 
 static __always_inline int
 __snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
-	      bool has_l4_header, int l4_off, bool update_tuple,
-	      const struct ipv4_nat_target *target, __u16 port_off,
-	      struct trace_ctx *trace, __s8 *ext_err)
+	      struct iphdr *ip4, bool has_l4_header, int l4_off,
+	      bool update_tuple, const struct ipv4_nat_target *target,
+	      __u16 port_off, struct trace_ctx *trace, __s8 *ext_err)
 {
 	struct ipv4_nat_entry *state, tmp;
 	int ret;
 
 	ret = snat_v4_nat_handle_mapping(ctx, tuple, has_l4_header, &state,
-					 &tmp, l4_off, target, trace, ext_err);
+					 &tmp, ip4, l4_off, target, trace, ext_err);
 	if (ret < 0)
 		return ret;
 
@@ -867,15 +800,12 @@ __snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
 }
 
 static __always_inline __maybe_unused int
-snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple, int off,
-	    bool has_l4_header, const struct ipv4_nat_target *target,
+snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
+	    struct iphdr *ip4, int off, bool has_l4_header,
+	    const struct ipv4_nat_target *target,
 	    struct trace_ctx *trace, __s8 *ext_err)
 {
 	struct icmphdr icmphdr __align_stack_8;
-	struct {
-		__be16 sport;
-		__be16 dport;
-	} l4hdr;
 	__u16 port_off;
 
 	build_bug_on(sizeof(struct ipv4_nat_entry) > 64);
@@ -886,11 +816,11 @@ snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple, int off,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		if (ctx_load_bytes(ctx, off, &l4hdr, sizeof(l4hdr)) < 0)
+		if (ipv4_load_l4_ports(ctx, NULL, off, CT_EGRESS,
+				       &tuple->dport, &has_l4_header) < 0)
 			return DROP_INVALID;
 
-		tuple->dport = l4hdr.dport;
-		tuple->sport = l4hdr.sport;
+		ipv4_ct_tuple_swap_ports(tuple);
 		port_off = TCP_SPORT_OFF;
 		break;
 	case IPPROTO_ICMP:
@@ -920,7 +850,7 @@ snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple, int off,
 	if (snat_v4_nat_can_skip(target, tuple))
 		return NAT_PUNT_TO_STACK;
 
-	return __snat_v4_nat(ctx, tuple, has_l4_header, off, false, target,
+	return __snat_v4_nat(ctx, tuple, ip4, has_l4_header, off, false, target,
 			     port_off, trace, ext_err);
 }
 
@@ -1005,12 +935,10 @@ snat_v4_rev_nat(struct __ctx_buff *ctx, const struct ipv4_nat_target *target,
 	struct ipv4_ct_tuple tuple = {};
 	void *data, *data_end;
 	struct iphdr *ip4;
-	struct {
-		__be16 sport;
-		__be16 dport;
-	} l4hdr;
 	bool has_l4_header = true;
 	__u64 off, inner_l3_off;
+	__be16 to_dport = 0;
+	__u16 port_off = 0;
 	int ret;
 
 	build_bug_on(sizeof(struct ipv4_nat_entry) > 64);
@@ -1027,10 +955,11 @@ snat_v4_rev_nat(struct __ctx_buff *ctx, const struct ipv4_nat_target *target,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		if (ctx_load_bytes(ctx, off, &l4hdr, sizeof(l4hdr)) < 0)
+		if (ipv4_load_l4_ports(ctx, ip4, off, CT_INGRESS,
+				       &tuple.dport, &has_l4_header) < 0)
 			return DROP_INVALID;
-		tuple.dport = l4hdr.dport;
-		tuple.sport = l4hdr.sport;
+		ipv4_ct_tuple_swap_ports(&tuple);
+		port_off = TCP_DPORT_OFF;
 		break;
 	case IPPROTO_ICMP:
 		if (ctx_load_bytes(ctx, off, &icmphdr, sizeof(icmphdr)) < 0)
@@ -1039,6 +968,7 @@ snat_v4_rev_nat(struct __ctx_buff *ctx, const struct ipv4_nat_target *target,
 		case ICMP_ECHOREPLY:
 			tuple.dport = icmphdr.un.echo.id;
 			tuple.sport = 0;
+			port_off = offsetof(struct icmphdr, un.echo.id);
 			break;
 		case ICMP_DEST_UNREACH:
 			if (icmphdr.code != ICMP_FRAG_NEEDED)
@@ -1052,6 +982,7 @@ snat_v4_rev_nat(struct __ctx_buff *ctx, const struct ipv4_nat_target *target,
 			if (IS_ERR(ret))
 				return ret;
 
+			has_l4_header = true;
 			goto rewrite;
 		default:
 			return NAT_PUNT_TO_STACK;
@@ -1064,12 +995,17 @@ snat_v4_rev_nat(struct __ctx_buff *ctx, const struct ipv4_nat_target *target,
 	if (snat_v4_rev_nat_can_skip(target, &tuple))
 		return NAT_PUNT_TO_STACK;
 	ret = snat_v4_rev_nat_handle_mapping(ctx, &tuple, has_l4_header, &state,
-					     off, target, trace);
+					     ip4, off, target, trace);
 	if (ret < 0)
 		return ret;
 
+	/* Skip port rewrite for ICMP_DEST_UNREACH by passing old_port == new_port == 0. */
+	to_dport = state->to_dport;
+
 rewrite:
-	return snat_v4_rewrite_ingress(ctx, &tuple, state, off);
+	return snat_v4_rewrite_headers(ctx, tuple.nexthdr, ETH_HLEN, has_l4_header, off,
+				       tuple.daddr, state->to_daddr, IPV4_DADDR_OFF,
+				       tuple.dport, to_dport, port_off);
 }
 #else
 static __always_inline __maybe_unused
@@ -1615,7 +1551,7 @@ snat_v6_nat(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple, int off,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		if (ctx_load_bytes(ctx, off, &l4hdr, sizeof(l4hdr)) < 0)
+		if (l4_load_ports(ctx, off, (__be16 *)&l4hdr) < 0)
 			return DROP_INVALID;
 
 		tuple->dport = l4hdr.dport;
@@ -1771,7 +1707,7 @@ snat_v6_rev_nat(struct __ctx_buff *ctx, const struct ipv6_nat_target *target,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		if (ctx_load_bytes(ctx, off, &l4hdr, sizeof(l4hdr)) < 0)
+		if (l4_load_ports(ctx, off, (__be16 *)&l4hdr) < 0)
 			return DROP_INVALID;
 		tuple.dport = l4hdr.dport;
 		tuple.sport = l4hdr.sport;

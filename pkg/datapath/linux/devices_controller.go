@@ -46,8 +46,10 @@ var DevicesControllerCell = cell.Module(
 	// ordering and to populate the tables before there are any readers.
 	// But these cells are still usable directly in tests to provide
 	// the modules under test device and route test data.
-	tables.DeviceTableCell,
-	tables.RouteTableCell,
+	cell.ProvidePrivate(
+		tables.NewDeviceTable,
+		tables.NewRouteTable,
+	),
 
 	cell.Provide(
 		newDevicesController,
@@ -115,6 +117,10 @@ type devicesController struct {
 }
 
 func newDevicesController(lc hive.Lifecycle, p devicesControllerParams) (*devicesController, statedb.Table[*tables.Device], statedb.Table[*tables.Route]) {
+	p.DB.RegisterTable(
+		p.DeviceTable,
+		p.RouteTable,
+	)
 	dc := &devicesController{
 		params:          p,
 		initialized:     make(chan struct{}),
@@ -362,7 +368,8 @@ func (dc *devicesController) processUpdates(
 
 func deviceAddressFromAddrUpdate(upd netlink.AddrUpdate) tables.DeviceAddress {
 	return tables.DeviceAddress{
-		Addr: ip.MustAddrFromIP(upd.LinkAddress.IP),
+		Addr:      ip.MustAddrFromIP(upd.LinkAddress.IP),
+		Secondary: upd.Flags&unix.IFA_F_SECONDARY != 0,
 
 		// ifaddrmsg.ifa_scope is uint8, vishvananda/netlink has wrong type
 		Scope: uint8(upd.Scope),
@@ -397,7 +404,10 @@ func (dc *devicesController) processBatch(txn statedb.WriteTxn, batch map[int][]
 			d = d.DeepCopy()
 		}
 		deviceDeleted := false
-		deviceUpdated := false // Set to true if the batch contained an address or link update.
+
+		// Set to true if the device was modified. This is done to avoid unnecessary
+		// modifications to the device that would wake up watchers.
+		deviceUpdated := false
 
 		for _, u := range updates {
 			switch u := u.(type) {
@@ -457,6 +467,18 @@ func (dc *devicesController) processBatch(txn statedb.WriteTxn, batch map[int][]
 			}
 		}
 
+		// Recheck the viability of the device after the updates have been applied.
+		// Since route changes may cause device to be selected (e.g. veth device that
+		// has default route), always recheck viability if device is not selected.
+		if deviceUpdated || !d.Selected {
+			oldSelected := d.Selected
+			oldReason := d.NotSelectedReason
+			d.Selected, d.NotSelectedReason = dc.isSelectedDevice(d, txn)
+			if d.Selected != oldSelected || d.NotSelectedReason != oldReason {
+				deviceUpdated = true
+			}
+		}
+
 		if deviceDeleted {
 			// Remove the deleted device.
 			dc.params.DeviceTable.Delete(txn, d)
@@ -468,9 +490,6 @@ func (dc *devicesController) processBatch(txn statedb.WriteTxn, batch map[int][]
 				dc.params.RouteTable.Delete(txn, r)
 			}
 		} else if deviceUpdated {
-			// Recheck the viability of the device after the updates have been applied.
-			d.Selected, d.NotSelectedReason = dc.isSelectedDevice(d, txn)
-
 			// Create or update the device.
 			_, _, err := dc.params.DeviceTable.Insert(txn, d)
 			if err != nil {

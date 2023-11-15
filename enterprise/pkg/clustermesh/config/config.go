@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/option"
 )
 
@@ -49,7 +50,7 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 	}
 
 	if !dcfg.TunnelingEnabled() {
-		return fmt.Errorf("--%s depends on tunnel=%s|%s", enableClusterAwareAddressing, option.TunnelVXLAN, option.TunnelGeneve)
+		return fmt.Errorf("--%s depends on tunnel=%s|%s", enableClusterAwareAddressing, tunnel.VXLAN, tunnel.Geneve)
 	}
 
 	// We cannot rely on the EnableNodePort value only because it may be

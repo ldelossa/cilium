@@ -6,7 +6,6 @@ package node
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -416,12 +415,6 @@ func SetIPv6NodeRange(net *cidr.CIDR) {
 
 // AutoComplete completes the parts of addressing that can be auto derived
 func AutoComplete() error {
-	if option.Config.EnableHostIPRestore {
-		// At this point, only attempt to restore the `cilium_host` IPs from
-		// the filesystem because we haven't fully synced with K8s yet.
-		restoreCiliumHostIPsFromFS()
-	}
-
 	InitDefaultPrefix(option.Config.DirectRoutingDevice)
 
 	if option.Config.EnableIPv6 && GetIPv6AllocRange() == nil {
@@ -434,120 +427,6 @@ func AutoComplete() error {
 
 	return nil
 }
-
-// RestoreHostIPs restores the router IPs (`cilium_host`) from a previous
-// Cilium run. Router IPs from the filesystem are preferred over the IPs found
-// in the Kubernetes resource (Node or CiliumNode), because we consider the
-// filesystem to be the most up-to-date source of truth. The chosen router IP
-// is then checked whether it is contained inside node CIDR (pod CIDR) range.
-// If not, then the router IP is discarded and not restored.
-//
-// The restored IP is returned.
-func RestoreHostIPs(ipv6 bool, fromK8s, fromFS net.IP, cidrs []*cidr.CIDR) net.IP {
-	if !option.Config.EnableHostIPRestore {
-		return nil
-	}
-
-	var (
-		setter func(net.IP)
-	)
-	if ipv6 {
-		setter = SetIPv6Router
-	} else {
-		setter = SetInternalIPv4Router
-	}
-
-	ip, err := chooseHostIPsToRestore(ipv6, fromK8s, fromFS, cidrs)
-	switch {
-	case err != nil && errors.Is(err, errDoesNotBelong):
-		log.WithFields(logrus.Fields{
-			logfields.CIDRS: cidrs,
-		}).Infof(
-			"The router IP (%s) considered for restoration does not belong in the Pod CIDR of the node. Discarding old router IP.",
-			ip,
-		)
-		// Indicate that this IP will not be restored by setting to nil after
-		// we've used it to log above.
-		ip = nil
-		setter(nil)
-	case err != nil && errors.Is(err, errMismatch):
-		log.Warnf(
-			mismatchRouterIPsMsg,
-			fromK8s, fromFS, option.LocalRouterIPv4, option.LocalRouterIPv6,
-		)
-		fallthrough // Above is just a warning; we still want to set the router IP regardless.
-	case err == nil:
-		setter(ip)
-	}
-
-	return ip
-}
-
-func chooseHostIPsToRestore(ipv6 bool, fromK8s, fromFS net.IP, cidrs []*cidr.CIDR) (ip net.IP, err error) {
-	switch {
-	// If both IPs are available, then check both for validity. We prefer the
-	// local IP from the FS over the K8s IP.
-	case fromK8s != nil && fromFS != nil:
-		if fromK8s.Equal(fromFS) {
-			ip = fromK8s
-		} else {
-			ip = fromFS
-			err = errMismatch
-
-			// Check if we need to fallback to using the fromK8s IP, in the
-			// case that the IP from the FS is not within the CIDR. If we
-			// fallback, then we also need to check the fromK8s IP is also
-			// within the CIDR.
-			for _, cidr := range cidrs {
-				if cidr != nil && cidr.Contains(ip) {
-					return
-				} else if cidr != nil && cidr.Contains(fromK8s) {
-					ip = fromK8s
-					return
-				}
-			}
-		}
-	case fromK8s == nil && fromFS != nil:
-		ip = fromFS
-	case fromK8s != nil && fromFS == nil:
-		ip = fromK8s
-	case fromK8s == nil && fromFS == nil:
-		// We do nothing in this case because there are no router IPs to
-		// restore.
-		return
-	}
-
-	for _, cidr := range cidrs {
-		if cidr != nil && cidr.Contains(ip) {
-			return
-		}
-	}
-
-	err = errDoesNotBelong
-	return
-}
-
-// restoreCiliumHostIPsFromFS restores the router IPs (`cilium_host`) from a
-// previous Cilium run. The IPs are restored from the filesystem. This is part
-// 1/2 of the restoration.
-func restoreCiliumHostIPsFromFS() {
-	// Read the previous cilium_host IPs from node_config.h for backward
-	// compatibility.
-	router4, router6 := getCiliumHostIPs()
-	if option.Config.EnableIPv4 {
-		SetInternalIPv4Router(router4)
-	}
-	if option.Config.EnableIPv6 {
-		SetIPv6Router(router6)
-	}
-}
-
-var (
-	errMismatch      = errors.New("mismatched IPs")
-	errDoesNotBelong = errors.New("IP does not belong to CIDR")
-)
-
-const mismatchRouterIPsMsg = "Mismatch of router IPs found during restoration. The Kubernetes resource contained %s, while the filesystem contained %s. Using the router IP from the filesystem. To change the router IP, specify --%s and/or --%s."
 
 // ValidatePostInit validates the entire addressing setup and completes it as
 // required
@@ -695,10 +574,14 @@ func getCiliumHostIPsFromFile(nodeConfig string) (ipv4GW, ipv6Router net.IP) {
 	return ipv4GW, ipv6Router
 }
 
-// getCiliumHostIPs returns the Cilium IPv4 gateway and router IPv6 address from
+// ExtractCiliumHostIPFromFS returns the Cilium IPv4 gateway and router IPv6 address from
 // the node_config.h file if is present; or by deriving it from
 // defaults.HostDevice interface, on which only the IPv4 is possible to derive.
-func getCiliumHostIPs() (ipv4GW, ipv6Router net.IP) {
+func ExtractCiliumHostIPFromFS() (ipv4GW, ipv6Router net.IP) {
+	if !option.Config.EnableHostIPRestore {
+		return nil, nil
+	}
+
 	nodeConfig := option.Config.GetNodeConfigPath()
 	ipv4GW, ipv6Router = getCiliumHostIPsFromFile(nodeConfig)
 	if ipv4GW != nil || ipv6Router != nil {

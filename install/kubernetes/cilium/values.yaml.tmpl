@@ -593,6 +593,12 @@ cni:
   # inside the agent pod.
   hostConfDirMountPath: /host/etc/cni/net.d
 
+  # -- Specifies the resources for the cni initContainer
+  resources:
+    requests:
+      cpu: 100m
+      memory: 10Mi
+
 # -- (string) Configure how frequently garbage collection should occur for the datapath
 # connection tracking table.
 # @default -- `"0s"`
@@ -721,8 +727,7 @@ ingressController:
   # -- Enable proxy protocol for all Ingress listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
   enableProxyProtocol: false
 
-  # -- IngressLBAnnotations are the annotation prefixes, which are used to filter annotations to propagate
-  # from Ingress to the Load Balancer service
+  # -- IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service
   ingressLBAnnotationPrefixes: ['service.beta.kubernetes.io', 'service.kubernetes.io', 'cloud.google.com']
 
   # -- Default secret namespace for ingresses without .spec.tls[].secretName set.
@@ -2248,15 +2253,6 @@ tls:
     #   ...
     #   -----END CERTIFICATE-----
 
-# -- Configure the encapsulation configuration for communication between nodes.
-# Deprecated in favor of tunnelProtocol and routingMode. To be removed in 1.15.
-# Possible values:
-#   - disabled
-#   - vxlan
-#   - geneve
-# @default -- `"vxlan"`
-tunnel: ""
-
 # -- Tunneling protocol to use in tunneling mode and for ad-hoc tunnels.
 # Possible values:
 #   - ""
@@ -2815,6 +2811,12 @@ enableCriticalPriorityClass: true
 clustermesh:
   # -- Deploy clustermesh-apiserver for clustermesh
   useAPIServer: false
+  # -- The maximum number of clusters to support in a ClusterMesh. This value
+  # cannot be changed on running clusters, and all clusters in a ClusterMesh
+  # must be configured with the same value. Values > 255 will decrease the
+  # maximum allocatable cluster-local identities.
+  # Supported values are 255 and 511.
+  maxConnectedClusters: 255
 
   # -- Annotations to be added to all top-level clustermesh objects (resources under templates/clustermesh-apiserver and templates/clustermesh-config)
   annotations: {}
@@ -3316,6 +3318,19 @@ authentication:
           # -- SPIRE agent tolerations configuration
           # ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
           tolerations: []
+          # -- SPIRE agent affinity configuration
+          affinity: {}
+          # -- SPIRE agent nodeSelector configuration
+          # ref: ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
+          nodeSelector: {}
+          # -- Security context to be added to spire agent pods.
+          # SecurityContext holds pod-level security attributes and common container settings.
+          # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
+          podSecurityContext: {}
+          # -- Security context to be added to spire agent containers.
+          # SecurityContext holds pod-level security attributes and common container settings.
+          # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
+          securityContext: {}
         server:
           # -- SPIRE server image
           image:

@@ -91,9 +91,9 @@ func (r *tlsRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&gatewayv1alpha2.TLSRoute{}).
 		// Watch for changes to Backend services
 		Watches(&corev1.Service{}, r.enqueueRequestForBackendService()).
+		// Watch for changes to Reference Grants
+		Watches(&gatewayv1alpha2.ReferenceGrant{}, r.enqueueRequestForReferenceGrant()).
 		// Watch for changes to Gateways and enqueue TLSRoutes that reference them
-		Watches(&gatewayv1.Gateway{}, r.enqueueRequestForGateway()).
-		// Watch for changes to Gateways and enqueue TLSRoutes that reference them,
 		Watches(&gatewayv1.Gateway{}, r.enqueueRequestForGateway(),
 			builder.WithPredicates(
 				predicate.NewPredicateFuncs(hasMatchingController(context.Background(), mgr.GetClient(), controllerName)),
@@ -105,6 +105,12 @@ func (r *tlsRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // if the backend services are updated.
 func (r *tlsRouteReconciler) enqueueRequestForBackendService() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(r.enqueueFromIndex(backendServiceIndex))
+}
+
+// enqueueRequestForReferenceGrant makes sure that all TLS Routes are reconciled
+// if a ReferenceGrant changes
+func (r *tlsRouteReconciler) enqueueRequestForReferenceGrant() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(r.enqueueAll())
 }
 
 func (r *tlsRouteReconciler) enqueueRequestForGateway() handler.EventHandler {
@@ -128,6 +134,34 @@ func (r *tlsRouteReconciler) enqueueFromIndex(index string) handler.MapFunc {
 
 		requests := make([]reconcile.Request, 0, len(rList.Items))
 		for _, item := range rList.Items {
+			route := client.ObjectKey{
+				Namespace: item.GetNamespace(),
+				Name:      item.GetName(),
+			}
+			requests = append(requests, reconcile.Request{
+				NamespacedName: route,
+			})
+			scopedLog.WithField("tlsRoute", route).Info("Enqueued TLSRoute for resource")
+		}
+		return requests
+	}
+}
+
+func (r *tlsRouteReconciler) enqueueAll() handler.MapFunc {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		scopedLog := log.WithFields(logrus.Fields{
+			logfields.Controller: "tlsRoute",
+			logfields.Resource:   client.ObjectKeyFromObject(o),
+		})
+		trList := &gatewayv1alpha2.TLSRouteList{}
+
+		if err := r.Client.List(ctx, trList, &client.ListOptions{}); err != nil {
+			scopedLog.WithError(err).Error("Failed to get TLSRoutes")
+			return []reconcile.Request{}
+		}
+
+		requests := make([]reconcile.Request, 0, len(trList.Items))
+		for _, item := range trList.Items {
 			route := client.ObjectKey{
 				Namespace: item.GetNamespace(),
 				Name:      item.GetName(),

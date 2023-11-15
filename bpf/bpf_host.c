@@ -141,22 +141,22 @@ handle_ipv6(struct __ctx_buff *ctx, __u32 secctx __maybe_unused,
 #ifdef ENABLE_HOST_FIREWALL
 	struct ct_buffer6 ct_buffer = {};
 	bool need_hostfw = false;
+	__u8 nexthdr;
+	int hdrlen;
 #endif /* ENABLE_HOST_FIREWALL */
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
 	int __maybe_unused ret;
-	int hdrlen;
-	__u8 nexthdr;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
 
+#ifdef ENABLE_HOST_FIREWALL
 	nexthdr = ip6->nexthdr;
 	hdrlen = ipv6_hdrlen(ctx, &nexthdr);
 	if (hdrlen < 0)
 		return hdrlen;
 
-#ifdef ENABLE_HOST_FIREWALL
 	if (likely(nexthdr == IPPROTO_ICMPV6)) {
 		ret = icmp6_host_handle(ctx, ETH_HLEN + hdrlen);
 		if (ret == SKIP_HOST_FIREWALL)
@@ -1333,17 +1333,11 @@ skip_host_firewall:
 		return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP,
 					      METRIC_EGRESS);
 
-	/* We disable the WireGuard strict mode if the tunnel mode is enabled,
-	 * since we have a check earlier in the datapath before encapsulation.
-	 * We chose this approach so that we don't have to decapsulate the
-	 * packet to check if the packet's original destination is allowed to
-	 * be sent unencrypted.
-	 */
-#if !defined(TUNNEL_MODE) && defined(ENCRYPTION_STRICT_MODE)
+#if defined(ENCRYPTION_STRICT_MODE)
 	if (!strict_allow(ctx))
 		return send_drop_notify_error(ctx, 0, DROP_UNENCRYPTED_TRAFFIC,
 					      CTX_ACT_DROP, METRIC_EGRESS);
-#endif /* !TUNNEL_MODE && ENCRYPTION_STRICT_MODE */
+#endif /* ENCRYPTION_STRICT_MODE */
 #endif /* ENABLE_WIREGUARD */
 
 #ifdef ENABLE_HEALTH_CHECK

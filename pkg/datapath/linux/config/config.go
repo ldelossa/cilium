@@ -67,11 +67,6 @@ import (
 
 var (
 	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "datapath-linux-config")
-
-	tunnelProtocols = map[string]int{
-		option.TunnelVXLAN:  1,
-		option.TunnelGeneve: 2,
-	}
 )
 
 // HeaderfileWriter is a wrapper type which implements datapath.ConfigWriter.
@@ -152,26 +147,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	if option.Config.EnableIPv6 {
 		extraMacrosMap["HOST_IP"] = hostIP.String()
 		fw.WriteString(defineIPv6("HOST_IP", hostIP))
-	}
-
-	for t, id := range tunnelProtocols {
-		macroName := fmt.Sprintf("TUNNEL_PROTOCOL_%s", strings.ToUpper(t))
-		cDefinesMap[macroName] = fmt.Sprintf("%d", id)
-	}
-
-	encapProto := option.Config.TunnelProtocol
-	if !option.Config.TunnelingEnabled() &&
-		option.Config.EnableNodePort &&
-		option.Config.NodePortMode != option.NodePortModeSNAT &&
-		option.Config.LoadBalancerDSRDispatch == option.DSRDispatchGeneve {
-		encapProto = option.TunnelGeneve
-	}
-
-	cDefinesMap["TUNNEL_PROTOCOL"] = fmt.Sprintf("%d", tunnelProtocols[encapProto])
-	cDefinesMap["TUNNEL_PORT"] = fmt.Sprintf("%d", option.Config.TunnelPort)
-
-	if tunnelDev, err := netlink.LinkByName(fmt.Sprintf("cilium_%s", encapProto)); err == nil {
-		cDefinesMap["ENCAP_IFINDEX"] = fmt.Sprintf("%d", tunnelDev.Attrs().Index)
 	}
 
 	cDefinesMap["HOST_ID"] = fmt.Sprintf("%d", identity.GetReservedID(labels.IDNameHost))
@@ -791,6 +766,12 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		}
 	}
 
+	// Write Identity and ClusterID related macros.
+	cDefinesMap["CLUSTER_ID_MAX"] = fmt.Sprintf("%d", option.Config.MaxConnectedClusters)
+
+	fmt.Fprint(fw, declareConfig("identity_length", identity.GetClusterIDShift(), "Identity length in bits"))
+	fmt.Fprint(fw, assignConfig("identity_length", identity.GetClusterIDShift()))
+
 	// Since golang maps are unordered, we sort the keys in the map
 	// to get a consistent written format to the writer. This maintains
 	// the consistency when we try to calculate hash for a datapath after
@@ -1090,7 +1071,9 @@ func (h *HeaderfileWriter) writeTemplateConfig(fw *bufio.Writer, e datapath.Endp
 		}
 		fmt.Fprintf(fw, "#define DIRECT_ROUTING_DEV_IFINDEX %d\n", directRoutingIfIndex)
 		if len(option.Config.GetDevices()) == 1 {
-			fmt.Fprintf(fw, "#define ENABLE_SKIP_FIB 1\n")
+			if e.IsHost() || !option.Config.EnforceLXCFibLookup() {
+				fmt.Fprintf(fw, "#define ENABLE_SKIP_FIB 1\n")
+			}
 		}
 	}
 

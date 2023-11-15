@@ -31,6 +31,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/lbmap"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
 	"github.com/cilium/cilium/pkg/maps/metricsmap"
+	"github.com/cilium/cilium/pkg/maps/timestamp"
 	tunnelmap "github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
@@ -210,12 +211,7 @@ func (d *Daemon) getHostFirewallStatus() *models.HostFirewall {
 }
 
 func (d *Daemon) getClockSourceStatus() *models.ClockSource {
-	s := &models.ClockSource{Mode: models.ClockSourceModeKtime}
-	if option.Config.ClockSource == option.ClockSourceJiffies {
-		s.Mode = models.ClockSourceModeJiffies
-		s.Hertz = int64(option.Config.KernelHz)
-	}
-	return s
+	return timestamp.GetClockSourceFromOptions()
 }
 
 func (d *Daemon) getCNIChainingStatus() *models.CNIChainingStatus {
@@ -736,8 +732,8 @@ func (d *Daemon) getStatus(brief bool) models.StatusResponse {
 
 func (d *Daemon) getIdentityRange() *models.IdentityRange {
 	s := &models.IdentityRange{
-		MinIdentity: int64(identity.MinimalAllocationIdentity),
-		MaxIdentity: int64(identity.MaximumAllocationIdentity),
+		MinIdentity: int64(identity.GetMinimalAllocationIdentity()),
+		MaxIdentity: int64(identity.GetMaximumAllocationIdentity()),
 	}
 
 	return s

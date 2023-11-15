@@ -46,7 +46,7 @@ cilium-operator-azure hive dot-graph [flags]
       --ingress-default-lb-mode string                               Default loadbalancer mode for Ingress. Applicable values: dedicated, shared (default "dedicated")
       --ingress-default-secret-name string                           Default secret name for Ingress.
       --ingress-default-secret-namespace string                      Default secret namespace for Ingress.
-      --ingress-lb-annotation-prefixes strings                       Annotations which are needed to propagate from Ingress to the Load Balancer. (default [service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
+      --ingress-lb-annotation-prefixes strings                       Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
       --ingress-secrets-namespace string                             Namespace having tls secrets used by Ingress and CEC. (default "cilium-secrets")
       --ingress-shared-lb-service-name string                        Name of shared LB service name for Ingress. (default "cilium-ingress")
       --k8s-api-server string                                        Kubernetes API server URL
@@ -57,6 +57,7 @@ cilium-operator-azure hive dot-graph [flags]
       --k8s-service-proxy-name string                                Value of K8s service-proxy-name label for which Cilium handles the services (empty = all services without service.kubernetes.io/service-proxy-name label)
       --loadbalancer-l7-algorithm string                             Default LB algorithm for services that do not specify related annotation (default "round_robin")
       --loadbalancer-l7-ports strings                                List of service ports that will be automatically redirected to backend.
+      --max-connected-clusters uint32                                Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
       --mesh-auth-mutual-enabled                                     The flag to enable mutual authentication for the SPIRE server (beta).
       --mesh-auth-spiffe-trust-domain string                         The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-agent-socket string                          The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")
