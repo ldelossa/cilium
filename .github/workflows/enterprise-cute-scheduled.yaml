@@ -31,6 +31,7 @@ jobs:
           { repo: swiss-post, dir: azure-aks-byocni, region: eastus2 },
           { repo: roche, dir: ., region: ap-south-1 },
           { repo: astrazeneca, dir: ., region: ca-central-1 },
+          { repo: telenor, dir: ., region: eu-north-1 },
         ]
     runs-on: ubuntu-latest
     steps:
