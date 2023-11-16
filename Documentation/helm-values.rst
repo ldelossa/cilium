@@ -1120,6 +1120,10 @@
      - Enables the multi-network feature in Cilium CNI
      - bool
      - ``false``
+   * - :spelling:ignore:`enterprise.multicast.enabled`
+     - Enables multicast in cilium, multicast replication works only in tunnel mode.
+     - bool
+     - ``false``
    * - :spelling:ignore:`enterprise.srv6.enabled`
      - Enable SRv6 encapsulation support.
      - bool

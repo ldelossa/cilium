@@ -48,6 +48,10 @@ enterprise:
     # -- Automatically creates a "default" IsovalentPodNetwork on operator startup
     autoCreateDefaultPodNetwork: true
 
+  multicast:
+    # -- Enables multicast in cilium, multicast replication works only in tunnel mode.
+    enabled: false
+
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This flag is not required for new installations.

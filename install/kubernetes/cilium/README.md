@@ -330,6 +330,7 @@ contributors across the globe, there is almost always someone available to help.
 | enterprise.multiNetwork.autoCreateDefaultPodNetwork | bool | `true` | Automatically creates a "default" IsovalentPodNetwork on operator startup |
 | enterprise.multiNetwork.autoDirectNodeRoutes | bool | `true` | Enable multi-network aware automatic L2 routing between nodes |
 | enterprise.multiNetwork.enabled | bool | `false` | Enables the multi-network feature in Cilium CNI |
+| enterprise.multicast.enabled | bool | `false` | Enables multicast in cilium, multicast replication works only in tunnel mode. |
 | enterprise.srv6.enabled | bool | `false` | Enable SRv6 encapsulation support. |
 | enterprise.srv6.encapMode | string | `"reduced"` | Specify SRv6 SID encapsulation. |
 | enterprise.srv6.locatorPoolEnabled | bool | `false` | Enables custom SRv6 SID locator pool operator support. |
