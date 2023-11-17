@@ -27,7 +27,7 @@ make a release.
 
     git checkout -b pr/prepare-${CEE_VERSION}
     git add release-notes/$CEE_VERSION.md
-    git commit -s -m "Prepare for $CEE_VERSION release"
+    git commit -s -m "enterprise/cilium-cli: prepare for $CEE_VERSION release"
     git push origin HEAD
 
 Then open a pull request against `main-ce` branch. Wait for the PR to be reviewed and merged.

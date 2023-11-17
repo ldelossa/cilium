@@ -6,7 +6,7 @@ go 1.21.4
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.15.0-pre.2
-	github.com/cilium/cilium-cli v0.15.13
+	github.com/cilium/cilium-cli v0.15.14
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/google/go-cmp v0.6.0
 	github.com/stretchr/testify v1.8.4
@@ -34,11 +34,11 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20231026172044-2ee56d76ec1a // indirect
+	github.com/cilium/charts v0.0.0-20231113210111-5a4126644d7d // indirect
 	github.com/cilium/ebpf v0.12.3 // indirect
 	github.com/cilium/hubble v0.12.2 // indirect
 	github.com/cilium/proxy v0.0.0-20231031145409-f19708f3d018 // indirect
-	github.com/cilium/tetragon/pkg/k8s v0.0.0-20231027135814-0fd246f5b760 // indirect
+	github.com/cilium/tetragon/pkg/k8s v0.0.0-20231113182204-78cd2af76968 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
 	github.com/containerd/containerd v1.7.6 // indirect
@@ -217,7 +217,7 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.13.1 // indirect
+	helm.sh/helm/v3 v3.13.2 // indirect
 	k8s.io/apiextensions-apiserver v0.28.3 // indirect
 	k8s.io/apiserver v0.28.3 // indirect
 	k8s.io/cli-runtime v0.28.2 // indirect
