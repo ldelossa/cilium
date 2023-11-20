@@ -317,7 +317,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 			Task: func(ctx context.Context) error {
 				sidManagers := schema.GroupVersionResource{
 					Group:    "isovalent.com",
-					Resource: "isovalentsrv6sidmanager",
+					Resource: "isovalentsrv6sidmanagers",
 					Version:  "v1alpha1",
 				}
 				n := corev1.NamespaceAll
@@ -337,7 +337,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 			Task: func(ctx context.Context) error {
 				locatorPools := schema.GroupVersionResource{
 					Group:    "isovalent.com",
-					Resource: "isovalentsrv6locatorpool",
+					Resource: "isovalentsrv6locatorpools",
 					Version:  "v1alpha1",
 				}
 				n := corev1.NamespaceAll
