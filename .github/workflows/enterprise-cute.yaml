@@ -4,24 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       PR-number:
-        description: "Pull request number. Not relevant for CuTEs."
+        description: "Not relevant for CuTEs."
         required: true
         default: 'n/a'
       context-ref:
-        description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
-        required: true
-        default: 'main-ce'
+        description: "Context branch. More info: https://www.notion.so/isovalent/Customer-Test-Environment-CuTE-43a53c6e2b984c5fb299d7e728ee862f?pvs=4#818708b5a3384e54b21667111cc0423a."
+        required: false
+        default: ''
       SHA:
-        description: "SHA under test (head of the PR branch). Not relevant for CuTEs."
+        description: "Not relevant for CuTEs."
         required: true
         default: 'n/a'
       extra-args:
-        description: "Mandatory arguments passed from the trigger comment via regex capture group. For example: `sky`, `bloomberg`, etc."
+        description: "Mandatory arguments passed from the trigger comment via regex capture group. More info: https://www.notion.so/isovalent/Customer-Test-Environment-CuTE-43a53c6e2b984c5fb299d7e728ee862f?pvs=4#818708b5a3384e54b21667111cc0423a."
         required: true
-      use-stable-branch:
-        description: "Arbitrary argument that indicates if CuTE should run on top of CE stable branch."
-        required: true
-        default: 'false'
       helm-override-file:
         description: "Helm override Cilium values file."
         required: false
@@ -29,7 +25,6 @@ on:
 
 env:
   helm_registry: quay.io
-  helm_registry_namespace: isovalent-charts-dev
   regions: '{"aws": "us-west-2", "azure": "westus2", "gcp": "us-west2-a"}'
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
@@ -40,31 +35,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout context ref
+      - name: Checkout workflow context branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
+          path: workflow-context
 
       - name: Set Environment Variables
-        uses: ./.github/actions/set-env-variables
+        uses: ./workflow-context/.github/actions/set-env-variables
 
       - name: Set up job variables
         id: vars
         run: |
           input=${{ inputs.extra-args }}
+          upgrade=""
+          if [[ $input == *\^* ]]; then
+            upgrade="${input##*^}"
+            input=${input%%^*}
+          fi
+          deploy="current"
+          if [[ $input == *%* ]]; then
+            deploy="${input##*%}"
+            input=${input%%%*}
+          fi
           region=""
           if [[ $input == *~* ]]; then
             region="${input##*~}"
             input=${input%%~*}
           fi
-
           ref=""
           if [[ $input == *@* ]]; then
             ref="${input##*@}"
             input=${input%%@*}
           fi
-
           dir=""
           repo=$input
           if [[ $input == */* ]]; then
@@ -76,6 +79,8 @@ jobs:
           echo cute_dir=$dir >> $GITHUB_OUTPUT
           echo cute_ref=$ref >> $GITHUB_OUTPUT
           echo cute_region=$region >> $GITHUB_OUTPUT
+          echo deploy_type=$deploy >> $GITHUB_OUTPUT
+          echo upgrade_branch=$upgrade >> $GITHUB_OUTPUT
 
       - name: Checkout CuTE repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -87,9 +92,9 @@ jobs:
 
       - name: Set CuTE properties
         id: cute_props
-        working-directory: ./cute
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          cd ./${{ steps.vars.outputs.cute_dir }}
+          echo "getting cloud provider and region ..."
           provider=""
           region=""
           count=$(cat *.tf | grep -c 'provider "aws"' || true)
@@ -107,19 +112,23 @@ jobs:
             provider="gcp"
             region=$(echo "$regions" | jq -r .gcp)
           fi
-
           if [[ -z $provider ]]; then
             echo "terraform provider not found!"
             exit 1
           fi
-
           if [[ "${{ steps.vars.outputs.cute_region }}" != "" ]]; then
             region=${{ steps.vars.outputs.cute_region }}
           fi
 
-          ce_branch=${{ inputs.context-ref }}
-          use_stable_branch=${{ inputs.use-stable-branch }}
-          if [[ $use_stable_branch == 'true' ]]; then
+          echo "getting helm chart type and version ..."
+          is_enterprise_chart=false
+          count=$(grep -o '^cilium:\s*$' *.y*ml | wc -l | xargs || true)
+          [[ "$count" -gt 0 ]] && is_enterprise_chart=true
+
+          deploy_branch=${{ inputs.context-ref }} # use current branch version by default
+          if [[ "${{ steps.vars.outputs.deploy_type }}" == "cute" ]]; then
+            deploy_branch=""
+          elif [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
             chart_version=$(grep -A 3 '^variable "cilium_helm_version.*" {' *.tf | grep 'default')
             chart_version=$(echo "${chart_version##*=}" | xargs)
             # remove patch version number
@@ -129,19 +138,13 @@ jobs:
               minor="${minor%%\.*}"
               chart_version="$major.$minor"
             fi
-            ce_branch="v$chart_version-ce"
-          fi
-
-          use_ce_chart=false
-          count=$(grep -o '^cilium:\s*$' *.y*ml | wc -l | xargs || true)
-          if [[ "$count" -gt 0 ]]; then
-            use_ce_chart=true
+            deploy_branch="v$chart_version${{ env.BRANCH_SUFFIX }}"
           fi
 
           echo provider=$provider >> $GITHUB_OUTPUT
           echo region=$region >> $GITHUB_OUTPUT
-          echo ce_branch=$ce_branch >> $GITHUB_OUTPUT
-          echo use_ce_chart=$use_ce_chart >> $GITHUB_OUTPUT
+          echo deploy_branch=$deploy_branch >> $GITHUB_OUTPUT
+          echo is_enterprise_chart=$is_enterprise_chart >> $GITHUB_OUTPUT
 
       - name: Print CuTE properties
         run: |
@@ -150,9 +153,11 @@ jobs:
           echo "CuTE ref: ${{ steps.vars.outputs.cute_ref }}"
           echo "Cloud provider: ${{ steps.cute_props.outputs.provider }}"
           echo "Region: ${{ steps.cute_props.outputs.region }}"
-          echo "CE branch: ${{ steps.cute_props.outputs.ce_branch }}"
-          echo "CE umbrella chart: ${{ steps.cute_props.outputs.use_ce_chart }}"
+          echo "Deploy type: ${{ steps.vars.outputs.deploy_type }}"
+          echo "Deploy branch: ${{ steps.cute_props.outputs.deploy_branch }}"
+          echo "Helm enterprise (umbrella) chart: ${{ steps.cute_props.outputs.is_enterprise_chart }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
+          echo "Upgrade branch: ${{ steps.vars.outputs.upgrade_branch }}"
 
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@c1fa8afda634f0457e9905d4f638e5164c4e0fc8 # v0.15.17
@@ -234,79 +239,52 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$( jq -r '.subscriptionId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
 
-      - name: Checkout CE branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        with:
-          # checkout pull request head ref so that print-chart-version.sh prints the correct chart version.
-          ref: ${{ steps.cute_props.outputs.ce_branch }}
-          # required for git describe
-          fetch-depth: 0
-          path: cilium
-
-      - name: Set helm chart version
+      - name: Prepare helm chart
         id: cute_helm
-        working-directory: ./cilium
-        run: |
-          version=$(bash contrib/scripts/print-chart-version.sh)
-          echo version=$version >> $GITHUB_OUTPUT
-          echo version_ce=$version-enterprise >> $GITHUB_OUTPUT
-
-      - name: Wait for Helm dev chart to be available
+        # `cute` type means that CuTE Helm chart will be used (it already exists)
+        if: steps.vars.outputs.deploy_type != 'cute'
         timeout-minutes: 30
-        run: |
-          helm registry login quay.io -u ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_USERNAME }} -p ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_PASSWORD }}
-          until helm pull oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium --version ${{ steps.cute_helm.outputs.version }} &> /dev/null;
-            do sleep 15s;
-          done
-
-      - name: Checkout enterprise helm repo
-        if: steps.cute_props.outputs.use_ce_chart == 'true'
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: ./workflow-context/.github/actions/cute-helm-chart
         with:
-          repository: isovalent/helm-charts
-          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
-          path: ce_chart
+          branch: ${{ steps.cute_props.outputs.deploy_branch }}
+          enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
+          quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
+          quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+          isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
 
-      - name: Hack enterprise helm chart
-        if: steps.cute_props.outputs.use_ce_chart == 'true'
-        working-directory: ./ce_chart
-        run: |
-          yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.cute_helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
-          yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}"' ./cilium-enterprise/Chart.yaml
-
-      - name: Push enterprise helm chart
-        if: steps.cute_props.outputs.use_ce_chart == 'true'
-        uses: cilium/reusable-workflows/.github/actions/push-helm-chart@6ae27958f2f37545bf48e44106b73df05b1f6d12 # v0.1.0
+      - name: Prepare upgrade helm chart
+        id: cute_helm_upgrade
+        if: steps.vars.outputs.upgrade_branch != ''
+        timeout-minutes: 30
+        uses: ./workflow-context/.github/actions/cute-helm-chart
         with:
-          name: cilium-enterprise
-          path: ce_chart/cilium-enterprise
-          version: ${{ steps.cute_helm.outputs.version_ce }}
-          registry: quay.io
-          registry_namespace: ${{ env.helm_registry_namespace }}
-          registry_username: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
-          registry_password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+          branch: ${{ steps.vars.outputs.upgrade_branch }}
+          enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
+          quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
+          quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+          isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
 
       - name: CuTE Terraform variables file
-        working-directory: ./cute
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          HELM_CHART="oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium"
-          HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
-          if [[ ${{ steps.cute_props.outputs.use_ce_chart }} == 'true' ]]; then
-            HELM_CHART="oci://${{ env.helm_registry }}/${{ env.helm_registry_namespace }}/cilium-enterprise"
-            HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version_ce }}
-          fi
-
-          cd ./${{ steps.vars.outputs.cute_dir }}
           cat > terraform.tfvars << EOF
           cluster_name="cute-${{ env.name }}"
           owner="ci"
           region="${{ steps.cute_props.outputs.region }}"
-          cilium_helm_chart="$HELM_CHART"
-          cilium_helm_version="$HELM_CHART_VERSION"
-          # the below variables are for cluster mesh scenario
-          cilium_helm_version_1="$HELM_CHART_VERSION"
-          cilium_helm_version_2="$HELM_CHART_VERSION"
           EOF
+          if [[ "${{ steps.vars.outputs.deploy_type }}" != "cute" ]]; then
+            HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
+            HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
+            if [[ ${{ steps.cute_props.outputs.is_enterprise_chart }} == 'true' ]]; then
+              HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium-enterprise"
+              HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version-enterprise }}
+            fi
+            echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
+            echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+            # the below variables are for cluster mesh scenario
+            echo "cilium_helm_version_1=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+            echo "cilium_helm_version_2=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+          fi
           if [[ "${{ inputs.helm-override-file }}" != "" ]]; then
             echo "cilium_helm_values_override_file_path=\"${{ inputs.helm-override-file }}\"" >> terraform.tfvars
           fi
@@ -316,25 +294,22 @@ jobs:
 
       - name: Create CuTE resources
         id: create
-        working-directory: ./cute
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
           # The below line is required for Terraform provisioner script:
           # https://github.com/isovalent/terraform-k8s-cilium/blob/main/scripts/provisioner.sh#L79
           helm repo add isovalent https://helm.isovalent.com
-          cd ./${{ steps.vars.outputs.cute_dir }}
           make apply AUTO_APPROVE=true
 
       - name: Run CuTE tests
         timeout-minutes: 60
-        working-directory: ./cute
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          cd ./${{ steps.vars.outputs.cute_dir }}
           make test
 
       # If the creation step was run, always run the cleanup step, even if create or test steps failed
       - name: Clean up CuTE resources
         if: always() && steps.create.outcome != 'skipped'
-        working-directory: ./cute
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          cd ./${{ steps.vars.outputs.cute_dir }}
           make destroy AUTO_APPROVE=true

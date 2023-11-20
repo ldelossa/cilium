@@ -1,0 +1,89 @@
+name: Prepare CuTE helm chart
+description: Prepare CuTE helm chart
+inputs:
+  branch:
+    description: 'Cilium branch.'
+    required: true
+  enterprise:
+    description: 'Indicates if CuTE uses Cilium enterprise (umbrella) helm chart.'
+    required: true
+  quay-user:
+    description: 'Quay repo username.'
+    required: true
+  quay-password:
+    description: 'Quay repo password.'
+    required: true
+  isovalent-bot:
+    description: 'Isovalent bot token.'
+    required: true
+outputs:
+  version:
+    description: ''
+    value: ${{ steps.cute_helm.outputs.version }}
+  version-enterprise:
+    description: ''
+    value: ${{ steps.cute_helm.outputs.version-enterprise }}
+runs:
+  using: composite
+  steps:
+    - name: Checkout Cilium branch
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      with:
+        # checkout head ref so that print-chart-version.sh prints the correct chart version.
+        ref: ${{ inputs.branch }}
+        # required for git describe
+        fetch-depth: 0
+        path: ${{ inputs.branch }}
+
+    - name: Set helm chart version
+      id: cute_helm
+      working-directory: ./${{ inputs.branch }}
+      shell: bash
+      run: |
+        version=$(bash contrib/scripts/print-chart-version.sh)
+        echo version=$version >> $GITHUB_OUTPUT
+        echo version-enterprise=$version-enterprise >> $GITHUB_OUTPUT
+
+    - name: Wait for Helm dev chart to be available
+      shell: bash
+      run: |
+        helm registry login quay.io -u ${{ inputs.quay-user }} -p ${{ inputs.quay-password }}
+        until helm pull oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium --version ${{ steps.cute_helm.outputs.version }} &> /dev/null;
+          do sleep 15s;
+        done
+
+    # All the following steps required for CuTEs that use CE Enterprise (umbrella) chart (inputs.enterprise == 'true').
+    # CI will checkout `isovalent/helm-charts`, replace and push required chart version in the repository.
+    - name: Checkout enterprise helm repo
+      if: inputs.enterprise == 'true'
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      with:
+        repository: isovalent/helm-charts
+        token: ${{ inputs.isovalent-bot }}
+        path: enterprise_chart
+
+    - name: Hack enterprise helm chart
+      if: inputs.enterprise == 'true'
+      working-directory: ./enterprise_chart
+      shell: bash
+      run: |
+        yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.cute_helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
+        yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"' ./cilium-enterprise/Chart.yaml
+
+    - name: Cleanup before build and push
+      if: inputs.enterprise == 'true'
+      shell: bash
+      run: |
+        rm -f cilium-enterprise-*.tgz
+
+    - name: Push enterprise helm chart
+      if: inputs.enterprise == 'true'
+      uses: cilium/reusable-workflows/.github/actions/push-helm-chart@6ae27958f2f37545bf48e44106b73df05b1f6d12 # v0.1.0
+      with:
+        name: cilium-enterprise
+        path: enterprise_chart/cilium-enterprise
+        version: ${{ steps.cute_helm.outputs.version-enterprise }}
+        registry: quay.io
+        registry_namespace: ${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}
+        registry_username: ${{ inputs.quay-user }}
+        registry_password: ${{ inputs.quay-password }}
