@@ -302,9 +302,11 @@ jobs:
           if [[ "$ARM_SUBSCRIPTION_ID" != "" ]]; then
             echo "subscription_id=\"$ARM_SUBSCRIPTION_ID\"" >> terraform.tfvars
           fi
+          cat terraform.tfvars
 
       - name: Create CuTE resources
         id: create
+        timeout-minutes: 60
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
           # The below line is required for Terraform provisioner script:
@@ -312,8 +314,35 @@ jobs:
           helm repo add isovalent https://helm.isovalent.com
           make apply AUTO_APPROVE=true
 
+      - name: Set cluster config
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
+        run: |
+          eval `make print-kubeconfig`
+          [[ ! "$KUBECONFIG" =~ ^/.* ]] && KUBECONFIG="$(pwd)/$KUBECONFIG"
+          cat $KUBECONFIG # useful for troubleshooting, especially for the RKE clusters.
+          echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+
+      - name: Wait for Cilium to be ready
+        timeout-minutes: 20
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
+        run: |
+          # Temporary fix for the NWM CuTE to make cluster stable
+          make startup_wait || true
+          cilium status --wait
+
+      - name: Check encryption type
+        id: encryption
+        run: |
+          if [[ $(cilium config view | grep -c '^enable-ipsec[[:blank:]]*true$' || true) -gt 0 ]]; then
+            echo type=ipsec >> $GITHUB_OUTPUT
+          elif [[ $(cilium config view | grep -c '^enable-wireguard[[:blank:]]*true$' || true) -gt 0 ]]; then
+            echo type=wireguard >> $GITHUB_OUTPUT
+          else
+            echo type=none >> $GITHUB_OUTPUT
+          fi
+
       - name: Run CuTE tests
-        timeout-minutes: 60
+        timeout-minutes: 90
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
           make test
