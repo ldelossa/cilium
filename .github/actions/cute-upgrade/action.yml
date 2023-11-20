@@ -1,0 +1,57 @@
+name: CuTE upgrade
+description: CuTE upgrade
+inputs:
+  deploy-type:
+    description: 'CI deploy type.'
+    required: true
+  use-enterprise:
+    description: 'Indicates if CuTE uses Cilium enterprise (umbrella) helm chart.'
+    required: true
+  helm-version:
+    description: 'Cilium Helm chart version.'
+    required: true
+  helm-enterprise-version:
+    description: 'Cilium enterprise (umbrella) Helm chart version.'
+    required: true
+  cute-dir:
+    description: 'Directory with a CuTE code/config.'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: CuTE Terraform variables file
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
+        HELM_CHART_VERSION=${{ inputs.helm-version }}
+        if [[ ${{ inputs.use-enterprise }} == 'true' ]]; then
+          HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium-enterprise"
+          HELM_CHART_VERSION=${{ inputs.helm-enterprise-version }}
+        fi
+        if [[ ${{ inputs.deploy-type }} == 'cute' ]]; then
+          echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
+          echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+          # the below variables are for cluster mesh scenario
+          echo "cilium_helm_version_1=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+          echo "cilium_helm_version_2=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+        else
+          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"$HELM_CHART_VERSION\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"$HELM_CHART_VERSION\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"$HELM_CHART_VERSION\"/g" terraform.tfvars
+        fi
+        cat terraform.tfvars
+
+    - name: CuTE upgrade
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        make apply AUTO_APPROVE=true
+
+    - name: Wait for Cilium to be ready
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        # Temporary fix for the NWM CuTE to make cluster stable
+        make startup_wait || true
+        cilium status --wait
