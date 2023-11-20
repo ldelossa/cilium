@@ -32,6 +32,7 @@ jobs:
           { repo: roche, dir: ., region: ap-south-1 },
           { repo: astrazeneca, dir: ., region: ca-central-1 },
           { repo: telenor, dir: ., region: eu-north-1 },
+          { repo: adobe, dir: ., region: ap-northeast-1 },
         ]
     runs-on: ubuntu-latest
     steps:
