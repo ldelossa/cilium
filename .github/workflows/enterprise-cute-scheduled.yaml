@@ -49,6 +49,4 @@ jobs:
           echo "Triggering workflow for CuTE: ${{ matrix.cute.repo }}/${{ matrix.cute.dir }}"
           gh workflow run enterprise-cute.yaml \
             --ref ${REF} \
-            -f context-ref=${REF} \
-            -f extra-args="${{ matrix.cute.repo }}/${{ matrix.cute.dir }}~${{ matrix.cute.region }}" \
-            -f use-stable-branch="true"
+            -f extra-args="${{ matrix.cute.repo }}/${{ matrix.cute.dir }}~${{ matrix.cute.region }}%stable"
