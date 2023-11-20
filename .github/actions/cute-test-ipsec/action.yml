@@ -1,0 +1,116 @@
+name: Test CuTE IPSec
+description: Test CuTE IPSec
+inputs:
+  cute-dir:
+    description: 'Directory with a CuTE code.'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Deploy sensitive application server
+      shell: bash
+      run: |
+        echo "Deploying sensitive application server ..."
+        curl -s https://raw.githubusercontent.com/cilium/cilium/main/test/k8s/manifests/migrate-svc-server.yaml | kubectl apply -f -
+        kubectl wait --for=condition=ready pod -l app=migrate-svc-server
+        echo "Sensitive application server deployed."
+
+    - name: Deploy sensitive application client
+      shell: bash
+      run: |
+        echo "Deploying sensitive application client ..."
+        curl -s https://raw.githubusercontent.com/cilium/cilium/main/test/k8s/manifests/migrate-svc-client.yaml | kubectl apply -f -
+        kubectl wait --for=condition=ready pod -l app=migrate-svc-client
+        echo "Sensitive application client deployed."
+
+    - name: Verify sensitive application
+      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+
+    - name: Rotate IPSec keys
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        echo "Rotating IPSec keys ..."
+        make rotate_ipsec_key
+
+    - name: Wait for 2 active keys
+      shell: bash
+      run: |
+        echo "Wait for 2 active keys ..."
+        CILIUM_NS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.namespace}{"\n"}{end}' | head -n 1)
+        CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}')
+        while true; do
+          TWO_KEYS_IN_USE=true
+          for POD in $CILIUM_PODS; do
+            KEY_COUNT=$(kubectl -n "$CILIUM_NS" exec "$POD" -c cilium-agent -- cilium encrypt status | grep "Keys in use:" || true)
+            KEY_COUNT="${KEY_COUNT##*Keys in use: }"
+            if [[ "$KEY_COUNT" -lt 2 ]]; then
+              echo "Not all pods use new IPSec key [$POD] ..."
+              TWO_KEYS_IN_USE=false
+              break
+            fi
+          done
+          [[ $TWO_KEYS_IN_USE == "true" ]] && break
+          sleep 30
+        done
+        echo "All the pods use 2 active keys now."
+
+    - name: Verify sensitive application
+      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+
+    - name: Wait for key rotation
+      shell: bash
+      run: |
+        echo "Wait for key rotation ..."
+        CILIUM_NS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.namespace}{"\n"}{end}' | head -n 1)
+        CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}')
+        while true; do
+          ONE_KEY_IN_USE=true
+          for POD in $CILIUM_PODS; do
+            KEY_COUNT=$(kubectl -n "$CILIUM_NS" exec "$POD" -c cilium-agent -- cilium encrypt status | grep "Keys in use:" || true)
+            KEY_COUNT="${KEY_COUNT##*Keys in use: }"
+            if [[ "$KEY_COUNT" -gt 1  ]]; then
+              echo "Not all pods rotated IPSec key [$POD] ..."
+              ONE_KEY_IN_USE=false
+              break
+            fi
+          done
+          [[ $ONE_KEY_IN_USE == "true" ]] && break
+          sleep 60
+        done
+        echo "IPSec key has been rotated."
+
+    - name: Verify sensitive application
+      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+
+    - name: Scale up cluster
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        echo "Scaling up cluster ..."
+        make scaleup
+
+    - name: Verify sensitive application
+      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+
+    - name: Scale down cluster
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        echo "Scaling down cluster ..."
+        make scaledown
+
+    - name: Display cluster pods
+      shell: bash
+      run: |
+        echo "Displaying cluster pods ..."
+        kubectl get pods --all-namespaces -o wide
+
+    - name: Delete sensitive application
+      shell: bash
+      run: |
+        echo "Deleting sensitive application client ..."
+        kubectl delete rs migrate-svc-client
+        echo "Deleting sensitive application server ..."
+        kubectl delete svc migrate-svc
+        kubectl delete rs migrate-svc-server

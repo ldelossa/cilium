@@ -35,7 +35,7 @@ jobs:
   cute-ci:
     name: CuTE CI
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 420
     steps:
       - name: Checkout workflow context branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -341,6 +341,13 @@ jobs:
             echo type=none >> $GITHUB_OUTPUT
           fi
 
+      - name: IPSec tests
+        if: steps.encryption.outputs.type == 'ipsec'
+        timeout-minutes: 60
+        uses: ./workflow-context/.github/actions/cute-test-ipsec
+        with:
+          cute-dir: cute/${{ steps.vars.outputs.cute_dir }}
+
       - name: Run CuTE upgrade
         if: steps.vars.outputs.upgrade_branch != ''
         timeout-minutes: 40
@@ -350,6 +357,13 @@ jobs:
           use-enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
           helm-enterprise-version: ${{ steps.cute_helm_upgrade.outputs.version-enterprise }}
+          cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
+
+      - name: IPSec tests after upgrade
+        if: steps.vars.outputs.upgrade_branch != '' && steps.encryption.outputs.type == 'ipsec'
+        timeout-minutes: 60
+        uses: ./workflow-context/.github/actions/cute-test-ipsec
+        with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 
       - name: Run CuTE tests
