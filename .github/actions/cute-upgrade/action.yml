@@ -10,6 +10,9 @@ inputs:
   helm-version:
     description: 'Cilium Helm chart version.'
     required: true
+  enterprise-chart-path:
+    description: 'Path to Cilium enterprise (umbrella) Helm chart.'
+    required: true
   helm-enterprise-version:
     description: 'Cilium enterprise (umbrella) Helm chart version.'
     required: true
@@ -26,7 +29,7 @@ runs:
         HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
         HELM_CHART_VERSION=${{ inputs.helm-version }}
         if [[ ${{ inputs.use-enterprise }} == 'true' ]]; then
-          HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium-enterprise"
+          HELM_CHART=${{ inputs.enterprise-chart-path }}
           HELM_CHART_VERSION=${{ inputs.helm-enterprise-version }}
         fi
         if [[ ${{ inputs.deploy-type }} == 'cute' ]]; then

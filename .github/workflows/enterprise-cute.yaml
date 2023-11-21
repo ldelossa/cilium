@@ -250,6 +250,11 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$( jq -r '.subscriptionId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
 
+      - name: Set helm repository
+        run: |
+          # Required for Terraform provisioner script:
+          helm repo add ${{ env.CILIUM_HELM_REPO_NAME }} ${{ env.CILIUM_HELM_REPO_URL }}
+
       - name: Prepare helm chart
         id: cute_helm
         # `cute` type means that CuTE Helm chart will be used (it already exists)
@@ -287,7 +292,7 @@ jobs:
             HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
             HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
             if [[ ${{ steps.cute_props.outputs.is_enterprise_chart }} == 'true' ]]; then
-              HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium-enterprise"
+              HELM_CHART="${{ steps.cute_helm.outputs.enterprise-chart-path }}"
               HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version-enterprise }}
             fi
             echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
@@ -309,9 +314,6 @@ jobs:
         timeout-minutes: 60
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          # The below line is required for Terraform provisioner script:
-          # https://github.com/isovalent/terraform-k8s-cilium/blob/main/scripts/provisioner.sh#L79
-          helm repo add isovalent https://helm.isovalent.com
           make apply AUTO_APPROVE=true
 
       - name: Set cluster config
@@ -356,6 +358,7 @@ jobs:
           deploy-type: ${{ steps.vars.outputs.deploy_type }}
           use-enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
+          enterprise-chart-path: ${{ steps.cute_helm_upgrade.outputs.enterprise-chart-path }}
           helm-enterprise-version: ${{ steps.cute_helm_upgrade.outputs.version-enterprise }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 

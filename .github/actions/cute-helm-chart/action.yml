@@ -18,11 +18,14 @@ inputs:
     required: true
 outputs:
   version:
-    description: ''
-    value: ${{ steps.cute_helm.outputs.version }}
+    description: 'Helm chart version'
+    value: ${{ steps.helm.outputs.version }}
   version-enterprise:
-    description: ''
-    value: ${{ steps.cute_helm.outputs.version-enterprise }}
+    description: 'Enterprise helm chart version'
+    value: ${{ steps.helm.outputs.version-enterprise }}
+  enterprise-chart-path:
+    description: 'Path to the enterprise helm chart'
+    value: ${{ steps.helm_enterprise.outputs.chart-path }}
 runs:
   using: composite
   steps:
@@ -36,7 +39,7 @@ runs:
         path: ${{ inputs.branch }}
 
     - name: Set helm chart version
-      id: cute_helm
+      id: helm
       working-directory: ./${{ inputs.branch }}
       shell: bash
       run: |
@@ -48,7 +51,7 @@ runs:
       shell: bash
       run: |
         helm registry login quay.io -u ${{ inputs.quay-user }} -p ${{ inputs.quay-password }}
-        until helm pull oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium --version ${{ steps.cute_helm.outputs.version }} &> /dev/null;
+        until helm pull oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium --version ${{ steps.helm.outputs.version }} &> /dev/null;
           do sleep 15s;
         done
 
@@ -62,28 +65,20 @@ runs:
         token: ${{ inputs.isovalent-bot }}
         path: enterprise_chart
 
-    - name: Hack enterprise helm chart
+    - name: Set enterprise helm chart version
       if: inputs.enterprise == 'true'
       working-directory: ./enterprise_chart
       shell: bash
       run: |
-        yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.cute_helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
+        yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
         yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"' ./cilium-enterprise/Chart.yaml
 
-    - name: Cleanup before build and push
+    - name: Build enterprise helm chart
       if: inputs.enterprise == 'true'
+      id: helm_enterprise
+      working-directory: ./enterprise_chart/cilium-enterprise
       shell: bash
       run: |
-        rm -f cilium-enterprise-*.tgz
-
-    - name: Push enterprise helm chart
-      if: inputs.enterprise == 'true'
-      uses: cilium/reusable-workflows/.github/actions/push-helm-chart@6ae27958f2f37545bf48e44106b73df05b1f6d12 # v0.1.0
-      with:
-        name: cilium-enterprise
-        path: enterprise_chart/cilium-enterprise
-        version: ${{ steps.cute_helm.outputs.version-enterprise }}
-        registry: quay.io
-        registry_namespace: ${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}
-        registry_username: ${{ inputs.quay-user }}
-        registry_password: ${{ inputs.quay-password }}
+        helm dependency update
+        helm dependency build
+        echo chart-path="$(pwd)" >> $GITHUB_OUTPUT

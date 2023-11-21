@@ -7,6 +7,8 @@ runs:
       run: |
         echo "QUAY_ORGANIZATION=isovalent" >> $GITHUB_ENV
         echo "QUAY_ORGANIZATION_DEV=isovalent-dev" >> $GITHUB_ENV
+        echo "CILIUM_HELM_REPO_NAME=isovalent" >> $GITHUB_ENV
+        echo "CILIUM_HELM_REPO_URL=https://helm.isovalent.com" >> $GITHUB_ENV
         echo "CILIUM_CLI_REPO=isovalent/cilium-cli-releases" >> $GITHUB_ENV
         # no prod yet
         echo "QUAY_CHARTS_ORGANIZATION_DEV=isovalent-charts-dev" >> $GITHUB_ENV
