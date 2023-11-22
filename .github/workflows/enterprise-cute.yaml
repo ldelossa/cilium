@@ -343,8 +343,9 @@ jobs:
             echo type=none >> $GITHUB_OUTPUT
           fi
 
-      - name: IPSec tests
-        if: steps.encryption.outputs.type == 'ipsec'
+      - name: IPsec tests
+        # Step will be skipped for the CuTE version that Customer already uses
+        if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
         timeout-minutes: 60
         uses: ./workflow-context/.github/actions/cute-test-ipsec
         with:
@@ -362,7 +363,7 @@ jobs:
           helm-enterprise-version: ${{ steps.cute_helm_upgrade.outputs.version-enterprise }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 
-      - name: IPSec tests after upgrade
+      - name: IPsec tests after upgrade
         if: steps.vars.outputs.upgrade_branch != '' && steps.encryption.outputs.type == 'ipsec'
         timeout-minutes: 60
         uses: ./workflow-context/.github/actions/cute-test-ipsec
