@@ -43,6 +43,10 @@ func Initialize(vp *viper.Viper, inits []plugins.Init) (plugins.Instances, error
 		res = append(res, inst)
 	}
 
+	if err := InjectDependencies(res); err != nil {
+		return nil, fmt.Errorf("failed to inject deps: %w", err)
+	}
+
 	return res, nil
 }
 
@@ -87,6 +91,23 @@ func AddServerOptions(list plugins.Instances) error {
 				observer.DefaultOptions,
 				so.ServerOptions()...,
 			)
+		}
+	}
+
+	return nil
+}
+
+// InjectDependencies into the plugins.
+//
+// After the list of plugins got initialized, each plugin is able to look at
+// what else is available in the build and accept dependencies to modify it's
+// behavior.
+func InjectDependencies(list plugins.Instances) error {
+	for _, i := range list {
+		if da, ok := i.(plugins.DepAcceptor); ok {
+			if err := da.AcceptDeps(list); err != nil {
+				return fmt.Errorf("failed to inject deps: %v", err)
+			}
 		}
 	}
 

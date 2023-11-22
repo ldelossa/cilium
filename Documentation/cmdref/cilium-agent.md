@@ -173,6 +173,11 @@ cilium-agent [flags]
       --envoy-config-timeout duration                                Timeout duration for Envoy Config acknowledgements (default 2m0s)
       --envoy-log string                                             Path to a separate Envoy log file, if any
       --exclude-local-address strings                                Exclude CIDR from being recognized as local address
+      --export-aggregation strings                                   Perform aggregation pre-storage ('connection', 'identity')
+      --export-aggregation-ignore-source-port                        Ignore source port during aggregation (default true)
+      --export-aggregation-renew-ttl                                 Renew flow TTL when a new flow is observed (default true)
+      --export-aggregation-state-filter strings                      The state changes to include while aggregating ('new', 'established', 'first_error', 'error', 'closed') (default [new,error,closed])
+      --export-aggregation-ttl duration                              TTL for flow aggregation (default 30s)
       --export-file-compress                                         Compress rotated files (default true)
       --export-file-max-backups int                                  Number of rotated files to keep (default 3)
       --export-file-max-size int                                     Maximum size of the file in megabytes (default 100)

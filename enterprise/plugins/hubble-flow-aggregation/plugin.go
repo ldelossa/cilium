@@ -26,6 +26,7 @@ var (
 	// validate interface conformity
 	_ plugins.Init          = New
 	_ plugins.ServerOptions = (*flowAggregationPlugin)(nil)
+	_ Plugin                = (*flowAggregationPlugin)(nil)
 )
 
 type Plugin interface {
