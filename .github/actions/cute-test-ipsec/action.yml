@@ -85,6 +85,13 @@ runs:
     - name: Verify sensitive application
       uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
 
+    - name: Run CuTE tests
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        echo "Running CuTE tests ..."
+        make test
+
     - name: Scale up cluster
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash

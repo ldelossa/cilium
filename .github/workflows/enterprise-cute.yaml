@@ -35,7 +35,7 @@ jobs:
   cute-ci:
     name: CuTE CI
     runs-on: ubuntu-latest
-    timeout-minutes: 420
+    timeout-minutes: 600
     steps:
       - name: Checkout workflow context branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -346,7 +346,7 @@ jobs:
       - name: IPsec tests
         # Step will be skipped for the CuTE version that Customer already uses
         if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
-        timeout-minutes: 60
+        timeout-minutes: 150
         uses: ./workflow-context/.github/actions/cute-test-ipsec
         with:
           cute-dir: cute/${{ steps.vars.outputs.cute_dir }}
@@ -365,7 +365,7 @@ jobs:
 
       - name: IPsec tests after upgrade
         if: steps.vars.outputs.upgrade_branch != '' && steps.encryption.outputs.type == 'ipsec'
-        timeout-minutes: 60
+        timeout-minutes: 150
         uses: ./workflow-context/.github/actions/cute-test-ipsec
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
