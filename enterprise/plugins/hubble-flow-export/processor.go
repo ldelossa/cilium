@@ -96,7 +96,7 @@ func (e *export) OnServerInit(_ observeroption.Server) error {
 	}
 
 	e.nodeName = conf.nodeName
-	e.logger.WithField("config", fmt.Sprintf("%+v", conf)).Info("Initialized atlantis export plugin")
+	e.logger.WithField("config", fmt.Sprintf("%+v", conf)).Info("Initialized export plugin")
 	return nil
 }
 
