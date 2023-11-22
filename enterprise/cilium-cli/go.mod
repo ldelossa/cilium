@@ -75,7 +75,7 @@ require (
 	github.com/go-openapi/spec v0.20.9 // indirect
 	github.com/go-openapi/strfmt v0.21.7 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
-	github.com/go-openapi/validate v0.22.1 // indirect
+	github.com/go-openapi/validate v0.22.2 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -188,10 +188,10 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.10 // indirect
-	go.mongodb.org/mongo-driver v1.11.9 // indirect
-	go.opentelemetry.io/otel v1.20.0 // indirect
-	go.opentelemetry.io/otel/metric v1.20.0 // indirect
-	go.opentelemetry.io/otel/trace v1.20.0 // indirect
+	go.mongodb.org/mongo-driver v1.12.0 // indirect
+	go.opentelemetry.io/otel v1.21.0 // indirect
+	go.opentelemetry.io/otel/metric v1.21.0 // indirect
+	go.opentelemetry.io/otel/trace v1.21.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
 	go.uber.org/dig v1.17.1 // indirect
@@ -203,7 +203,7 @@ require (
 	golang.org/x/net v0.18.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.14.1-0.20231113162313-11eadc05e9bf // indirect
+	golang.org/x/sys v0.14.1-0.20231118010836-13b15b780d90 // indirect
 	golang.org/x/term v0.14.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.4.0 // indirect

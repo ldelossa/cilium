@@ -175,15 +175,15 @@ func (d *Daemon) getIPV4BigTCPStatus() *models.IPV4BigTCP {
 
 func (d *Daemon) getBandwidthManagerStatus() *models.BandwidthManager {
 	s := &models.BandwidthManager{
-		Enabled: option.Config.EnableBandwidthManager,
+		Enabled: d.bwManager.Enabled(),
 	}
 
-	if !option.Config.EnableBandwidthManager {
+	if !d.bwManager.Enabled() {
 		return s
 	}
 
 	s.CongestionControl = models.BandwidthManagerCongestionControlCubic
-	if option.Config.EnableBBR {
+	if d.bwManager.BBREnabled() {
 		s.CongestionControl = models.BandwidthManagerCongestionControlBbr
 	}
 
@@ -271,6 +271,14 @@ func (d *Daemon) getKubeProxyReplacementStatus() *models.KubeProxyReplacement {
 	if option.Config.EnableNodePort {
 		features.NodePort.Enabled = true
 		features.NodePort.Mode = strings.ToUpper(option.Config.NodePortMode)
+		switch option.Config.LoadBalancerDSRDispatch {
+		case option.DSRDispatchIPIP:
+			features.NodePort.DsrMode = models.KubeProxyReplacementFeaturesNodePortDsrModeIPIP
+		case option.DSRDispatchOption:
+			features.NodePort.DsrMode = models.KubeProxyReplacementFeaturesNodePortDsrModeIPOptionExtension
+		case option.DSRDispatchGeneve:
+			features.NodePort.DsrMode = models.KubeProxyReplacementFeaturesNodePortDsrModeGeneve
+		}
 		if option.Config.NodePortMode == option.NodePortModeHybrid {
 			features.NodePort.Mode = strings.Title(option.Config.NodePortMode)
 		}

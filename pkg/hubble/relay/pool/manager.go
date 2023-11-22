@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -31,13 +32,19 @@ type peer struct {
 // PeerManager manages a pool of peers (Peer) and associated gRPC connections.
 // Peers and peer change notifications are obtained from a peer gRPC service.
 type PeerManager struct {
-	opts    options
-	updated chan string
-	wg      sync.WaitGroup
-	stop    chan struct{}
-	mu      lock.RWMutex
-	peers   map[string]*peer
-	metrics *PoolMetrics
+	opts                 options
+	updated              chan string
+	wg                   sync.WaitGroup
+	stop                 chan struct{}
+	peerServiceConnected atomic.Bool
+	mu                   lock.RWMutex
+	peers                map[string]*peer
+	metrics              *PoolMetrics
+}
+
+type Status struct {
+	PeerServiceConnected bool
+	AvailablePeers       int
 }
 
 // NewPeerManager creates a new manager that connects to a peer gRPC service to
@@ -51,11 +58,12 @@ func NewPeerManager(registry prometheus.Registerer, options ...Option) (*PeerMan
 	}
 	metrics := NewPoolMetrics(registry)
 	return &PeerManager{
-		peers:   make(map[string]*peer),
-		updated: make(chan string, 100),
-		stop:    make(chan struct{}),
-		opts:    opts,
-		metrics: metrics,
+		peers:                make(map[string]*peer),
+		updated:              make(chan string, 100),
+		stop:                 make(chan struct{}),
+		opts:                 opts,
+		metrics:              metrics,
+		peerServiceConnected: atomic.Bool{},
 	}, nil
 }
 
@@ -78,6 +86,11 @@ func (m *PeerManager) Start() {
 
 func (m *PeerManager) watchNotifications() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		<-m.stop
+		cancel()
+	}()
 	retryTimer, retryTimerDone := inctimer.New()
 	defer retryTimerDone()
 connect:
@@ -90,7 +103,6 @@ connect:
 			}).Warning("Failed to create peer client for peers synchronization; will try again after the timeout has expired")
 			select {
 			case <-m.stop:
-				cancel()
 				return
 			case <-retryTimer.After(m.opts.retryTimeout):
 				continue
@@ -105,17 +117,16 @@ connect:
 			}).Warning("Failed to create peer notify client for peers change notification; will try again after the timeout has expired")
 			select {
 			case <-m.stop:
-				cancel()
 				return
 			case <-retryTimer.After(m.opts.retryTimeout):
 				continue
 			}
 		}
+		m.peerServiceConnected.Store(true)
 		for {
 			select {
 			case <-m.stop:
 				cl.Close()
-				cancel()
 				return
 			default:
 			}
@@ -126,9 +137,9 @@ connect:
 					"error":              err,
 					"connection timeout": m.opts.retryTimeout,
 				}).Warning("Error while receiving peer change notification; will try again after the timeout has expired")
+				m.peerServiceConnected.Store(false)
 				select {
 				case <-m.stop:
-					cancel()
 					return
 				case <-retryTimer.After(m.opts.retryTimeout):
 					continue connect
@@ -236,6 +247,27 @@ func (m *PeerManager) List() []poolTypes.Peer {
 		v.mu.Unlock()
 	}
 	return peers
+}
+
+// Status provides the status of the manager
+func (m *PeerManager) Status() Status {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	availablePeers := 0
+	for _, peer := range m.peers {
+		peer.mu.Lock()
+		if peer.conn != nil {
+			state := peer.conn.GetState()
+			if state != connectivity.TransientFailure && state != connectivity.Shutdown {
+				availablePeers++
+			}
+		}
+		peer.mu.Unlock()
+	}
+	return Status{
+		PeerServiceConnected: m.peerServiceConnected.Load(),
+		AvailablePeers:       availablePeers,
+	}
 }
 
 func (m *PeerManager) upsert(hp *peerTypes.Peer) {

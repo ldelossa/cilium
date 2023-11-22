@@ -18,6 +18,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/completion"
 	"github.com/cilium/cilium/pkg/controller"
+	"github.com/cilium/cilium/pkg/datapath/linux/bandwidth"
 	endpointid "github.com/cilium/cilium/pkg/endpoint/id"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/eventqueue"
@@ -88,17 +89,18 @@ func (e *Endpoint) getNamedPortEgress(npMap types.NamedPortMultiMap, name string
 	return port
 }
 
-// proxyID returns a unique string to identify a proxy mapping.
+// proxyID returns a unique string to identify a proxy mapping,
+// and the resolved destination port number, if any.
 // Must be called with e.mutex held.
-func (e *Endpoint) proxyID(l4 *policy.L4Filter) string {
+func (e *Endpoint) proxyID(l4 *policy.L4Filter) (string, uint16) {
 	port := uint16(l4.Port)
 	if port == 0 && l4.PortName != "" {
 		port = e.GetNamedPort(l4.Ingress, l4.PortName, uint8(l4.U8Proto))
 		if port == 0 {
-			return ""
+			return "", 0
 		}
 	}
-	return policy.ProxyID(e.ID, l4.Ingress, string(l4.Protocol), port)
+	return policy.ProxyID(e.ID, l4.Ingress, string(l4.Protocol), port), port
 }
 
 // lookupRedirectPort returns the redirect L4 proxy port for the given L4
@@ -958,8 +960,9 @@ func (e *Endpoint) UpdateVisibilityPolicy(annoCB AnnotationsResolverCB) {
 
 // UpdateBandwidthPolicy updates the egress bandwidth of this endpoint to
 // progagate the throttle rate to the BPF data path.
-func (e *Endpoint) UpdateBandwidthPolicy(annoCB AnnotationsResolverCB) {
+func (e *Endpoint) UpdateBandwidthPolicy(bwm bandwidth.Manager, annoCB AnnotationsResolverCB) {
 	ch, err := e.eventQueue.Enqueue(eventqueue.NewEvent(&EndpointPolicyBandwidthEvent{
+		bwm:    bwm,
 		ep:     e,
 		annoCB: annoCB,
 	}))

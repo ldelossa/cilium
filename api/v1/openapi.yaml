@@ -1168,6 +1168,30 @@ paths:
           x-go-name: Disabled
           schema:
             "$ref": "#/definitions/Error"
+  "/bgp/route-policies":
+    get:
+      summary: Lists BGP route policies configured in BGP Control Plane.
+      description: Retrieves route policies from BGP Control Plane.
+      tags:
+        - bgp
+      parameters:
+        - "$ref": "#/parameters/bgp-router-asn"
+      responses:
+        '200':
+          description: Success
+          schema:
+            type: array
+            items:
+              "$ref": "#/definitions/BgpRoutePolicy"
+        '500':
+          description: Internal Server Error
+          schema:
+            "$ref": "#/definitions/Error"
+        '501':
+          description: BGP Control Plane disabled
+          x-go-name: Disabled
+          schema:
+            "$ref": "#/definitions/Error"
 parameters:
   endpoint-id:
     name: id
@@ -2376,6 +2400,12 @@ definitions:
                 - SNAT
                 - DSR
                 - Hybrid
+              dsrMode:
+                type: string
+                enum:
+                  - IP Option/Extension
+                  - IPIP
+                  - Geneve
               algorithm:
                 type: string
                 enum:
@@ -2387,6 +2417,7 @@ definitions:
                 - None
                 - Native
                 - Generic
+                - Best-Effort
               portMin:
                 type: integer
               portMax:
@@ -2835,6 +2866,9 @@ definitions:
       ingress-address:
         description: Source address for Ingress listener
         "$ref": "#/definitions/NodeAddressing"
+      source:
+        description: Source of the node configuration
+        type: string
   NodeAddressing:
     description: |-
       Addressing information of a node for all address families
@@ -2920,7 +2954,7 @@ definitions:
         type: string
       labels:
         description: Labels are the metadata labels associated with the selector
-        type: object
+        "$ref": "#/definitions/LabelArray"
       identities:
         description: identities mapping to this selector
         type: array
@@ -4060,3 +4094,84 @@ definitions:
       base64:
         description: Base64-encoded BGP path attribute in the BGP UPDATE message format
         type: string
+  BgpRoutePolicy:
+    description: Single BGP route policy retrieved from the underlying router
+    properties:
+      router-asn:
+        description: Autonomous System Number (ASN) identifying a BGP virtual router instance
+        type: integer
+      name:
+        description: Name of the route policy
+        type: string
+      type:
+        description: Type of the route policy
+        type: string
+        enum:
+          - export
+          - import
+      statements:
+        description: List of the route policy statements
+        type: array
+        items:
+          "$ref": "#/definitions/BgpRoutePolicyStatement"
+  BgpRoutePolicyStatement:
+    description: Single BGP route policy statement
+    properties:
+      match-neighbors:
+        description: Matches any of the provided BGP neighbor IP addresses. If empty matches all neighbors.
+        type: array
+        items:
+          type: string
+      match-prefixes:
+        description:  Matches any of the provided prefixes. If empty matches all prefixes.
+        type: array
+        items:
+          "$ref": "#/definitions/BgpRoutePolicyPrefixMatch"
+      route-action:
+        description: RIB processing action taken on the matched route
+        type: string
+        enum:
+          - none
+          - accept
+          - reject
+      add-communities:
+        description:  List of BGP standard community values to be added to the matched route
+        type: array
+        items:
+          type: string
+      add-large-communities:
+        description:  List of BGP large community values to be added to the matched route
+        type: array
+        items:
+          type: string
+      set-local-preference:
+        description: BGP local preference value to be set on the matched route
+        type: integer
+  BgpRoutePolicyPrefixMatch:
+    description: Matches a CIDR prefix in a BGP route policy
+    properties:
+      cidr:
+        description: CIDR prefix to match with
+        type: string
+      prefix-len-min:
+        description: Minimal prefix length that will match if it falls under CIDR
+        type: integer
+      prefix-len-max:
+        description: Maximal prefix length that will match if it falls under CIDR
+        type: integer
+  Label:
+    description: Label is the Cilium's representation of a container label
+    type: object
+    properties:
+      key:
+        type: string
+      value:
+        type: string
+      source:
+        description: Source can be one of the above values (e.g. LabelSourceContainer)
+        type: string
+  LabelArray:
+    description: LabelArray is an array of labels forming a set
+    type: array
+    items:
+      "$ref": "#/definitions/Label"

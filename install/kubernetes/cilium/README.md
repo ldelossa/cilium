@@ -159,7 +159,8 @@ contributors across the globe, there is almost always someone available to help.
 | cluster.name | string | `"default"` | Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE. |
 | clustermesh.annotations | object | `{}` | Annotations to be added to all top-level clustermesh objects (resources under templates/clustermesh-apiserver and templates/clustermesh-config) |
 | clustermesh.apiserver.affinity | object | `{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"clustermesh-apiserver"}},"topologyKey":"kubernetes.io/hostname"}]}}` | Affinity for clustermesh.apiserver |
-| clustermesh.apiserver.etcd.image | object | `{"digest":"sha256:795d8660c48c439a7c3764c2330ed9222ab5db5bb524d8d0607cac76f7ba82a3","override":null,"pullPolicy":"Always","repository":"quay.io/coreos/etcd","tag":"v3.5.4","useDigest":true}` | Clustermesh API server etcd image. |
+| clustermesh.apiserver.etcd.init.extraArgs | list | `[]` | Additional arguments to `clustermesh-apiserver etcdinit`. |
+| clustermesh.apiserver.etcd.init.extraEnv | list | `[]` | Additional environment variables to `clustermesh-apiserver etcdinit`. |
 | clustermesh.apiserver.etcd.init.resources | object | `{}` | Specifies the resources for etcd init container in the apiserver |
 | clustermesh.apiserver.etcd.lifecycle | object | `{}` | lifecycle setting for the etcd container |
 | clustermesh.apiserver.etcd.resources | object | `{}` | Specifies the resources for etcd container in the apiserver |
@@ -607,7 +608,8 @@ contributors across the globe, there is almost always someone available to help.
 | l7Proxy | bool | `true` | Enable Layer 7 network policy. |
 | livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
-| loadBalancer | object | `{"l7":{"algorithm":"round_robin","backend":"disabled","ports":[]}}` | Configure service load balancing |
+| loadBalancer | object | `{"acceleration":"disabled","l7":{"algorithm":"round_robin","backend":"disabled","ports":[]}}` | Configure service load balancing |
+| loadBalancer.acceleration | string | `"disabled"` | acceleration is the option to accelerate service handling via XDP Applicable values can be: disabled (do not use XDP), native (XDP BPF program is run directly out of the networking driver's early receive path), or best-effort (use native mode XDP acceleration on devices that support it). |
 | loadBalancer.l7 | object | `{"algorithm":"round_robin","backend":"disabled","ports":[]}` | L7 LoadBalancer |
 | loadBalancer.l7.algorithm | string | `"round_robin"` | Default LB algorithm The default LB algorithm to be used for services, which can be overridden by the service annotation (e.g. service.cilium.io/lb-l7-algorithm) Applicable values: round_robin, least_request, random |
 | loadBalancer.l7.backend | string | `"disabled"` | Enable L7 service load balancing via envoy proxy. The request to a k8s service, which has specific annotation e.g. service.cilium.io/lb-l7, will be forwarded to the local backend proxy to be load balanced to the service endpoints. Please refer to docs for supported annotations for more configuration.  Applicable values:   - envoy: Enable L7 load balancing via envoy proxy. This will automatically set enable-envoy-config as well.   - disabled: Disable L7 load balancing by way of service annotation. |

@@ -38,6 +38,7 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
+	"github.com/cilium/cilium/pkg/datapath/linux/bandwidth"
 	"github.com/cilium/cilium/pkg/datapath/linux/bigtcp"
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
@@ -566,12 +567,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.AddressScopeMax)
 	option.BindEnv(vp, option.AddressScopeMax)
 
-	flags.Bool(option.EnableBandwidthManager, false, "Enable BPF bandwidth manager")
-	option.BindEnv(vp, option.EnableBandwidthManager)
-
-	flags.Bool(option.EnableBBR, false, "Enable BBR for the bandwidth manager")
-	option.BindEnv(vp, option.EnableBBR)
-
 	flags.Bool(option.EnableRecorder, false, "Enable BPF datapath pcap recorder")
 	option.BindEnv(vp, option.EnableRecorder)
 
@@ -751,10 +746,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.String(option.SidecarIstioProxyImage, k8s.DefaultSidecarIstioProxyImageRegexp,
 		"Regular expression matching compatible Istio sidecar istio-proxy container image names")
 	option.BindEnv(vp, option.SidecarIstioProxyImage)
-
-	flags.Bool(option.SingleClusterRouteName, false,
-		"Use a single cluster route instead of per node routes")
-	option.BindEnv(vp, option.SingleClusterRouteName)
 
 	flags.String(option.SocketPath, defaults.SockPath, "Sets daemon's socket path to listen for connections")
 	option.BindEnv(vp, option.SocketPath)
@@ -1421,11 +1412,6 @@ func initEnv(vp *viper.Viper) {
 		}
 	}
 
-	if option.Config.EnableBandwidthManager && option.Config.EnableIPSec {
-		log.Warning("The bandwidth manager cannot be used with IPSec. Disabling the bandwidth manager.")
-		option.Config.EnableBandwidthManager = false
-	}
-
 	if option.Config.EnableIPv6Masquerade && option.Config.EnableBPFMasquerade && option.Config.EnableHostFirewall {
 		// We should be able to support this, but we first need to
 		// check how this plays in the datapath if BPF-masquerading is
@@ -1670,6 +1656,7 @@ type daemonParams struct {
 	ClusterInfo         cmtypes.ClusterInfo
 	BigTCPConfig        *bigtcp.Configuration
 	TunnelConfig        tunnel.Config
+	BandwidthManager    bandwidth.Manager
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1836,7 +1823,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 		ms := maps.NewMapSweeper(&EndpointMapManager{
 			EndpointManager: d.endpointManager,
-		})
+		}, d.bwManager)
 		ms.CollectStaleMapGarbage()
 		ms.RemoveDisabledMaps()
 

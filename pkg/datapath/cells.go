@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/l2responder"
 	"github.com/cilium/cilium/pkg/datapath/link"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
+	"github.com/cilium/cilium/pkg/datapath/linux/bandwidth"
 	"github.com/cilium/cilium/pkg/datapath/linux/bigtcp"
 	dpcfg "github.com/cilium/cilium/pkg/datapath/linux/config"
 	"github.com/cilium/cilium/pkg/datapath/linux/modules"
@@ -89,6 +90,9 @@ var Cell = cell.Module(
 	// Tunnel protocol configuration and alike.
 	tunnel.Cell,
 
+	// The bandwidth manager provides efficient EDT-based rate-limiting (on Linux).
+	bandwidth.Cell,
+
 	cell.Provide(func(dp types.Datapath) types.NodeIDHandler {
 		return dp.NodeIDs()
 	}),
@@ -138,7 +142,12 @@ func newDatapath(params datapathParams) types.Datapath {
 		ProcFs:       option.Config.ProcFs,
 	}
 
-	datapath := linuxdatapath.NewDatapath(datapathConfig, params.IptablesManager, params.WgAgent, params.NodeMap, params.ConfigWriter)
+	datapath := linuxdatapath.NewDatapath(linuxdatapath.DatapathParams{
+		ConfigWriter: params.ConfigWriter,
+		RuleManager:  params.IptablesManager,
+		WGAgent:      params.WgAgent,
+		NodeMap:      params.NodeMap,
+	}, datapathConfig)
 
 	params.LC.Append(hive.Hook{
 		OnStart: func(hive.HookContext) error {

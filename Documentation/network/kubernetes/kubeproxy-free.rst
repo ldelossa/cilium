@@ -81,7 +81,7 @@ by using the following commands below.
 
 .. include:: ../../installation/k8s-install-download-release.rst
 
-Next, generate the required YAML files and deploy them. 
+Next, generate the required YAML files and deploy them.
 
 .. important::
 
@@ -676,8 +676,10 @@ In case of a multi-device environment, where Cilium's device auto-detection sele
 more than a single device to expose NodePort or a user specifies multiple devices
 with ``devices``, the XDP acceleration is enabled on all devices. This means that
 each underlying device's driver must have native XDP support on all Cilium managed
-nodes. In addition, for performance reasons we recommend kernel >= 5.5 for
-the multi-device XDP acceleration.
+nodes. If you have an environment where some devices support XDP but others do not
+you can have XDP enabled on the supported devices by setting
+``loadBalancer.acceleration`` to ``best-effort``. In addition, for performance
+reasons we recommend kernel >= 5.5 for the multi-device XDP acceleration.
 
 A list of drivers supporting XDP can be found in :ref:`the XDP documentation<xdp_drivers>`.
 
@@ -820,7 +822,7 @@ enabled. In addition, the Linux kernel on the nodes must also have support for
 native XDP in the ``hv_netvsc`` driver, which is available in kernel >= 5.6 and was backported to
 the Azure Linux kernel in 5.4.0-1022.
 
-On AKS, make sure to use the AKS Ubuntu 18.04 node image with Kubernetes version v1.18 which will
+On AKS, make sure to use the AKS Ubuntu 22.04 node image with Kubernetes version v1.26 which will
 provide a Linux kernel with the necessary backports to the ``hv_netvsc`` driver. Please refer to the
 documentation on `how to configure an AKS cluster
 <https://docs.microsoft.com/en-us/azure/aks/cluster-configuration>`_ for more details.
@@ -833,12 +835,14 @@ with Accelerated Networking using Azure CLI
 for more details.
 
 When *Accelerated Networking* is enabled, ``lspci`` will show a
-Mellanox ConnectX-3 or ConnectX-4 Lx NIC:
+Mellanox ConnectX NIC:
 
 .. code-block:: shell-session
 
     $ lspci | grep Ethernet
     2846:00:02.0 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx Virtual Function] (rev 80)
+
+XDP acceleration can only be enabled on NICs ConnectX-4 Lx and onwards.
 
 In order to run XDP, large receive offload (LRO) needs to be disabled on the
 ``hv_netvsc`` device. If not the case already, this can be achieved by:
@@ -866,7 +870,7 @@ will automatically configure your virtual network to route pod traffic correctly
      --set devices=eth0 \\
      --set kubeProxyReplacement=true \\
      --set loadBalancer.acceleration=native \\
-     --set loadBalancer.mode=hybrid \\
+     --set loadBalancer.mode=snat \\
      --set k8sServiceHost=${API_SERVER_IP} \\
      --set k8sServicePort=${API_SERVER_PORT}
 
@@ -896,9 +900,9 @@ have Kubernetes InternalIP or ExternalIP assigned. InternalIP is preferred over
 ExternalIP if both exist. To change the devices, set their names in the
 ``devices`` Helm option, e.g. ``devices='{eth0,eth1,eth2}'``. Each
 listed device has to be named the same on all Cilium managed nodes. Alternatively
-if the devices do not match across different nodes, the wildcard option can be 
+if the devices do not match across different nodes, the wildcard option can be
 used, e.g. ``devices=eth+``, which would match any device starting with prefix
-``eth``. If no device can be matched the Cilium agent will try to perform auto 
+``eth``. If no device can be matched the Cilium agent will try to perform auto
 detection.
 
 When multiple devices are used, only one device can be used for direct routing
