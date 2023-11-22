@@ -8,6 +8,7 @@
   // This ensures that the gitAuthor and gitSignOff fields match
   "gitAuthor": "renovate[bot] <bot@renovateapp.com>",
   "includePaths": [
+    ".github/actions/set-env-variables/enterprise-overrides.sh",
     ".github/workflows/enterprise-*",
     "images/cilium/download-hubble-enterprise.sh"
   ],
@@ -33,6 +34,14 @@
   ],
   "stopUpdatingLabel": "renovate/stop-updating",
   "packageRules": [
+    {
+      "groupName": "Cilium CLI Enterprise",
+      "groupSlug": "cilium-cli-ee",
+      "ignoreUnstable": false,
+      "matchDepNames": [
+        "isovalent/cilium-cli-releases",
+      ],
+    },
     {
       "groupName": "Hubble CLI Enterprise",
       "groupSlug": "hubble-cli-ee",
@@ -124,6 +133,14 @@
     }
   ],
   "regexManagers": [
+    {
+      "fileMatch": [
+        ".github/actions/set-env-variables/enterprise-overrides.sh",
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+CILIUM_CLI_VERSION=\"(?<currentValue>.*)\"",
+      ]
+    },
     {
       "fileMatch": [
         "images/cilium/download-hubble-enterprise\\.sh",

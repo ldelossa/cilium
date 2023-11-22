@@ -15,3 +15,8 @@ runs:
         # renovate: datasource=github-releases depName=cilium/cilium-cli
         CILIUM_CLI_VERSION="v0.15.14"
         echo "CILIUM_CLI_VERSION=$CILIUM_CLI_VERSION" >> $GITHUB_ENV
+
+    - shell: bash
+      name: enterprise overrides
+      run: |
+        ./.github/actions/set-env-variables/enterprise-overrides.sh
