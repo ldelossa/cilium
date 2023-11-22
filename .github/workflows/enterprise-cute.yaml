@@ -379,6 +379,7 @@ jobs:
       # If the creation step was run, always run the cleanup step, even if create or test steps failed
       - name: Clean up CuTE resources
         if: always() && steps.create.outcome != 'skipped'
+        timeout-minutes: 60
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
           make destroy AUTO_APPROVE=true
