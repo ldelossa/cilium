@@ -70,7 +70,7 @@ jobs:
         run: |
           helm install -n kube-system cilium ${{ env.helm_chart_repo }} --version ${{ steps.vars.outputs.version }} \
           --values .github/values/cilium-enterprise-values.yaml
-          kubectl rollout status -n kube-system ds/cilium
+          kubectl rollout status -n kube-system ds/cilium --watch
 
       - name: Install FQDN proxy
         run: |
@@ -79,7 +79,8 @@ jobs:
           helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy \
             --version ${{ env.fqdn_proxy_version }} \
             --set metrics.enabled=true
-          kubectl rollout status -n kube-system ds/cilium
+          # TODO(tklauser): enable once the fqdn-proxy plugin is merged into main-ce
+          # kubectl rollout status -n kube-system ds/cilium-dnsproxy --watch
 
       - name: Run enterprise tests
         run: |
