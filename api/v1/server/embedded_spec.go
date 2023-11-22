@@ -68,6 +68,44 @@ func init() {
         }
       }
     },
+    "/bgp/route-policies": {
+      "get": {
+        "description": "Retrieves route policies from BGP Control Plane.",
+        "tags": [
+          "bgp"
+        ],
+        "summary": "Lists BGP route policies configured in BGP Control Plane.",
+        "parameters": [
+          {
+            "$ref": "#/parameters/bgp-router-asn"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/BgpRoutePolicy"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          },
+          "501": {
+            "description": "BGP Control Plane disabled",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "x-go-name": "Disabled"
+          }
+        }
+      }
+    },
     "/bgp/routes": {
       "get": {
         "description": "Retrieves routes from BGP Control Plane RIB filtered by parameters you specify",
@@ -2180,6 +2218,97 @@ func init() {
         }
       }
     },
+    "BgpRoutePolicy": {
+      "description": "Single BGP route policy retrieved from the underlying router",
+      "properties": {
+        "name": {
+          "description": "Name of the route policy",
+          "type": "string"
+        },
+        "router-asn": {
+          "description": "Autonomous System Number (ASN) identifying a BGP virtual router instance",
+          "type": "integer"
+        },
+        "statements": {
+          "description": "List of the route policy statements",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BgpRoutePolicyStatement"
+          }
+        },
+        "type": {
+          "description": "Type of the route policy",
+          "type": "string",
+          "enum": [
+            "export",
+            "import"
+          ]
+        }
+      }
+    },
+    "BgpRoutePolicyPrefixMatch": {
+      "description": "Matches a CIDR prefix in a BGP route policy",
+      "properties": {
+        "cidr": {
+          "description": "CIDR prefix to match with",
+          "type": "string"
+        },
+        "prefix-len-max": {
+          "description": "Maximal prefix length that will match if it falls under CIDR",
+          "type": "integer"
+        },
+        "prefix-len-min": {
+          "description": "Minimal prefix length that will match if it falls under CIDR",
+          "type": "integer"
+        }
+      }
+    },
+    "BgpRoutePolicyStatement": {
+      "description": "Single BGP route policy statement",
+      "properties": {
+        "add-communities": {
+          "description": "List of BGP standard community values to be added to the matched route",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "add-large-communities": {
+          "description": "List of BGP large community values to be added to the matched route",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "match-neighbors": {
+          "description": "Matches any of the provided BGP neighbor IP addresses. If empty matches all neighbors.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "match-prefixes": {
+          "description": "Matches any of the provided prefixes. If empty matches all prefixes.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BgpRoutePolicyPrefixMatch"
+          }
+        },
+        "route-action": {
+          "description": "RIB processing action taken on the matched route",
+          "type": "string",
+          "enum": [
+            "none",
+            "accept",
+            "reject"
+          ]
+        },
+        "set-local-preference": {
+          "description": "BGP local preference value to be set on the matched route",
+          "type": "integer"
+        }
+      }
+    },
     "CIDRList": {
       "description": "List of CIDRs",
       "type": "object",
@@ -3699,7 +3828,8 @@ func init() {
                   "enum": [
                     "None",
                     "Native",
-                    "Generic"
+                    "Generic",
+                    "Best-Effort"
                   ]
                 },
                 "algorithm": {
@@ -3707,6 +3837,14 @@ func init() {
                   "enum": [
                     "Random",
                     "Maglev"
+                  ]
+                },
+                "dsrMode": {
+                  "type": "string",
+                  "enum": [
+                    "IP Option/Extension",
+                    "IPIP",
+                    "Geneve"
                   ]
                 },
                 "enabled": {
@@ -3841,6 +3979,29 @@ func init() {
           "description": "Unique identification",
           "type": "string"
         }
+      }
+    },
+    "Label": {
+      "description": "Label is the Cilium's representation of a container label",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "source": {
+          "description": "Source can be one of the above values (e.g. LabelSourceContainer)",
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "LabelArray": {
+      "description": "LabelArray is an array of labels forming a set",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Label"
       }
     },
     "LabelConfiguration": {
@@ -4173,6 +4334,10 @@ func init() {
           "items": {
             "$ref": "#/definitions/NodeAddressingElement"
           }
+        },
+        "source": {
+          "description": "Source of the node configuration",
+          "type": "string"
         }
       }
     },
@@ -4679,7 +4844,7 @@ func init() {
         },
         "labels": {
           "description": "Labels are the metadata labels associated with the selector",
-          "type": "object"
+          "$ref": "#/definitions/LabelArray"
         },
         "selector": {
           "description": "string form of selector",
@@ -5395,6 +5560,47 @@ func init() {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/BgpPeer"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          },
+          "501": {
+            "description": "BGP Control Plane disabled",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            },
+            "x-go-name": "Disabled"
+          }
+        }
+      }
+    },
+    "/bgp/route-policies": {
+      "get": {
+        "description": "Retrieves route policies from BGP Control Plane.",
+        "tags": [
+          "bgp"
+        ],
+        "summary": "Lists BGP route policies configured in BGP Control Plane.",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Autonomous System Number (ASN) identifying a BGP virtual router instance.\nIf not specified, all virtual router instances are selected.\n",
+            "name": "router_asn",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/BgpRoutePolicy"
               }
             }
           },
@@ -7762,6 +7968,97 @@ func init() {
         }
       }
     },
+    "BgpRoutePolicy": {
+      "description": "Single BGP route policy retrieved from the underlying router",
+      "properties": {
+        "name": {
+          "description": "Name of the route policy",
+          "type": "string"
+        },
+        "router-asn": {
+          "description": "Autonomous System Number (ASN) identifying a BGP virtual router instance",
+          "type": "integer"
+        },
+        "statements": {
+          "description": "List of the route policy statements",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BgpRoutePolicyStatement"
+          }
+        },
+        "type": {
+          "description": "Type of the route policy",
+          "type": "string",
+          "enum": [
+            "export",
+            "import"
+          ]
+        }
+      }
+    },
+    "BgpRoutePolicyPrefixMatch": {
+      "description": "Matches a CIDR prefix in a BGP route policy",
+      "properties": {
+        "cidr": {
+          "description": "CIDR prefix to match with",
+          "type": "string"
+        },
+        "prefix-len-max": {
+          "description": "Maximal prefix length that will match if it falls under CIDR",
+          "type": "integer"
+        },
+        "prefix-len-min": {
+          "description": "Minimal prefix length that will match if it falls under CIDR",
+          "type": "integer"
+        }
+      }
+    },
+    "BgpRoutePolicyStatement": {
+      "description": "Single BGP route policy statement",
+      "properties": {
+        "add-communities": {
+          "description": "List of BGP standard community values to be added to the matched route",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "add-large-communities": {
+          "description": "List of BGP large community values to be added to the matched route",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "match-neighbors": {
+          "description": "Matches any of the provided BGP neighbor IP addresses. If empty matches all neighbors.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "match-prefixes": {
+          "description": "Matches any of the provided prefixes. If empty matches all prefixes.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BgpRoutePolicyPrefixMatch"
+          }
+        },
+        "route-action": {
+          "description": "RIB processing action taken on the matched route",
+          "type": "string",
+          "enum": [
+            "none",
+            "accept",
+            "reject"
+          ]
+        },
+        "set-local-preference": {
+          "description": "BGP local preference value to be set on the matched route",
+          "type": "integer"
+        }
+      }
+    },
     "CIDRList": {
       "description": "List of CIDRs",
       "type": "object",
@@ -9382,7 +9679,8 @@ func init() {
                   "enum": [
                     "None",
                     "Native",
-                    "Generic"
+                    "Generic",
+                    "Best-Effort"
                   ]
                 },
                 "algorithm": {
@@ -9390,6 +9688,14 @@ func init() {
                   "enum": [
                     "Random",
                     "Maglev"
+                  ]
+                },
+                "dsrMode": {
+                  "type": "string",
+                  "enum": [
+                    "IP Option/Extension",
+                    "IPIP",
+                    "Geneve"
                   ]
                 },
                 "enabled": {
@@ -9564,7 +9870,8 @@ func init() {
               "enum": [
                 "None",
                 "Native",
-                "Generic"
+                "Generic",
+                "Best-Effort"
               ]
             },
             "algorithm": {
@@ -9572,6 +9879,14 @@ func init() {
               "enum": [
                 "Random",
                 "Maglev"
+              ]
+            },
+            "dsrMode": {
+              "type": "string",
+              "enum": [
+                "IP Option/Extension",
+                "IPIP",
+                "Geneve"
               ]
             },
             "enabled": {
@@ -9733,7 +10048,8 @@ func init() {
           "enum": [
             "None",
             "Native",
-            "Generic"
+            "Generic",
+            "Best-Effort"
           ]
         },
         "algorithm": {
@@ -9741,6 +10057,14 @@ func init() {
           "enum": [
             "Random",
             "Maglev"
+          ]
+        },
+        "dsrMode": {
+          "type": "string",
+          "enum": [
+            "IP Option/Extension",
+            "IPIP",
+            "Geneve"
           ]
         },
         "enabled": {
@@ -9860,6 +10184,29 @@ func init() {
           "description": "Unique identification",
           "type": "string"
         }
+      }
+    },
+    "Label": {
+      "description": "Label is the Cilium's representation of a container label",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "source": {
+          "description": "Source can be one of the above values (e.g. LabelSourceContainer)",
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "LabelArray": {
+      "description": "LabelArray is an array of labels forming a set",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Label"
       }
     },
     "LabelConfiguration": {
@@ -10206,6 +10553,10 @@ func init() {
           "items": {
             "$ref": "#/definitions/NodeAddressingElement"
           }
+        },
+        "source": {
+          "description": "Source of the node configuration",
+          "type": "string"
         }
       }
     },
@@ -10712,7 +11063,7 @@ func init() {
         },
         "labels": {
           "description": "Labels are the metadata labels associated with the selector",
-          "type": "object"
+          "$ref": "#/definitions/LabelArray"
         },
         "selector": {
           "description": "string form of selector",

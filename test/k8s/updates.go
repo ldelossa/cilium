@@ -115,7 +115,8 @@ var _ = Describe("K8sUpdates", func() {
 	})
 
 	AfterFailed(func() {
-		kubectl.CiliumReport("cilium-dbg endpoint list")
+		// TODO(joe): Switch to cilium-dbg after v1.16-dev.
+		kubectl.CiliumReport("cilium endpoint list")
 	})
 
 	JustAfterEach(func() {
@@ -450,6 +451,8 @@ func InstallAndValidateCiliumUpgrades(kubectl *helpers.Kubectl, oldHelmChartVers
 			"image.tag":              newImageVersion,
 			"operator.image.tag":     newImageVersion,
 			"hubble.relay.image.tag": newImageVersion,
+			"cluster.name":           clusterName,
+			"cluster.id":             clusterID,
 		}
 
 		upgradeCompatibilityVer := strings.TrimSuffix(oldHelmChartVersion, "-dev")

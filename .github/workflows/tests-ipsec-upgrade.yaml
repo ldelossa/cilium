@@ -51,8 +51,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.13
   cilium_cli_ci_version:
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
   # renovate: datasource=docker depName=quay.io/cilium/kindest-node
@@ -181,9 +179,9 @@ jobs:
           persist-credentials: false
 
       - name: Install Cilium CLI-cli
-        uses: cilium/cilium-cli@6361bfd0c291800e6c1041ea3c6ed6d178242e6a # v0.15.13
+        uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
         with:
-          release-version: ${{ env.cilium_cli_version }}
+          release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
           binary-name: cilium-cli
           binary-dir: ./
@@ -243,19 +241,12 @@ jobs:
             # TODO: After Cilium 1.15 release, update to cilium-dbg
             kubectl -n kube-system exec daemonset/cilium -- cilium status
 
-      - name: Test Cilium ${{ steps.vars.outputs.downgrade_version }} (${{ matrix.name }})
+      - name: Start conn-disrupt-test
         uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44c3f906d # v0.0.12
         with:
           provision: 'false'
           cmd: |
             cd /host/
-
-            ./cilium-cli connectivity test --include-unsafe-tests --collect-sysdump-on-failure \
-              --flush-ct \
-              --sysdump-hubble-flows-count=1000000 --sysdump-hubble-flows-timeout=5m \
-              --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>" \
-              --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml" \
-              --junit-property github_job_step="Run tests upgrade 1 (${{ join(matrix.*, ', ') }})"
 
             # Create pods which establish long lived connections. It will be used by
             # subsequent connectivity tests with --include-conn-disrupt-test to catch any
@@ -266,8 +257,6 @@ jobs:
         uses: cilium/cilium/.github/actions/conn-disrupt-test@93f26fd0af7f5bd5832e08b10785ec53d4252b1c
         with:
           job-name: ipsec-upgrade-${{ matrix.name }}
-          # Disable check-log-errors due to https://github.com/cilium/cilium-cli/issues/1858
-          extra-connectivity-test-flags: --test '!check-log-errors'
           operation-cmd: |
             cd /host/
 
@@ -283,8 +272,7 @@ jobs:
         with:
           job-name: ipsec-downgrade-${{ matrix.name }}
           # Disable no-missed-tail-calls due to https://github.com/cilium/cilium/issues/26739
-          # Disable check-log-errors due to https://github.com/cilium/cilium-cli/issues/1858
-          extra-connectivity-test-flags: --test '!no-missed-tail-calls,!check-log-errors'
+          extra-connectivity-test-flags: --test '!no-missed-tail-calls'
           operation-cmd: |
             cd /host/
 

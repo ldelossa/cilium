@@ -34,6 +34,8 @@ cilium-agent hive dot-graph [flags]
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
       --egress-gateway-policy-map-max int                            Maximum number of entries in egress gateway policy map (default 16384)
       --egress-gateway-reconciliation-trigger-interval duration      Time between triggers of egress gateway state reconciliations (default 1s)
+      --enable-bandwidth-manager                                     Enable BPF bandwidth manager
+      --enable-bbr                                                   Enable BBR for the bandwidth manager
       --enable-cilium-api-server-access strings                      List of cilium API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-health-api-server-access strings               List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs

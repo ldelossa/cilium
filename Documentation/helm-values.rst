@@ -436,10 +436,14 @@
      - Affinity for clustermesh.apiserver
      - object
      - ``{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"clustermesh-apiserver"}},"topologyKey":"kubernetes.io/hostname"}]}}``
-   * - :spelling:ignore:`clustermesh.apiserver.etcd.image`
-     - Clustermesh API server etcd image.
-     - object
-     - ``{"digest":"sha256:795d8660c48c439a7c3764c2330ed9222ab5db5bb524d8d0607cac76f7ba82a3","override":null,"pullPolicy":"Always","repository":"quay.io/coreos/etcd","tag":"v3.5.4","useDigest":true}``
+   * - :spelling:ignore:`clustermesh.apiserver.etcd.init.extraArgs`
+     - Additional arguments to ``clustermesh-apiserver etcdinit``.
+     - list
+     - ``[]``
+   * - :spelling:ignore:`clustermesh.apiserver.etcd.init.extraEnv`
+     - Additional environment variables to ``clustermesh-apiserver etcdinit``.
+     - list
+     - ``[]``
    * - :spelling:ignore:`clustermesh.apiserver.etcd.init.resources`
      - Specifies the resources for etcd init container in the apiserver
      - object
@@ -2231,7 +2235,11 @@
    * - :spelling:ignore:`loadBalancer`
      - Configure service load balancing
      - object
-     - ``{"l7":{"algorithm":"round_robin","backend":"disabled","ports":[]}}``
+     - ``{"acceleration":"disabled","l7":{"algorithm":"round_robin","backend":"disabled","ports":[]}}``
+   * - :spelling:ignore:`loadBalancer.acceleration`
+     - acceleration is the option to accelerate service handling via XDP Applicable values can be: disabled (do not use XDP), native (XDP BPF program is run directly out of the networking driver's early receive path), or best-effort (use native mode XDP acceleration on devices that support it).
+     - string
+     - ``"disabled"``
    * - :spelling:ignore:`loadBalancer.l7`
      - L7 LoadBalancer
      - object

@@ -14,6 +14,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	v2api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
@@ -31,16 +32,21 @@ type RoutePolicyReconcilerOut struct {
 }
 
 type RoutePolicyReconciler struct {
-	ipPoolStore BGPCPResourceStore[*v2alpha1api.CiliumLoadBalancerIPPool]
+	lbPoolStore  BGPCPResourceStore[*v2alpha1api.CiliumLoadBalancerIPPool]
+	podPoolStore BGPCPResourceStore[*v2alpha1api.CiliumPodIPPool]
 }
 
 // RoutePolicyReconcilerMetadata holds routing policies configured by the policy reconciler keyed by policy name.
 type RoutePolicyReconcilerMetadata map[string]*types.RoutePolicy
 
-func NewRoutePolicyReconciler(ipPoolStore BGPCPResourceStore[*v2alpha1api.CiliumLoadBalancerIPPool]) RoutePolicyReconcilerOut {
+func NewRoutePolicyReconciler(
+	lbStore BGPCPResourceStore[*v2alpha1api.CiliumLoadBalancerIPPool],
+	podStore BGPCPResourceStore[*v2alpha1api.CiliumPodIPPool],
+) RoutePolicyReconcilerOut {
 	return RoutePolicyReconcilerOut{
 		Reconciler: &RoutePolicyReconciler{
-			ipPoolStore: ipPoolStore,
+			lbPoolStore:  lbStore,
+			podPoolStore: podStore,
 		},
 	}
 }
@@ -66,8 +72,8 @@ func (r *RoutePolicyReconciler) Reconcile(ctx context.Context, params ReconcileP
 	if params.CurrentServer == nil {
 		return fmt.Errorf("attempted routing policy reconciliation with nil ServerWithConfig")
 	}
-	if params.Node == nil {
-		return fmt.Errorf("attempted routing policy reconciliation with nil LocalNode")
+	if params.CiliumNode == nil {
+		return fmt.Errorf("attempted routing policy reconciliation with nil local CiliumNode")
 	}
 
 	// take currently configured policies from cache
@@ -186,8 +192,27 @@ func (r *RoutePolicyReconciler) pathAttributesToPolicy(attrs v2alpha1api.CiliumB
 	}
 
 	switch attrs.SelectorType {
+	case v2alpha1api.CPIPKindDefinition:
+		localPools := r.populateLocalPools(params.CiliumNode)
+		for _, pool := range r.podPoolStore.List() {
+			if attrs.Selector != nil && !labelSelector.Matches(labels.Set(pool.Labels)) {
+				continue
+			}
+			// only include pool cidrs that have been allocated to the local node.
+			if cidrs, ok := localPools[pool.Name]; ok {
+				for _, cidr := range cidrs {
+					if cidr.Addr().Is4() {
+						prefixLen := int(pool.Spec.IPv4.MaskSize)
+						v4Prefixes = append(v4Prefixes, &types.RoutePolicyPrefixMatch{CIDR: cidr, PrefixLenMin: prefixLen, PrefixLenMax: prefixLen})
+					} else {
+						prefixLen := int(pool.Spec.IPv6.MaskSize)
+						v6Prefixes = append(v6Prefixes, &types.RoutePolicyPrefixMatch{CIDR: cidr, PrefixLenMin: prefixLen, PrefixLenMax: prefixLen})
+					}
+				}
+			}
+		}
 	case v2alpha1api.CiliumLoadBalancerIPPoolSelectorName:
-		for _, pool := range r.ipPoolStore.List() {
+		for _, pool := range r.lbPoolStore.List() {
 			if pool.Spec.Disabled {
 				continue
 			}
@@ -207,10 +232,10 @@ func (r *RoutePolicyReconciler) pathAttributesToPolicy(attrs v2alpha1api.CiliumB
 			}
 		}
 	case v2alpha1api.PodCIDRSelectorName:
-		if attrs.Selector != nil && !labelSelector.Matches(labels.Set(params.Node.Labels)) {
+		if attrs.Selector != nil && !labelSelector.Matches(labels.Set(params.CiliumNode.Labels)) {
 			break
 		}
-		for _, podCIDR := range params.Node.ToCiliumNode().Spec.IPAM.PodCIDRs {
+		for _, podCIDR := range params.CiliumNode.Spec.IPAM.PodCIDRs {
 			cidr, err := netip.ParsePrefix(podCIDR)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse PodCIDR %s: %w", podCIDR, err)
@@ -251,6 +276,37 @@ func (r *RoutePolicyReconciler) pathAttributesToPolicy(attrs v2alpha1api.CiliumB
 		policy.Statements = append(policy.Statements, policyStatement(neighborAddress, v6Prefixes, attrs.LocalPreference, communities, largeCommunities))
 	}
 	return policy, nil
+}
+
+// populateLocalPools returns a map of allocated multi-pool IPAM CIDRs of the local CiliumNode,
+// keyed by the pool name.
+func (r *RoutePolicyReconciler) populateLocalPools(localNode *v2api.CiliumNode) map[string][]netip.Prefix {
+	var (
+		l = log.WithFields(
+			logrus.Fields{
+				"component": "manager.routePolicyReconciler",
+			},
+		)
+	)
+
+	if localNode == nil {
+		return nil
+	}
+
+	lp := make(map[string][]netip.Prefix)
+	for _, pool := range localNode.Spec.IPAM.Pools.Allocated {
+		var prefixes []netip.Prefix
+		for _, cidr := range pool.CIDRs {
+			if p, err := cidr.ToPrefix(); err == nil {
+				prefixes = append(prefixes, *p)
+			} else {
+				l.Errorf("invalid ipam pool cidr %v: %v", cidr, err)
+			}
+		}
+		lp[pool.Pool] = prefixes
+	}
+
+	return lp
 }
 
 // pathAttributesPolicyName returns a policy name derived from the provided CiliumBGPPathAttributes

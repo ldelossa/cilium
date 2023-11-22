@@ -226,6 +226,7 @@
 /.devcontainer @cilium/contributing
 /.gitattributes @cilium/tophat
 /.github/ @cilium/contributing
+/.github/renovate.json5 @cilium/github-sec @cilium/ci-structure
 /.github/actions/ @cilium/github-sec @cilium/ci-structure
 /.github/workflows/ @cilium/github-sec @cilium/ci-structure
 /.github/workflows/*datapath*.yaml @cilium/sig-datapath @cilium/github-sec @cilium/ci-structure
@@ -377,6 +378,7 @@ Makefile* @cilium/build
 /operator/pkg/ingress @cilium/sig-servicemesh
 /operator/pkg/lbipam @cilium/sig-lb
 /operator/pkg/model @cilium/sig-servicemesh
+/operator/pkg/secretsync @cilium/sig-servicemesh
 /operator/watchers/bgp.go @cilium/sig-bgp
 /pkg/ @cilium/tophat
 /pkg/annotation @cilium/sig-k8s
@@ -388,7 +390,7 @@ Makefile* @cilium/build
 /pkg/aws/ @cilium/aws
 /pkg/azure/ @cilium/azure
 /pkg/backoff/ @cilium/sig-agent
-/pkg/bandwidth/ @cilium/sig-datapath
+/pkg/datapath/linux/bandwidth/ @cilium/sig-datapath
 /pkg/bgp/ @cilium/sig-bgp
 /pkg/bgpv1/ @cilium/sig-bgp
 /pkg/bpf/ @cilium/loader
