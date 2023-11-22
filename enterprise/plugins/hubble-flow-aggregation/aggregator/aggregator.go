@@ -119,6 +119,10 @@ func (p *flowAggregation) newContext(ctx context.Context, agg *aggregationpb.Agg
 		return ctx, err
 	}
 
+	if aggregator == nil {
+		return ctx, nil
+	}
+
 	go aggregator.Start(ctx)
 
 	return context.WithValue(ctx, ctxKey, &aggregatorCtx{
