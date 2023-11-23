@@ -20,6 +20,8 @@ import (
 	"github.com/cilium/cilium/enterprise/plugins"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/aggregator"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
+	"github.com/cilium/cilium/pkg/logging"
+	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
 var (
@@ -39,17 +41,14 @@ type flowAggregationPlugin struct {
 
 // New returns a new flow aggregation plugin
 func New(_ *viper.Viper) (plugins.Instance, error) {
-	return &flowAggregationPlugin{}, nil
-}
-
-func (p *flowAggregationPlugin) OnServerInit(srv observeroption.Server) error {
-	p.flowAggregator = aggregator.NewFlowAggregator(srv.GetLogger())
-	return nil
+	logger := logging.DefaultLogger.WithField(logfields.LogSubsys, "hubble-flow-aggregation")
+	return &flowAggregationPlugin{
+		flowAggregator: aggregator.NewFlowAggregator(logger),
+	}, nil
 }
 
 func (p *flowAggregationPlugin) ServerOptions() []observeroption.Option {
 	return []observeroption.Option{
-		observeroption.WithOnServerInit(p),
 		observeroption.WithOnFlowDelivery(p),
 		observeroption.WithOnGetFlows(p),
 	}
