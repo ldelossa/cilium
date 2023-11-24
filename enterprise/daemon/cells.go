@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
+	"github.com/cilium/cilium/enterprise/pkg/mixedrouting"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
 	"github.com/cilium/cilium/pkg/hive/cell"
@@ -52,6 +53,8 @@ var (
 		egressgatewayha.PolicyCell,
 
 		cell.Invoke(func(*egressgatewayha.Manager) {}),
+
+		mixedrouting.Cell,
 	)
 
 	Datapath = cell.Module(

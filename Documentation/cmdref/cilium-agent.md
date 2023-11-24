@@ -189,6 +189,7 @@ cilium-agent [flags]
       --export-node-name string                                      Override the node_name field in exported flows
       --export-rate-limit int                                        Rate limit (per minute) for flow exports. Set to -1 to disable (default -1)
       --external-envoy-proxy                                         whether the Envoy is deployed externally in form of a DaemonSet or not
+      --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
       --fixed-identity-mapping map                                   Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
   -h, --help                                                         help for cilium-agent

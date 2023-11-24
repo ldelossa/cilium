@@ -45,6 +45,7 @@ cilium-agent hive [flags]
       --enable-monitor                                               Enable the monitor unix domain socket server (default true)
       --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
+      --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
   -h, --help                                                         help for hive
       --iptables-lock-timeout duration                               Time to pass to each iptables invocation to wait for xtables lock acquisition (default 5s)
