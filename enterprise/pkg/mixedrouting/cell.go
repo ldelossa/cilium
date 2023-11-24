@@ -23,6 +23,8 @@ var Cell = cell.Module(
 	cell.Config(cemrcfg.Config{}),
 
 	cell.Provide(
+		newManager,
+
 		// Configure the datapath to enable the configuration of the tunnel device
 		// and the compilation of the corresponding logic when the primary routing
 		// mode is native, and fallback it tunnel.
@@ -32,5 +34,8 @@ var Cell = cell.Module(
 	cell.Invoke(
 		// Validate the mixed routing configuration.
 		cemrcfg.Config.Validate,
+
+		// Add the supported routing modes annotation to the local node.
+		(*manager).configureLocalNode,
 	),
 )

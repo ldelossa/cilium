@@ -13,9 +13,18 @@ package mixedrouting
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
+	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/option"
+
+	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
 )
 
 // routingModeType represents the routing modes possibly supported by any node.
@@ -52,6 +61,49 @@ const (
 	// routingModesSeparator is the separator used to serialize routingModesType.
 	routingModesSeparator = ","
 )
+
+type manager struct {
+	logger logrus.FieldLogger
+	config cemrcfg.Config
+	modes  routingModesType
+}
+
+type params struct {
+	cell.In
+
+	Logger logrus.FieldLogger
+
+	Config       cemrcfg.Config
+	DaemonConfig *option.DaemonConfig
+	Tunnel       tunnel.Config
+}
+
+func newManager(in params) *manager {
+	mgr := manager{
+		logger: in.Logger,
+		config: in.Config,
+	}
+
+	mgr.modes = append(mgr.modes, toRoutingMode(in.DaemonConfig.RoutingMode, option.RoutingModeTunnel, in.Tunnel.Protocol()))
+	if mgr.enabled() && (in.Config.FallbackRoutingMode == cemrcfg.FallbackTunnel) != (in.DaemonConfig.TunnelingEnabled()) {
+		mgr.modes = append(mgr.modes, toRoutingMode(in.Config.FallbackRoutingMode, cemrcfg.FallbackTunnel, in.Tunnel.Protocol()))
+	}
+
+	return &mgr
+}
+
+func (mgr *manager) configureLocalNode(lns *node.LocalNodeStore) {
+	mgr.logger.WithField(logfields.RoutingModes, mgr.modes).Info("Supported routing modes configured")
+	lns.Update(func(ln *node.LocalNode) {
+		// Create a clone, so that we don't mutate the current annotations,
+		// as LocalNodeStore.Update emits a shallow copy of the whole object.
+		ln.Annotations = maps.Clone(ln.Annotations)
+		ln.Annotations[SupportedRoutingModesKey] = mgr.modes.String()
+	})
+}
+
+// enabled returns whether mixed routing mode support is enabled.
+func (mgr *manager) enabled() bool { return mgr.config.FallbackRoutingMode != cemrcfg.FallbackDisabled }
 
 // String returns the string representation of the routing modes (i.e., comma separated).
 func (rm routingModesType) String() string { return strings.Join([]string(rm), routingModesSeparator) }

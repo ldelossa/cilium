@@ -31,4 +31,7 @@ const (
 
 	// SID is the segment identifier used in SRv6.
 	SID = "sid"
+
+	// RoutingModes is a list of routing modes supported by a given node.
+	RoutingModes = "routingModes"
 )

@@ -11,12 +11,84 @@
 package mixedrouting
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
+	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/node/types"
+	"github.com/cilium/cilium/pkg/option"
+
+	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
 )
+
+func TestNodeStoreUpdate(t *testing.T) {
+	tests := []struct {
+		primary  string
+		fallback cemrcfg.FallbackType
+		proto    tunnel.Protocol
+		expected string
+	}{
+		{
+			primary:  option.RoutingModeNative,
+			fallback: cemrcfg.FallbackDisabled,
+			proto:    tunnel.VXLAN,
+			expected: "native",
+		},
+		{
+			primary:  option.RoutingModeNative,
+			fallback: cemrcfg.FallbackNative,
+			proto:    tunnel.VXLAN,
+			expected: "native",
+		},
+		{
+			primary:  option.RoutingModeNative,
+			fallback: cemrcfg.FallbackTunnel,
+			proto:    tunnel.VXLAN,
+			expected: "native,tunnel/vxlan",
+		},
+		{
+			primary:  option.RoutingModeTunnel,
+			fallback: cemrcfg.FallbackDisabled,
+			proto:    tunnel.Geneve,
+			expected: "tunnel/geneve",
+		},
+		{
+			primary:  option.RoutingModeTunnel,
+			fallback: cemrcfg.FallbackNative,
+			proto:    tunnel.Geneve,
+			expected: "tunnel/geneve,native",
+		},
+		{
+			primary:  option.RoutingModeTunnel,
+			fallback: cemrcfg.FallbackTunnel,
+			proto:    tunnel.Geneve,
+			expected: "tunnel/geneve",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%v-%v-%v", tt.primary, tt.fallback, tt.proto), func(t *testing.T) {
+			lns := node.NewTestLocalNodeStore(node.LocalNode{
+				Node: types.Node{Annotations: map[string]string{"foo": "bar"}}})
+
+			newManager(params{
+				Logger:       logrus.StandardLogger(),
+				DaemonConfig: &option.DaemonConfig{RoutingMode: tt.primary},
+				Config:       cemrcfg.Config{FallbackRoutingMode: tt.fallback},
+				Tunnel:       tunnel.NewTestConfig(tt.proto),
+			}).configureLocalNode(lns)
+
+			ln, _ := lns.Get(context.Background())
+			require.Equal(t, "bar", ln.Annotations["foo"])
+			require.Equal(t, tt.expected, ln.Annotations[SupportedRoutingModesKey])
+		})
+	}
+}
 
 func TestRoutingModeParsing(t *testing.T) {
 	tests := []struct {
