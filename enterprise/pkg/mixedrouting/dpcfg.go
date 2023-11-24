@@ -11,26 +11,28 @@
 package mixedrouting
 
 import (
+	dpcfgdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
+	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/option"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
 )
 
-var Cell = cell.Module(
-	"mixed-routing",
-	"Support for mixed routing mode",
+func datapathConfigProvider(cfg cemrcfg.Config, dcfg *option.DaemonConfig) (out struct {
+	cell.Out
 
-	cell.Config(cemrcfg.Config{}),
+	tunnel.EnablerOut
+	dpcfgdef.NodeOut
+}) {
+	// We need to enable the tunnel functionalities only when the fallback mode
+	// is set to tunnel, and the primary routing mode of the given node is native.
+	if !dcfg.TunnelingEnabled() && cfg.FallbackRoutingMode == cemrcfg.FallbackTunnel {
+		out.EnablerOut = tunnel.NewEnabler(true)
+		out.NodeDefines = dpcfgdef.Map{
+			"TUNNEL_MODE": "1",
+		}
+	}
 
-	cell.Provide(
-		// Configure the datapath to enable the configuration of the tunnel device
-		// and the compilation of the corresponding logic when the primary routing
-		// mode is native, and fallback it tunnel.
-		datapathConfigProvider,
-	),
-
-	cell.Invoke(
-		// Validate the mixed routing configuration.
-		cemrcfg.Config.Validate,
-	),
-)
+	return
+}
