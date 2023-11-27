@@ -48,6 +48,9 @@ to do review on a PR.)
       will take care of closing backport tracking issues. This can be done by
       copying the corresponding workflow from a previous `v1.X-ce` branch and
       adjusting the branch name and label. See [this v1.14 PR] for an example.
+- [ ] Delete enterprise/cilium-cli directory:
+
+        git rm -r enterprise/cilium-cli
 
 ## Update Hubble enterprise CLI version
 - [ ] Make sure that `images/cilium/download-hubble-enterprise.sh` has the
