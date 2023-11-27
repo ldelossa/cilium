@@ -58,7 +58,7 @@ env:
   # renovate: datasource=github-releases depName=eksctl-io/eksctl
   eksctl_version: v0.164.0
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  kubectl_version: v1.28.3
+  kubectl_version: v1.28.4
 
 jobs:
   commit-status-start:
@@ -160,6 +160,7 @@ jobs:
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
         with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
 
@@ -191,6 +192,7 @@ jobs:
           region: ${{ matrix.region }}
           owner: "${{ steps.vars.outputs.owner }}"
           version: ${{ matrix.version }}
+          spot: ${{ github.event_name != 'schedule' }}
 
       # This is a workaround for flake #16938.
       - name: Remove AWS-CNI

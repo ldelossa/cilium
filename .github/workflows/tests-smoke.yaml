@@ -7,6 +7,8 @@ on:
     branches:
       - main-ce
       - ft/main/**
+  merge_group:
+    types: [checks_requested]
 
 permissions: read-all
 
@@ -76,7 +78,7 @@ jobs:
 
   conformance-test:
     needs: check_changes
-    if: ${{ needs.check_changes.outputs.tested == 'true' }}
+    if: ${{ needs.check_changes.outputs.tested == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest
     name: Installation and Conformance Test
     steps:
@@ -143,6 +145,7 @@ jobs:
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
         with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
 

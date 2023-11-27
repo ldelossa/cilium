@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package manager
+package reconciler
 
 import (
 	"context"
@@ -9,14 +9,23 @@ import (
 	"net/netip"
 	"slices"
 
+	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/maps"
+
+	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	v2api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
+)
 
-	"github.com/sirupsen/logrus"
+const (
+	podIPPoolNameLabel      = "io.cilium.podippool.name"
+	podIPPoolNamespaceLabel = "io.cilium.podippool.namespace"
 )
 
 type PodIPPoolReconcilerOut struct {
@@ -26,13 +35,13 @@ type PodIPPoolReconcilerOut struct {
 }
 
 type PodIPPoolReconciler struct {
-	poolStore BGPCPResourceStore[*v2alpha1api.CiliumPodIPPool]
+	poolStore store.BGPCPResourceStore[*v2alpha1api.CiliumPodIPPool]
 }
 
 // PodIPPoolReconcilerMetadata holds any announced pod ip pool CIDRs keyed by pool name of the backing CiliumPodIPPool.
 type PodIPPoolReconcilerMetadata map[resource.Key][]*types.Path
 
-func NewPodIPPoolReconciler(poolStore BGPCPResourceStore[*v2alpha1api.CiliumPodIPPool]) PodIPPoolReconcilerOut {
+func NewPodIPPoolReconciler(poolStore store.BGPCPResourceStore[*v2alpha1api.CiliumPodIPPool]) PodIPPoolReconcilerOut {
 	if poolStore == nil {
 		return PodIPPoolReconcilerOut{}
 	}
@@ -62,7 +71,7 @@ func (r *PodIPPoolReconciler) Reconcile(ctx context.Context, p ReconcileParams) 
 	return nil
 }
 
-func (r *PodIPPoolReconciler) getMetadata(sc *ServerWithConfig) PodIPPoolReconcilerMetadata {
+func (r *PodIPPoolReconciler) getMetadata(sc *instance.ServerWithConfig) PodIPPoolReconcilerMetadata {
 	if _, found := sc.ReconcilerMetadata[r.Name()]; !found {
 		sc.ReconcilerMetadata[r.Name()] = make(PodIPPoolReconcilerMetadata)
 	}
@@ -75,7 +84,7 @@ func (r *PodIPPoolReconciler) populateLocalPools(localNode *v2api.CiliumNode) ma
 	var (
 		l = log.WithFields(
 			logrus.Fields{
-				"component": "manager.podIPPoolReconciler",
+				"component": "PodIPPoolReconciler",
 			},
 		)
 	)
@@ -102,7 +111,7 @@ func (r *PodIPPoolReconciler) populateLocalPools(localNode *v2api.CiliumNode) ma
 
 // fullReconciliation reconciles all pod ip pools.
 func (r *PodIPPoolReconciler) fullReconciliation(ctx context.Context,
-	sc *ServerWithConfig,
+	sc *instance.ServerWithConfig,
 	newc *v2alpha1api.CiliumBGPVirtualRouter,
 	localPools map[string][]netip.Prefix) error {
 	podIPPoolAnnouncements := r.getMetadata(sc)
@@ -133,7 +142,7 @@ func (r *PodIPPoolReconciler) fullReconciliation(ctx context.Context,
 }
 
 // withdrawPool removes all announcements for the given pod ip pool.
-func (r *PodIPPoolReconciler) withdrawPool(ctx context.Context, sc *ServerWithConfig, key resource.Key) error {
+func (r *PodIPPoolReconciler) withdrawPool(ctx context.Context, sc *instance.ServerWithConfig, key resource.Key) error {
 	podIPPoolAnnouncements := r.getMetadata(sc)
 	advertisements := podIPPoolAnnouncements[key]
 	// Loop in reverse order so we can delete without effect to the iteration.
@@ -158,7 +167,7 @@ func (r *PodIPPoolReconciler) withdrawPool(ctx context.Context, sc *ServerWithCo
 // reconcilePodIPPool ensures the CIDRs of the given pool are announced if they are present
 // on the local node, adding missing announcements or withdrawing unwanted ones.
 func (r *PodIPPoolReconciler) reconcilePodIPPool(ctx context.Context,
-	sc *ServerWithConfig,
+	sc *instance.ServerWithConfig,
 	newc *v2alpha1api.CiliumBGPVirtualRouter,
 	pool *v2alpha1api.CiliumPodIPPool,
 	localPools map[string][]netip.Prefix) error {
@@ -236,4 +245,14 @@ func (r *PodIPPoolReconciler) poolDesiredRoutes(
 	}
 
 	return desiredRoutes, nil
+}
+
+func podIPPoolLabelSet(pool *v2alpha1api.CiliumPodIPPool) labels.Labels {
+	poolLabels := maps.Clone(pool.Labels)
+	if poolLabels == nil {
+		poolLabels = make(map[string]string)
+	}
+	poolLabels[podIPPoolNameLabel] = pool.Name
+	poolLabels[podIPPoolNamespaceLabel] = pool.Namespace
+	return labels.Set(poolLabels)
 }
