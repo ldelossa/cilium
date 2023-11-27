@@ -33,8 +33,6 @@ env:
   regions: '{"aws": "us-west-2", "azure": "westus2", "gcp": "us-west2-a"}'
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
-  # renovate: datasource=github-releases depName=isovalent/cilium-cli-releases
-  cilium_cli_version: v0.15.14-cee.1
 
 jobs:
   cute-ci:
@@ -42,6 +40,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
+      - name: Checkout context ref
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set Environment Variables
+        uses: ./.github/actions/set-env-variables
+
       - name: Set up job variables
         id: vars
         run: |
@@ -147,11 +154,11 @@ jobs:
           echo "CE umbrella chart: ${{ steps.cute_props.outputs.use_ce_chart }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
 
-      - name: Install CE CLI
-        run: |
-          curl -LO https://github.com/isovalent/cilium-cli-releases/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz
-          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-          rm cilium-linux-amd64.tar.gz
+      - name: Install Cilium CLI
+        uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
+        with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
+          release-version: ${{ env.CILIUM_CLI_VERSION }}
 
       - name: Install cfssl
         run: |
