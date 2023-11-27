@@ -34,7 +34,7 @@ env:
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   # renovate: datasource=github-releases depName=isovalent/cilium-cli-releases
-  cilium_cli_version: v0.15.11-cee.1
+  cilium_cli_version: v0.15.14-cee.1
 
 jobs:
   cute-ci:
