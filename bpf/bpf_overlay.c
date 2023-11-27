@@ -32,6 +32,7 @@
 #include "lib/nodeport.h"
 #include "lib/clustermesh.h"
 #include "lib/wireguard.h"
+#include "lib/egress_gateway.h"
 
 #ifdef ENABLE_VTEP
 #include "lib/arp.h"
@@ -386,6 +387,24 @@ skip_vtep:
 	ctx->mark = 0;
 not_esp:
 #endif
+
+#if defined(ENABLE_EGRESS_GATEWAY_COMMON)
+	{
+		__be32 snat_addr, daddr;
+		int ret;
+
+		daddr = ip4->daddr;
+		if (egress_gw_snat_needed_hook(ip4->saddr, daddr, &snat_addr)) {
+			ret = ipv4_l3(ctx, ETH_HLEN, NULL, NULL, ip4);
+			if (unlikely(ret != CTX_ACT_OK))
+				return ret;
+
+			/* to-netdev@bpf_host handles SNAT, so no need to do it here. */
+			return egress_gw_fib_lookup_and_redirect(ctx, snat_addr,
+								 daddr, ext_err);
+		}
+	}
+#endif /* ENABLE_EGRESS_GATEWAY_COMMON */
 
 	/* Deliver to local (non-host) endpoint: */
 	ep = lookup_ip4_endpoint(ip4);

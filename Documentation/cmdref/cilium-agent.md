@@ -67,6 +67,7 @@ cilium-agent [flags]
       --cni-chaining-mode string                                     Enable CNI chaining with the specified plugin (default "none")
       --cni-chaining-target string                                   CNI network name into which to insert the Cilium chained configuration. Use '*' to select any network.
       --cni-exclusive                                                Whether to remove other CNI configurations
+      --cni-external-routing                                         Whether the chained CNI plugin handles routing on the node
       --cni-log-file string                                          Path where the CNI plugin should write logs (default "/var/run/cilium/cilium-cni.log")
       --config string                                                Configuration file (default "$HOME/ciliumd.yaml")
       --config-dir string                                            Configuration directory that contains a file for each option
@@ -317,6 +318,7 @@ cilium-agent [flags]
       --restore                                                      Restores state, if possible, from previous daemon (default true)
       --route-metric int                                             Overwrite the metric used by cilium when adding routes to its 'cilium_host' device
       --routing-mode string                                          Routing mode ("native" or "tunnel") (default "tunnel")
+      --service-no-backend-response string                           Response to traffic for a service without backends (default "reject")
       --sidecar-istio-proxy-image string                             Regular expression matching compatible Istio sidecar istio-proxy container image names (default "cilium/istio_proxy")
       --socket-path string                                           Sets daemon's socket path to listen for connections (default "/var/run/cilium/cilium.sock")
       --state-dir string                                             Directory path to store runtime state (default "/var/run/cilium")

@@ -52,7 +52,7 @@ jobs:
     needs: check_changes
     if: ${{ needs.check_changes.outputs.tested == 'true' }}
     runs-on: ubuntu-22.04
-    name: Installation and Conformance Test
+    name: Installation and Conformance Test (ipv6)
     steps:
       - name: Checkout main branch to access local actions
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -130,6 +130,7 @@ jobs:
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
         with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
 

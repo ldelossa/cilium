@@ -504,6 +504,18 @@ const (
 	// RoutingMode is the name of the option to choose between native routing and tunneling mode
 	RoutingMode = "routing-mode"
 
+	// ServiceNoBackendResponse is the name of the option to pick how to handle traffic for services
+	// without any backends
+	ServiceNoBackendResponse = "service-no-backend-response"
+
+	// ServiceNoBackendResponseReject is the name of the option to reject traffic for services
+	// without any backends
+	ServiceNoBackendResponseReject = "reject"
+
+	// ServiceNoBackendResponseDrop is the name of the option to drop traffic for services
+	// without any backends
+	ServiceNoBackendResponseDrop = "drop"
+
 	// MaxInternalTimerDelay sets a maximum on all periodic timers in
 	// the agent in order to flush out timer-related bugs in the agent.
 	MaxInternalTimerDelay = "max-internal-timer-delay"
@@ -1258,6 +1270,9 @@ const (
 
 	// CNIExclusive tells the agent to remove other CNI configuration files
 	CNIExclusive = "cni-exclusive"
+
+	// CNIExternalRouting delegates endpoint routing to the chained CNI plugin.
+	CNIExternalRouting = "cni-external-routing"
 
 	// CNILogFile is the path to a log file (on the host) for the CNI plugin
 	// binary to use for logging.
@@ -2429,6 +2444,9 @@ type DaemonConfig struct {
 
 	// ForceDeviceRequired enforces the attachment of BPF programs on native device.
 	ForceDeviceRequired bool
+
+	// ServiceNoBackendResponse determines how we handle traffic to a service with no backends.
+	ServiceNoBackendResponse string
 }
 
 var (
@@ -3171,6 +3189,15 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnablePMTUDiscovery = vp.GetBool(EnablePMTUDiscovery)
 	c.IPv6NAT46x64CIDR = defaults.IPv6NAT46x64CIDR
 	c.IPAMCiliumNodeUpdateRate = vp.GetDuration(IPAMCiliumNodeUpdateRate)
+
+	c.ServiceNoBackendResponse = vp.GetString(ServiceNoBackendResponse)
+	switch c.ServiceNoBackendResponse {
+	case ServiceNoBackendResponseReject, ServiceNoBackendResponseDrop:
+	case "":
+		c.ServiceNoBackendResponse = defaults.ServiceNoBackendResponse
+	default:
+		log.Fatalf("Invalid value for --%s: %s (must be 'reject' or 'drop')", ServiceNoBackendResponse, c.ServiceNoBackendResponse)
+	}
 
 	c.populateLoadBalancerSettings(vp)
 	c.populateDevices(vp)

@@ -179,13 +179,6 @@ func (ipc *IPCache) RUnlock() {
 	ipc.mutex.RUnlock()
 }
 
-// SetListeners sets the listeners for this IPCache.
-func (ipc *IPCache) SetListeners(listeners []IPIdentityMappingListener) {
-	ipc.mutex.Lock()
-	ipc.listeners = listeners
-	ipc.mutex.Unlock()
-}
-
 // AddListener adds a listener for this IPCache.
 func (ipc *IPCache) AddListener(listener IPIdentityMappingListener) {
 	// We need to acquire the semaphored mutex as we Write Lock as we are
@@ -890,12 +883,4 @@ func (m *K8sMetadata) Equal(o *K8sMetadata) bool {
 		}
 	}
 	return m.Namespace == o.Namespace && m.PodName == o.PodName
-}
-
-func (ipc *IPCache) ForEachListener(f func(listener IPIdentityMappingListener)) {
-	ipc.mutex.Lock()
-	defer ipc.mutex.Unlock()
-	for _, listener := range ipc.listeners {
-		f(listener)
-	}
 }
