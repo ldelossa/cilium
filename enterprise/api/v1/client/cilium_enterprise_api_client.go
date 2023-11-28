@@ -16,10 +16,12 @@ package client
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"github.com/cilium/cilium/enterprise/api/v1/client/restapi"
 	"github.com/go-openapi/runtime"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+
+	"github.com/cilium/cilium/enterprise/api/v1/client/network"
+	"github.com/cilium/cilium/enterprise/api/v1/client/restapi"
 )
 
 // Default cilium enterprise API HTTP client.
@@ -64,6 +66,7 @@ func New(transport runtime.ClientTransport, formats strfmt.Registry) *CiliumEnte
 
 	cli := new(CiliumEnterpriseAPI)
 	cli.Transport = transport
+	cli.Network = network.New(transport, formats)
 	cli.Restapi = restapi.New(transport, formats)
 	return cli
 }
@@ -109,6 +112,8 @@ func (cfg *TransportConfig) WithSchemes(schemes []string) *TransportConfig {
 
 // CiliumEnterpriseAPI is a client for cilium enterprise API
 type CiliumEnterpriseAPI struct {
+	Network network.ClientService
+
 	Restapi restapi.ClientService
 
 	Transport runtime.ClientTransport
@@ -117,5 +122,6 @@ type CiliumEnterpriseAPI struct {
 // SetTransport changes the transport on the client and all its subresources
 func (c *CiliumEnterpriseAPI) SetTransport(transport runtime.ClientTransport) {
 	c.Transport = transport
+	c.Network.SetTransport(transport)
 	c.Restapi.SetTransport(transport)
 }

@@ -28,6 +28,8 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
+
+	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 )
 
 // NewCiliumEnterpriseAPIAPI creates a new CiliumEnterpriseAPI instance
@@ -54,6 +56,9 @@ func NewCiliumEnterpriseAPIAPI(spec *loads.Document) *CiliumEnterpriseAPIAPI {
 
 		GetHealthzHandler: GetHealthzHandlerFunc(func(params GetHealthzParams) middleware.Responder {
 			return middleware.NotImplemented("operation GetHealthz has not yet been implemented")
+		}),
+		NetworkGetNetworkAttachmentHandler: network.GetNetworkAttachmentHandlerFunc(func(params network.GetNetworkAttachmentParams) middleware.Responder {
+			return middleware.NotImplemented("operation network.GetNetworkAttachment has not yet been implemented")
 		}),
 	}
 }
@@ -93,6 +98,8 @@ type CiliumEnterpriseAPIAPI struct {
 
 	// GetHealthzHandler sets the operation handler for the get healthz operation
 	GetHealthzHandler GetHealthzHandler
+	// NetworkGetNetworkAttachmentHandler sets the operation handler for the get network attachment operation
+	NetworkGetNetworkAttachmentHandler network.GetNetworkAttachmentHandler
 
 	// ServeError is called when an error is received, there is a default handler
 	// but you can set your own with this
@@ -172,6 +179,9 @@ func (o *CiliumEnterpriseAPIAPI) Validate() error {
 
 	if o.GetHealthzHandler == nil {
 		unregistered = append(unregistered, "GetHealthzHandler")
+	}
+	if o.NetworkGetNetworkAttachmentHandler == nil {
+		unregistered = append(unregistered, "network.GetNetworkAttachmentHandler")
 	}
 
 	if len(unregistered) > 0 {
@@ -265,6 +275,10 @@ func (o *CiliumEnterpriseAPIAPI) initHandlerCache() {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
 	o.handlers["GET"]["/healthz"] = NewGetHealthz(o.context, o.GetHealthzHandler)
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/network/attachment"] = network.NewGetNetworkAttachment(o.context, o.NetworkGetNetworkAttachmentHandler)
 }
 
 // Serve creates a http handler to serve the API over HTTP

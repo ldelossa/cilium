@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/netutil"
 
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi"
+	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/hive"
@@ -62,7 +63,8 @@ type apiParams struct {
 
 	Middleware middleware.Builder `name:"cilium-enterprise-api-middleware" optional:"true"`
 
-	GetHealthzHandler restapi.GetHealthzHandler
+	GetHealthzHandler                  restapi.GetHealthzHandler
+	NetworkGetNetworkAttachmentHandler network.GetNetworkAttachmentHandler
 }
 
 func newAPI(p apiParams) *restapi.CiliumEnterpriseAPIAPI {
@@ -71,6 +73,7 @@ func newAPI(p apiParams) *restapi.CiliumEnterpriseAPIAPI {
 	// Construct the API from the provided handlers
 
 	api.GetHealthzHandler = p.GetHealthzHandler
+	api.NetworkGetNetworkAttachmentHandler = p.NetworkGetNetworkAttachmentHandler
 
 	// Inject custom middleware if provided by Hive
 	if p.Middleware != nil {
