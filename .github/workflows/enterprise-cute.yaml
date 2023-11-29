@@ -186,7 +186,7 @@ jobs:
       - name: Set up gcloud credentials
         if: steps.cute_props.outputs.provider == 'gcp'
         id: auth
-        uses: google-github-actions/auth@097d292c0489acc46bc647faf5e577f74499385a
+        uses: google-github-actions/auth@042a3056d60b02f62a368700aaa7a72c9075ff69
         with:
           credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
 

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Get image tag
         id: tag
@@ -22,7 +22,7 @@ jobs:
           echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
 
       - name: Set up Go
-        uses: actions/setup-go@331ce1d993939866bb63c32c6cbbfd48fa76fc57
+        uses: actions/setup-go@bfd2fb341f32be7281829126376a12a780ca79fc
         with:
           go-version-file: 'enterprise/cilium-cli/go.mod'
 
@@ -35,7 +35,7 @@ jobs:
 
       - name: Create a Release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           repository: isovalent/cilium-cli-releases
           name: ${{ steps.tag.outputs.tag }}
