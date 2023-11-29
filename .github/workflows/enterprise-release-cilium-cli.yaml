@@ -19,7 +19,7 @@ jobs:
       - name: Get image tag
         id: tag
         run: |
-          echo ::set-output name=tag::${GITHUB_REF##*/}
+          echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@331ce1d993939866bb63c32c6cbbfd48fa76fc57
