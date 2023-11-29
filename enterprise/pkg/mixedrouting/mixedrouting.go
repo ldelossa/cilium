@@ -22,6 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
+	nodemanager "github.com/cilium/cilium/pkg/node/manager"
 	"github.com/cilium/cilium/pkg/option"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
@@ -66,6 +67,8 @@ type manager struct {
 	logger logrus.FieldLogger
 	config cemrcfg.Config
 	modes  routingModesType
+
+	nodes *nodeManager
 }
 
 type params struct {
@@ -76,6 +79,8 @@ type params struct {
 	Config       cemrcfg.Config
 	DaemonConfig *option.DaemonConfig
 	Tunnel       tunnel.Config
+
+	NodeManager nodemanager.NodeManager
 }
 
 func newManager(in params) *manager {
@@ -87,6 +92,12 @@ func newManager(in params) *manager {
 	mgr.modes = append(mgr.modes, toRoutingMode(in.DaemonConfig.RoutingMode, option.RoutingModeTunnel, in.Tunnel.Protocol()))
 	if mgr.enabled() && (in.Config.FallbackRoutingMode == cemrcfg.FallbackTunnel) != (in.DaemonConfig.TunnelingEnabled()) {
 		mgr.modes = append(mgr.modes, toRoutingMode(in.Config.FallbackRoutingMode, cemrcfg.FallbackTunnel, in.Tunnel.Protocol()))
+	}
+
+	mgr.nodes = &nodeManager{
+		logger:     mgr.logger,
+		modes:      mgr.modes,
+		downstream: in.NodeManager,
 	}
 
 	return &mgr
@@ -164,4 +175,10 @@ func toRoutingMode[T comparable](rm T, rmtun T, proto tunnel.Protocol) routingMo
 		}
 	}
 	return routingModeNative
+}
+
+// needsEncapsulation returns whether tunnel encapsulation shall be used
+// depending on the specified routing mode.
+func needsEncapsulation(rm routingModeType) bool {
+	return rm == routingModeVXLAN || rm == routingModeGeneve
 }

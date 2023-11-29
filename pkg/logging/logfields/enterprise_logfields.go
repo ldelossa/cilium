@@ -32,6 +32,12 @@ const (
 	// SID is the segment identifier used in SRv6.
 	SID = "sid"
 
+	// RoutingModes is the routing modes selected towards a given node.
+	RoutingMode = "routingMode"
+
 	// RoutingModes is a list of routing modes supported by a given node.
 	RoutingModes = "routingModes"
+
+	// InvalidRoutingModes is a list of unrecognized routing modes.
+	InvalidRoutingModes = "invalidRoutingModes"
 )
