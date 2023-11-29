@@ -1,4 +1,7 @@
 on:
+  pull_request:
+    branches:
+      - 'main-ce'
   push:
     tags:
       - 'enterprise/cilium-cli/v[0-9]+.[0-9]+.[0-9]+-cee.[0-9]+'
@@ -31,6 +34,7 @@ jobs:
           make enterprise-release
 
       - name: Create a Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
           repository: isovalent/cilium-cli-releases
