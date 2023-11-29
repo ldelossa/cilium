@@ -11,10 +11,14 @@
 package mixedrouting
 
 import (
+	"net"
+	"slices"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	nodemanager "github.com/cilium/cilium/pkg/node/manager"
 	"github.com/cilium/cilium/pkg/node/store"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 )
@@ -25,6 +29,9 @@ type nodeManager struct {
 
 	downstream store.NodeManager
 	nodesCache lock.Map[nodeTypes.Identity, *nodeTypes.Node]
+
+	ipsetter  nodemanager.CEIPSetManager
+	ipsetSkip lock.Map[string, struct{}]
 }
 
 // NodeUpdated wraps the corresponding nodemanager.Manager method to observe node
@@ -49,10 +56,13 @@ func (nm *nodeManager) NodeUpdated(node nodeTypes.Node) {
 		log.Warning("Preferred routing mode changed. " +
 			"Expect connectivity disruption towards hosted endpoints")
 		nm.NodeDeleted(*prev)
+		prev = nil
 	}
 
 	log.Debug("Observed node upsertion")
 	nm.nodesCache.Store(id, &node)
+
+	nm.updateIpsetSkipSet(prev, &node, log)
 
 	nm.downstream.NodeUpdated(node)
 }
@@ -70,8 +80,33 @@ func (nm *nodeManager) NodeDeleted(node nodeTypes.Node) {
 	)
 
 	log.Debug("Observed node deletion")
-	nm.downstream.NodeDeleted(node)
 	nm.nodesCache.Delete(id)
+
+	nm.updateIpsetSkipSet(&node, nil, log)
+
+	nm.downstream.NodeDeleted(node)
+}
+
+// AddToNodeIpset wraps the corresponding iptables.Manager method, skipping the
+// insertion if the IP address belongs to the exclusion list (i.e., it was
+// configured to prefer tunnel routing).
+func (nm *nodeManager) AddToNodeIpset(nodeIP net.IP) {
+	ipstr := nodeIP.String()
+	if _, ok := nm.ipsetSkip.Load(ipstr); ok {
+		nm.logger.WithField(logfields.IPAddr, ipstr).
+			Debug("Skipping ipset insertion, as the IP belongs to the exclusion list")
+
+		// Ensure that no stale entry is present.
+		nm.RemoveFromNodeIpset(nodeIP)
+		return
+	}
+
+	nm.ipsetter.AddToNodeIpset(nodeIP)
+}
+
+// RemoveFromNodeIpset wraps the corresponding iptables.Manager method.
+func (nm *nodeManager) RemoveFromNodeIpset(nodeIP net.IP) {
+	nm.ipsetter.RemoveFromNodeIpset(nodeIP)
 }
 
 // needsEncapsulation returns whether tunnel encapsulation shall be used towards
@@ -116,6 +151,72 @@ func (nm *nodeManager) routingMode(node *nodeTypes.Node, verbose bool) routingMo
 	}
 
 	return mode
+}
+
+// updateIpsetSkipSet updates the set of IPs for which the ipset entry insertion
+// and removal should be skipped. Specifically, it includes all NodeInternalIP
+// addresses of nodes towards which tunnel routing is preferred.
+func (nm *nodeManager) updateIpsetSkipSet(old, new *nodeTypes.Node, log logrus.FieldLogger) {
+	// Don't add the IPs to the exclusion list if native routing is preferred.
+	if new != nil && !nm.needsEncapsulation(new) {
+		new = nil
+	}
+
+	onAdded := func(ip net.IP) {
+		ipstr := ip.String()
+		if _, loaded := nm.ipsetSkip.LoadOrStore(ipstr, struct{}{}); !loaded {
+			log.WithField(logfields.IPAddr, ipstr).Debug("Added IP address to ipset exclusion list")
+		}
+	}
+
+	onDeleted := func(ip net.IP) {
+		ipstr := ip.String()
+		if _, loaded := nm.ipsetSkip.LoadAndDelete(ipstr); loaded {
+			log.WithField(logfields.IPAddr, ipstr).Debug("Removed IP address from ipset exclusion list")
+		}
+	}
+
+	nm.forEachAddress(old, new, false /* InternalIPs only */, onAdded, onDeleted)
+}
+
+// forEachAddress respectively executes the onAdded and onDeleted functions for
+// each NodeInternalIP (and NodeExternalIP if includeExternalIPs is set) that is
+// different between the old and the new node.
+func (nm *nodeManager) forEachAddress(old, new *nodeTypes.Node, includeExternalIPs bool, onAdded, onDeleted func(net.IP)) {
+	var (
+		oldIPs []net.IP
+		newIPs []net.IP
+		filter = func(ip net.IP) bool { return ip == nil || ip.IsUnspecified() }
+	)
+
+	if old != nil {
+		oldIPs = append(oldIPs, old.GetNodeInternalIPv4(), old.GetNodeInternalIPv6())
+		if includeExternalIPs {
+			oldIPs = append(oldIPs, old.GetExternalIP(false /* IPv4 */), old.GetExternalIP(true /* IPv6 */))
+		}
+	}
+
+	if new != nil {
+		newIPs = append(newIPs, new.GetNodeInternalIPv4(), new.GetNodeInternalIPv6())
+		if includeExternalIPs {
+			newIPs = append(newIPs, new.GetExternalIP(false /* IPv4 */), new.GetExternalIP(true /* IPv6 */))
+		}
+
+		// Drop the addresses that did not change.
+		for i := range oldIPs {
+			if oldIPs[i].Equal(newIPs[i]) {
+				oldIPs[i], newIPs[i] = nil, nil
+			}
+		}
+	}
+
+	for _, ip := range slices.DeleteFunc(oldIPs, filter) {
+		onDeleted(ip)
+	}
+
+	for _, ip := range slices.DeleteFunc(newIPs, filter) {
+		onAdded(ip)
+	}
 }
 
 // nodeManagerLight aliases nodeManager to provide lightweight wrappers of the

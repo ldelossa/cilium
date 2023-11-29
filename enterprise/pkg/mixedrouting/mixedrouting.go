@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
+	"github.com/cilium/cilium/pkg/datapath/iptables"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -83,7 +84,8 @@ type params struct {
 	DaemonConfig *option.DaemonConfig
 	Tunnel       tunnel.Config
 
-	NodeManager nodemanager.NodeManager
+	NodeManager     nodemanager.NodeManager
+	IPTablesManager *iptables.Manager
 }
 
 func newManager(in params) *manager {
@@ -101,6 +103,7 @@ func newManager(in params) *manager {
 		logger:     mgr.logger,
 		modes:      mgr.modes,
 		downstream: in.NodeManager,
+		ipsetter:   in.IPTablesManager,
 	}
 
 	return &mgr
@@ -116,7 +119,7 @@ func (mgr *manager) configureLocalNode(lns *node.LocalNodeStore) {
 	})
 }
 
-func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.ClusterMesh) {
+func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.ClusterMesh, nomgr nodemanager.NodeManager) {
 	// We don't need to hook the extra logic if the local node is configured
 	// with a single routing mode, as it will be always selected anyway.
 	// However, we still inject the lightweight version of the node manager
@@ -128,6 +131,15 @@ func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.Clust
 
 	clustermesh.InjectCENodeObserver(cm, mgr.nodes)
 	linuxdatapath.InjectCEEnableEncapsulation(dp, mgr.nodes.needsEncapsulation)
+
+	// Note: the current approach works assuming that the fallback routing mode
+	// is tunnel (the only supported configuration at the moment), by filtering
+	// out the ipset insertions/deletions if the preferred routing mode towards
+	// the given node is tunneling (and the local routing mode is set to native,
+	// otherwise they would not have been inserted in the first place). To support
+	// native routing fallback, instead, we should force the creation of the ipset
+	// and manually insert the appropriate entries.
+	nodemanager.InjectCEIPSetManager(nomgr, mgr.nodes)
 }
 
 // enabled returns whether mixed routing mode support is enabled.
