@@ -18,7 +18,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/cilium/cilium/pkg/clustermesh"
+	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
+	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
@@ -113,8 +116,26 @@ func (mgr *manager) configureLocalNode(lns *node.LocalNodeStore) {
 	})
 }
 
+func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.ClusterMesh) {
+	// We don't need to hook the extra logic if the local node is configured
+	// with a single routing mode, as it will be always selected anyway.
+	// However, we still inject the lightweight version of the node manager
+	// to log an error message in case of mismatching routing modes.
+	if !mgr.enabledWithFallback() {
+		clustermesh.InjectCENodeObserver(cm, (*nodeManagerLight)(mgr.nodes))
+		return
+	}
+
+	clustermesh.InjectCENodeObserver(cm, mgr.nodes)
+	linuxdatapath.InjectCEEnableEncapsulation(dp, mgr.nodes.needsEncapsulation)
+}
+
 // enabled returns whether mixed routing mode support is enabled.
 func (mgr *manager) enabled() bool { return mgr.config.FallbackRoutingMode != cemrcfg.FallbackDisabled }
+
+// enabledWithFallback returns whether mixed routing mode support is enabled,
+// and the fallback routing mode is different from the primary one.
+func (mgr *manager) enabledWithFallback() bool { return len(mgr.modes) > 1 }
 
 // String returns the string representation of the routing modes (i.e., comma separated).
 func (rm routingModesType) String() string { return strings.Join([]string(rm), routingModesSeparator) }

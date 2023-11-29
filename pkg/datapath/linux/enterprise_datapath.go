@@ -40,3 +40,14 @@ func InjectCEPrefixClusterMutator(dp datapath.Datapath, cmcfg cecmcfg.Config, dc
 		return opts
 	})
 }
+
+// InjectCEEnableEncapsulation overrides the function used to determine whether
+// native routing or tunnel encapsulation should be used for the given node.
+func InjectCEEnableEncapsulation(dp datapath.Datapath, fn func(node *types.Node) bool) {
+	ldp, ok := dp.(*linuxDatapath)
+	if !ok {
+		return
+	}
+
+	ldp.node.OverrideEnableEncapsulation(fn)
+}

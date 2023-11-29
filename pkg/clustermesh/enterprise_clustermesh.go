@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 
 	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
+	nodeStore "github.com/cilium/cilium/pkg/node/store"
 )
 
 // InjectCEServiceMerger allows to override the default ServiceMerger injected
@@ -23,5 +24,15 @@ import (
 func InjectCEServiceMerger(cm *ClusterMesh, cmcfg cmcfg.Config, sc *k8s.ServiceCache) {
 	if cm != nil {
 		cm.conf.ServiceMerger = k8s.NewCEServiceMerger(sc, cmcfg)
+	}
+}
+
+// InjectCENodeObserver allows to override the default NodeObserver injected
+// through hive, to support additional enterprise features (e.g., mixed routing
+// mode). This method is intended to be executed through an Invoke function
+// before starting the clustermesh subsystem.
+func InjectCENodeObserver(cm *ClusterMesh, mgr nodeStore.NodeManager) {
+	if cm != nil {
+		cm.conf.NodeObserver = nodeStore.NewNodeObserver(mgr)
 	}
 }

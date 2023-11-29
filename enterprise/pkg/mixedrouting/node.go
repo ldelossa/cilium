@@ -117,3 +117,20 @@ func (nm *nodeManager) routingMode(node *nodeTypes.Node, verbose bool) routingMo
 
 	return mode
 }
+
+// nodeManagerLight aliases nodeManager to provide lightweight wrappers of the
+// NodeUpdated and NodeDeleted methods, that simply log an error message in case
+// of mismatching routing modes. This is intended to be used when the local node
+// supports a single routing mode, as that would be always selected anyway.
+type nodeManagerLight nodeManager
+
+func (nml *nodeManagerLight) NodeUpdated(node nodeTypes.Node) {
+	// We only care about the side effect of emitting a log error message in
+	// case the advertised routing modes are not compatible with the local one.
+	_ = (*nodeManager)(nml).routingMode(&node, true /* verbose */)
+	nml.downstream.NodeUpdated(node)
+}
+
+func (nml *nodeManagerLight) NodeDeleted(node nodeTypes.Node) {
+	nml.downstream.NodeDeleted(node)
+}

@@ -37,5 +37,10 @@ var Cell = cell.Module(
 
 		// Add the supported routing modes annotation to the local node.
 		(*manager).configureLocalNode,
+
+		// Hook the extra logic to observe node upsertions and deletions, retrieve
+		// the routing modes annotations and configure the datapath accordingly
+		// (e.g., node routes, ipset entries, ...).
+		(*manager).setupNodeManager,
 	),
 )
