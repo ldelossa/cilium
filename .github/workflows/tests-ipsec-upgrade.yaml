@@ -54,7 +54,7 @@ env:
   cilium_cli_ci_version:
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
   # renovate: datasource=docker depName=quay.io/cilium/kindest-node
-  k8s_version: v1.28.3
+  k8s_version: v1.29.0-rc.1
 
 jobs:
   commit-status-start:
@@ -81,7 +81,7 @@ jobs:
           # Define three config sets
           - config: '5.4'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.4-20231026.065108'
+            kernel: '5.4-20231124.100406'
             kube-proxy: 'iptables'
             kpr: 'disabled'
             tunnel: 'disabled'
@@ -89,7 +89,7 @@ jobs:
 
           - config: '5.10'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20231026.065108'
+            kernel: '5.10-20231124.100406'
             kube-proxy: 'iptables'
             kpr: 'disabled'
             tunnel: 'disabled'
@@ -98,7 +98,7 @@ jobs:
 
           - config: 'bpf-next'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20231123.012848'
+            kernel: 'bpf-next-20231127.012907'
             kube-proxy: 'iptables'
             kpr: 'disabled'
             tunnel: 'vxlan'
@@ -230,7 +230,7 @@ jobs:
 
       - name: Install Cilium CLI-cli
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
+        uses: cilium/cilium-cli@beceead2bece1d174e2c11f36e6bfac8ce3f8e7d # v0.15.16
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -247,7 +247,6 @@ jobs:
           host-mount: ./
           cpu: 4
           mem: '12G'
-          dns-resolver: '1.1.1.1'
           install-dependencies: 'true'
           cmd: |
             git config --global --add safe.directory /host
@@ -311,7 +310,7 @@ jobs:
 
       - name: Upgrade Cilium & Test (${{ matrix.name }})
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: cilium/cilium/.github/actions/conn-disrupt-test@614f2ddcc8fe93aeaf463b4535dcc0f1dcc373a3
+        uses: cilium/cilium/.github/actions/conn-disrupt-test@main
         with:
           job-name: ipsec-upgrade-${{ matrix.name }}
           operation-cmd: |
@@ -326,7 +325,7 @@ jobs:
 
       - name: Downgrade Cilium to ${{ steps.vars.outputs.downgrade_version }} & Test (${{ matrix.name }})
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: cilium/cilium/.github/actions/conn-disrupt-test@614f2ddcc8fe93aeaf463b4535dcc0f1dcc373a3
+        uses: cilium/cilium/.github/actions/conn-disrupt-test@main
         with:
           job-name: ipsec-downgrade-${{ matrix.name }}
           operation-cmd: |

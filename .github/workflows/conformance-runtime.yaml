@@ -59,6 +59,7 @@ env:
 
 jobs:
   commit-status-start:
+    if: ${{ github.event_name != 'push' }}
     name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
@@ -261,11 +262,10 @@ jobs:
           test-name: runtime-tests
           install-dependencies: true
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          image-version: "bpf-next-20231123.012848@sha256:d086bbc65808e0ab471e69dd99b11e79c58f518ef58502ceb2596c1e553e1b10"
+          image-version: "bpf-next-20231127.012907@sha256:e46bb7809049c1408637ba477c31fb69781014a30af66fa36ba67df72f4d1ed6"
           host-mount: ./
           cpu: 4
           mem: 12G
-          dns-resolver: '1.1.1.1'
 
       # Load Ginkgo build from GitHub
       - name: Load ${{ matrix.name }} Ginkgo build from GitHub
@@ -332,6 +332,7 @@ jobs:
             export VMUSER=root
             echo '127.0.0.1 localhost' >> /etc/hosts
             echo '::1 localhost' >> /etc/hosts
+            sed -i '1s/^/nameserver 1.1.1.1\n/' /etc/resolv.conf
             /tmp/provision/runtime_install.sh
             service docker restart
 
@@ -440,7 +441,7 @@ jobs:
           junit-directory: "cilium-junits"
 
   commit-status-final:
-    if: ${{ always() }}
+    if: ${{ always() && github.event_name != 'push' }}
     name: Commit Status Final
     needs: setup-and-test
     runs-on: ubuntu-latest

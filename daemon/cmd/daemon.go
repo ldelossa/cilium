@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"net/netip"
 	"os"
@@ -39,6 +38,7 @@ import (
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/datapath/loader"
 	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
+	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/debug"
@@ -87,6 +87,7 @@ import (
 	"github.com/cilium/cilium/pkg/resiliency"
 	"github.com/cilium/cilium/pkg/service"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
+	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
@@ -108,6 +109,7 @@ const (
 type Daemon struct {
 	ctx              context.Context
 	clientset        k8sClient.Clientset
+	db               *statedb.DB
 	buildEndpointSem *semaphore.Weighted
 	l7Proxy          *proxy.Proxy
 	svc              service.ServiceManager
@@ -124,14 +126,11 @@ type Daemon struct {
 	ciliumHealth *health.CiliumHealth
 
 	deviceManager *linuxdatapath.DeviceManager
+	devices       statedb.Table[*datapathTables.Device]
 
 	// dnsNameManager tracks which api.FQDNSelector are present in policy which
 	// apply to locally running endpoints.
 	dnsNameManager *fqdn.NameManager
-
-	// dnsProxyContext contains fields relevant to the DNS proxy. See each
-	// field's godoc for more details.
-	dnsProxyContext dnsProxyContext
 
 	// Used to synchronize generation of daemon's BPF programs and endpoint BPF
 	// programs.
@@ -139,7 +138,7 @@ type Daemon struct {
 
 	clustermesh *clustermesh.ClusterMesh
 
-	mtuConfig mtu.Configuration
+	mtuConfig mtu.MTU
 
 	datapathRegenTrigger *trigger.Trigger
 
@@ -220,28 +219,6 @@ type Daemon struct {
 	// Tunnel-related configuration
 	tunnelConfig tunnel.Config
 	bwManager    bandwidth.Manager
-}
-
-func (d *Daemon) initDNSProxyContext(size int) {
-	d.dnsProxyContext = dnsProxyContext{
-		responseMutexes: make([]*lock.Mutex, size),
-		modulus:         big.NewInt(int64(size)),
-	}
-	for i := range d.dnsProxyContext.responseMutexes {
-		d.dnsProxyContext.responseMutexes[i] = new(lock.Mutex)
-	}
-}
-
-// dnsProxyContext is a meta struct containing fields relevant to the DNS proxy
-// of the daemon, for organizational purposes.
-type dnsProxyContext struct {
-	// responseMutexes is used to serialized the critical path of
-	// notifyOnDNSMsg() to ensure that identity allocation and ipcache
-	// insertion happen atomically between parallel DNS request handling.
-	responseMutexes []*lock.Mutex
-	// modulus is used when computing the hash of the DNS response IPs in order
-	// to map them to the mutexes inside responseMutexes.
-	modulus *big.Int
 }
 
 // GetPolicyRepository returns the policy repository of the daemon
@@ -424,32 +401,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 	lbmap.Init(lbmapInitParams)
 
-	authKeySize, encryptKeyID, err := setupIPSec()
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to setup encryption: %s", err)
-	}
-
-	var mtuConfig mtu.Configuration
-	externalIP := node.GetIPv4()
-	if externalIP == nil {
-		externalIP = node.GetIPv6()
-	}
-	configuredMTU := option.Config.MTU
-	if mtu := params.CNIConfigManager.GetMTU(); mtu > 0 {
-		configuredMTU = mtu
-		log.WithField("mtu", configuredMTU).Info("Overwriting MTU based on CNI configuration")
-	}
-	// ExternalIP could be nil but we are covering that case inside NewConfiguration
-	mtuConfig = mtu.NewConfiguration(
-		authKeySize,
-		option.Config.EnableIPSec,
-		params.TunnelConfig.ShouldAdaptMTU(),
-		option.Config.EnableWireguard,
-		option.Config.EnableHighScaleIPcache && option.Config.EnableNodePort,
-		configuredMTU,
-		externalIP,
-	)
-
 	params.NodeManager.Subscribe(params.Datapath.Node())
 
 	identity.IterateReservedIdentities(func(_ identity.NumericIdentity, _ *identity.Identity) {
@@ -461,16 +412,18 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		metrics.Identity.WithLabelValues(identity.WellKnownIdentityType).Add(float64(num))
 	}
 
-	nd := nodediscovery.NewNodeDiscovery(params.NodeManager, params.Clientset, mtuConfig, params.CNIConfigManager.GetCustomNetConf())
+	nd := nodediscovery.NewNodeDiscovery(params.NodeManager, params.Clientset, params.MTU, params.CNIConfigManager.GetCustomNetConf())
 
 	d := Daemon{
 		ctx:               ctx,
 		clientset:         params.Clientset,
+		db:                params.DB,
 		buildEndpointSem:  semaphore.NewWeighted(int64(numWorkerThreads())),
 		compilationMutex:  new(lock.RWMutex),
-		mtuConfig:         mtuConfig,
+		mtuConfig:         params.MTU,
 		datapath:          params.Datapath,
 		deviceManager:     params.DeviceManager,
+		devices:           params.Devices,
 		nodeDiscovery:     nd,
 		nodeLocalStore:    params.LocalNodeStore,
 		endpointCreations: newEndpointCreationManager(params.Clientset),
@@ -715,7 +668,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	bootstrapStats.restore.End(true)
 
 	bootstrapStats.fqdn.Start()
-	err = d.bootstrapFQDN(restoredEndpoints.possible, option.Config.ToFQDNsPreCache)
+	err = d.bootstrapFQDN(restoredEndpoints.possible, option.Config.ToFQDNsPreCache, d.ipcache)
 	if err != nil {
 		bootstrapStats.fqdn.EndError(err)
 		return nil, restoredEndpoints, err
@@ -1003,7 +956,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 				params.Clientset,
 				nodeTypes.GetName(),
 				latestLocalNode.Node,
-				encryptKeyID)
+				params.IPsecKeyCustodian.SPI())
 		}
 		if err != nil {
 			log.WithError(err).Warning("Cannot annotate k8s node with CIDR range")
@@ -1102,12 +1055,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		}
 	}
 
-	if option.Config.EnableIPSec {
-		if err := ipsec.StartKeyfileWatcher(ctx, option.Config.IPSecKeyFile, nd, d.Datapath().Node()); err != nil {
-			log.WithError(err).Error("Unable to start IPSec keyfile watcher")
-		}
-
-		ipsec.StartStaleKeysReclaimer(ctx)
+	if err := params.IPsecKeyCustodian.StartBackgroundJobs(nd, d.Datapath().Node()); err != nil {
+		log.WithError(err).Error("Unable to start IPsec key watcher")
 	}
 
 	return &d, restoredEndpoints, nil
@@ -1129,13 +1078,9 @@ func (d *Daemon) ReloadOnDeviceChange(devices []string) {
 	}
 
 	if option.Config.EnableNodePort {
-		if err := node.InitNodePortAddrs(devices, option.Config.LBDevInheritIPAddr); err != nil {
-			log.WithError(err).Warn("Failed to initialize NodePort addresses")
-		} else {
-			// Synchronize services and endpoints to reflect new addresses onto lbmap.
-			d.svc.SyncServicesOnDeviceChange(d.Datapath().LocalNodeAddressing())
-			d.controllers.TriggerController(syncHostIPsController)
-		}
+		// Synchronize services and endpoints to reflect new addresses onto lbmap.
+		d.svc.SyncServicesOnDeviceChange(d.Datapath().LocalNodeAddressing())
+		d.controllers.TriggerController(syncHostIPsController)
 	}
 
 	// Reload the datapath.
