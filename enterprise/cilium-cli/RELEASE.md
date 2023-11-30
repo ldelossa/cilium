@@ -52,7 +52,7 @@ Then tag and push the release:
     git tag -a $CEE_VERSION_TAG -m "$CEE_VERSION release" $COMMIT_SHA && git push origin $CEE_VERSION_TAG
 
 Then, go to
-https://github.com/isovalent/cilium/actions/workflows/release-cilium-cli.yaml
+https://github.com/isovalent/cilium/actions/workflows/enterprise-release-cilium-cli.yaml
 and you can stare at the Github Actions output while it creates a release.
 
 ## Review release draft and publish
