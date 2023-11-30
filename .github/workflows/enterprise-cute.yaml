@@ -283,6 +283,7 @@ jobs:
       - name: CuTE Terraform variables file
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
+          echo "${{ secrets.OPENSHIFT_PULL_SECRET }}" | base64 -d > .pullsecret.json
           cat > terraform.tfvars << EOF
           cluster_name="cute-${{ env.name }}"
           owner="ci"
