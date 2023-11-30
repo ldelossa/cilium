@@ -7,24 +7,13 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Deploy sensitive application server
+    - name: Start conn-disrupt-test
       shell: bash
       run: |
-        echo "Deploying sensitive application server ..."
-        curl -s https://raw.githubusercontent.com/cilium/cilium/main/test/k8s/manifests/migrate-svc-server.yaml | kubectl apply -f -
-        kubectl wait --for=condition=ready pod -l app=migrate-svc-server
-        echo "Sensitive application server deployed."
-
-    - name: Deploy sensitive application client
-      shell: bash
-      run: |
-        echo "Deploying sensitive application client ..."
-        curl -s https://raw.githubusercontent.com/cilium/cilium/main/test/k8s/manifests/migrate-svc-client.yaml | kubectl apply -f -
-        kubectl wait --for=condition=ready pod -l app=migrate-svc-client
-        echo "Sensitive application client deployed."
-
-    - name: Verify sensitive application
-      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+        # Create pods which establish long lived connections. It will be used by
+        # subsequent connectivity tests with --include-conn-disrupt-test to catch any
+        # interruption in such flows.
+        cilium connectivity test --include-conn-disrupt-test --conn-disrupt-test-setup
 
     - name: Rotate IPsec keys
       working-directory: ./${{ inputs.cute-dir }}
@@ -57,8 +46,8 @@ runs:
         [[ $TWO_KEYS_IN_USE != "true" ]] && exit 1
         echo "All the pods use 2 active keys now."
 
-    - name: Verify sensitive application
-      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+    - name: Verify state
+      uses: ./workflow-context/.github/actions/cute-verify-state
 
     - name: Wait for key rotation
       shell: bash
@@ -82,8 +71,8 @@ runs:
         done
         echo "IPsec key has been rotated."
 
-    - name: Verify sensitive application
-      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+    - name: Verify state
+      uses: ./workflow-context/.github/actions/cute-verify-state
 
     - name: Run CuTE tests
       working-directory: ./${{ inputs.cute-dir }}
@@ -99,8 +88,8 @@ runs:
         echo "Scaling up cluster ..."
         make scaleup
 
-    - name: Verify sensitive application
-      uses: ./workflow-context/.github/actions/cute-verify-sensitive-app
+    - name: Verify state
+      uses: ./workflow-context/.github/actions/cute-verify-state
 
     - name: Scale down cluster
       working-directory: ./${{ inputs.cute-dir }}
@@ -115,11 +104,28 @@ runs:
         echo "Displaying cluster pods ..."
         kubectl get pods --all-namespaces -o wide
 
-    - name: Delete sensitive application
+    - name: Delete connectivity tests namespace
       shell: bash
       run: |
-        echo "Deleting sensitive application client ..."
-        kubectl delete rs migrate-svc-client
-        echo "Deleting sensitive application server ..."
-        kubectl delete svc migrate-svc
-        kubectl delete rs migrate-svc-server
+        echo "Deleting connectivity tests namespace ..."
+        kubectl delete namespace cilium-test
+
+    - name: Fetch artifacts
+      if: ${{ !success() }}
+      shell: bash
+      run: |
+        kubectl -n kube-system get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n kube-system exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
+        kubectl get pods --all-namespaces -o wide
+        cilium status
+        mkdir -p cilium-sysdumps
+        cilium sysdump --output-filename cilium-sysdump-final
+        # To debug https://github.com/cilium/cilium/issues/26062
+        head -n -0 /proc/buddyinfo /proc/pagetypeinfo
+
+    - name: Upload artifacts
+      if: ${{ !success() }}
+      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+      with:
+        name: cilium-sysdumps
+        path: cilium-sysdump-*.zip
+        retention-days: 5
