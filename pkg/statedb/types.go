@@ -143,7 +143,7 @@ type RWTable[Obj any] interface {
 // the object type (the 'Obj' constraint).
 type TableMeta interface {
 	Name() TableName                          // The name of the table
-	tableKey() index.Key                      // The radix key for the table in the root tree
+	tableKey() []byte                         // The radix key for the table in the root tree
 	primaryIndexer() anyIndexer               // The untyped primary indexer for the table
 	secondaryIndexers() map[string]anyIndexer // Secondary indexers (if any)
 	sortableMutex() lock.SortableMutex        // The sortable mutex for locking the table for writing
@@ -184,17 +184,15 @@ type WriteTxn interface {
 }
 
 type Query[Obj any] struct {
-	index  IndexName
-	unique bool
-	key    []byte
+	index IndexName
+	key   []byte
 }
 
 // ByRevision constructs a revision query. Applicable to any table.
 func ByRevision[Obj any](rev uint64) Query[Obj] {
 	return Query[Obj]{
-		index:  RevisionIndex,
-		unique: false,
-		key:    index.Uint64(rev),
+		index: RevisionIndex,
+		key:   index.Uint64(rev),
 	}
 }
 
@@ -202,7 +200,7 @@ func ByRevision[Obj any](rev uint64) Query[Obj] {
 type Index[Obj any, Key any] struct {
 	Name       string
 	FromObject func(obj Obj) index.KeySet
-	FromKey    func(key Key) []byte
+	FromKey    func(key Key) index.Key
 	Unique     bool
 }
 
@@ -229,9 +227,8 @@ func (i Index[Obj, Key]) isUnique() bool {
 // Query constructs a query against this index from a key.
 func (i Index[Obj, Key]) Query(key Key) Query[Obj] {
 	return Query[Obj]{
-		index:  i.Name,
-		unique: i.isUnique(),
-		key:    i.FromKey(key),
+		index: i.Name,
+		key:   i.FromKey(key),
 	}
 }
 
@@ -292,27 +289,30 @@ type deleteTracker interface {
 	getRevision() uint64
 }
 
-type indexTree = *iradix.Tree[object]
+type indexEntry struct {
+	tree   *iradix.Tree[object]
+	unique bool
+}
 
 type tableEntry struct {
 	meta           TableMeta
-	indexes        *iradix.Tree[indexTree]
+	indexes        *iradix.Tree[indexEntry]
 	deleteTrackers *iradix.Tree[deleteTracker]
 	revision       uint64
 }
 
 func (t *tableEntry) numObjects() int {
-	indexTree, ok := t.indexes.Get([]byte(RevisionIndex))
+	indexEntry, ok := t.indexes.Get([]byte(RevisionIndex))
 	if ok {
-		return indexTree.Len()
+		return indexEntry.tree.Len()
 	}
 	return 0
 }
 
 func (t *tableEntry) numDeletedObjects() int {
-	indexTree, ok := t.indexes.Get([]byte(GraveyardIndex))
+	indexEntry, ok := t.indexes.Get([]byte(GraveyardIndex))
 	if ok {
-		return indexTree.Len()
+		return indexEntry.tree.Len()
 	}
 	return 0
 }

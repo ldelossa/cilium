@@ -285,12 +285,8 @@ var defaultBackendListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "cilium-ingress-random-namespace-load-balancing",
 		Namespace: "random-namespace",
-		OwnerReferences: []metav1.OwnerReference{
-			{
-				APIVersion: "networking.k8s.io/v1",
-				Kind:       "Ingress",
-				Name:       "load-balancing",
-			},
+		Labels: map[string]string{
+			"cilium.io/use-original-source-address": "false",
 		},
 	},
 	Spec: ciliumv2.CiliumEnvoyConfigSpec{
@@ -436,12 +432,8 @@ var hostRulesListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "cilium-ingress-random-namespace-host-rules",
 		Namespace: "random-namespace",
-		OwnerReferences: []metav1.OwnerReference{
-			{
-				APIVersion: "networking.k8s.io/v1",
-				Kind:       "Ingress",
-				Name:       "host-rules",
-			},
+		Labels: map[string]string{
+			"cilium.io/use-original-source-address": "false",
 		},
 	},
 	Spec: ciliumv2.CiliumEnvoyConfigSpec{
@@ -722,12 +714,8 @@ var pathRulesListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "cilium-ingress-random-namespace-path-rules",
 		Namespace: "random-namespace",
-		OwnerReferences: []metav1.OwnerReference{
-			{
-				APIVersion: "networking.k8s.io/v1",
-				Kind:       "Ingress",
-				Name:       "path-rules",
-			},
+		Labels: map[string]string{
+			"cilium.io/use-original-source-address": "false",
 		},
 	},
 	Spec: ciliumv2.CiliumEnvoyConfigSpec{
@@ -909,12 +897,8 @@ var proxyProtoListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "cilium-ingress-random-namespace-load-balancing",
 		Namespace: "random-namespace",
-		OwnerReferences: []metav1.OwnerReference{
-			{
-				APIVersion: "networking.k8s.io/v1",
-				Kind:       "Ingress",
-				Name:       "load-balancing",
-			},
+		Labels: map[string]string{
+			"cilium.io/use-original-source-address": "false",
 		},
 	},
 	Spec: ciliumv2.CiliumEnvoyConfigSpec{

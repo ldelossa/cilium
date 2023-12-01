@@ -86,7 +86,7 @@ jobs:
             ci-kernel: '510'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
           - kernel: '6.1-20231026.065108'
-            ci-kernel: '510'
+            ci-kernel: '61'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
           - kernel: 'bpf-next-20231123.012848'
             ci-kernel: 'netnext'
@@ -108,7 +108,6 @@ jobs:
           image-version: ${{ matrix.kernel }}
           host-mount: ./
           cpu: 4
-          dns-resolver: '1.1.1.1'
           install-dependencies: 'true'
           cmd: |
             git config --global --add safe.directory /host

@@ -17,9 +17,13 @@ on:
         description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
         required: false
         default: '{}'
-  # Run every 6 hours
-  schedule:
-    - cron:  '0 3/6 * * *'
+
+  push:
+    branches:
+      - main
+      - ft/main/**
+    paths-ignore:
+      - 'Documentation/**'
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
@@ -36,7 +40,7 @@ concurrency:
   # - Workflow name
   # - Event type
   # - A unique identifier depending on event type:
-  #   - schedule: SHA
+  #   - push: SHA
   #   - workflow_dispatch: PR number
   #
   # This structure ensures a unique concurrency group name is generated for each
@@ -45,7 +49,7 @@ concurrency:
     ${{ github.workflow }}
     ${{ github.event_name }}
     ${{
-      (github.event_name == 'schedule' && github.sha) ||
+      (github.event_name == 'push' && github.sha) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.PR-number)
     }}
   cancel-in-progress: true
@@ -54,7 +58,7 @@ env:
   # renovate: datasource=github-releases depName=kubernetes-sigs/kind
   kind_version: v0.20.0
   # renovate: datasource=docker depName=quay.io/cilium/kindest-node
-  k8s_version: v1.28.3
+  k8s_version: v1.29.0-rc.1
   cilium_cli_ci_version:
 
   clusterName1: cluster1
@@ -64,6 +68,7 @@ env:
 
 jobs:
   commit-status-start:
+    if: ${{ github.event_name != 'push' }}
     name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
@@ -181,7 +186,7 @@ jobs:
           echo "connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS}" >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
+        uses: cilium/cilium-cli@beceead2bece1d174e2c11f36e6bfac8ce3f8e7d # v0.15.16
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -295,14 +300,23 @@ jobs:
             --set=clustermesh.apiserver.image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/clustermesh-apiserver-ci:${SHA} \
             --set=clustermesh.apiserver.kvstoremesh.image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/kvstoremesh-ci:${SHA} \
           "
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
           echo "cilium_image_settings=${CILIUM_IMAGE_SETTINGS}" >> $GITHUB_OUTPUT
 
-      - name: Wait for images to be available
+      - name: Wait for images to be available (newest)
         timeout-minutes: 10
         shell: bash
         run: |
           for image in cilium-ci operator-generic-ci hubble-relay-ci clustermesh-apiserver-ci ; do
             until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.newest-vars.outputs.sha }} &> /dev/null; do sleep 45s; done
+          done
+
+      - name: Wait for images to be available (downgrade)
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          for image in cilium-ci operator-generic-ci hubble-relay-ci clustermesh-apiserver-ci ; do
+            until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.downgrade-vars.outputs.sha }} &> /dev/null; do sleep 45s; done
           done
 
 
@@ -534,7 +548,7 @@ jobs:
           junit-directory: "cilium-junits"
 
   commit-status-final:
-    if: ${{ always() }}
+    if: ${{ always() && github.event_name != 'push' }}
     name: Commit Status Final
     needs: upgrade-and-downgrade
     runs-on: ubuntu-latest

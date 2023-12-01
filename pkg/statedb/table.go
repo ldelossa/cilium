@@ -92,8 +92,8 @@ type genTable[Obj any] struct {
 	secondaryAnyIndexers map[string]anyIndexer
 }
 
-func (t *genTable[Obj]) tableKey() index.Key {
-	return index.String(t.table)
+func (t *genTable[Obj]) tableKey() []byte {
+	return []byte(t.table)
 }
 
 func (t *genTable[Obj]) primaryIndexer() anyIndexer {
@@ -123,9 +123,30 @@ func (t *genTable[Obj]) First(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint
 
 func (t *genTable[Obj]) FirstWatch(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint64, watch <-chan struct{}, ok bool) {
 	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
-	iter := indexTxn.Root().Iterator()
+	iter := indexTxn.txn.Root().Iterator()
 	watch = iter.SeekPrefixWatch(q.key)
-	_, iobj, ok := iter.Next()
+
+	var iobj object
+	for {
+		var key []byte
+		key, iobj, ok = iter.Next()
+		if !ok {
+			break
+		}
+
+		// Check that we have a full match on the key
+		var match bool
+		if indexTxn.entry.unique {
+			match = len(key) == len(q.key)
+		} else {
+			_, secondary := decodeNonUniqueKey(key)
+			match = len(secondary) == len(q.key)
+		}
+		if match {
+			break
+		}
+	}
+
 	if ok {
 		obj = iobj.data.(Obj)
 		revision = iobj.revision
@@ -140,9 +161,30 @@ func (t *genTable[Obj]) Last(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint6
 
 func (t *genTable[Obj]) LastWatch(txn ReadTxn, q Query[Obj]) (obj Obj, revision uint64, watch <-chan struct{}, ok bool) {
 	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
-	iter := indexTxn.Root().ReverseIterator()
+	iter := indexTxn.txn.Root().ReverseIterator()
 	watch = iter.SeekPrefixWatch(q.key)
-	_, iobj, ok := iter.Previous()
+
+	var iobj object
+	for {
+		var key []byte
+		key, iobj, ok = iter.Previous()
+		if !ok {
+			break
+		}
+
+		// Check that we have a full match on the key
+		var match bool
+		if indexTxn.entry.unique {
+			match = len(key) == len(q.key)
+		} else {
+			_, secondary := decodeNonUniqueKey(key)
+			match = len(secondary) == len(q.key)
+		}
+		if match {
+			break
+		}
+	}
+
 	if ok {
 		obj = iobj.data.(Obj)
 		revision = iobj.revision
@@ -152,7 +194,7 @@ func (t *genTable[Obj]) LastWatch(txn ReadTxn, q Query[Obj]) (obj Obj, revision 
 
 func (t *genTable[Obj]) LowerBound(txn ReadTxn, q Query[Obj]) (Iterator[Obj], <-chan struct{}) {
 	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
-	root := indexTxn.Root()
+	root := indexTxn.txn.Root()
 
 	// Since LowerBound query may be invalidated by changes in another branch
 	// of the tree, we cannot just simply watch the node we seeked to. Instead
@@ -165,7 +207,7 @@ func (t *genTable[Obj]) LowerBound(txn ReadTxn, q Query[Obj]) (Iterator[Obj], <-
 
 func (t *genTable[Obj]) All(txn ReadTxn) (Iterator[Obj], <-chan struct{}) {
 	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, t.primaryAnyIndexer.name)
-	root := indexTxn.Root()
+	root := indexTxn.txn.Root()
 	// Grab the watch channel for the root node
 	watchCh, _, _ := root.GetWatch(nil)
 	return &iterator[Obj]{root.Iterator()}, watchCh
@@ -173,9 +215,13 @@ func (t *genTable[Obj]) All(txn ReadTxn) (Iterator[Obj], <-chan struct{}) {
 
 func (t *genTable[Obj]) Get(txn ReadTxn, q Query[Obj]) (Iterator[Obj], <-chan struct{}) {
 	indexTxn := txn.getTxn().mustIndexReadTxn(t.table, q.index)
-	iter := indexTxn.Root().Iterator()
+	iter := indexTxn.txn.Root().Iterator()
 	watchCh := iter.SeekPrefixWatch(q.key)
-	return &iterator[Obj]{iter}, watchCh
+
+	if indexTxn.entry.unique {
+		return &uniqueIterator[Obj]{iter, q.key}, watchCh
+	}
+	return &nonUniqueIterator[Obj]{iter, q.key}, watchCh
 }
 
 func (t *genTable[Obj]) Insert(txn WriteTxn, obj Obj) (oldObj Obj, hadOld bool, err error) {
