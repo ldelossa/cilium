@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
 	nodemanager "github.com/cilium/cilium/pkg/node/manager"
@@ -72,7 +73,8 @@ type manager struct {
 	config cemrcfg.Config
 	modes  routingModesType
 
-	nodes *nodeManager
+	nodes     *nodeManager
+	endpoints *endpointManager
 }
 
 type params struct {
@@ -86,6 +88,7 @@ type params struct {
 
 	NodeManager     nodemanager.NodeManager
 	IPTablesManager *iptables.Manager
+	IPCache         *ipcache.IPCache
 }
 
 func newManager(in params) *manager {
@@ -97,6 +100,16 @@ func newManager(in params) *manager {
 	mgr.modes = append(mgr.modes, toRoutingMode(in.DaemonConfig.RoutingMode, option.RoutingModeTunnel, in.Tunnel.Protocol()))
 	if mgr.enabled() && (in.Config.FallbackRoutingMode == cemrcfg.FallbackTunnel) != (in.DaemonConfig.TunnelingEnabled()) {
 		mgr.modes = append(mgr.modes, toRoutingMode(in.Config.FallbackRoutingMode, cemrcfg.FallbackTunnel, in.Tunnel.Protocol()))
+	}
+
+	if mgr.enabledWithFallback() {
+		mgr.endpoints = &endpointManager{
+			logger:     mgr.logger,
+			debug:      in.DaemonConfig.Debug,
+			modes:      mgr.modes,
+			downstream: in.IPCache,
+			prefixes:   newPrefixCache(),
+		}
 	}
 
 	mgr.nodes = &nodeManager{
