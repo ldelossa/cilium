@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	ipcmap "github.com/cilium/cilium/pkg/maps/ipcache"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -274,4 +275,38 @@ func (em *endpointManager) unsetMapping(hostIP net.IP) {
 	// We don't explicitly trigger the deletion of the entries associated with
 	// this host IP, relying instead on the corresponding deletion events.
 	em.mappings.Delete(hostIP.String())
+}
+
+func (em *endpointManager) mutateRemoteEndpointInfo(key *ipcmap.Key, rei *ipcmap.RemoteEndpointInfo) {
+	var ip hostIPType
+	if !rei.TunnelEndpoint.IsZero() {
+		// The tunnel endpoint is found, match based on it.
+		ip = rei.TunnelEndpoint.String()
+	} else {
+		// Otherwise, try to match based on the prefix, if it represents a single
+		// IP, so that we configure the flag correctly also for the NodeInternalIP
+		// and NodeExternalIP entries, which are needed to toggle masquerading.
+		if prefix := key.Prefix(); prefix.IsSingleIP() {
+			ip = prefix.Addr().String()
+		}
+	}
+
+	mode, ok := em.mappings.Load(ip)
+	if !ok || ip == "" {
+		mode = em.modes.primary()
+	}
+
+	if em.debug {
+		em.logger.WithFields(logrus.Fields{
+			logfields.Prefix:      key.Prefix().String(),
+			logfields.TunnelPeer:  rei.TunnelEndpoint.String(),
+			logfields.RoutingMode: mode,
+		}).Debug("Configuring ipcache BPF map entry")
+	}
+
+	if needsEncapsulation(mode) {
+		rei.Flags &= ^ipcmap.FlagSkipTunnel
+	} else {
+		rei.Flags |= ipcmap.FlagSkipTunnel
+	}
 }

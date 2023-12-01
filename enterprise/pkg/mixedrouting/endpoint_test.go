@@ -19,7 +19,9 @@ import (
 
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging"
+	ipcmap "github.com/cilium/cilium/pkg/maps/ipcache"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/types"
 )
 
 type fakeEPEntry struct {
@@ -161,4 +163,87 @@ func TestEndpointManager(t *testing.T) {
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.1"}, fed.ops[0])
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.2"}, fed.ops[1])
 	fed.clear()
+}
+
+func TestEndpointManagerMutateRemoteEndpointInfo(t *testing.T) {
+	const (
+		tunnelSkipFlagUnset = ipcmap.RemoteEndpointInfoFlags(0)
+		tunnelSkipFlagSet   = ipcmap.RemoteEndpointInfoFlags(1)
+	)
+
+	te := types.IPv4(net.ParseIP("10.255.0.1").To4())
+	tests := []struct {
+		name     string
+		key      ipcmap.Key
+		rei      ipcmap.RemoteEndpointInfo
+		primary  routingModeType
+		init     func(em *endpointManager)
+		expected ipcmap.RemoteEndpointInfoFlags
+	}{
+		{
+			name:     "Tunnel endpoint match, should unset",
+			key:      ipcmap.NewKey(net.ParseIP("10.0.0.4"), net.CIDRMask(32, 32), 0),
+			rei:      ipcmap.RemoteEndpointInfo{TunnelEndpoint: te, Flags: tunnelSkipFlagSet},
+			primary:  routingModeNative,
+			init:     func(em *endpointManager) { em.setMapping(net.ParseIP("10.255.0.1"), routingModeVXLAN) },
+			expected: tunnelSkipFlagUnset,
+		},
+		{
+			name:     "Tunnel endpoint match, should set",
+			key:      ipcmap.NewKey(net.ParseIP("10.0.0.4"), net.CIDRMask(32, 32), 0),
+			rei:      ipcmap.RemoteEndpointInfo{TunnelEndpoint: te, Flags: tunnelSkipFlagUnset},
+			primary:  routingModeGeneve,
+			init:     func(em *endpointManager) { em.setMapping(net.ParseIP("10.255.0.1"), routingModeNative) },
+			expected: tunnelSkipFlagSet,
+		},
+		{
+			name:     "Prefix match (single IP), IPv4",
+			key:      ipcmap.NewKey(net.ParseIP("10.0.0.4"), net.CIDRMask(32, 32), 0),
+			rei:      ipcmap.RemoteEndpointInfo{TunnelEndpoint: types.IPv4{}, Flags: tunnelSkipFlagSet},
+			primary:  routingModeNative,
+			init:     func(em *endpointManager) { em.setMapping(net.ParseIP("10.0.0.4"), routingModeGeneve) },
+			expected: tunnelSkipFlagUnset,
+		},
+		{
+			name:     "Prefix match (single IP), IPv6",
+			key:      ipcmap.NewKey(net.ParseIP("fd00::4"), net.CIDRMask(128, 128), 0),
+			rei:      ipcmap.RemoteEndpointInfo{TunnelEndpoint: types.IPv4{}, Flags: tunnelSkipFlagUnset},
+			primary:  routingModeVXLAN,
+			init:     func(em *endpointManager) { em.setMapping(net.ParseIP("fd00::4"), routingModeNative) },
+			expected: tunnelSkipFlagSet,
+		},
+		{
+			name:     "Prefix match, should default to primary",
+			key:      ipcmap.NewKey(net.ParseIP("10.0.0.4"), net.CIDRMask(30, 32), 0),
+			rei:      ipcmap.RemoteEndpointInfo{TunnelEndpoint: types.IPv4{}, Flags: tunnelSkipFlagUnset},
+			primary:  routingModeNative,
+			init:     func(em *endpointManager) { em.setMapping(net.ParseIP("10.0.0.4"), routingModeVXLAN) },
+			expected: tunnelSkipFlagSet,
+		},
+		{
+			name:    "No match, should default to primary",
+			key:     ipcmap.NewKey(net.ParseIP("10.0.0.4"), net.CIDRMask(30, 32), 0),
+			rei:     ipcmap.RemoteEndpointInfo{TunnelEndpoint: te, Flags: tunnelSkipFlagSet},
+			primary: routingModeGeneve,
+			init: func(em *endpointManager) {
+				em.setMapping(net.ParseIP("10.0.0.1"), routingModeGeneve)
+				em.setMapping(net.ParseIP("10.0.0.4"), routingModeGeneve)
+				em.unsetMapping(net.ParseIP("10.0.0.4"))
+			},
+			expected: tunnelSkipFlagUnset,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			em := endpointManager{
+				logger: logging.DefaultLogger, debug: true,
+				modes: routingModesType{tt.primary},
+			}
+
+			tt.init(&em)
+			em.mutateRemoteEndpointInfo(&tt.key, &tt.rei)
+			require.Equal(t, tt.expected, tt.rei.Flags)
+		})
+	}
 }
