@@ -16,6 +16,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/cilium/cilium/pkg/bpf"
+	dpipc "github.com/cilium/cilium/pkg/datapath/ipcache"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -309,4 +311,16 @@ func (em *endpointManager) mutateRemoteEndpointInfo(key *ipcmap.Key, rei *ipcmap
 	} else {
 		rei.Flags |= ipcmap.FlagSkipTunnel
 	}
+}
+
+type ipcmapwr struct {
+	dpipc.Map
+	mutator func(*ipcmap.Key, *ipcmap.RemoteEndpointInfo)
+}
+
+// Update wraps the corresponding ipcachemap.Map method to appropriately mutate
+// the value (setting the tunnel flag) before performing the upsertion operation.
+func (imw *ipcmapwr) Update(key bpf.MapKey, value bpf.MapValue) error {
+	imw.mutator(key.(*ipcmap.Key), value.(*ipcmap.RemoteEndpointInfo))
+	return imw.Map.Update(key, value)
 }

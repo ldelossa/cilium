@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
+	dpipc "github.com/cilium/cilium/pkg/datapath/ipcache"
 	"github.com/cilium/cilium/pkg/datapath/iptables"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
@@ -26,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	ipcmap "github.com/cilium/cilium/pkg/maps/ipcache"
 	"github.com/cilium/cilium/pkg/node"
 	nodemanager "github.com/cilium/cilium/pkg/node/manager"
 	"github.com/cilium/cilium/pkg/option"
@@ -156,6 +158,20 @@ func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.Clust
 	// native routing fallback, instead, we should force the creation of the ipset
 	// and manually insert the appropriate entries.
 	nodemanager.InjectCEIPSetManager(nomgr, mgr.nodes)
+}
+
+func (mgr *manager) setupEndpointManager(cm *clustermesh.ClusterMesh, lst *dpipc.BPFListener) {
+	// We don't need to hook the extra logic if the local node is configured
+	// with a single routing mode, as it will be always selected anyway.
+	if !mgr.enabledWithFallback() {
+		return
+	}
+
+	clustermesh.InjectCEIPCache(cm, mgr.endpoints)
+	dpipc.InjectCEMap(lst, &ipcmapwr{
+		Map:     ipcmap.IPCacheMap(),
+		mutator: mgr.endpoints.mutateRemoteEndpointInfo,
+	})
 }
 
 // enabled returns whether mixed routing mode support is enabled.

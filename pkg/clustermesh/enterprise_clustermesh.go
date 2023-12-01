@@ -11,6 +11,7 @@
 package clustermesh
 
 import (
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s"
 
 	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
@@ -34,5 +35,15 @@ func InjectCEServiceMerger(cm *ClusterMesh, cmcfg cmcfg.Config, sc *k8s.ServiceC
 func InjectCENodeObserver(cm *ClusterMesh, mgr nodeStore.NodeManager) {
 	if cm != nil {
 		cm.conf.NodeObserver = nodeStore.NewNodeObserver(mgr)
+	}
+}
+
+// InjectCEIPCache allows to override the default IPCache implementation injected
+// through hive, to support additional enterprise features (e.g., mixed routing
+// mode). This method is intended to be executed through an Invoke function
+// before starting the clustermesh subsystem.
+func InjectCEIPCache(cm *ClusterMesh, ipcacher ipcache.IPCacher) {
+	if cm != nil {
+		cm.conf.IPCache = ipcacher
 	}
 }

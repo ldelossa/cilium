@@ -42,5 +42,10 @@ var Cell = cell.Module(
 		// the routing modes annotations and configure the datapath accordingly
 		// (e.g., node routes, ipset entries, ...).
 		(*manager).setupNodeManager,
+
+		// Hook the extra logic to observe endpoint upsertions and deletions,
+		// match them with the corresponding node (and the associated routing
+		// mode) and configure the datapath accordingly (ipcache map tunnel flag).
+		(*manager).setupEndpointManager,
 	),
 )
