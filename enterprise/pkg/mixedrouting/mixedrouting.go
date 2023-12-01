@@ -11,9 +11,9 @@
 package mixedrouting
 
 import (
-	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -108,21 +108,45 @@ func (mgr *manager) enabled() bool { return mgr.config.FallbackRoutingMode != ce
 // String returns the string representation of the routing modes (i.e., comma separated).
 func (rm routingModesType) String() string { return strings.Join([]string(rm), routingModesSeparator) }
 
-func parseRoutingModes(in string) (routingModesType, error) {
-	if len(in) == 0 {
-		return nil, errors.New("no routing mode specified")
-	}
+// primary returns the primary routing mode. It panics if no routing mode is set.
+func (rm routingModesType) primary() routingModeType { return rm[0] }
 
-	modes := strings.Split(in, routingModesSeparator)
-	for _, mode := range modes {
-		switch mode {
-		case routingModeNative, routingModeVXLAN, routingModeGeneve:
-		default:
-			return nil, fmt.Errorf("invalid routing mode %q", mode)
+// match returns the first routing mode that is present both in the local and
+// in the remote list. An error is returned if no match is found. This is guaranteed
+// to lead to a symmetric selection of the routing mode as long as every node is
+// configured with a primary mode and exactly the same secondary mode (as in the
+// current implementation). Differently, it could lead to different decisions on
+// different nodes if associated with multiple secondary modes.
+func (local routingModesType) match(remote routingModesType) (routingModeType, error) {
+	for _, mode := range local {
+		if slices.Contains(remote, mode) {
+			return mode, nil
 		}
 	}
 
-	return modes, nil
+	return routingModeUnspec, fmt.Errorf("no matching routing mode found")
+}
+
+// parseRoutingModes parses a comma separated list of routing modes. In addition
+// to the list of valid routing modes, it also returns unrecognized ones (if any),
+// which can then be ignored (possibly emitting appropriate log messages). We
+// avoid to fail hard to enable backward compatibility in case we would ever want
+// to introduce a new routing mode in a subsequent release.
+func parseRoutingModes(in string) (valid routingModesType, invalid []string) {
+	if len(in) == 0 {
+		return
+	}
+
+	for _, mode := range strings.Split(in, routingModesSeparator) {
+		switch mode {
+		case routingModeNative, routingModeVXLAN, routingModeGeneve:
+			valid = append(valid, mode)
+		default:
+			invalid = append(invalid, mode)
+		}
+	}
+
+	return
 }
 
 // toRoutingMode returns the routing mode representation, based on mode and protocol.

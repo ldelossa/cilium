@@ -16,12 +16,14 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/slices"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
 )
@@ -90,19 +92,69 @@ func TestNodeStoreUpdate(t *testing.T) {
 	}
 }
 
+func TestRoutingModeMatch(t *testing.T) {
+	tests := []struct {
+		local     routingModesType
+		remote    routingModesType
+		expected  routingModeType
+		errAssert assert.ErrorAssertionFunc
+	}{
+		{
+			local:     routingModesType{routingModeNative, routingModeVXLAN},
+			errAssert: assert.Error,
+		},
+		{
+			local:     routingModesType{routingModeNative},
+			remote:    routingModesType{routingModeNative},
+			expected:  routingModeNative,
+			errAssert: assert.NoError,
+		},
+		{
+			local:     routingModesType{routingModeNative},
+			remote:    routingModesType{routingModeVXLAN},
+			errAssert: assert.Error,
+		},
+		{
+			local:     routingModesType{routingModeGeneve, routingModeVXLAN, routingModeNative},
+			remote:    routingModesType{routingModeVXLAN, routingModeNative},
+			expected:  routingModeVXLAN,
+			errAssert: assert.NoError,
+		},
+		{
+			local:     routingModesType{routingModeGeneve, routingModeVXLAN, routingModeNative},
+			remote:    routingModesType{routingModeNative, routingModeVXLAN},
+			expected:  routingModeVXLAN,
+			errAssert: assert.NoError,
+		},
+		{
+			local:     routingModesType{routingModeGeneve, routingModeVXLAN},
+			remote:    routingModesType{routingModeNative},
+			errAssert: assert.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s|%s", tt.local, tt.remote), func(t *testing.T) {
+			mode, err := tt.local.match(tt.remote)
+			tt.errAssert(t, err)
+			assert.Equal(t, tt.expected, mode)
+		})
+	}
+}
+
 func TestRoutingModeParsing(t *testing.T) {
 	tests := []struct {
-		in        routingModesType
-		expectErr bool
+		in      routingModesType
+		invalid []string
 	}{
-		{in: nil, expectErr: true},
+		{in: nil, invalid: nil},
 		{in: routingModesType{routingModeNative}},
 		{in: routingModesType{routingModeVXLAN}},
 		{in: routingModesType{routingModeGeneve}},
 		{in: routingModesType{routingModeVXLAN, routingModeNative}},
 		{in: routingModesType{routingModeGeneve, routingModeNative, routingModeGeneve}},
-		{in: routingModesType{"foo"}, expectErr: true},
-		{in: routingModesType{routingModeNative, "foo", routingModeGeneve}, expectErr: true},
+		{in: routingModesType{"foo"}, invalid: []string{"foo"}},
+		{in: routingModesType{routingModeNative, "foo", routingModeGeneve}, invalid: []string{"foo"}},
 	}
 
 	for _, tt := range tests {
@@ -112,14 +164,9 @@ func TestRoutingModeParsing(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			out, err := parseRoutingModes(tt.in.String())
-			if tt.expectErr {
-				require.Error(t, err)
-				require.Empty(t, out)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.in, out)
-			}
+			valid, invalid := parseRoutingModes(tt.in.String())
+			require.EqualValues(t, slices.Diff(tt.in, tt.invalid), valid)
+			require.EqualValues(t, tt.invalid, invalid)
 		})
 	}
 }
