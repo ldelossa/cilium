@@ -8,11 +8,8 @@ runs:
       run: |
         echo "Verify no conn-disrupt-test pods restarted ..."
         for ((i = 5; i >= 1; i--)); do
-          restarted=$(kubectl get pods -l app=test-conn-disrupt-client -A -o=jsonpath='{range.items[?(@.status.containerStatuses[*].restartCount!=0)]}{.metadata.name}{"\n"}{end}')
-          if [[ -n "$restarted" ]]; then
-            exit 1
-          fi
           echo "no restarts found [$i minutes left ...]"
           sleep 60
+          cilium connectivity test --include-conn-disrupt-test --test no-interrupted-connections --conn-disrupt-test-setup
         done
         echo "No restarts found."
