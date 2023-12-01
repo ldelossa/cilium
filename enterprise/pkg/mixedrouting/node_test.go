@@ -84,6 +84,21 @@ func newFakeIPSetter() fakeIPSetter                    { return make(map[string]
 func (fis fakeIPSetter) AddToNodeIpset(ip net.IP)      { fis[ip.String()] = struct{}{} }
 func (fis fakeIPSetter) RemoveFromNodeIpset(ip net.IP) { delete(fis, ip.String()) }
 
+type fakeEPMapper map[string]routingModeType
+
+func newFakeEPMapper() fakeEPMapper                                     { return make(map[string]routingModeType) }
+func (fem fakeEPMapper) setMapping(hostIP net.IP, mode routingModeType) { fem[hostIP.String()] = mode }
+func (fem fakeEPMapper) unsetMapping(hostIP net.IP)                     { delete(fem, hostIP.String()) }
+
+func toMapping(ips []string, mode routingModeType) fakeEPMapper {
+	mapping := make(map[string]routingModeType)
+	// Additionally include the NodeExternalIP
+	for _, ip := range append(ips, "2001::beef") {
+		mapping[ip] = mode
+	}
+	return mapping
+}
+
 func newNode(name string, id uint32, modes routingModesType, internalIPs []string) *nodeTypes.Node {
 	annotations := make(map[string]string)
 	if len(modes) > 0 {
@@ -106,6 +121,7 @@ func TestNodeManager(t *testing.T) {
 	mgr := nodeManager{
 		logger:   logging.DefaultLogger,
 		modes:    routingModesType{routingModeNative, routingModeVXLAN},
+		epmapper: newFakeEPMapper(),
 		ipsetter: newFakeIPSetter(),
 	}
 	fd := newFakeNodeDownstream(&mgr)
@@ -126,12 +142,14 @@ func TestNodeManager(t *testing.T) {
 	require.Len(t, fd.ops, 1, "Insertion should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opUpsert, no1}, fd.ops[0], "Insertion should propagate to downstream")
 	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
+	require.Equal(t, toMapping(ips1, routingModeVXLAN), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeUpdated(no2)
 	require.Len(t, fd.ops, 1, "Update should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opUpsert, no2}, fd.ops[0], "Update should propagate to downstream")
 	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
+	require.Equal(t, toMapping(ips2, routingModeVXLAN), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeUpdated(no3)
@@ -139,12 +157,14 @@ func TestNodeManager(t *testing.T) {
 	require.Equal(t, fakeNodeEntry{opDelete, no2}, fd.ops[0], "Routing mode change should trigger deletion followed by insertion")
 	require.Equal(t, fakeNodeEntry{opUpsert, no3}, fd.ops[1], "Routing mode change should trigger deletion followed by insertion")
 	require.ElementsMatch(t, maps.Keys(mgr.ipsetter.(fakeIPSetter)), ips2, "ipset not configured correctly")
+	require.Equal(t, toMapping(ips2, routingModeNative), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeUpdated(no4)
 	require.Len(t, fd.ops, 1, "Update should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opUpsert, no4}, fd.ops[0], "Update should propagate to downstream")
 	require.ElementsMatch(t, maps.Keys(mgr.ipsetter.(fakeIPSetter)), ips1, "ipset not configured correctly")
+	require.Equal(t, toMapping(ips1, routingModeNative), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeUpdated(no2)
@@ -152,12 +172,14 @@ func TestNodeManager(t *testing.T) {
 	require.Equal(t, fakeNodeEntry{opDelete, no4}, fd.ops[0], "Routing mode change should trigger deletion followed by insertion")
 	require.Equal(t, fakeNodeEntry{opUpsert, no2}, fd.ops[1], "Routing mode change should trigger deletion followed by insertion")
 	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
+	require.Equal(t, toMapping(ips2, routingModeVXLAN), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeDeleted(no2)
 	require.Len(t, fd.ops, 1, "Deletion should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opDelete, no2}, fd.ops[0], "Deletion should propagate to downstream")
 	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
+	require.Empty(t, mgr.epmapper.(fakeEPMapper), "endpoint mapping not reset correctly")
 	fd.clear()
 }
 

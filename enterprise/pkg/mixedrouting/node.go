@@ -23,6 +23,11 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 )
 
+type endpointMapper interface {
+	setMapping(hostIP net.IP, mode routingModeType)
+	unsetMapping(hostIP net.IP)
+}
+
 type nodeManager struct {
 	logger logrus.FieldLogger
 	modes  routingModesType
@@ -32,6 +37,8 @@ type nodeManager struct {
 
 	ipsetter  nodemanager.CEIPSetManager
 	ipsetSkip lock.Map[string, struct{}]
+
+	epmapper endpointMapper
 }
 
 // NodeUpdated wraps the corresponding nodemanager.Manager method to observe node
@@ -63,6 +70,7 @@ func (nm *nodeManager) NodeUpdated(node nodeTypes.Node) {
 	nm.nodesCache.Store(id, &node)
 
 	nm.updateIpsetSkipSet(prev, &node, log)
+	nm.updateEndpointAssociations(prev, &node, log)
 
 	nm.downstream.NodeUpdated(node)
 }
@@ -83,6 +91,7 @@ func (nm *nodeManager) NodeDeleted(node nodeTypes.Node) {
 	nm.nodesCache.Delete(id)
 
 	nm.updateIpsetSkipSet(&node, nil, log)
+	nm.updateEndpointAssociations(&node, nil, log)
 
 	nm.downstream.NodeDeleted(node)
 }
@@ -177,6 +186,41 @@ func (nm *nodeManager) updateIpsetSkipSet(old, new *nodeTypes.Node, log logrus.F
 	}
 
 	nm.forEachAddress(old, new, false /* InternalIPs only */, onAdded, onDeleted)
+}
+
+// updateEndpointAssociations updates the mappings between Node{Internal,External}IP
+// addresses and preferred routing mode, leveraged to appropriately customize the
+// ipcache map skip_tunnel flag for each endpoint entry.
+func (nm *nodeManager) updateEndpointAssociations(old, new *nodeTypes.Node, log logrus.FieldLogger) {
+	var mode routingModeType
+	if new != nil {
+		mode = nm.routingMode(new, false /* silent */)
+	}
+
+	onAdded := func(ip net.IP) {
+		log.WithField(logfields.IPAddr, ip.String()).
+			Debug("Configured tunnel endpoint to routing mode association")
+		nm.epmapper.setMapping(ip, mode)
+	}
+
+	onDeleted := func(ip net.IP) {
+		log.WithField(logfields.IPAddr, ip.String()).
+			Debug("Removed tunnel endpoint to routing mode association")
+		nm.epmapper.unsetMapping(ip)
+	}
+
+	// Configure both internal and external addresses, as they are needed to
+	// tune BPF masquerading (only for native routing clusters). Indeed,
+	// while with iptables SNAT is skipped for pod to node traffic only
+	// towards InternalIP addresses, the BPF counterpart skips it both for
+	// InternalIP and ExternalIP addresses (cilium/cilium#17177). We need to
+	// ensure that SNAT is performed towards both classes of addresses if the
+	// preferred routing mode is tunnel, otherwise traffic will be dropped.
+	// The address used to configure the host IP address in the CiliumEndpoint
+	// and in the equivalent kvstore representation is retrieved through
+	// GetCiliumEndpointNodeIP(), corresponding to the IPv4 InternalIP, with
+	// fallback to the IPv4 ExternalIP. Hence, both cases are also covered.
+	nm.forEachAddress(old, new, true /* Both InternalIPs and ExternalIPs */, onAdded, onDeleted)
 }
 
 // forEachAddress respectively executes the onAdded and onDeleted functions for

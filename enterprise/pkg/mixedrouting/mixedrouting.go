@@ -112,11 +112,14 @@ func newManager(in params) *manager {
 		}
 	}
 
+	// The node manager must be used in its lightweight form when
+	// mgr.enabledWithFallback() is false, as is only partially initialized.
 	mgr.nodes = &nodeManager{
 		logger:     mgr.logger,
 		modes:      mgr.modes,
 		downstream: in.NodeManager,
 		ipsetter:   in.IPTablesManager,
+		epmapper:   mgr.endpoints,
 	}
 
 	return &mgr
