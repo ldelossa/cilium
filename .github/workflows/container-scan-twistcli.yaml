@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           sparse-checkout: |
-            vex-data.vex.json
+            .openvex.json
           sparse-checkout-cone-mode: false
           path: isovalent-cilium-vex
       - name: Set up Docker Buildx
@@ -66,7 +66,7 @@ jobs:
       - name: Install vexctl
         run: go install github.com/openvex/vexctl@latest
       - name: Filter false positives
-        run: vexctl filter ${{ steps.scan-image.outputs.sarif_file }} isovalent-cilium-vex/vex-data.vex.json > filtered-results.json
+        run: vexctl filter ${{ steps.scan-image.outputs.sarif_file }} isovalent-cilium-vex/.openvex.json > filtered-results.json
       - name: Upload SARIF scan results
         uses: actions/upload-artifact@v3
         with:
