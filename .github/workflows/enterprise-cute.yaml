@@ -41,10 +41,9 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           persist-credentials: false
-          path: workflow-context
 
       - name: Set Environment Variables
-        uses: ./workflow-context/.github/actions/set-env-variables
+        uses: ./.github/actions/set-env-variables
 
       - name: Set up job variables
         id: vars
@@ -260,7 +259,7 @@ jobs:
         # `cute` type means that CuTE Helm chart will be used (it already exists)
         if: steps.vars.outputs.deploy_type != 'cute'
         timeout-minutes: 30
-        uses: ./workflow-context/.github/actions/cute-helm-chart
+        uses: ./.github/actions/cute-helm-chart
         with:
           branch: ${{ steps.cute_props.outputs.deploy_branch }}
           enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
@@ -272,7 +271,7 @@ jobs:
         id: cute_helm_upgrade
         if: steps.vars.outputs.upgrade_branch != ''
         timeout-minutes: 30
-        uses: ./workflow-context/.github/actions/cute-helm-chart
+        uses: ./.github/actions/cute-helm-chart
         with:
           branch: ${{ steps.vars.outputs.upgrade_branch }}
           enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
@@ -347,14 +346,14 @@ jobs:
         # Step will be skipped for the CuTE version that Customer already uses
         if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
         timeout-minutes: 150
-        uses: ./workflow-context/.github/actions/cute-test-ipsec
+        uses: ./.github/actions/cute-test-ipsec
         with:
           cute-dir: cute/${{ steps.vars.outputs.cute_dir }}
 
       - name: Run CuTE upgrade
         if: steps.vars.outputs.upgrade_branch != ''
         timeout-minutes: 40
-        uses: ./workflow-context/.github/actions/cute-upgrade
+        uses: ./.github/actions/cute-upgrade
         with:
           deploy-type: ${{ steps.vars.outputs.deploy_type }}
           use-enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
@@ -366,7 +365,7 @@ jobs:
       - name: IPsec tests after upgrade
         if: steps.vars.outputs.upgrade_branch != '' && steps.encryption.outputs.type == 'ipsec'
         timeout-minutes: 150
-        uses: ./workflow-context/.github/actions/cute-test-ipsec
+        uses: ./.github/actions/cute-test-ipsec
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 

@@ -47,7 +47,7 @@ runs:
         echo "All the pods use 2 active keys now."
 
     - name: Verify state
-      uses: ./workflow-context/.github/actions/cute-verify-state
+      uses: ./.github/actions/cute-verify-state
 
     - name: Wait for key rotation
       shell: bash
@@ -72,7 +72,7 @@ runs:
         echo "IPsec key has been rotated."
 
     - name: Verify state
-      uses: ./workflow-context/.github/actions/cute-verify-state
+      uses: ./.github/actions/cute-verify-state
 
     - name: Run CuTE tests
       working-directory: ./${{ inputs.cute-dir }}
@@ -89,7 +89,7 @@ runs:
         make scaleup
 
     - name: Verify state
-      uses: ./workflow-context/.github/actions/cute-verify-state
+      uses: ./.github/actions/cute-verify-state
 
     - name: Scale down cluster
       working-directory: ./${{ inputs.cute-dir }}
