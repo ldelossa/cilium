@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/netip"
 	"os"
@@ -154,6 +155,8 @@ type Daemon struct {
 	ipam *ipam.IPAM
 
 	endpointManager endpointmanager.EndpointManager
+
+	endpointRestoreComplete chan struct{}
 
 	identityAllocator CachingIdentityAllocator
 
@@ -412,7 +415,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		metrics.Identity.WithLabelValues(identity.WellKnownIdentityType).Add(float64(num))
 	}
 
-	nd := nodediscovery.NewNodeDiscovery(params.NodeManager, params.Clientset, params.MTU, params.CNIConfigManager.GetCustomNetConf())
+	nd := nodediscovery.NewNodeDiscovery(params.NodeManager, params.Clientset, params.LocalNodeStore, params.MTU, params.CNIConfigManager.GetCustomNetConf())
 
 	d := Daemon{
 		ctx:               ctx,
@@ -516,7 +519,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	)
 	nd.RegisterK8sGetters(d.k8sWatcher)
 
-	d.k8sWatcher.RegisterNodeSubscriber(d.endpointManager)
 	if option.Config.BGPAnnounceLBIP || option.Config.BGPAnnouncePodCIDR {
 		switch option.Config.IPAMMode() {
 		case ipamOption.IPAMKubernetes:
@@ -525,12 +527,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			d.bgpSpeaker.SubscribeToLocalCiliumNodeResource(ctx, params.Resources.LocalCiliumNode)
 		}
 	}
-	if option.Config.EnableServiceTopology {
-		d.k8sWatcher.RegisterNodeSubscriber(d.k8sWatcher.K8sSvcCache)
-	}
-
-	// watchers.NewCiliumNodeUpdater needs to be registered *after* d.endpointManager
-	d.k8sWatcher.RegisterNodeSubscriber(watchers.NewCiliumNodeUpdater(d.nodeDiscovery))
 
 	d.redirectPolicyManager.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
 	if option.Config.BGPAnnounceLBIP {
@@ -692,13 +688,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 				return nil, restoredEndpoints, err
 			}
 		}
-
-		// Launch the K8s node watcher so we can start receiving node events.
-		// Launching the k8s node watcher at this stage will prevent all agents
-		// from performing Gets directly into kube-apiserver to get the most up
-		// to date version of the k8s node. This allows for better scalability
-		// in large clusters.
-		d.k8sWatcher.NodesInit(d.clientset)
 
 		if option.Config.IPAM == ipamOption.IPAMClusterPool ||
 			option.Config.IPAM == ipamOption.IPAMMultiPool {
@@ -884,14 +873,19 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			log.WithError(err).Errorf("joining a Cilium cluster (--%s) requires kvstore (--%s) be set", option.JoinClusterName, option.KVStore)
 			return nil, nil, fmt.Errorf("joining a Cilium cluster (--%s) requires kvstore (--%s) be set", option.JoinClusterName, option.KVStore)
 		}
+
 		agentLabels := labels.NewLabelsFromModel(option.Config.AgentLabels).K8sStringMap()
 		if option.Config.K8sNamespace != "" {
 			agentLabels[k8sConst.PodNamespaceLabel] = option.Config.K8sNamespace
 		}
 		agentLabels[k8sConst.PodNameLabel] = nodeTypes.GetName()
 		agentLabels[k8sConst.PolicyLabelCluster] = option.Config.ClusterName
+
 		// Set configured agent labels to local node for node registration
-		node.SetLabels(agentLabels)
+		params.LocalNodeStore.Update(func(ln *node.LocalNode) {
+			ln.Labels = maps.Clone(ln.Labels)
+			maps.Copy(ln.Labels, agentLabels)
+		})
 
 		// This can override node addressing config, so do this before starting IPAM
 		log.WithField(logfields.NodeName, nodeTypes.GetName()).Debug("Calling JoinCluster()")
@@ -1055,7 +1049,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		}
 	}
 
-	if err := params.IPsecKeyCustodian.StartBackgroundJobs(nd, d.Datapath().Node()); err != nil {
+	if err := params.IPsecKeyCustodian.StartBackgroundJobs(d.Datapath().Node()); err != nil {
 		log.WithError(err).Error("Unable to start IPsec key watcher")
 	}
 

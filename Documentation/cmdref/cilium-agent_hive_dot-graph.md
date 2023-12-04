@@ -48,6 +48,7 @@ cilium-agent hive dot-graph [flags]
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-l2-pod-announcements                                  Enable announcing Pod IPs with Gratuitous ARP
       --enable-monitor                                               Enable the monitor unix domain socket server (default true)
+      --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
       --iptables-lock-timeout duration                               Time to pass to each iptables invocation to wait for xtables lock acquisition (default 5s)
@@ -74,6 +75,7 @@ cilium-agent hive dot-graph [flags]
       --pprof                                                        Enable serving pprof debugging API
       --pprof-address string                                         Address that pprof listens on (default "localhost")
       --pprof-port uint16                                            Port that pprof listens on (default 6060)
+      --prepend-iptables-chains                                      Prepend custom iptables chains instead of appending (default true)
       --prometheus-serve-addr string                                 IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off) (default ":9962")
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
       --tunnel-port uint16                                           Tunnel port (default 8472 for "vxlan" and 6081 for "geneve")

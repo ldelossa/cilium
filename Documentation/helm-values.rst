@@ -904,10 +904,6 @@
      - Enable CiliumEndpointSlice feature.
      - bool
      - ``false``
-   * - :spelling:ignore:`enableCnpStatusUpdates`
-     - Whether to enable CNP status updates.
-     - bool
-     - ``false``
    * - :spelling:ignore:`enableCriticalPriorityClass`
      - Explicitly enable or disable priority class. .Capabilities.KubeVersion is unsettable in ``helm template`` calls, it depends on k8s libraries version that Helm was compiled against. This option allows to explicitly disable setting the priority class, which is useful for rendering charts for gke clusters in advance.
      - bool
@@ -928,10 +924,6 @@
      - Enables masquerading of IPv6 traffic leaving the node from endpoints.
      - bool
      - ``true``
-   * - :spelling:ignore:`enableK8sEventHandover`
-     - Configures the use of the KVStore to optimize Kubernetes event handling by mirroring it into the KVstore for reduced overhead in large clusters.
-     - bool
-     - ``false``
    * - :spelling:ignore:`enableK8sTerminatingEndpoint`
      - Configure whether to enable auto detect of terminating state for endpoints in order to support graceful termination.
      - bool
@@ -1500,6 +1492,38 @@
      - Enable Hubble (true by default).
      - bool
      - ``true``
+   * - :spelling:ignore:`hubble.export`
+     - Hubble flows export.
+     - object
+     - ``{"dynamic":{"config":{"configMapName":"cilium-flowlog-config","content":[{"excludeFilters":[],"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log","includeFilters":[],"name":"all"}],"createConfigMap":true},"enabled":false},"fileMaxBackups":5,"fileMaxSizeMb":10,"static":{"allowList":[],"denyList":[],"enabled":false,"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log"}}``
+   * - :spelling:ignore:`hubble.export.dynamic`
+     - - Dynamic exporters configuration. Dynamic exporters may be reconfigured without a need of agent restarts.
+     - object
+     - ``{"config":{"configMapName":"cilium-flowlog-config","content":[{"excludeFilters":[],"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log","includeFilters":[],"name":"all"}],"createConfigMap":true},"enabled":false}``
+   * - :spelling:ignore:`hubble.export.dynamic.config.configMapName`
+     - -- Name of configmap with configuration that may be altered to reconfigure exporters within a running agents.
+     - string
+     - ``"cilium-flowlog-config"``
+   * - :spelling:ignore:`hubble.export.dynamic.config.content`
+     - -- Exporters configuration in YAML format.
+     - list
+     - ``[{"excludeFilters":[],"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log","includeFilters":[],"name":"all"}]``
+   * - :spelling:ignore:`hubble.export.dynamic.config.createConfigMap`
+     - -- True if helm installer should create config map. Switch to false if you want to self maintain the file content.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`hubble.export.fileMaxBackups`
+     - - Defines max number of backup/rotated files.
+     - int
+     - ``5``
+   * - :spelling:ignore:`hubble.export.fileMaxSizeMb`
+     - - Defines max file size of output file before it gets rotated.
+     - int
+     - ``10``
+   * - :spelling:ignore:`hubble.export.static`
+     - - Static exporter configuration. Static exporter is bound to agent lifecycle.
+     - object
+     - ``{"allowList":[],"denyList":[],"enabled":false,"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log"}``
    * - :spelling:ignore:`hubble.listenAddress`
      - An additional address for Hubble to listen to. Set this field ":4244" if you are enabling Hubble Relay, as it assumes that Hubble is listening on port 4244.
      - string
@@ -2163,15 +2187,15 @@
    * - :spelling:ignore:`k8sClientRateLimit`
      - Configure the client side rate limit for the agent and operator  If the amount of requests to the Kubernetes API server exceeds the configured rate limit, the agent and operator will start to throttle requests by delaying them until there is budget or the request times out.
      - object
-     - ``{"burst":10,"qps":5}``
+     - ``{"burst":null,"qps":null}``
    * - :spelling:ignore:`k8sClientRateLimit.burst`
      - The burst request rate in requests per second. The rate limiter will allow short bursts with a higher rate.
      - int
-     - ``10``
+     - 10 for k8s up to 1.26. 20 for k8s version 1.27+
    * - :spelling:ignore:`k8sClientRateLimit.qps`
      - The sustained request rate in requests per second.
      - int
-     - ``5``
+     - 5 for k8s up to 1.26. 10 for k8s version 1.27+
    * - :spelling:ignore:`k8sNetworkPolicy.enabled`
      - Enable support for K8s NetworkPolicy
      - bool

@@ -179,7 +179,7 @@ jobs:
 
       - name: Set up gcloud credentials
         id: 'auth'
-        uses: google-github-actions/auth@f105ef0cdb3b102a020be1767fcc8a974898b7c6 # v1.2.0
+        uses: google-github-actions/auth@67e9c72af6e0492df856527b474995862b7b6591 # v2.0.0
         with:
           credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
 
@@ -211,7 +211,7 @@ jobs:
             --num-nodes 2 \
             --machine-type e2-custom-2-4096 \
             --disk-type pd-standard \
-            --disk-size 10GB \
+            --disk-size 20GB \
             --node-taints ignore-taint.cluster-autoscaler.kubernetes.io/cilium-agent-not-ready=true:NoExecute \
             --preemptible
 
@@ -239,12 +239,8 @@ jobs:
 
       - name: Wait for Cilium to be ready
         run: |
-          cilium status --wait
+          cilium status --wait --wait-duration=10m
           kubectl get pods -n kube-system
-
-      - name: Wait for Cilium status to be ready
-        run: |
-          cilium status --wait
 
       - name: Port forward Relay
         run: |
