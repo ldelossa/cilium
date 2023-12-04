@@ -202,6 +202,9 @@ func (in *IsovalentEgressGatewayPolicySpec) DeepEqual(other *IsovalentEgressGate
 	if in.BGPEnabled != other.BGPEnabled {
 		return false
 	}
+	if in.AZAffinity != other.AZAffinity {
+		return false
+	}
 
 	return true
 }

@@ -75,6 +75,20 @@ type IsovalentEgressGatewayPolicySpec struct {
 	//
 	// +kubebuilder:validation:Optional
 	BGPEnabled bool `json:"bgpEnabled"`
+
+	// AZAffinity controls the AZ affinity of the gateway nodes to the source pods and allows to select or prefer local (i.e. gateways in the same AZ of a given pod) gateways.
+	//
+	// 4 modes are supported:
+	// - disabled: no AZ affinity
+	// - localOnly: only local gateway nodes will be selected
+	// - localOnlyFirst: only local gateways nodes will be selected until at least one gateway is available in the AZ.
+	//   When no more local gateways are available, gateways from different AZs will be used
+	// - localPriority: local gateways will be picked up first to build the list of active gateways.
+	//   This mode is supposed to be used in combination with maxGatewayNodes
+	//
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=disabled;localOnly;localOnlyFirst;localPriority
+	AZAffinity string `json:"azAffinity"`
 }
 
 type EgressRule struct {
