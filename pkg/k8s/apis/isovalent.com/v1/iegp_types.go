@@ -151,6 +151,8 @@ type IsovalentEgressGatewayPolicyStatus struct {
 // policy group. It consists of a pair of slices that describe the set of active
 // and healthy gateway IPs for a given EgressGroup.
 type IsovalentEgressGatewayPolicyGroupStatus struct {
-	ActiveGatewayIPs  []string `json:"activeGatewayIPs,omitempty"`
-	HealthyGatewayIPs []string `json:"healthyGatewayIPs,omitempty"`
+	ActiveGatewayIPs []string `json:"activeGatewayIPs,omitempty"`
+	// +deepequal-gen=false
+	ActiveGatewayIPsByAZ map[string][]string `json:"activeGatewayIPsByAZ,omitempty"`
+	HealthyGatewayIPs    []string            `json:"healthyGatewayIPs,omitempty"`
 }

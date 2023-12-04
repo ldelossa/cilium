@@ -303,6 +303,12 @@ spec:
                       items:
                         type: string
                       type: array
+                    activeGatewayIPsByAZ:
+                      additionalProperties:
+                        items:
+                          type: string
+                        type: array
+                      type: object
                     healthyGatewayIPs:
                       items:
                         type: string
