@@ -7,6 +7,16 @@ enterprise:
     # -- Enable overlapping PodCIDR support
     enableOverlappingPodCIDRSupport: false
 
+    mixedRoutingMode:
+      # -- Enable meshing clusters configured with a different primary routing mode.
+      # Inter-cluster traffic is forwarded according to the locally configured mode
+      # when matching that of the target cluster, native routing if both clusters use
+      # native routing, tunnel if both clusters use tunnel, and defaults to tunnel in
+      # the case of a mismatch. The tunnel protocol must be configured to the same
+      # value in all clusters. Limited to Cluster Scope or Kubernetes Host Scope
+      # IPAM modes. Incompatible with the Direct Server Return (DSR) LB mode.
+      enabled: false
+
   # -- Enables egress gateway HA
   egressGatewayHA:
     enabled: false
@@ -28,7 +38,6 @@ enterprise:
     encapMode: reduced
     # -- Enables custom SRv6 SID locator pool operator support.
     locatorPoolEnabled: false
-
 
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation

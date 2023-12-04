@@ -31,4 +31,8 @@ egress-gateway-ha-healthcheck-timeout: {{ .Values.enterprise.egressGatewayHA.hea
 egress-gateway-ha-healthcheck-timeout: {{ .Values.egressGateway.healthcheckTimeout | quote }}
 {{- end }}
 
+{{- if .Values.enterprise.clustermesh.mixedRoutingMode.enabled }}
+fallback-routing-mode: tunnel
+{{- end }}
+
 {{- end }}
