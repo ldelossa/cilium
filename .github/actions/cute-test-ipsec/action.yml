@@ -48,6 +48,9 @@ runs:
 
     - name: Verify state
       uses: ./.github/actions/cute-verify-state
+      with:
+        cute-dir: ./${{ inputs.cute-dir }}
+        run-tests: false
 
     - name: Wait for key rotation
       shell: bash
@@ -73,13 +76,8 @@ runs:
 
     - name: Verify state
       uses: ./.github/actions/cute-verify-state
-
-    - name: Run CuTE tests
-      working-directory: ./${{ inputs.cute-dir }}
-      shell: bash
-      run: |
-        echo "Running CuTE tests ..."
-        make test
+      with:
+        cute-dir: ./${{ inputs.cute-dir }}
 
     - name: Scale up cluster
       working-directory: ./${{ inputs.cute-dir }}
@@ -90,6 +88,8 @@ runs:
 
     - name: Verify state
       uses: ./.github/actions/cute-verify-state
+      with:
+        cute-dir: ./${{ inputs.cute-dir }}
 
     - name: Scale down cluster
       working-directory: ./${{ inputs.cute-dir }}
@@ -108,7 +108,7 @@ runs:
       shell: bash
       run: |
         echo "Deleting connectivity tests namespace ..."
-        kubectl delete namespace cilium-test
+        kubectl delete namespace cilium-test || true
 
     - name: Fetch artifacts
       if: ${{ !success() }}

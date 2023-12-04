@@ -57,4 +57,4 @@ runs:
       run: |
         # Temporary fix for the NWM CuTE to make cluster stable
         make startup_wait || true
-        cilium status --wait
+        cilium status --wait 15m0s

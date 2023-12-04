@@ -1,5 +1,13 @@
 name: Verify CuTE state
 description: Verify CuTE state
+inputs:
+  cute-dir:
+    description: 'Directory with a CuTE code.'
+    required: true
+  run-tests:
+    description: 'Run CuTE tests.'
+    required: false
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -10,6 +18,14 @@ runs:
         for ((i = 5; i >= 1; i--)); do
           echo "no restarts found [$i minutes left ...]"
           sleep 60
-          cilium connectivity test --include-conn-disrupt-test --test no-interrupted-connections --conn-disrupt-test-setup
+          cilium connectivity test --include-conn-disrupt-test --test 'no-interrupted-connections,no-ipsec-xfrm-errors' --conn-disrupt-test-setup
         done
         echo "No restarts found."
+
+    - name: Run CuTE tests
+      if: inputs.run-tests == 'true'
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        echo "Running CuTE tests ..."
+        make test
