@@ -276,13 +276,11 @@ contributors across the globe, there is almost always someone available to help.
 | egressGateway.installRoutes | bool | `false` | Deprecated without a replacement necessary. |
 | egressGateway.reconciliationTriggerInterval | string | `"1s"` | Time between triggers of egress gateway state reconciliations |
 | enableCiliumEndpointSlice | bool | `false` | Enable CiliumEndpointSlice feature. |
-| enableCnpStatusUpdates | bool | `false` | Whether to enable CNP status updates. |
 | enableCriticalPriorityClass | bool | `true` | Explicitly enable or disable priority class. .Capabilities.KubeVersion is unsettable in `helm template` calls, it depends on k8s libraries version that Helm was compiled against. This option allows to explicitly disable setting the priority class, which is useful for rendering charts for gke clusters in advance. |
 | enableIPv4BIGTCP | bool | `false` | Enables IPv4 BIG TCP support which increases maximum IPv4 GSO/GRO limits for nodes and pods |
 | enableIPv4Masquerade | bool | `true` | Enables masquerading of IPv4 traffic leaving the node from endpoints. |
 | enableIPv6BIGTCP | bool | `false` | Enables IPv6 BIG TCP support which increases maximum IPv6 GSO/GRO limits for nodes and pods |
 | enableIPv6Masquerade | bool | `true` | Enables masquerading of IPv6 traffic leaving the node from endpoints. |
-| enableK8sEventHandover | bool | `false` | Configures the use of the KVStore to optimize Kubernetes event handling by mirroring it into the KVstore for reduced overhead in large clusters. |
 | enableK8sTerminatingEndpoint | bool | `true` | Configure whether to enable auto detect of terminating state for endpoints in order to support graceful termination. |
 | enableMasqueradeRouteSource | bool | `false` | Enables masquerading to the source of the route for traffic leaving the node from endpoints. |
 | enableRuntimeDeviceDetection | bool | `false` | Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered. |
@@ -425,6 +423,14 @@ contributors across the globe, there is almost always someone available to help.
 | hostPort.enabled | bool | `false` | Enable hostPort service support. |
 | hubble.annotations | object | `{}` | Annotations to be added to all top-level hubble objects (resources under templates/hubble) |
 | hubble.enabled | bool | `true` | Enable Hubble (true by default). |
+| hubble.export | object | `{"dynamic":{"config":{"configMapName":"cilium-flowlog-config","content":[{"excludeFilters":[],"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log","includeFilters":[],"name":"all"}],"createConfigMap":true},"enabled":false},"fileMaxBackups":5,"fileMaxSizeMb":10,"static":{"allowList":[],"denyList":[],"enabled":false,"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log"}}` | Hubble flows export. |
+| hubble.export.dynamic | object | `{"config":{"configMapName":"cilium-flowlog-config","content":[{"excludeFilters":[],"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log","includeFilters":[],"name":"all"}],"createConfigMap":true},"enabled":false}` | - Dynamic exporters configuration. Dynamic exporters may be reconfigured without a need of agent restarts. |
+| hubble.export.dynamic.config.configMapName | string | `"cilium-flowlog-config"` | -- Name of configmap with configuration that may be altered to reconfigure exporters within a running agents. |
+| hubble.export.dynamic.config.content | list | `[{"excludeFilters":[],"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log","includeFilters":[],"name":"all"}]` | -- Exporters configuration in YAML format. |
+| hubble.export.dynamic.config.createConfigMap | bool | `true` | -- True if helm installer should create config map. Switch to false if you want to self maintain the file content. |
+| hubble.export.fileMaxBackups | int | `5` | - Defines max number of backup/rotated files. |
+| hubble.export.fileMaxSizeMb | int | `10` | - Defines max file size of output file before it gets rotated. |
+| hubble.export.static | object | `{"allowList":[],"denyList":[],"enabled":false,"fieldMask":[],"filePath":"/var/run/cilium/hubble/events.log"}` | - Static exporter configuration. Static exporter is bound to agent lifecycle. |
 | hubble.listenAddress | string | `":4244"` | An additional address for Hubble to listen to. Set this field ":4244" if you are enabling Hubble Relay, as it assumes that Hubble is listening on port 4244. |
 | hubble.metrics | object | `{"dashboards":{"annotations":{},"enabled":false,"label":"grafana_dashboard","labelValue":"1","namespace":null},"enableOpenMetrics":false,"enabled":null,"port":9965,"serviceAnnotations":{},"serviceMonitor":{"annotations":{},"enabled":false,"interval":"10s","jobLabel":"","labels":{},"metricRelabelings":null,"relabelings":[{"replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}]}}` | Hubble metrics configuration. See https://docs.cilium.io/en/stable/observability/metrics/#hubble-metrics for more comprehensive documentation about Hubble metrics. |
 | hubble.metrics.dashboards | object | `{"annotations":{},"enabled":false,"label":"grafana_dashboard","labelValue":"1","namespace":null}` | Grafana dashboards for hubble grafana can import dashboards based on the label and value ref: https://github.com/grafana/helm-charts/tree/main/charts/grafana#sidecar-for-dashboards |
@@ -590,9 +596,9 @@ contributors across the globe, there is almost always someone available to help.
 | ipv6.enabled | bool | `false` | Enable IPv6 support. |
 | ipv6NativeRoutingCIDR | string | `""` | Allows to explicitly specify the IPv6 CIDR for native routing. When specified, Cilium assumes networking for this CIDR is preconfigured and hands traffic destined for that range to the Linux network stack without applying any SNAT. Generally speaking, specifying a native routing CIDR implies that Cilium can depend on the underlying networking stack to route packets to their destination. To offer a concrete example, if Cilium is configured to use direct routing and the Kubernetes CIDR is included in the native routing CIDR, the user must configure the routes to reach pods, either manually or by setting the auto-direct-node-routes flag. |
 | k8s | object | `{}` | Configure Kubernetes specific configuration |
-| k8sClientRateLimit | object | `{"burst":10,"qps":5}` | Configure the client side rate limit for the agent and operator  If the amount of requests to the Kubernetes API server exceeds the configured rate limit, the agent and operator will start to throttle requests by delaying them until there is budget or the request times out. |
-| k8sClientRateLimit.burst | int | `10` | The burst request rate in requests per second. The rate limiter will allow short bursts with a higher rate. |
-| k8sClientRateLimit.qps | int | `5` | The sustained request rate in requests per second. |
+| k8sClientRateLimit | object | `{"burst":null,"qps":null}` | Configure the client side rate limit for the agent and operator  If the amount of requests to the Kubernetes API server exceeds the configured rate limit, the agent and operator will start to throttle requests by delaying them until there is budget or the request times out. |
+| k8sClientRateLimit.burst | int | 10 for k8s up to 1.26. 20 for k8s version 1.27+ | The burst request rate in requests per second. The rate limiter will allow short bursts with a higher rate. |
+| k8sClientRateLimit.qps | int | 5 for k8s up to 1.26. 10 for k8s version 1.27+ | The sustained request rate in requests per second. |
 | k8sNetworkPolicy.enabled | bool | `true` | Enable support for K8s NetworkPolicy |
 | k8sServiceHost | string | `""` | Kubernetes service host |
 | k8sServicePort | string | `""` | Kubernetes service port |

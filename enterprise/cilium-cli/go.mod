@@ -72,10 +72,10 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/loads v0.21.2 // indirect
 	github.com/go-openapi/runtime v0.26.0 // indirect
-	github.com/go-openapi/spec v0.20.9 // indirect
-	github.com/go-openapi/strfmt v0.21.7 // indirect
+	github.com/go-openapi/spec v0.20.11 // indirect
+	github.com/go-openapi/strfmt v0.21.8 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
-	github.com/go-openapi/validate v0.22.2 // indirect
+	github.com/go-openapi/validate v0.22.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -169,7 +169,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.10.0 // indirect
-	github.com/spf13/cast v1.5.1 // indirect
+	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace // indirect
 	github.com/spf13/viper v1.17.0 // indirect
@@ -177,7 +177,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
-	github.com/vishvananda/netlink v1.2.1-beta.2.0.20231024175852-77df5d35f725 // indirect
+	github.com/vishvananda/netlink v1.2.1-beta.2.0.20231127184239-0ced8385386a // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/weppos/publicsuffix-go v0.15.1-0.20210511084619-b1f36a2d6c0b // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
@@ -200,7 +200,7 @@ require (
 	go.uber.org/dig v1.17.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	go4.org/netipx v0.0.0-20230824141953-6213f710f925 // indirect
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/crypto v0.16.0 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.19.0 // indirect

@@ -339,6 +339,9 @@ Annotations:
   is configured in native routing mode and :ref:`DSR mode with Geneve` is enabled.
   Explicitly configure ``--tunnel-protocol=geneve`` (or the equivalent
   ``tunnelProtocol=geneve`` helm value) when DSR with Geneve is enabled.
+* The ``CILIUM_PREPEND_IPTABLES_CHAIN`` environment variable has been renamed
+  to ``CILIUM_PREPEND_IPTABLES_CHAINS`` (note the trailing ``S``) to more accurately
+  match the name of the associated command line flag ``--prepend-iptables-chains``.
 
 .. _upgrade_cilium_cli_helm_mode:
 
@@ -378,6 +381,8 @@ Removed Options
 * The ``dnsproxy-lock-count`` and ``dnsproxy-lock-timeout`` flags no longer have
   any effect and are deprecated. They will be removed in a future release.
 
+* Deprecated options ``enable-k8s-event-handover`` and ``cnp-status-update-interval`` has been removed.
+
 Helm Options
 ~~~~~~~~~~~~
 
@@ -398,6 +403,8 @@ Helm Options
 
 * Value ``tunnel`` was deprecated in Cilium 1.14 in favor of ``routingMode`` and
   ``tunnelProtocol``, and has been removed.
+
+* Values  ``enableK8sEventHandover`` and ``enableCnpStatusUpdates`` have been removed.
 
 Added Metrics
 ~~~~~~~~~~~~~

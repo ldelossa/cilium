@@ -44,11 +44,13 @@ k8sServicePort: ""
 # rate limit, the agent and operator will start to throttle requests by delaying
 # them until there is budget or the request times out.
 k8sClientRateLimit:
-  # -- The sustained request rate in requests per second.
-  qps: 5
-  # -- The burst request rate in requests per second.
+  # -- (int) The sustained request rate in requests per second.
+  # @default -- 5 for k8s up to 1.26. 10 for k8s version 1.27+
+  qps:
+  # -- (int) The burst request rate in requests per second.
   # The rate limiter will allow short bursts with a higher rate.
-  burst: 10
+  # @default -- 10 for k8s up to 1.26. 20 for k8s version 1.27+
+  burst:
 
 cluster:
   # -- Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE.
@@ -675,13 +677,6 @@ enableRuntimeDeviceDetection: false
 
 # -- Limit iptables-based egress masquerading to interface selector.
 # egressMasqueradeInterfaces: ""
-
-# -- Whether to enable CNP status updates.
-enableCnpStatusUpdates: false
-
-# -- Configures the use of the KVStore to optimize Kubernetes event handling by
-# mirroring it into the KVstore for reduced overhead in large clusters.
-enableK8sEventHandover: false
 
 # -- Enable setting identity mark for local traffic.
 # enableIdentityMark: true
@@ -1607,6 +1602,55 @@ hubble:
       #  - secretName: chart-example-tls
       #    hosts:
       #      - chart-example.local
+
+  # -- Hubble flows export.
+  export:
+    # --- Defines max file size of output file before it gets rotated.
+    fileMaxSizeMb: 10
+    # --- Defines max number of backup/rotated files.
+    fileMaxBackups: 5
+    # --- Static exporter configuration.
+    # Static exporter is bound to agent lifecycle.
+    static:
+      enabled: false
+      filePath: /var/run/cilium/hubble/events.log
+      fieldMask: []
+      # - time
+      # - source
+      # - destination
+      # - verdict
+      allowList: []
+      # - '{"verdict":["DROPPED","ERROR"]}'
+      denyList: []
+      # - '{"source_pod":["kube-system/"]}'
+      # - '{"destination_pod":["kube-system/"]}'
+    # --- Dynamic exporters configuration.
+    # Dynamic exporters may be reconfigured without a need of agent restarts.
+    dynamic:
+      enabled: false
+      config:
+        # ---- Name of configmap with configuration that may be altered to reconfigure exporters within a running agents.
+        configMapName: cilium-flowlog-config
+        # ---- True if helm installer should create config map.
+        # Switch to false if you want to self maintain the file content.
+        createConfigMap: true
+        # ---- Exporters configuration in YAML format.
+        content:
+        - name: all
+          fieldMask: []
+          includeFilters: []
+          excludeFilters: []
+          filePath: "/var/run/cilium/hubble/events.log"
+        #- name: "test002"
+        #  filePath: "/var/log/network/flow-log/pa/test002.log"
+        #  fieldMask: ["source.namespace", "source.pod_name", "destination.namespace", "destination.pod_name", "verdict"]
+        #  includeFilters:
+        #  - source_pod: ["default/"]
+        #    event_type:
+        #    - type: 1
+        #  - destination_pod: ["frontend/nginx-975996d4c-7hhgt"]
+        #  excludeFilters: []
+        #  end: "2023-10-09T23:59:59-07:00"
 
 # -- Method to use for identity allocation (`crd` or `kvstore`).
 identityAllocationMode: "crd"

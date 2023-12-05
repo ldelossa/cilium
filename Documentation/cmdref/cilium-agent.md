@@ -136,7 +136,6 @@ cilium-agent [flags]
       --enable-k8s                                                   Enable the k8s clientset (default true)
       --enable-k8s-api-discovery                                     Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
-      --enable-k8s-event-handover                                    Enable k8s event handover to kvstore for improved scalability
       --enable-k8s-terminating-endpoint                              Enable auto-detect of terminating endpoint condition (default true)
       --enable-l2-announcements                                      Enable L2 announcements
       --enable-l2-neigh-discovery                                    Enables L2 neighbor discovery used by kube-proxy-replacement and IPsec (default true)
@@ -209,6 +208,7 @@ cilium-agent [flags]
       --hubble-export-file-max-backups int                           Number of rotated Hubble export files to keep. (default 5)
       --hubble-export-file-max-size-mb int                           Size in MB at which to rotate Hubble export file. (default 10)
       --hubble-export-file-path string                               Filepath to write Hubble events to.
+      --hubble-flowlogs-config-path string                           Filepath with configuration of hubble flowlogs
       --hubble-listen-address string                                 An additional address for Hubble server to listen to, e.g. ":4244"
       --hubble-metrics strings                                       List of Hubble metrics to enable.
       --hubble-metrics-server string                                 Address to serve Hubble metrics on.
