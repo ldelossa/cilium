@@ -1,0 +1,7 @@
+bpf:
+  masquerade: true
+kubeProxyReplacement: "strict"
+l7Proxy: false
+enterprise:
+  egressGatewayHA:
+    enabled: true
