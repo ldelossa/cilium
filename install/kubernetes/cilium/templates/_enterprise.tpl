@@ -13,6 +13,9 @@ enable-srv6:               {{ .Values.enterprise.srv6.enabled            | defau
 srv6-encap-mode:           {{ .Values.enterprise.srv6.encapMode          | default "reduced" | quote }}
 srv6-locator-pool-enabled: {{ .Values.enterprise.srv6.locatorPoolEnabled | default "false"   | quote }}
 
+# Service health-checking integration in BGP control plane
+enable-bgp-svc-health-checking: {{ .Values.enterprise.bgpControlPlane.enableServiceHealthChecking | default "false" | quote }}
+
 # Configuration options to enable multicast support
 multicast-enabled: {{ .Values.enterprise.multicast.enabled | default "false" | quote }}
 

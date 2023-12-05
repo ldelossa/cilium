@@ -36,6 +36,10 @@ enterprise:
     # -- Enables custom SRv6 SID locator pool operator support.
     locatorPoolEnabled: false
 
+  bgpControlPlane:
+    # -- Enables BGP integration with service health-checking.
+    enableServiceHealthChecking: false
+
   # -- Multi-network support (preview feature)
   multiNetwork:
     # -- Enables the multi-network feature in Cilium CNI
