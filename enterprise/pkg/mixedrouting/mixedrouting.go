@@ -11,8 +11,10 @@
 package mixedrouting
 
 import (
+	"context"
 	"fmt"
 	"maps"
+	"runtime/pprof"
 	"slices"
 	"strings"
 
@@ -25,12 +27,14 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	ipcmap "github.com/cilium/cilium/pkg/maps/ipcache"
 	"github.com/cilium/cilium/pkg/node"
 	nodemanager "github.com/cilium/cilium/pkg/node/manager"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/time"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
 )
@@ -91,6 +95,8 @@ type params struct {
 	NodeManager     nodemanager.NodeManager
 	IPTablesManager *iptables.Manager
 	IPCache         *ipcache.IPCache
+
+	Metrics Metrics
 }
 
 func newManager(in params) *manager {
@@ -110,7 +116,7 @@ func newManager(in params) *manager {
 			debug:      in.DaemonConfig.Debug,
 			modes:      mgr.modes,
 			downstream: in.IPCache,
-			prefixes:   newPrefixCache(),
+			prefixes:   newPrefixCache(in.Metrics.BufferedEndpoints),
 		}
 	}
 
@@ -172,6 +178,41 @@ func (mgr *manager) setupEndpointManager(cm *clustermesh.ClusterMesh, lst *dpipc
 		Map:     ipcmap.IPCacheMap(),
 		mutator: mgr.endpoints.mutateRemoteEndpointInfo,
 	})
+}
+
+func (mgr *manager) registerJobs(in struct {
+	cell.In
+
+	Lifecycle   cell.Lifecycle
+	JobRegistry job.Registry
+	Scope       cell.Scope
+
+	ClusterMesh *clustermesh.ClusterMesh
+}) {
+	if !mgr.enabledWithFallback() {
+		return
+	}
+
+	group := in.JobRegistry.NewGroup(
+		in.Scope,
+		job.WithLogger(mgr.logger),
+		job.WithPprofLabels(pprof.Labels("cell", "mixed-routing")),
+	)
+
+	group.Add(
+		job.OneShot("warn-buffered-entries-starter", func(ctx context.Context, _ cell.HealthReporter) error {
+			if in.ClusterMesh != nil {
+				if err := in.ClusterMesh.NodesSynced(ctx); err != nil {
+					return err
+				}
+			}
+
+			group.Add(job.Timer("warn-buffered-entries", mgr.endpoints.warnBufferedEntries, time.Minute))
+			return nil
+		}),
+	)
+
+	in.Lifecycle.Append(group)
 }
 
 // enabled returns whether mixed routing mode support is enabled.

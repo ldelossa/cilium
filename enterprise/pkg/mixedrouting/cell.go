@@ -21,6 +21,7 @@ var Cell = cell.Module(
 	"Support for mixed routing mode",
 
 	cell.Config(cemrcfg.Config{}),
+	cell.Metric(newMetrics),
 
 	cell.Provide(
 		newManager,
@@ -47,5 +48,8 @@ var Cell = cell.Module(
 		// match them with the corresponding node (and the associated routing
 		// mode) and configure the datapath accordingly (ipcache map tunnel flag).
 		(*manager).setupEndpointManager,
+
+		// Register the jobs required by the mixed routing manager.
+		(*manager).registerJobs,
 	),
 )

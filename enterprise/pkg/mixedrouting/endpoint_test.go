@@ -15,6 +15,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -58,10 +59,11 @@ func (fed *fakeEPDownstream) clear() { fed.ops = nil }
 
 func TestEndpointManager(t *testing.T) {
 	var fed fakeEPDownstream
+	me := newMetrics()
 	mgr := endpointManager{
 		logger: logging.DefaultLogger, debug: true,
 		downstream: &fed,
-		prefixes:   newPrefixCache(),
+		prefixes:   newPrefixCache(me.BufferedEndpoints),
 	}
 
 	tep1 := net.ParseIP("172.18.0.1")
@@ -80,6 +82,7 @@ func TestEndpointManager(t *testing.T) {
 	mgr.Upsert("10.0.0.1", net.IPv4zero, 91, &meta1, id1)
 	require.Len(t, fed.ops, 1, "Upsertion should have been propagated to downstream")
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.1", net.IPv4zero, 91, &meta1, id1}, fed.ops[0])
+	require.EqualValues(t, 0, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// The upsertion of an entry associated with a known tunnel endpoint should propagate immediately.
@@ -87,6 +90,7 @@ func TestEndpointManager(t *testing.T) {
 	mgr.Upsert("10.0.0.2", tep1, 92, &meta2, id2)
 	require.Len(t, fed.ops, 1, "Upsertion should have been propagated to downstream")
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.2", tep1, 92, &meta2, id2}, fed.ops[0])
+	require.EqualValues(t, 0, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// The upsertion of entries not associated with any known tunnel endpoint should be buffered.
@@ -97,6 +101,7 @@ func TestEndpointManager(t *testing.T) {
 	mgr.Delete("10.0.0.4", source.KVStore)
 	mgr.Upsert("10.0.0.5", tep2, 95, &meta1, id3)
 	require.Len(t, fed.ops, 0, "Upsertions should have been buffered")
+	require.EqualValues(t, 3, testutil.ToFloat64(me.BufferedEndpoints))
 
 	// The configuration of a tunnel endpoint mapping should trigger the upsertion of buffered entries.
 	mgr.setMapping(tep2, routingModeNative)
@@ -104,6 +109,7 @@ func TestEndpointManager(t *testing.T) {
 	fed.sort() // Ensure deterministic order as spilled out from map.
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.3", tep2, 93, &meta3, id3}, fed.ops[0])
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.5", tep2, 95, &meta1, id3}, fed.ops[1])
+	require.EqualValues(t, 1, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// The change of the routing mode should trigger a synthetic deletion+upsertion event.
@@ -114,16 +120,19 @@ func TestEndpointManager(t *testing.T) {
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.3", tep2, 93, &meta3, id3}, fed.ops[1])
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.5"}, fed.ops[2])
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.5", tep2, 95, &meta1, id3}, fed.ops[3])
+	require.EqualValues(t, 1, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// A no-op change of the routing mode should not trigger events.
 	mgr.setMapping(tep2, routingModeVXLAN)
 	require.Len(t, fed.ops, 0, "Synthetic upsertions and deletions should not have been generated")
+	require.EqualValues(t, 1, testutil.ToFloat64(me.BufferedEndpoints))
 
 	// A tunnel endpoint change for an existing prefix should propagate if known.
 	mgr.Upsert("10.0.0.3", tep1, 93, &meta3, id3)
 	require.Len(t, fed.ops, 1, "Upsertion should have been propagated to downstream")
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.3", tep1, 93, &meta3, id3}, fed.ops[0])
+	require.EqualValues(t, 1, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// A tunnel endpoint change for an existing prefix should trigger a synthetic
@@ -131,6 +140,7 @@ func TestEndpointManager(t *testing.T) {
 	mgr.Upsert("10.0.0.5", tep3, 95, &meta1, id3)
 	require.Len(t, fed.ops, 1, "A synthetic deletion should have been propagated to downsteam")
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.5"}, fed.ops[0])
+	require.EqualValues(t, 2, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// ... which should be emitted when the mapping is eventually configured.
@@ -139,12 +149,14 @@ func TestEndpointManager(t *testing.T) {
 	fed.sort() // Ensure deterministic order as spilled out from map.
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.5", tep3, 95, &meta1, id3}, fed.ops[0])
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.6", tep3, 96, &meta2, id3}, fed.ops[1])
+	require.EqualValues(t, 0, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// Unsetting mappings should not trigger any event propagation
 	mgr.unsetMapping(tep1)
 	mgr.unsetMapping(tep3)
 	require.Len(t, fed.ops, 0, "No event should have been propagated to downstream")
+	require.EqualValues(t, 0, testutil.ToFloat64(me.BufferedEndpoints))
 
 	// And a subsequent reconfiguration should trigger deletions+upsertions for known entries.
 	mgr.setMapping(tep1, routingModeGeneve)
@@ -154,6 +166,7 @@ func TestEndpointManager(t *testing.T) {
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.2", tep1, 92, &meta2, id2}, fed.ops[1])
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.3"}, fed.ops[2])
 	require.Equal(t, fakeEPEntry{opUpsert, "10.0.0.3", tep1, 93, &meta3, id3}, fed.ops[3])
+	require.EqualValues(t, 0, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 
 	// The deletion of an entry previously propagated should propagate immediately.
@@ -162,6 +175,7 @@ func TestEndpointManager(t *testing.T) {
 	require.Len(t, fed.ops, 2, "Deletion should have been propagated to downstream")
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.1"}, fed.ops[0])
 	require.Equal(t, fakeEPEntry{op: opDelete, prefix: "10.0.0.2"}, fed.ops[1])
+	require.EqualValues(t, 0, testutil.ToFloat64(me.BufferedEndpoints))
 	fed.clear()
 }
 

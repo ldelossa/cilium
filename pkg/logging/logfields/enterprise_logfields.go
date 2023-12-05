@@ -40,4 +40,7 @@ const (
 
 	// InvalidRoutingModes is a list of unrecognized routing modes.
 	InvalidRoutingModes = "invalidRoutingModes"
+
+	// Omitted is the number of omitted objects.
+	Omitted = "omitted"
 )

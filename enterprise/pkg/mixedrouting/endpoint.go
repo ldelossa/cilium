@@ -11,6 +11,7 @@
 package mixedrouting
 
 import (
+	"context"
 	"net"
 
 	"github.com/sirupsen/logrus"
@@ -22,6 +23,8 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	ipcmap "github.com/cilium/cilium/pkg/maps/ipcache"
+	"github.com/cilium/cilium/pkg/math"
+	"github.com/cilium/cilium/pkg/metrics/metric"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -51,16 +54,18 @@ const (
 
 // prefixCache caches all known prefixes, along with the associated information.
 type prefixCache struct {
-	propagated map[prefixType]*epEntry
-	buffered   map[prefixType]epBufferedEntry
-	byHostIP   map[hostIPType]sets.Set[prefixType]
+	propagated  map[prefixType]*epEntry
+	buffered    map[prefixType]epBufferedEntry
+	byHostIP    map[hostIPType]sets.Set[prefixType]
+	bufepMetric metric.Gauge
 }
 
-func newPrefixCache() prefixCache {
+func newPrefixCache(bufepMetric metric.Gauge) prefixCache {
 	return prefixCache{
-		propagated: make(map[prefixType]*epEntry),
-		buffered:   make(map[prefixType]epBufferedEntry),
-		byHostIP:   make(map[hostIPType]sets.Set[prefixType]),
+		propagated:  make(map[prefixType]*epEntry),
+		buffered:    make(map[prefixType]epBufferedEntry),
+		byHostIP:    make(map[hostIPType]sets.Set[prefixType]),
+		bufepMetric: bufepMetric,
 	}
 }
 
@@ -102,6 +107,7 @@ func (pc *prefixCache) upsert(prefix prefixType, entry *epEntry, state epState) 
 		}
 	}
 
+	pc.bufepMetric.Set(float64(len(pc.buffered)))
 	return oldState, oldEntry
 }
 
@@ -120,6 +126,7 @@ func (pc *prefixCache) delete(prefix prefixType) (state epState) {
 		pc.unsetHostIPMapping(prefix, entry.hostIP.String())
 	}
 
+	pc.bufepMetric.Set(float64(len(pc.buffered)))
 	return state
 }
 
@@ -277,6 +284,42 @@ func (em *endpointManager) unsetMapping(hostIP net.IP) {
 	// We don't explicitly trigger the deletion of the entries associated with
 	// this host IP, relying instead on the corresponding deletion events.
 	em.mappings.Delete(hostIP.String())
+}
+
+// warnBufferedEntries scans the list of buffered entries and emits a warning message
+// if they have been buffered for longer than expected. This function is intended to
+// be run periodically by a timer job.
+func (em *endpointManager) warnBufferedEntries(context.Context) error {
+	const deadline, max = 1 * time.Minute, 10
+
+	em.mu.Lock()
+	defer em.mu.Unlock()
+
+	var count int
+	for prefix, entry := range em.prefixes.buffered {
+		if time.Since(entry.buffered) > deadline {
+			count++
+
+			// We print only a limited number of warnings to avoid flooding logs.
+			if count < max {
+				em.logger.WithFields(logrus.Fields{
+					logfields.Prefix:     prefix,
+					logfields.TunnelPeer: entry.hostIP.String(),
+				}).Warning("Node entry corresponding to buffered endpoint not yet observed. " +
+					"Expect connectivity disruption towards it")
+			}
+		}
+	}
+
+	if count > 0 {
+		em.logger.WithFields(logrus.Fields{
+			logfields.Count:   count,
+			logfields.Omitted: math.IntMax(0, count-max),
+		}).Warning("Detected buffered endpoints. Please check the health of the clustermesh " +
+			"control plane and whether agents are successfully connected to it.")
+	}
+
+	return nil
 }
 
 func (em *endpointManager) mutateRemoteEndpointInfo(key *ipcmap.Key, rei *ipcmap.RemoteEndpointInfo) {
