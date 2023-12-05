@@ -8,8 +8,12 @@
 # or reproduction of this material is strictly forbidden unless prior written
 # permission is obtained from Isovalent Inc.
 
-SUBDIRS_CILIUM_CONTAINER := enterprise/cilium-dbg enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix
+SUBDIRS_CILIUM_CONTAINER := enterprise/cilium-dbg enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix plugins/cilium-cni
 SUBDIR_OPERATOR_CONTAINER := enterprise/operator
+
+ifdef LIBNETWORK_PLUGIN
+SUBDIRS_CILIUM_CONTAINER += plugins/cilium-docker
+endif
 
 .PHONY: build-enterprise-cli
 build-enterprise-cli: ## Build cilium-dbg daemon binary
