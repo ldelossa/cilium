@@ -33,6 +33,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
+	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
@@ -40,6 +41,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
+	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
@@ -72,6 +74,8 @@ const (
 	eventDeletePolicy
 	eventUpdateEndpoint
 	eventDeleteEndpoint
+	eventUpdateNode
+	eventDeleteNode
 )
 
 type Config struct {
@@ -120,6 +124,12 @@ type Manager struct {
 
 	// endpoints allows reading endpoint CRD from k8s.
 	endpoints resource.Resource[*k8sTypes.CiliumEndpoint]
+
+	// nodesResource allows reading node CRD from k8s.
+	ciliumNodes resource.Resource[*cilium_api_v2.CiliumNode]
+
+	// nodeDataStore stores node names to node mapping
+	nodeDataStore map[string]nodeTypes.Node
 
 	// policyConfigs stores policy configs indexed by policyID
 	policyConfigs map[policyID]*PolicyConfig
@@ -170,6 +180,7 @@ type Params struct {
 	PolicyMap         egressmapha.PolicyMap
 	Policies          resource.Resource[*Policy]
 	Endpoints         resource.Resource[*k8sTypes.CiliumEndpoint]
+	Nodes             resource.Resource[*cilium_api_v2.CiliumNode]
 	CtMap             egressmapha.CtMap
 	LocalNodeStore    *node.LocalNodeStore
 
@@ -237,6 +248,7 @@ func NewEgressGatewayManager(p Params) (out struct {
 
 func newEgressGatewayManager(p Params) (*Manager, error) {
 	manager := &Manager{
+		nodeDataStore:                 make(map[string]nodeTypes.Node),
 		policyConfigs:                 make(map[policyID]*PolicyConfig),
 		policyConfigsBySourceIP:       make(map[string][]*PolicyConfig),
 		epDataStore:                   make(map[endpointID]*endpointMetadata),
@@ -245,6 +257,7 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		policyMap:                     p.PolicyMap,
 		policies:                      p.Policies,
 		endpoints:                     p.Endpoints,
+		ciliumNodes:                   p.Nodes,
 		ctMap:                         p.CtMap,
 		localNodeStore:                p.LocalNodeStore,
 	}
@@ -327,9 +340,9 @@ func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Label
 // processEvents spawns a goroutine that waits for the agent to
 // sync with k8s and then runs the first reconciliation.
 func (manager *Manager) processEvents(ctx context.Context) {
-	var policySync, endpointSync bool
+	var policySync, endpointSync, nodeSync bool
 	maybeTriggerReconcile := func() {
-		if !policySync || !endpointSync {
+		if !policySync || !endpointSync || !nodeSync {
 			return
 		}
 
@@ -353,6 +366,7 @@ func (manager *Manager) processEvents(ctx context.Context) {
 
 	policyEvents := manager.policies.Events(ctx)
 	endpointEvents := manager.endpoints.Events(ctx, resource.WithRateLimiter(endpointsRateLimit))
+	nodeEvents := manager.ciliumNodes.Events(ctx)
 
 	for {
 		select {
@@ -375,6 +389,15 @@ func (manager *Manager) processEvents(ctx context.Context) {
 				event.Done(nil)
 			} else {
 				manager.handleEndpointEvent(event)
+			}
+
+		case event := <-nodeEvents:
+			if event.Kind == resource.Sync {
+				nodeSync = true
+				maybeTriggerReconcile()
+				event.Done(nil)
+			} else {
+				manager.handleNodeEvent(event)
 			}
 		}
 	}
@@ -517,6 +540,28 @@ func (manager *Manager) handleEndpointEvent(event resource.Event[*k8sTypes.Ciliu
 	} else {
 		manager.deleteEndpoint(endpoint)
 		event.Done(nil)
+	}
+}
+
+// handleNodeEvent takes care of node upserts and removals.
+func (manager *Manager) handleNodeEvent(event resource.Event[*cilium_api_v2.CiliumNode]) {
+	defer event.Done(nil)
+
+	node := nodeTypes.ParseCiliumNode(event.Object)
+
+	manager.Lock()
+	defer manager.Unlock()
+
+	if event.Kind == resource.Upsert {
+		manager.nodeDataStore[node.Name] = node
+
+		manager.setEventBitmap(eventUpdateNode)
+		manager.reconciliationTrigger.TriggerWithReason("CiliumNode updated")
+	} else {
+		delete(manager.nodeDataStore, node.Name)
+
+		manager.setEventBitmap(eventDeleteNode)
+		manager.reconciliationTrigger.TriggerWithReason("CiliumNode deleted")
 	}
 }
 

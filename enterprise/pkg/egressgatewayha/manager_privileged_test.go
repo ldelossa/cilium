@@ -119,9 +119,10 @@ type parsedEgressCtEntry struct {
 
 // Hook up gocheck into the "go test" runner.
 type EgressGatewayTestSuite struct {
-	manager   *Manager
-	policies  fakeResource[*Policy]
-	endpoints fakeResource[*k8sTypes.CiliumEndpoint]
+	manager     *Manager
+	policies    fakeResource[*Policy]
+	endpoints   fakeResource[*k8sTypes.CiliumEndpoint]
+	ciliumNodes fakeResource[*cilium_api_v2.CiliumNode]
 }
 
 var _ = Suite(&EgressGatewayTestSuite{})
@@ -141,6 +142,7 @@ func (k *EgressGatewayTestSuite) SetUpSuite(c *C) {
 func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 	k.policies = make(fakeResource[*Policy])
 	k.endpoints = make(fakeResource[*k8sTypes.CiliumEndpoint])
+	k.ciliumNodes = make(fakeResource[*cilium_api_v2.CiliumNode])
 
 	lc := hivetest.Lifecycle(c)
 	policyMap := egressmapha.CreatePrivatePolicyMap(lc, egressmapha.DefaultPolicyConfig)
@@ -165,6 +167,7 @@ func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 		CtMap:             ctMap,
 		Policies:          k.policies,
 		Endpoints:         k.endpoints,
+		Nodes:             k.ciliumNodes,
 		LocalNodeStore:    localNodeStore,
 	})
 	c.Assert(err, IsNil)
@@ -251,6 +254,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 
 	k.policies.sync(c)
 	k.endpoints.sync(c)
+	k.ciliumNodes.sync(c)
 
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -468,6 +472,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 
 	k.policies.sync(c)
 	k.endpoints.sync(c)
+	k.ciliumNodes.sync(c)
 
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -765,6 +770,7 @@ func (k *EgressGatewayTestSuite) TestEndpointDataStore(c *C) {
 
 	k.policies.sync(c)
 	k.endpoints.sync(c)
+	k.ciliumNodes.sync(c)
 
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
