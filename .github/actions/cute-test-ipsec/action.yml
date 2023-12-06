@@ -104,12 +104,6 @@ runs:
         echo "Displaying cluster pods ..."
         kubectl get pods --all-namespaces -o wide
 
-    - name: Delete connectivity tests namespace
-      shell: bash
-      run: |
-        echo "Deleting connectivity tests namespace ..."
-        kubectl delete namespace cilium-test || true
-
     - name: Fetch artifacts
       if: ${{ !success() }}
       shell: bash
