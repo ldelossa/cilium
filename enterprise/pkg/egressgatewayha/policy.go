@@ -505,20 +505,46 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 // calls the f callback function passing the given endpoint and CIDR, together
 // with a boolean value indicating if the CIDR belongs to the excluded ones and
 // the gatewayConfig of the receiver policy
-func (config *PolicyConfig) forEachEndpointAndCIDR(f func(netip.Addr, netip.Prefix, bool, *gatewayConfig)) {
+func (config *PolicyConfig) forEachEndpointAndCIDR(f func(*endpointMetadata, netip.Prefix, bool, *gatewayConfig)) {
 	for _, endpoint := range config.matchedEndpoints {
-		for _, endpointIP := range endpoint.ips {
-			isExcludedCIDR := false
-			for _, dstCIDR := range config.dstCIDRs {
-				f(endpointIP, dstCIDR, isExcludedCIDR, &config.gatewayConfig)
-			}
+		isExcludedCIDR := false
+		for _, dstCIDR := range config.dstCIDRs {
+			f(endpoint, dstCIDR, isExcludedCIDR, &config.gatewayConfig)
+		}
 
-			isExcludedCIDR = true
-			for _, excludedCIDR := range config.excludedCIDRs {
-				f(endpointIP, excludedCIDR, isExcludedCIDR, &config.gatewayConfig)
+		isExcludedCIDR = true
+		for _, excludedCIDR := range config.excludedCIDRs {
+			f(endpoint, excludedCIDR, isExcludedCIDR, &config.gatewayConfig)
+		}
+	}
+}
+
+// matches returns true if at least one of the combinations of (source, destination, egressIP, gatewayIP)
+// from the policy configuration matches the callback f
+//
+// The callback f takes as arguments:
+// - the given endpoint
+// - the destination CIDR
+// - a boolean value indicating if the CIDR belongs to the excluded ones
+// - the gatewayConfig of the  policy
+func (config *PolicyConfig) matches(f func(*endpointMetadata, netip.Prefix, bool, *gatewayConfig) bool) bool {
+	for _, ep := range config.matchedEndpoints {
+		isExcludedCIDR := false
+		for _, dstCIDR := range config.dstCIDRs {
+			if f(ep, dstCIDR, isExcludedCIDR, &config.gatewayConfig) {
+				return true
+			}
+		}
+
+		isExcludedCIDR = true
+		for _, excludedCIDR := range config.excludedCIDRs {
+			if f(ep, excludedCIDR, isExcludedCIDR, &config.gatewayConfig) {
+				return true
 			}
 		}
 	}
+
+	return false
 }
 
 // ParseIEGP takes a IsovalentEgressGatewayPolicy CR and converts to PolicyConfig,
