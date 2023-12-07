@@ -110,3 +110,6 @@ kind-egressgwha-install-cilium-fast: kind-ready ## Install a local Cilium versio
 			--nodes-without-cilium \
 			--version= >/dev/null 2>&1 & \
 	done
+
+# Cilium Mesh specific targets
+-include Makefile.ciliummesh

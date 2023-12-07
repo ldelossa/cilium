@@ -1,0 +1,7 @@
+cluster:
+  id: 1
+  name: cluster1
+clustermesh:
+  apiserver:
+    service:
+      nodePort: 32379

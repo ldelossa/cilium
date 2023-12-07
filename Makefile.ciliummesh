@@ -1,0 +1,91 @@
+# Copyright (C) Isovalent, Inc. - All Rights Reserved.
+#
+# NOTICE: All information contained herein is, and remains the property of
+# Isovalent Inc and its suppliers, if any. The intellectual and technical
+# concepts contained herein are proprietary to Isovalent Inc and its suppliers
+# and may be covered by U.S. and Foreign Patents, patents in process, and are
+# protected by trade secret or copyright law.  Dissemination of this information
+# or reproduction of this material is strictly forbidden unless prior written
+# permission is obtained from Isovalent Inc.
+
+.PHONY: kind-cilium-mesh
+kind-cilium-mesh:
+	$(QUIET) ./contrib/scripts/enterprise-kind-cilium-mesh.sh up
+
+.PHONY: kind-cilium-mesh-down
+kind-cilium-mesh-down:
+	$(QUIET) ./contrib/scripts/enterprise-kind-cilium-mesh.sh down
+
+.PHONY: kind-cilium-mesh-ready
+kind-cilium-mesh-ready:
+	@$(ECHO_CHECK) cilium-mesh kind clusters are ready...
+	$(QUIET) ./contrib/scripts/enterprise-kind-cilium-mesh.sh check || exit 1
+
+.PHONY: kind-cilium-mesh-install-fast
+kind-cilium-mesh-install-fast:
+	-@$(CILIUM_CLI) uninstall --context "kind-cluster1" >/dev/null 2>&1 || true
+
+	$(CILIUM_CLI) install --context kind-cluster1 \
+		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
+		--helm-values=$(ROOT_DIR)/contrib/testing/enterprise-cilium-install-cluster-common.yaml \
+		--helm-values=$(ROOT_DIR)/contrib/testing/enterprise-cilium-install-cluster-1.yaml \
+		--helm-values=$(ROOT_DIR)/contrib/testing/kind-fast.yaml \
+		--version= \
+		--wait
+
+	kubectl --context kind-cluster1 get secret -n kube-system cilium-ca -o yaml | kubectl --context kind-cluster2 create -f -
+
+	-@$(CILIUM_CLI) uninstall --context "kind-cluster2" >/dev/null 2>&1 || true
+
+	$(CILIUM_CLI) install --context kind-cluster2 \
+		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
+		--helm-values=$(ROOT_DIR)/contrib/testing/enterprise-cilium-install-cluster-common.yaml \
+		--helm-values=$(ROOT_DIR)/contrib/testing/enterprise-cilium-install-cluster-2.yaml \
+		--helm-values=$(ROOT_DIR)/contrib/testing/kind-fast.yaml \
+		--version= \
+		--wait
+
+	cilium clustermesh connect --context kind-cluster1 --destination-context kind-cluster2
+
+LOCAL_IMAGE_TAG ?= cilium-mesh
+DOCKER_REGISTRY ?= localhost:5000
+
+# Template for kind environment for a target. Parameters are:
+# $(1) Makefile target name
+define KIND_CILIUM_MESH_ENV
+.PHONY: $(1)
+$(1): export DOCKER_REGISTRY:=$$(DOCKER_REGISTRY)
+$(1): export DOCKER_DEV_ACCOUNT:=$$(DOCKER_DEV_ACCOUNT)
+$(1): export LOCAL_IMAGE_TAG:=$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_AGENT_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/cilium-dev:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_OPERATOR_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/operator-generic:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_CLUSTERMESH_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/clustermesh-apiserver:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_KVSTOREMESH_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/kvstoremesh:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_HUBBLE_RELAY_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/hubble-relay:$$(LOCAL_IMAGE_TAG)
+endef
+
+.PHONY: kind-build-cilium-mesh-images
+$(eval $(call KIND_CILIUM_MESH_ENV,kind-build-cilium-mesh-images))
+kind-build-cilium-mesh-images: kind-build-image-agent kind-build-image-operator kind-build-hubble-relay kind-build-clustermesh-apiserver
+
+.PHONY: kind-load-cilium-mesh-images
+$(eval $(call KIND_CILIUM_MESH_ENV,kind-load-cilium-mesh-images))
+kind-load-cilium-mesh-images: kind-cilium-mesh-ready
+	$(QUIET) ./contrib/scripts/enterprise-kind-cilium-mesh.sh load-images
+
+.PHONY: kind-cilium-mesh-images
+$(eval $(call KIND_CILIUM_MESH_ENV,kind-cilium-mesh-images))
+kind-cilium-mesh-images: kind-build-cilium-mesh-images kind-load-cilium-mesh-images
+
+.PHONY: kind-cilium-mesh-install
+$(eval $(call KIND_CILIUM_MESH_ENV,kind-cilium-mesh-install))
+kind-cilium-mesh-install: kind-cilium-mesh-ready
+	$(QUIET) \
+		ROOT_DIR="${ROOT_DIR}" \
+		CILIUM_CLI="${CILIUM_CLI}" \
+		contrib/scripts/enterprise-kind-cilium-mesh.sh install \
+		#
+
+.PHONY: kind-build-hubble-relay
+kind-build-hubble-relay:
+	$(QUIET) $(MAKE) docker-hubble-relay-image DOCKER_IMAGE_TAG=$(LOCAL_IMAGE_TAG)
