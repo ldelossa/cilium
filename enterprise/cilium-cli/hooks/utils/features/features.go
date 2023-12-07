@@ -68,7 +68,7 @@ func detectExternalCiliumDNSProxyFeature(ctx context.Context, ct *check.Connecti
 	for range ct.Clients() {
 		// cilium-dnsproxy pods are labelled with `k8s-app=ciliumdns-proxy`, let's filter on it.
 		ciliumDNSProxyLabelSelector := fmt.Sprintf("k8s-app=%s", tests.ExternalCiliumDNSProxyName)
-		pods, err := ct.K8sClient().ListPods(ctx, "kube-system", metav1.ListOptions{LabelSelector: ciliumDNSProxyLabelSelector})
+		pods, err := ct.K8sClient().ListPods(ctx, ct.Params().CiliumNamespace, metav1.ListOptions{LabelSelector: ciliumDNSProxyLabelSelector})
 		if err != nil {
 			return false, fmt.Errorf("unable to list %s pods: %w", tests.ExternalCiliumDNSProxyName, err)
 		}
@@ -79,7 +79,7 @@ func detectExternalCiliumDNSProxyFeature(ctx context.Context, ct *check.Connecti
 	}
 
 	// Check if configmap is set to enable external dns proxy.
-	cm, err := ct.K8sClient().GetConfigMap(ctx, "kube-system", defaults.ConfigMapName, metav1.GetOptions{})
+	cm, err := ct.K8sClient().GetConfigMap(ctx, ct.Params().CiliumNamespace, defaults.ConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return false, fmt.Errorf("unable to retrieve ConfigMap %q: %w", defaults.ConfigMapName, err)
 	}
