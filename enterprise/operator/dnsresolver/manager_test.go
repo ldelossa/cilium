@@ -16,6 +16,7 @@ import (
 	"net/netip"
 	"reflect"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -415,7 +416,7 @@ func TestManagerPeriodicResolver(t *testing.T) {
 	// defer goleak.VerifyNone(t)
 
 	// mock dns server handlers
-	nQueries := 0
+	var steps atomic.Int32
 	ipv4 := func(_ context.Context, fqdn string) ([]netip.Addr, []time.Duration, error) {
 		if fqdn != "cilium.io" {
 			return nil, nil, fmt.Errorf("expected fqdn %q, got %q", "cilium.io", fqdn)
@@ -425,7 +426,7 @@ func TestManagerPeriodicResolver(t *testing.T) {
 			ips  []netip.Addr
 			ttls []time.Duration
 		)
-		switch nQueries {
+		switch steps.Load() {
 		case 0:
 			ips = []netip.Addr{netip.MustParseAddr("1.1.1.1")}
 			ttls = []time.Duration{250 * time.Millisecond}
@@ -439,7 +440,6 @@ func TestManagerPeriodicResolver(t *testing.T) {
 			ips = []netip.Addr{netip.MustParseAddr("255.255.255.255")}
 			ttls = []time.Duration{time.Hour}
 		}
-		nQueries++
 		return ips, ttls, nil
 	}
 	ipv6 := func(_ context.Context, fqdn string) ([]netip.Addr, []time.Duration, error) {
@@ -500,12 +500,17 @@ func TestManagerPeriodicResolver(t *testing.T) {
 	if err := testCIDRGroup(clientset, "test-group", []api.CIDR{"1.1.1.1/32"}); err != nil {
 		t.Fatalf("cidr group reconciliation failed: %s", err)
 	}
+	steps.Add(1)
+
 	if err := testCIDRGroup(clientset, "test-group", []api.CIDR{"2.2.2.2/32"}); err != nil {
 		t.Fatalf("cidr group reconciliation failed: %s", err)
 	}
+	steps.Add(1)
+
 	if err := testCIDRGroup(clientset, "test-group", []api.CIDR{"3.3.3.3/32"}); err != nil {
 		t.Fatalf("cidr group reconciliation failed: %s", err)
 	}
+	steps.Add(1)
 
 	if err := clientset.IsovalentV1alpha1().IsovalentFQDNGroups().Delete(
 		context.Background(),
