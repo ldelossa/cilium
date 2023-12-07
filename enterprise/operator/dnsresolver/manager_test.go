@@ -413,7 +413,7 @@ func TestManagerMultipleSets(t *testing.T) {
 }
 
 func TestManagerPeriodicResolver(t *testing.T) {
-	// defer goleak.VerifyNone(t)
+	defer goleak.VerifyNone(t)
 
 	// mock dns server handlers
 	var steps atomic.Int32
