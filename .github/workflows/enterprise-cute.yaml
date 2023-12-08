@@ -381,4 +381,12 @@ jobs:
         timeout-minutes: 60
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
+          echo "killing terraform processes ..."
+          ps -ef | grep terraform | grep -v grep | awk '{print $2}' | xargs -n 1 kill -9
+          if [ -f .terraform.tfstate.lock.info ]; then
+            echo "unlocking terraform state ..."
+            LOCK_ID=$(jq -r '.ID' .terraform.tfstate.lock.info)
+            terraform force-unlock -force "$LOCK_ID" || true
+          fi
+          echo "destroying infra ..."
           make destroy AUTO_APPROVE=true
