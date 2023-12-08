@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"net"
 
-	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/tests"
+	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
 	"github.com/cilium/cilium-cli/connectivity/check"

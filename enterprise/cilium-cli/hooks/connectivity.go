@@ -21,8 +21,7 @@ import (
 
 	enterpriseCheck "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/check"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/tests"
+	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
@@ -60,15 +59,15 @@ func addHubbleVersionTests(ct *check.ConnectivityTest) error {
 	if err != nil {
 		return fmt.Errorf("failed to get test %s: %w", testNoPolicies, err)
 	}
-	test.WithScenarios(tests.HubbleCLIVersion())
+	test.WithScenarios(enterpriseTests.HubbleCLIVersion())
 	return nil
 }
 
 func addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest, pods map[string]check.Pod) error {
 	ct.NewTest("external-cilium-dns-proxy").WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.CiliumDNSProxyDeployed)).
-		WithScenarios(tests.ExternalCiliumDNSProxy(pods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
-		return check.ResultOK.ExpectMetricsIncrease(tests.ExternalCiliumDNSProxySource(pods), "isovalent_external_dns_proxy_policy_l7_total"),
+		WithScenarios(enterpriseTests.ExternalCiliumDNSProxy(pods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
+		return check.ResultOK.ExpectMetricsIncrease(enterpriseTests.ExternalCiliumDNSProxySource(pods), "isovalent_external_dns_proxy_policy_l7_total"),
 			check.ResultNone
 	})
 	return nil
@@ -86,19 +85,19 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 		}
 	}()
 
-	mustGetTest(ct, "no-policies").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
-	mustGetTest(ct, "allow-all-except-world").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "no-policies").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	mustGetTest(ct, "allow-all-except-world").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
 
 	// Traffic shall be dropped, because it is subject to the ingress/egress policy.
-	mustGetTest(ct, "all-ingress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
-	mustGetTest(ct, "all-ingress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
-	mustGetTest(ct, "all-egress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
-	mustGetTest(ct, "all-egress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
-	mustGetTest(ct, "cluster-entity-multi-cluster").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "all-ingress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	mustGetTest(ct, "all-ingress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	mustGetTest(ct, "all-egress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	mustGetTest(ct, "all-egress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	mustGetTest(ct, "cluster-entity-multi-cluster").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
 
 	// Traffic shall be allowed, because it matches the cross-cluster policy.
-	mustGetTest(ct, "client-egress").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
-	mustGetTest(ct, "client-egress-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
+	mustGetTest(ct, "client-egress").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	mustGetTest(ct, "client-egress-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
 
 	return
 }
