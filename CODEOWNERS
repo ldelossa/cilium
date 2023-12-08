@@ -578,12 +578,18 @@ Vagrantfile @cilium/ci-structure
 #   These owners are a stand-in for the user community to bring a user
 #   perspective to the review process. Consider how information is presented,
 #   consistency of flags and options.
+# - @isovalent/clustermesh
+#   Responsible for maintaining enterprise-specific cluster mesh features
 # - @isovalent/core-structure
 #   A team responsible for mindfulness of isovalent/cilium codebase.
-# - @isovalent/traffic-engineering
-#   Responsible for maintaining features related to traffic engineering such as SRv6.
+# - @isovalent/dns-proxy
+#   Responsible for maintaining DNS Proxy HA
 # - @isovalent/egress-gateway
 #   Responsible for maintaining egress-gateway and egress-gateway-ha
+# - @isovalent/hubble
+#   Responsible for maintaining enterprise Hubble products and features
+# - @isovalent/traffic-engineering
+#   Responsible for maintaining features related to traffic engineering such as SRv6.
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
@@ -596,6 +602,9 @@ Vagrantfile @cilium/ci-structure
 *enterprise* @isovalent/void
 /enterprise/cilium-cli/ @isovalent/cli
 /enterprise/cilium-cli/hooks/connectivity/tests/egressgateway.go @isovalent/egress-gateway
+/enterprise/cilium-cli/hooks/connectivity/tests/external_dns_proxy*.go @isovalent/dns-proxy
+/enterprise/cilium-cli/hooks/connectivity/tests/hubble-cli-version.go @isovalent/hubble
+/enterprise/cilium-cli/hooks/connectivity/tests/phantom.go @isovalent/clustermesh
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
