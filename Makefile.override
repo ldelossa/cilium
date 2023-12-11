@@ -10,6 +10,7 @@
 
 SUBDIRS_CILIUM_CONTAINER := enterprise/cilium-dbg enterprise/daemon cilium-health bugtool tools/mount tools/sysctlfix enterprise/cilium-cni
 SUBDIR_OPERATOR_CONTAINER := enterprise/operator
+SUBDIR_RELAY_CONTAINER := enterprise/hubble-relay
 
 ifdef LIBNETWORK_PLUGIN
 SUBDIRS_CILIUM_CONTAINER += plugins/cilium-docker
@@ -30,6 +31,10 @@ build-enterprise-agent: ## Build cilium daemon binary
 .PHONY: build-enterprise-operator
 build-enterprise-operator: ## Build cilium operator binary
 	$(QUIET)$(MAKE) -C enterprise/operator cilium-operator-generic
+
+.PHONY: build-enterprise-relay
+build-enterprise-relay: ## Build hubble-relay
+	$(QUIET)$(MAKE) -C enterprise/hubble-relay
 
 .PHONY: kind-image-fast-enterprise-agent
 kind-image-fast-enterprise-agent: kind-ready build-enterprise-cli build-enterprise-agent ## Build cilium cli and daemon binaries. Copy the bins and bpf files to kind nodes.
