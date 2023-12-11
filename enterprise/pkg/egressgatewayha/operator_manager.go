@@ -250,6 +250,9 @@ func (operatorManager *OperatorManager) onAddEgressPolicy(policy *Policy) error 
 		return err
 	}
 
+	operatorManager.Lock()
+	defer operatorManager.Unlock()
+
 	if _, ok := operatorManager.policyCache[config.id]; !ok {
 		logger.Debug("Added IsovalentEgressGatewayPolicy")
 	} else {
