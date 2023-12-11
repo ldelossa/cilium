@@ -36,11 +36,11 @@ runs:
         ref: ${{ inputs.branch }}
         # required for git describe
         fetch-depth: 0
-        path: ${{ inputs.branch }}
+        path: cilium_helm_chart_dir
 
     - name: Set helm chart version
       id: helm
-      working-directory: ./${{ inputs.branch }}
+      working-directory: ./cilium_helm_chart_dir
       shell: bash
       run: |
         version=$(bash contrib/scripts/print-chart-version.sh)
