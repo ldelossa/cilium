@@ -64,6 +64,11 @@ jobs:
             region="${input##*~}"
             input=${input%%~*}
           fi
+          umbrella_chart="false"
+          if [[ $input == *+* ]]; then
+            umbrella_chart="true"
+            input=${input%%+*}
+          fi
           ref=""
           if [[ $input == *@* ]]; then
             ref="${input##*@}"
@@ -78,6 +83,7 @@ jobs:
 
           echo cute_repo=$repo >> $GITHUB_OUTPUT
           echo cute_dir=$dir >> $GITHUB_OUTPUT
+          echo umbrella_chart=$umbrella_chart >> $GITHUB_OUTPUT
           echo cute_ref=$ref >> $GITHUB_OUTPUT
           echo cute_region=$region >> $GITHUB_OUTPUT
           echo deploy_type=$deploy >> $GITHUB_OUTPUT
@@ -121,11 +127,7 @@ jobs:
             region=${{ steps.vars.outputs.cute_region }}
           fi
 
-          echo "getting helm chart type and version ..."
-          is_enterprise_chart=false
-          count=$(grep -o '^cilium:\s*$' *.y*ml | wc -l | xargs || true)
-          [[ "$count" -gt 0 ]] && is_enterprise_chart=true
-
+          echo "getting deploy type and chart version ..."
           deploy_branch=${{ inputs.context-ref }} # use current branch version by default
           if [[ "${{ steps.vars.outputs.deploy_type }}" == "cute" ]]; then
             deploy_branch=""
@@ -145,7 +147,6 @@ jobs:
           echo provider=$provider >> $GITHUB_OUTPUT
           echo region=$region >> $GITHUB_OUTPUT
           echo deploy_branch=$deploy_branch >> $GITHUB_OUTPUT
-          echo is_enterprise_chart=$is_enterprise_chart >> $GITHUB_OUTPUT
 
       - name: Print CuTE properties
         run: |
@@ -156,7 +157,7 @@ jobs:
           echo "Region: ${{ steps.cute_props.outputs.region }}"
           echo "Deploy type: ${{ steps.vars.outputs.deploy_type }}"
           echo "Deploy branch: ${{ steps.cute_props.outputs.deploy_branch }}"
-          echo "Helm enterprise (umbrella) chart: ${{ steps.cute_props.outputs.is_enterprise_chart }}"
+          echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
           echo "Upgrade branch: ${{ steps.vars.outputs.upgrade_branch }}"
 
@@ -262,7 +263,7 @@ jobs:
         uses: ./.github/actions/cute-helm-chart
         with:
           branch: ${{ steps.cute_props.outputs.deploy_branch }}
-          enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
+          umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
           isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
@@ -274,7 +275,7 @@ jobs:
         uses: ./.github/actions/cute-helm-chart
         with:
           branch: ${{ steps.vars.outputs.upgrade_branch }}
-          enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
+          umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
           isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
@@ -290,9 +291,8 @@ jobs:
           if [[ "${{ steps.vars.outputs.deploy_type }}" != "cute" ]]; then
             HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
             HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
-            if [[ ${{ steps.cute_props.outputs.is_enterprise_chart }} == 'true' ]]; then
-              HELM_CHART="${{ steps.cute_helm.outputs.enterprise-chart-path }}"
-              HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version-enterprise }}
+            if [[ ${{ steps.vars.outputs.umbrella_chart }} == 'true' ]]; then
+              HELM_CHART="${{ steps.cute_helm.outputs.umbrella-chart-path }}"
             fi
             echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
             echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
@@ -356,10 +356,9 @@ jobs:
         uses: ./.github/actions/cute-upgrade
         with:
           deploy-type: ${{ steps.vars.outputs.deploy_type }}
-          use-enterprise: ${{ steps.cute_props.outputs.is_enterprise_chart }}
+          use-umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
-          enterprise-chart-path: ${{ steps.cute_helm_upgrade.outputs.enterprise-chart-path }}
-          helm-enterprise-version: ${{ steps.cute_helm_upgrade.outputs.version-enterprise }}
+          umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 
       - name: IPsec tests after upgrade

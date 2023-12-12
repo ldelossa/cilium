@@ -4,8 +4,8 @@ inputs:
   branch:
     description: 'Cilium branch.'
     required: true
-  enterprise:
-    description: 'Indicates if CuTE uses Cilium enterprise (umbrella) helm chart.'
+  umbrella:
+    description: 'Indicates if CuTE uses Cilium umbrella helm chart.'
     required: true
   quay-user:
     description: 'Quay repo username.'
@@ -20,12 +20,9 @@ outputs:
   version:
     description: 'Helm chart version'
     value: ${{ steps.helm.outputs.version }}
-  version-enterprise:
-    description: 'Enterprise helm chart version'
-    value: ${{ steps.helm.outputs.version-enterprise }}
-  enterprise-chart-path:
-    description: 'Path to the enterprise helm chart'
-    value: ${{ steps.helm_enterprise.outputs.chart-path }}
+  umbrella-chart-path:
+    description: 'Path to the umbrella helm chart'
+    value: ${{ steps.helm_umbrella.outputs.chart-path }}
 runs:
   using: composite
   steps:
@@ -45,7 +42,6 @@ runs:
       run: |
         version=$(bash contrib/scripts/print-chart-version.sh)
         echo version=$version >> $GITHUB_OUTPUT
-        echo version-enterprise=$version-enterprise >> $GITHUB_OUTPUT
 
     - name: Wait for Helm dev chart to be available
       shell: bash
@@ -55,28 +51,28 @@ runs:
           do sleep 15s;
         done
 
-    # All the following steps required for CuTEs that use CE Enterprise (umbrella) chart (inputs.enterprise == 'true').
-    # CI will checkout `isovalent/helm-charts`, replace and push required chart version in the repository.
-    - name: Checkout enterprise helm repo
-      if: inputs.enterprise == 'true'
+    # All the following steps required for CuTEs that use CE umbrella chart (inputs.umbrella == 'true').
+    # CI will checkout `isovalent/helm-charts`, replace and build required chart version.
+    - name: Checkout umbrella helm repo
+      if: inputs.umbrella == 'true'
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       with:
         repository: isovalent/helm-charts
         token: ${{ inputs.isovalent-bot }}
-        path: enterprise_chart
+        path: umbrella_chart
 
-    - name: Set enterprise helm chart version
-      if: inputs.enterprise == 'true'
-      working-directory: ./enterprise_chart
+    - name: Set umbrella helm chart version
+      if: inputs.umbrella == 'true'
+      working-directory: ./umbrella_chart
       shell: bash
       run: |
         yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
         yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"' ./cilium-enterprise/Chart.yaml
 
-    - name: Build enterprise helm chart
-      if: inputs.enterprise == 'true'
-      id: helm_enterprise
-      working-directory: ./enterprise_chart/cilium-enterprise
+    - name: Build umbrella helm chart
+      if: inputs.umbrella == 'true'
+      id: helm_umbrella
+      working-directory: ./umbrella_chart/cilium-enterprise
       shell: bash
       run: |
         helm dependency update
