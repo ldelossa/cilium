@@ -607,6 +607,13 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-cli/hooks/connectivity/tests/phantom.go @isovalent/clustermesh
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
+/enterprise/pkg/maps/ctnat/ @isovalent/clustermesh
 /enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
+/enterprise/pkg/mixedrouting/ @isovalent/clustermesh
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
+/pkg/clustermesh/enterprise_* @isovalent/clustermesh
+/pkg/k8s/enterprise_overlapping_podcidr* @isovalent/clustermesh
+/pkg/k8s/enterprise_phantom* @isovalent/clustermesh
+/pkg/k8s/enterprise_service_merger* @isovalent/clustermesh
