@@ -382,7 +382,7 @@ jobs:
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
           echo "killing terraform processes ..."
-          ps -ef | grep terraform | grep -v grep | awk '{print $2}' | xargs -n 1 kill -9
+          ps -ef | grep terraform | grep -v grep | awk '{print $2}' | xargs -n 1 kill -9 || true
           if [ -f .terraform.tfstate.lock.info ]; then
             echo "unlocking terraform state ..."
             LOCK_ID=$(jq -r '.ID' .terraform.tfstate.lock.info)
