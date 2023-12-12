@@ -10,8 +10,7 @@
       "vulnerability": "CVE-2023-29405",
       "products": [
         "cilium:v1.13-ce",
-        "cilium:v1.12-ce",
-        "cilium:v1.11-ce"
+        "cilium:v1.12-ce"
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path"
@@ -20,8 +19,7 @@
       "vulnerability": "CVE-2023-29404",
       "products": [
         "cilium:v1.13-ce",
-        "cilium:v1.12-ce",
-        "cilium:v1.11-ce"
+        "cilium:v1.12-ce"
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path"
@@ -30,8 +28,7 @@
       "vulnerability": "CVE-2023-29403",
       "products": [
         "cilium:v1.13-ce",
-        "cilium:v1.12-ce",
-        "cilium:v1.11-ce"
+        "cilium:v1.12-ce"
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path"
@@ -40,8 +37,7 @@
       "vulnerability": "CVE-2023-29402",
       "products": [
         "cilium:v1.13-ce",
-        "cilium:v1.12-ce",
-        "cilium:v1.11-ce"
+        "cilium:v1.12-ce"
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path"
@@ -51,8 +47,7 @@
       "products": [
         "cilium:v1.14-ce",
         "cilium:v1.13-ce",
-        "cilium:v1.12-ce",
-        "cilium:v1.11-ce"
+        "cilium:v1.12-ce"
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path"

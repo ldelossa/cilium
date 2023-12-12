@@ -18,7 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         branch:
-          - "1.11-ce"
           - "1.12-ce"
           - "1.13-ce"
           - "1.14-ce"

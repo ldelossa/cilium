@@ -23,7 +23,6 @@
     "v1.14-ce",
     "v1.13-ce",
     "v1.12-ce",
-    "v1.11-ce",
   ],
   "vulnerabilityAlerts": {
     "enabled": true
@@ -93,7 +92,6 @@
       "matchBaseBranches": [
         "v1.13-ce",
         "v1.12-ce",
-        "v1.11-ce",
       ]
     },
     {
