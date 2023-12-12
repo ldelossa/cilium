@@ -373,6 +373,7 @@ internalTrafficPolicy
 intra
 io
 ip
+ipBlock
 ipam
 ipcache
 ipmasq
