@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive/hivetest"
 	"github.com/cilium/cilium/pkg/identity"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"github.com/cilium/cilium/pkg/k8s/resource"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
@@ -274,7 +275,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{})
 
 	// Add a new endpoint which matches policy-1
-	ep1, id1 := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
+	ep1, id1 := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels, node1IP)
 	addEndpoint(c, k.endpoints, &ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -371,7 +372,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	})
 
 	// Add a new endpoint that matches policy-2
-	ep2, id2 := newEndpointAndIdentity("ep-2", ep2IP, ep2Labels)
+	ep2, id2 := newEndpointAndIdentity("ep-2", ep2IP, ep2Labels, node1IP)
 	addEndpoint(c, k.endpoints, &ep2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -464,6 +465,102 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{})
 }
 
+func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroupAZAffinity(c *C) {
+	createTestInterface(c, testInterface1, egressCIDR1)
+	createTestInterface(c, testInterface2, egressCIDR2)
+
+	policyMap := k.manager.policyMap
+	egressGatewayManager := k.manager
+	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
+
+	k.policies.sync(c)
+	k.endpoints.sync(c)
+	k.ciliumNodes.sync(c)
+
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	node1 := newCiliumNode(node1Name, node1IP, nodeGroup1LabelsAZ1)
+	k.ciliumNodes.process(c, resource.Event[*cilium_api_v2.CiliumNode]{
+		Kind:   resource.Upsert,
+		Object: node1.ToCiliumNode(),
+	})
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	node2 := newCiliumNode(node2Name, node2IP, nodeGroup1LabelsAZ2)
+	k.ciliumNodes.process(c, resource.Event[*cilium_api_v2.CiliumNode]{
+		Kind:   resource.Upsert,
+		Object: node2.ToCiliumNode(),
+	})
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	// Create a new HA policy that selects k8s1 and k8s2 nodes
+	policy1 := &policyParams{
+		name:             "policy-1",
+		endpointLabels:   ep1Labels,
+		destinationCIDR:  destCIDR,
+		azAffinity:       azAffinityLocalOnly,
+		nodeLabels:       nodeGroup1Labels,
+		iface:            testInterface1,
+		activeGatewayIPs: []string{node1IP, node2IP},
+		activeGatewayIPsByAZ: map[string][]string{
+			"az-1": {node1IP},
+			"az-2": {node2IP},
+		},
+		healthyGatewayIPs: []string{node1IP, node2IP},
+	}
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{})
+
+	// Add a new endpoint on node-1 which matches policy-1
+	ep1, _ := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels, node1IP)
+	addEndpoint(c, k.endpoints, &ep1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	// Add a new endpoint on node-2 which matches policy-1
+	ep2, _ := newEndpointAndIdentity("ep-2", ep2IP, ep1Labels, node2IP)
+	addEndpoint(c, k.endpoints, &ep2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep2IP, destCIDR, zeroIP4, node2IP},
+	})
+
+	// Remove k8s1
+	policy1.activeGatewayIPs = []string{node2IP}
+	policy1.activeGatewayIPsByAZ = map[string][]string{
+		"az-2": {node2IP},
+	}
+	policy1.healthyGatewayIPs = []string{node2IP}
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep2IP, destCIDR, zeroIP4, node2IP},
+	})
+
+	// Add back node1
+	policy1.activeGatewayIPsByAZ = map[string][]string{
+		"az-1": {node1IP},
+		"az-2": {node2IP},
+	}
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
+	waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep2IP, destCIDR, zeroIP4, node2IP},
+	})
+}
+
 func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	createTestInterface(c, testInterface1, egressCIDR1)
 
@@ -493,7 +590,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Add a new endpoint which matches policy-1
-	ep1, _ := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
+	ep1, _ := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels, node1IP)
 	addEndpoint(c, k.endpoints, &ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -791,7 +888,7 @@ func (k *EgressGatewayTestSuite) TestEndpointDataStore(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{})
 
 	// Add a new endpoint & ID which matches policy-1
-	ep1, _ := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
+	ep1, _ := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels, node1IP)
 	addEndpoint(c, k.endpoints, &ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -804,7 +901,7 @@ func (k *EgressGatewayTestSuite) TestEndpointDataStore(c *C) {
 
 	// Produce a new endpoint ep2 similar to ep1 - with the same name & labels, but with a different IP address.
 	// The ep1 will be deleted.
-	ep2, _ := newEndpointAndIdentity(ep1.Name, ep2IP, ep1Labels)
+	ep2, _ := newEndpointAndIdentity(ep1.Name, ep2IP, ep1Labels, node1IP)
 
 	// Test event order: add new -> delete old
 	addEndpoint(c, k.endpoints, &ep2)
@@ -818,7 +915,7 @@ func (k *EgressGatewayTestSuite) TestEndpointDataStore(c *C) {
 	})
 
 	// Produce a new endpoint ep3 similar to ep2 (and ep1) - with the same name & labels, but with a different IP address.
-	ep3, _ := newEndpointAndIdentity(ep1.Name, ep3IP, ep1Labels)
+	ep3, _ := newEndpointAndIdentity(ep1.Name, ep3IP, ep1Labels, node1IP)
 
 	// Test event order: delete old -> update new
 	deleteEndpoint(c, k.endpoints, &ep2)
@@ -896,7 +993,7 @@ func newCiliumNode(name, nodeIP string, nodeLabels map[string]string) nodeTypes.
 }
 
 // Mock the creation of endpoint and its corresponding identity, returns endpoint and ID.
-func newEndpointAndIdentity(name, ip string, epLabels map[string]string) (k8sTypes.CiliumEndpoint, *identity.Identity) {
+func newEndpointAndIdentity(name, ip string, epLabels map[string]string, nodeIP string) (k8sTypes.CiliumEndpoint, *identity.Identity) {
 	id, _, _ := identityAllocator.AllocateIdentity(context.Background(), labels.Map2Labels(epLabels, labels.LabelSourceK8s), true, identity.InvalidIdentity)
 
 	return k8sTypes.CiliumEndpoint{
@@ -913,6 +1010,7 @@ func newEndpointAndIdentity(name, ip string, epLabels map[string]string) (k8sTyp
 					IPV4: ip,
 				},
 			},
+			NodeIP: nodeIP,
 		},
 	}, id
 }

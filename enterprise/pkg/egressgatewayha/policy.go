@@ -46,6 +46,22 @@ type groupConfig struct {
 	maxGatewayNodes int
 }
 
+// azActiveGatewayIPs is a list of active gateway IPs for a particular AZ.
+// In addition to the list of IPs, localNodeConfiguredAsGateway specifies if the
+// local node is configured as a gateway for the AZ.
+type azActiveGatewayIPs struct {
+	// list of active gateway IPs for a given AZ
+	gatewayIPs []netip.Addr
+
+	// with AZ affinity enabled, within an egress group, the same node can be
+	// be configured as gateway for some endpoints, while being not enabled
+	// for others.
+	//
+	// We track this information to determine correctly the egress IP to
+	// use for a given endpoint.
+	localNodeConfiguredAsGateway bool
+}
+
 // gatewayConfig is the gateway configuration derived at runtime from a policy.
 //
 // Some of these fields are derived from the running system as the policy may
@@ -55,6 +71,7 @@ type groupConfig struct {
 type gatewayConfig struct {
 	// ifaceName is the name of the interface used to SNAT traffic
 	ifaceName string
+
 	// egressIP is the IP used to SNAT traffic
 	egressIP netip.Addr
 
@@ -62,11 +79,18 @@ type gatewayConfig struct {
 	// egress gateways
 	activeGatewayIPs []netip.Addr
 
+	// activeGatewayIPsByAZ maps AZs to a slice of node IPs that are
+	// actively working as egress gateway for that AZ
+	activeGatewayIPsByAZ map[string]azActiveGatewayIPs
+
 	// healthyGatewayIPs is the entire pool of healthy nodes that can act as
 	// egress gateway for the given policy.
 	// Not all of them may be actively acting as gateway since with the
 	// maxGatewayNodes policy directive we can select a subset of them
 	healthyGatewayIPs []netip.Addr
+
+	// azAffinity configures the AZ affinity mode for the policy
+	azAffinity azAffinityMode
 
 	// localNodeConfiguredAsGateway tells if the local node belongs to the
 	// pool of egress gateway node for this config.
@@ -404,9 +428,11 @@ func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager
 
 func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 	config.gatewayConfig = gatewayConfig{
-		egressIP:          netip.IPv4Unspecified(),
-		activeGatewayIPs:  []netip.Addr{},
-		healthyGatewayIPs: []netip.Addr{},
+		egressIP:             netip.IPv4Unspecified(),
+		activeGatewayIPs:     []netip.Addr{},
+		activeGatewayIPsByAZ: map[string]azActiveGatewayIPs{},
+		healthyGatewayIPs:    []netip.Addr{},
+		azAffinity:           config.azAffinity,
 	}
 
 	if len(config.groupStatuses) == 0 {
@@ -429,28 +455,48 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 	for groupIndex, gc := range config.groupConfigs {
 		groupStatus := &config.groupStatuses[groupIndex]
 
-		gwc.activeGatewayIPs = append(gwc.activeGatewayIPs, groupStatus.activeGatewayIPs...)
+		if !gwc.azAffinity.enabled() {
+			gwc.activeGatewayIPs = append(gwc.activeGatewayIPs, groupStatus.activeGatewayIPs...)
+		} else {
+			for az, gwIPs := range groupStatus.activeGatewayIPsByAZ {
+				azGwIPs, ok := gwc.activeGatewayIPsByAZ[az]
+				if !ok {
+					azGwIPs = azActiveGatewayIPs{
+						gatewayIPs: []netip.Addr{},
+					}
+				}
+				azGwIPs.gatewayIPs = append(azGwIPs.gatewayIPs, gwIPs...)
+				gwc.activeGatewayIPsByAZ[az] = azGwIPs
+			}
+		}
 		gwc.healthyGatewayIPs = append(gwc.healthyGatewayIPs, groupStatus.healthyGatewayIPs...)
 
 		// We use the local node IP to determine if the current node
 		// matches the list of active gateway IPs
-		if slices.Contains(groupStatus.activeGatewayIPs, localNodeK8sAddr) {
-			logger := log.WithFields(logrus.Fields{
-				logfields.IsovalentEgressGatewayPolicyName: config.id,
-				logfields.Interface:                        gc.iface,
-				logfields.EgressIP:                         gc.egressIP,
-			})
+		localNodeMatchesGatewayIP := false
 
-			// If localNodeConfiguredAsGateway is already set it means that another
-			// egress group for the same policy has already selected it as gateway. In
-			// this case don't regenerate a new gatewayConfig and emit a warning
-			if gwc.localNodeConfiguredAsGateway {
-				logger.Warning("Local node selected by multiple egress gateway groups from the same policy")
-				continue
+		if !gwc.azAffinity.enabled() {
+			if slices.Contains(gwc.activeGatewayIPs, localNodeK8sAddr) {
+				localNodeMatchesGatewayIP = true
 			}
+		} else {
+			for az, azActiveGatewayIPs := range gwc.activeGatewayIPsByAZ {
+				if slices.Contains(azActiveGatewayIPs.gatewayIPs, localNodeK8sAddr) {
+					localNodeMatchesGatewayIP = true
 
+					azActiveGatewayIPs.localNodeConfiguredAsGateway = true
+					gwc.activeGatewayIPsByAZ[az] = azActiveGatewayIPs
+				}
+			}
+		}
+
+		if localNodeMatchesGatewayIP {
 			if err := gwc.deriveFromGroupConfig(&gc); err != nil {
-				logger.WithError(err).Error("Failed to derive policy gateway configuration")
+				log.WithFields(logrus.Fields{
+					logfields.IsovalentEgressGatewayPolicyName: config.id,
+					logfields.Interface:                        gc.iface,
+					logfields.EgressIP:                         gc.egressIP,
+				}).WithError(err).Error("Failed to derive policy gateway configuration")
 			}
 		}
 	}
@@ -459,8 +505,14 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 // deriveFromGroupConfig retrieves all the missing gateway configuration data
 // (such as egress IP or interface) given a policy group config
 func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
-	var err error
+	// If localNodeConfiguredAsGateway is already set it means that another
+	// egress group for the same policy has already selected it as gateway. In
+	// this case don't regenerate a new gatewayConfig and return an error
+	if gwc.localNodeConfiguredAsGateway {
+		return fmt.Errorf("local node selected by multiple egress gateway groups from the same policy")
+	}
 
+	var err error
 	gwc.localNodeConfiguredAsGateway = false
 
 	switch {
@@ -498,6 +550,49 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 	gwc.localNodeConfiguredAsGateway = true
 
 	return nil
+}
+
+// gatewayConfigForEndpoint returns the configuration of active gateway IPs
+// and egress IP for a given endpoint
+//
+// If the AZ resolution fails, this method will fallback to the non AZ-aware list of active gateway IPs
+func (gwc *gatewayConfig) gatewayConfigForEndpoint(manager *Manager, endpoint *endpointMetadata) ([]netip.Addr, netip.Addr) {
+	egressIP := netip.IPv4Unspecified()
+	if gwc.localNodeConfiguredAsGateway {
+		egressIP = gwc.egressIP
+	}
+
+	if !gwc.azAffinity.enabled() {
+		return gwc.activeGatewayIPs, egressIP
+	}
+
+	logger := log.WithFields(logrus.Fields{
+		logfields.EndpointID: endpoint.id,
+		logfields.K8sNodeIP:  endpoint.nodeIP.String,
+	})
+
+	endpointNode, ok := manager.nodesByIP[endpoint.nodeIP.String()]
+	if !ok {
+		logger.Error("cannot find endpoint's node")
+
+		//fallback to the non AZ-aware list of gateway IPs
+		return gwc.activeGatewayIPs, egressIP
+	}
+
+	az, ok := endpointNode.Labels[core_v1.LabelTopologyZone]
+	if !ok {
+		logger.Errorf("missing node's AZ label")
+
+		//fallback to the non AZ-aware list of gateway IPs
+		return gwc.activeGatewayIPs, egressIP
+	}
+
+	egressIP = netip.IPv4Unspecified()
+	if gwc.activeGatewayIPsByAZ[az].localNodeConfiguredAsGateway {
+		egressIP = gwc.egressIP
+	}
+
+	return gwc.activeGatewayIPsByAZ[az].gatewayIPs, egressIP
 }
 
 // forEachEndpointAndCIDR iterates through each combination of endpoints and

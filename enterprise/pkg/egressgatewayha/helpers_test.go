@@ -93,17 +93,18 @@ func addIEGP(tb testing.TB, policies fakeResource[*Policy], policy *v1.Isovalent
 }
 
 type policyParams struct {
-	name              string
-	endpointLabels    map[string]string
-	destinationCIDR   string
-	excludedCIDRs     []string
-	nodeLabels        map[string]string
-	iface             string
-	egressIP          string
-	maxGatewayNodes   int
-	azAffinity        azAffinityMode
-	activeGatewayIPs  []string
-	healthyGatewayIPs []string
+	name                 string
+	endpointLabels       map[string]string
+	destinationCIDR      string
+	excludedCIDRs        []string
+	nodeLabels           map[string]string
+	iface                string
+	egressIP             string
+	maxGatewayNodes      int
+	azAffinity           azAffinityMode
+	activeGatewayIPs     []string
+	activeGatewayIPsByAZ map[string][]string
+	healthyGatewayIPs    []string
 }
 
 func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
@@ -120,6 +121,13 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 	parsedActiveGatewayIPs := []netip.Addr{}
 	for _, activeGatewayIP := range params.activeGatewayIPs {
 		parsedActiveGatewayIPs = append(parsedActiveGatewayIPs, netip.MustParseAddr(activeGatewayIP))
+	}
+
+	parsedActiveGatewayIPsByAZ := map[string][]netip.Addr{}
+	for az, activeGatewayIPs := range params.activeGatewayIPsByAZ {
+		for _, activeGatewayIP := range activeGatewayIPs {
+			parsedActiveGatewayIPsByAZ[az] = append(parsedActiveGatewayIPsByAZ[az], netip.MustParseAddr(activeGatewayIP))
+		}
 	}
 
 	parsedHealthyGatewayIPs := []netip.Addr{}
@@ -154,8 +162,9 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		},
 		groupStatuses: []groupStatus{
 			{
-				activeGatewayIPs:  parsedActiveGatewayIPs,
-				healthyGatewayIPs: parsedHealthyGatewayIPs,
+				activeGatewayIPs:     parsedActiveGatewayIPs,
+				activeGatewayIPsByAZ: parsedActiveGatewayIPsByAZ,
+				healthyGatewayIPs:    parsedHealthyGatewayIPs,
 			},
 		},
 	}
@@ -207,8 +216,9 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		Status: v1.IsovalentEgressGatewayPolicyStatus{
 			GroupStatuses: []v1.IsovalentEgressGatewayPolicyGroupStatus{
 				{
-					ActiveGatewayIPs:  params.activeGatewayIPs,
-					HealthyGatewayIPs: params.healthyGatewayIPs,
+					ActiveGatewayIPs:     params.activeGatewayIPs,
+					ActiveGatewayIPsByAZ: params.activeGatewayIPsByAZ,
+					HealthyGatewayIPs:    params.healthyGatewayIPs,
 				},
 			},
 		},

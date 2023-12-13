@@ -41,6 +41,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
@@ -130,6 +131,9 @@ type Manager struct {
 
 	// nodeDataStore stores node names to node mapping
 	nodeDataStore map[string]nodeTypes.Node
+
+	// nodesByIP stores node IPs to node mapping
+	nodesByIP map[string]nodeTypes.Node
 
 	// policyConfigs stores policy configs indexed by policyID
 	policyConfigs map[policyID]*PolicyConfig
@@ -584,6 +588,18 @@ func (manager *Manager) updatePoliciesBySourceIP() {
 	}
 }
 
+func (manager *Manager) updateNodesByIP() {
+	manager.nodesByIP = make(map[string]nodeTypes.Node)
+
+	for _, node := range manager.nodeDataStore {
+		for _, ipAddress := range node.IPAddresses {
+			if ipAddress.AddrType() == addressing.NodeInternalIP {
+				manager.nodesByIP[ipAddress.ToString()] = node
+			}
+		}
+	}
+}
+
 // policyMatches returns true if there exists at least one policy matching the
 // given parameters.
 //
@@ -625,7 +641,7 @@ func (manager *Manager) addMissingEgressRules() {
 		})
 
 	addEgressRule := func(endpoint *endpointMetadata, dstCIDR netip.Prefix, excludedCIDR bool, gwc *gatewayConfig) {
-		activeGatewayIPs := gwc.activeGatewayIPs
+		activeGatewayIPs, egressIP := gwc.gatewayConfigForEndpoint(manager, endpoint)
 		if excludedCIDR {
 			activeGatewayIPs = []netip.Addr{ExcludedCIDRIPv4}
 		}
@@ -634,18 +650,18 @@ func (manager *Manager) addMissingEgressRules() {
 			policyKey := egressmapha.NewEgressPolicyKey4(endpointIP, dstCIDR)
 			policyVal, policyPresent := egressPolicies[policyKey]
 
-			if policyPresent && policyVal.Match(gwc.egressIP, activeGatewayIPs) {
+			if policyPresent && policyVal.Match(egressIP, activeGatewayIPs) {
 				return
 			}
 
 			logger := log.WithFields(logrus.Fields{
 				logfields.SourceIP:        endpointIP,
 				logfields.DestinationCIDR: dstCIDR.String(),
-				logfields.EgressIP:        gwc.egressIP,
+				logfields.EgressIP:        egressIP,
 				logfields.GatewayIPs:      joinStringers(activeGatewayIPs, ","),
 			})
 
-			if err := egressmapha.ApplyEgressPolicy(manager.policyMap, endpointIP, dstCIDR, gwc.egressIP, activeGatewayIPs); err != nil {
+			if err := egressmapha.ApplyEgressPolicy(manager.policyMap, endpointIP, dstCIDR, egressIP, activeGatewayIPs); err != nil {
 				logger.WithError(err).Error("Error applying egress gateway policy")
 			} else {
 				logger.Debug("Egress gateway policy applied")
@@ -670,13 +686,13 @@ func (manager *Manager) removeUnusedEgressRules() {
 nextPolicyKey:
 	for policyKey, policyVal := range egressPolicies {
 		matchPolicy := func(endpoint *endpointMetadata, dstCIDR netip.Prefix, excludedCIDR bool, gwc *gatewayConfig) bool {
-			activeGatewayIPs := gwc.activeGatewayIPs
+			activeGatewayIPs, egressIP := gwc.gatewayConfigForEndpoint(manager, endpoint)
 			if excludedCIDR {
 				activeGatewayIPs = []netip.Addr{ExcludedCIDRIPv4}
 			}
 
 			for _, endpointIP := range endpoint.ips {
-				if policyKey.Match(endpointIP, dstCIDR) && policyVal.Match(gwc.egressIP, activeGatewayIPs) {
+				if policyKey.Match(endpointIP, dstCIDR) && policyVal.Match(egressIP, activeGatewayIPs) {
 					return true
 				}
 			}
@@ -781,6 +797,9 @@ func (manager *Manager) reconcileLocked() {
 		fallthrough
 	case manager.eventBitmapIsSet(eventAddPolicy, eventDeletePolicy):
 		manager.updatePoliciesBySourceIP()
+		fallthrough
+	case manager.eventBitmapIsSet(eventUpdateNode, eventDeleteNode):
+		manager.updateNodesByIP()
 	}
 
 	manager.regenerateGatewayConfigs()
