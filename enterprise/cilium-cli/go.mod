@@ -1,12 +1,12 @@
 module github.com/isovalent/cilium/enterprise/cilium-cli
 
 // renovate: datasource=golang-version depName=go
-go 1.21.4
+go 1.21.5
 
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.15.0-pre.3
-	github.com/cilium/cilium-cli v0.15.17
+	github.com/cilium/cilium-cli v0.15.18
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/google/go-cmp v0.6.0
 	github.com/stretchr/testify v1.8.4
@@ -34,9 +34,9 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20231204144821-3de0b7aec8d6 // indirect
+	github.com/cilium/charts v0.0.0-20231209073633-64e4ab472dbc // indirect
 	github.com/cilium/ebpf v0.12.3 // indirect
-	github.com/cilium/hubble v0.12.2 // indirect
+	github.com/cilium/hubble v0.12.3 // indirect
 	github.com/cilium/proxy v0.0.0-20231031145409-f19708f3d018 // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20231127174521-c97da4b42413 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
@@ -73,7 +73,7 @@ require (
 	github.com/go-openapi/loads v0.21.2 // indirect
 	github.com/go-openapi/runtime v0.26.0 // indirect
 	github.com/go-openapi/spec v0.20.11 // indirect
-	github.com/go-openapi/strfmt v0.21.8 // indirect
+	github.com/go-openapi/strfmt v0.21.9 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/go-openapi/validate v0.22.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
@@ -191,7 +191,7 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.10 // indirect
-	go.mongodb.org/mongo-driver v1.12.0 // indirect
+	go.mongodb.org/mongo-driver v1.13.0 // indirect
 	go.opentelemetry.io/otel v1.21.0 // indirect
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
