@@ -39,6 +39,13 @@ enterprise:
     # -- Enables custom SRv6 SID locator pool operator support.
     locatorPoolEnabled: false
 
+  # -- Multi-network support (preview feature)
+  multiNetwork:
+    # -- Enables the multi-network feature in Cilium CNI
+    enabled: false
+    # -- Enable multi-network aware automatic L2 routing between nodes
+    autoDirectNodeRoutes: true
+
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This flag is not required for new installations.

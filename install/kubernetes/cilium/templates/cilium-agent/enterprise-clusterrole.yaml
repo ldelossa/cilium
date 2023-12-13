@@ -33,4 +33,14 @@ rules:
   - create
   - delete
   - get
+{{- if .Values.enterprise.multiNetwork.enabled }}
+- apiGroups:
+    - isovalent.com
+  resources:
+    - isovalentpodnetworks
+  verbs:
+    - list
+    - watch
+    - get
+{{- end }}
 {{- end }}

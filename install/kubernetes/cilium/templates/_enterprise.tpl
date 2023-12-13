@@ -35,4 +35,12 @@ egress-gateway-ha-healthcheck-timeout: {{ .Values.egressGateway.healthcheckTimeo
 fallback-routing-mode: tunnel
 {{- end }}
 
+{{- if .Values.enterprise.multiNetwork.enabled }}
+# Multi-network support
+enable-multi-network: {{ .Values.enterprise.multiNetwork.enabled | quote }}
+{{- if hasKey .Values.enterprise.multiNetwork "autoDirectNodeRoutes" }}
+multi-network-auto-direct-node-routes: {{ .Values.enterprise.multiNetwork.autoDirectNodeRoutes | quote }}
+{{- end }}
+{{- end }}
+
 {{- end }}

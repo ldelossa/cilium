@@ -325,6 +325,9 @@ contributors across the globe, there is almost always someone available to help.
 | enterprise.egressGatewayHA | object | `{"enabled":false,"installRoutes":false,"reconciliationTriggerInterval":"1s"}` | Enables egress gateway HA |
 | enterprise.egressGatewayHA.installRoutes | bool | `false` | Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface |
 | enterprise.egressGatewayHA.reconciliationTriggerInterval | string | `"1s"` | Time between triggers of egress gateway state reconciliations |
+| enterprise.multiNetwork | object | `{"autoDirectNodeRoutes":true,"enabled":false}` | Multi-network support (preview feature) |
+| enterprise.multiNetwork.autoDirectNodeRoutes | bool | `true` | Enable multi-network aware automatic L2 routing between nodes |
+| enterprise.multiNetwork.enabled | bool | `false` | Enables the multi-network feature in Cilium CNI |
 | enterprise.srv6.enabled | bool | `false` | Enable SRv6 encapsulation support. |
 | enterprise.srv6.encapMode | string | `"reduced"` | Specify SRv6 SID encapsulation. |
 | enterprise.srv6.locatorPoolEnabled | bool | `false` | Enables custom SRv6 SID locator pool operator support. |

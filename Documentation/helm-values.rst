@@ -1100,6 +1100,18 @@
      - Time between triggers of egress gateway state reconciliations
      - string
      - ``"1s"``
+   * - :spelling:ignore:`enterprise.multiNetwork`
+     - Multi-network support (preview feature)
+     - object
+     - ``{"autoDirectNodeRoutes":true,"enabled":false}``
+   * - :spelling:ignore:`enterprise.multiNetwork.autoDirectNodeRoutes`
+     - Enable multi-network aware automatic L2 routing between nodes
+     - bool
+     - ``true``
+   * - :spelling:ignore:`enterprise.multiNetwork.enabled`
+     - Enables the multi-network feature in Cilium CNI
+     - bool
+     - ``false``
    * - :spelling:ignore:`enterprise.srv6.enabled`
      - Enable SRv6 encapsulation support.
      - bool
