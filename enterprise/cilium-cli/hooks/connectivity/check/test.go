@@ -78,6 +78,9 @@ type IsovalentEgressGatewayPolicyParams struct {
 
 	// ExcludedCIDRs controls how the ExcludedCIDRs property should be configured
 	ExcludedCIDRs ExcludedCIDRsKind
+
+	// AZAffinity controls the azAffinity property
+	AZAffinity string
 }
 
 // WithIsovalentEgressGatewayPolicy takes a string containing a YAML policy
@@ -156,6 +159,11 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgress
 				pl[i].Spec.ExcludedCIDRs = append(pl[i].Spec.ExcludedCIDRs, cidr)
 			}
 		}
+
+		if params.AZAffinity == "" {
+			params.AZAffinity = "disabled"
+		}
+		pl[i].Spec.AZAffinity = params.AZAffinity
 	}
 
 	if err := t.addIEGPs(pl...); err != nil {
