@@ -35,8 +35,8 @@ func mustRoute(dst, gw string) *netlink.Route {
 func Test_extractNodeIPsforNetworks(t *testing.T) {
 	type args struct {
 		networks []*iso_v1alpha1.IsovalentPodNetwork
-		nodeIPv4 []net.IP
-		nodeIPv6 []net.IP
+		nodeIPv4 deviceToIPMap
+		nodeIPv6 deviceToIPMap
 	}
 	tests := []struct {
 		name string
@@ -89,11 +89,11 @@ func Test_extractNodeIPsforNetworks(t *testing.T) {
 						},
 					},
 				},
-				nodeIPv4: []net.IP{
-					net.ParseIP("10.20.30.40"),
+				nodeIPv4: deviceToIPMap{
+					"eno1": net.ParseIP("10.20.30.40"),
 				},
-				nodeIPv6: []net.IP{
-					net.ParseIP("fd00::10"),
+				nodeIPv6: deviceToIPMap{
+					"eno1": net.ParseIP("fd00::10"),
 				},
 			},
 			want: map[string]nodeIPPair{},
@@ -120,11 +120,11 @@ func Test_extractNodeIPsforNetworks(t *testing.T) {
 						},
 					},
 				},
-				nodeIPv4: []net.IP{
-					net.ParseIP("192.168.10.20"),
+				nodeIPv4: deviceToIPMap{
+					"eno1": net.ParseIP("192.168.10.20"),
 				},
-				nodeIPv6: []net.IP{
-					net.ParseIP("fc00::30"),
+				nodeIPv6: deviceToIPMap{
+					"eno1": net.ParseIP("fc00::30"),
 				},
 			},
 			want: map[string]nodeIPPair{},
@@ -168,25 +168,29 @@ func Test_extractNodeIPsforNetworks(t *testing.T) {
 						},
 					},
 				},
-				nodeIPv4: []net.IP{
-					net.ParseIP("10.0.0.10"),
-					net.ParseIP("172.16.0.10"),
-					net.ParseIP("192.168.0.10"),
+				nodeIPv4: deviceToIPMap{
+					"eno1": net.ParseIP("10.0.0.10"),
+					"eno2": net.ParseIP("172.16.0.10"),
+					"eno3": net.ParseIP("192.168.0.10"),
 				},
-				nodeIPv6: []net.IP{
-					net.ParseIP("fd00::10"),
-					net.ParseIP("fc00::10"),
-					net.ParseIP("fe00::10"),
+				nodeIPv6: deviceToIPMap{
+					"eno1": net.ParseIP("fd00::10"),
+					"eno2": net.ParseIP("fc00::10"),
+					"eno3": net.ParseIP("fe00::10"),
 				},
 			},
 			want: map[string]nodeIPPair{
 				"network-1": {
-					ipv4: net.ParseIP("10.0.0.10"),
-					ipv6: net.ParseIP("fd00::10"),
+					ipv4:       net.ParseIP("10.0.0.10"),
+					ipv4Device: "eno1",
+					ipv6:       net.ParseIP("fd00::10"),
+					ipv6Device: "eno1",
 				},
 				"network-2": {
-					ipv4: net.ParseIP("172.16.0.10"),
-					ipv6: net.ParseIP("fc00::10"),
+					ipv4:       net.ParseIP("172.16.0.10"),
+					ipv4Device: "eno2",
+					ipv6:       net.ParseIP("fc00::10"),
+					ipv6Device: "eno2",
 				},
 			},
 		},
@@ -208,15 +212,16 @@ func Test_extractNodeIPsforNetworks(t *testing.T) {
 						},
 					},
 				},
-				nodeIPv4: []net.IP{
-					net.ParseIP("10.0.0.10"),
-					net.ParseIP("10.0.0.20"),
+				nodeIPv4: deviceToIPMap{
+					"eno1": net.ParseIP("10.0.0.10"),
+					"eno2": net.ParseIP("10.0.0.20"),
 				},
 				nodeIPv6: nil,
 			},
 			want: map[string]nodeIPPair{
 				"network-1": {
-					ipv4: net.ParseIP("10.0.0.10"),
+					ipv4:       net.ParseIP("10.0.0.10"),
+					ipv4Device: "eno1",
 				},
 			},
 		},
@@ -238,9 +243,9 @@ func Test_extractNodeIPsforNetworks(t *testing.T) {
 						},
 					},
 				},
-				nodeIPv4: []net.IP{
-					net.ParseIP("10.0.0.10"),
-					net.ParseIP("192.168.0.10"),
+				nodeIPv4: deviceToIPMap{
+					"eno1": net.ParseIP("10.0.0.10"),
+					"eno2": net.ParseIP("192.168.0.10"),
 				},
 				nodeIPv6: nil,
 			},

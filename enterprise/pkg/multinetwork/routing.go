@@ -14,6 +14,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/exp/maps"
 
+	"github.com/cilium/cilium/pkg/datapath/connector"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -25,14 +26,21 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 )
 
+// nodeIPPair contains the IP addresses (and corresponding devices) of the node
+// for a given PodNetwork
 type nodeIPPair struct {
-	ipv4 net.IP
-	ipv6 net.IP
+	ipv4       net.IP
+	ipv4Device string
+	ipv6       net.IP
+	ipv6Device string
 }
 
 func (n nodeIPPair) Equal(o nodeIPPair) bool {
-	return n.ipv4.Equal(o.ipv4) && n.ipv6.Equal(o.ipv6)
+	return n.ipv4.Equal(o.ipv4) && n.ipv4Device == o.ipv4Device &&
+		n.ipv6.Equal(o.ipv6) && n.ipv6Device == o.ipv6Device
 }
+
+type deviceToIPMap map[string]net.IP // interfaceName -> IP address
 
 const (
 	localNodeSyncController = "multi-network-sync-local-node-ip"
@@ -92,8 +100,8 @@ type localNetworkIPCollector struct {
 }
 
 // collectLocalNodeIPs collects all local node IP addresses from the given interfaces and IP family.
-func collectLocalNodeIPs(ifaces []netlink.Link, family int) []net.IP {
-	nodeIPs := make([]net.IP, 0, len(ifaces))
+func collectLocalNodeIPs(ifaces []netlink.Link, family int) deviceToIPMap {
+	nodeIPs := make(deviceToIPMap, len(ifaces))
 	for _, iface := range ifaces {
 		scopedLog := log.WithField(logfields.Interface, iface.Attrs().Name)
 
@@ -106,7 +114,7 @@ func collectLocalNodeIPs(ifaces []netlink.Link, family int) []net.IP {
 		}
 
 		for _, addr := range addrs {
-			nodeIPs = append(nodeIPs, addr.IP)
+			nodeIPs[iface.Attrs().Name] = addr.IP
 		}
 	}
 
@@ -117,7 +125,7 @@ func collectLocalNodeIPs(ifaces []netlink.Link, family int) []net.IP {
 // It does this by matching the network routes to the local node IP addresses. The
 // first matching IP address is used for each network.
 // It returns a map of network name to node IP pair.
-func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nodeIPv4 []net.IP, nodeIPv6 []net.IP) map[string]nodeIPPair {
+func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nodeIPv4, nodeIPv6 deviceToIPMap) map[string]nodeIPPair {
 	nodeIPByNetworkName := make(map[string]nodeIPPair, len(networks))
 
 	for _, network := range networks {
@@ -140,16 +148,18 @@ func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nod
 			}
 
 			if networkPrefix.IP.To4() != nil {
-				for _, nodeIP := range nodeIPv4 {
+				for dev, nodeIP := range nodeIPv4 {
 					if networkPrefix.Contains(nodeIP) {
 						nodeIPs.ipv4 = nodeIP
+						nodeIPs.ipv4Device = dev
 						break
 					}
 				}
 			} else {
-				for _, nodeIP := range nodeIPv6 {
+				for dev, nodeIP := range nodeIPv6 {
 					if networkPrefix.Contains(nodeIP) {
 						nodeIPs.ipv6 = nodeIP
+						nodeIPs.ipv6Device = dev
 						break
 					}
 				}
@@ -173,7 +183,7 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses() error {
 		return fmt.Errorf("failed to list node interfaces: %w", err)
 	}
 
-	var nodeIPv4, nodeIPv6 []net.IP
+	var nodeIPv4, nodeIPv6 deviceToIPMap
 	if m.daemonConfig.IPv4Enabled() {
 		nodeIPv4 = collectLocalNodeIPs(ifaces, netlink.FAMILY_V4)
 	}
@@ -194,21 +204,34 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses() error {
 	m.nodeIPByNetworkName = nodeIPByNetworkName
 
 	nodeAddresses := make([]nodeTypes.Address, 0, len(m.nodeIPByNetworkName))
+	devices := make(map[string]struct{}, len(m.nodeIPByNetworkName))
 	for network, nodeIP := range m.nodeIPByNetworkName {
 		if nodeIP.ipv4 != nil {
 			nodeAddresses = append(nodeAddresses, nodeTypes.Address{
 				Type: newNetworkAddressingType(network),
 				IP:   nodeIP.ipv4,
 			})
+			devices[nodeIP.ipv4Device] = struct{}{}
 		}
 		if nodeIP.ipv6 != nil {
 			nodeAddresses = append(nodeAddresses, nodeTypes.Address{
 				Type: newNetworkAddressingType(network),
 				IP:   nodeIP.ipv6,
 			})
+			devices[nodeIP.ipv6Device] = struct{}{}
 		}
 	}
+
 	m.mutex.Unlock()
+
+	// Disable rp_filter on the direct-routing devices. This is particularly
+	// needed for cross-network traffic, where we have asynchronous routing
+	// where the reverse path will use a different interface.
+	for dev := range devices {
+		if err = connector.DisableRpFilter(dev); err != nil {
+			log.WithError(err).Warning("failed to set rp_filter")
+		}
+	}
 
 	// Make sure changes are reflected in CiliumNode resource
 	m.localNodeStore.Update(func(localNode *node.LocalNode) {
