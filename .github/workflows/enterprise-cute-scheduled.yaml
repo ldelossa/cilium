@@ -19,19 +19,64 @@ jobs:
       fail-fast: false
       matrix:
         cute: [
-          { repo: sky, dir: ., region: us-west-1 },
-          { repo: bloomberg, dir: ., region: us-west-2 },
-          { repo: form3, dir: MAKS, region: westus2 },
-          { repo: form3, dir: FPS, region: eu-west-2 },
-          { repo: zerohash, dir: ., region: us-east-2 },
-          { repo: postfinance, dir: ., region: eu-west-1 },
-          { repo: nationwide, dir: ., region: eu-central-1 },
-          { repo: swiss-post, dir: aws-eks-vpc-cni-chaining, region: ap-south-1 },
-          { repo: swiss-post, dir: azure-aks-byocni, region: eastus2 },
-          { repo: roche, dir: ., region: ap-south-1 },
-          { repo: astrazeneca, dir: ., region: ca-central-1 },
-          { repo: telenor, dir: ., region: eu-north-1 },
-          { repo: adobe, dir: ., region: ap-northeast-1 },
+          {
+            repo: sky,
+            region: us-west-1
+          },
+          {
+            repo: bloomberg,
+            umbrella: +,
+            region: us-west-2
+          },
+          {
+            repo: form3,
+            dir: MAKS,
+            region: westus2
+          },
+          {
+            repo: form3,
+            dir: FPS,
+            region: eu-west-2
+          },
+          {
+            repo: zerohash,
+            region: us-east-2
+          },
+          {
+            repo: postfinance,
+            region: eu-west-1
+          },
+          {
+            repo: nationwide,
+            umbrella: +,
+            region: eu-central-1
+          },
+          {
+            repo: swiss-post,
+            dir: aws-eks-vpc-cni-chaining,
+            region: ap-south-1
+          },
+          {
+            repo: swiss-post,
+            dir: azure-aks-byocni,
+            region: eastus2
+          },
+          {
+            repo: roche,
+            region: eu-west-3
+          },
+          {
+            repo: astrazeneca,
+            region: ca-central-1
+          },
+          {
+            repo: telenor,
+            region: eu-north-1
+          },
+          {
+            repo: adobe,
+            region: ap-northeast-1
+          },
         ]
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +90,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REF=${GITHUB_REF#refs/heads/}
-          echo "Triggering workflow for CuTE: ${{ matrix.cute.repo }}/${{ matrix.cute.dir }}"
-          gh workflow run enterprise-cute.yaml \
-            --ref ${REF} \
-            -f extra-args="${{ matrix.cute.repo }}/${{ matrix.cute.dir }}~${{ matrix.cute.region }}%stable"
+          dir="."
+          [[ -n "${{ matrix.cute.dir }}" ]] && dir="${{ matrix.cute.dir }}"
+          args="${{ matrix.cute.repo }}/$dir${{ matrix.cute.umbrella }}~${{ matrix.cute.region }}%stable"
+          echo "Triggering workflow for CuTE: $args"
+          gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
