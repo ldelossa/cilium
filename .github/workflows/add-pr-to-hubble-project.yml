@@ -1,0 +1,19 @@
+name: Add PR to Hubble project
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - converted_to_draft
+jobs:
+  add-pr-to-project:
+    name: Add PR to Hubble project
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: contains(github.event.pull_request.labels.*.name, 'vertical/hubble')
+    steps:
+      # adds the PR to the project, sets project status, project sprint and assignee
+      - uses: isovalent/reusable-workflows/.github/actions/add-pr-to-hubble-project@eba787424228f0f46198b59a4faa8453cec199c8 # v0.3.1
+        with:
+          github-token: ${{ secrets.REPO_PROJECT_READ_WRITE_TOKEN }}
