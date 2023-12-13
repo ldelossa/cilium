@@ -27,7 +27,6 @@ var Cell = cell.Module(
 
 	cell.Provide(configureEnterpriseAPI),
 	cell.Provide(newHealthzHandler),
-	cell.Provide(newNetworkHandler),
 )
 
 type enterpriseAPIIn struct {

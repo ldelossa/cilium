@@ -49,6 +49,7 @@ cilium-agent hive dot-graph [flags]
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-l2-pod-announcements                                  Enable announcing Pod IPs with Gratuitous ARP
       --enable-monitor                                               Enable the monitor unix domain socket server (default true)
+      --enable-multi-network                                         Enable support for multiple pod networks
       --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
@@ -73,6 +74,7 @@ cilium-agent hive dot-graph [flags]
       --mesh-auth-spire-admin-socket string                          The path for the SPIRE admin agent Unix socket.
       --metrics strings                                              Metrics that should be enabled or disabled from the default metric list. (+metric_foo to enable metric_foo, -metric_bar to disable metric_bar)
       --monitor-queue-size int                                       Size of the event queue when reading monitor events
+      --multi-network-auto-direct-node-routes                        Enable multi-network aware automatic L2 routing between nodes (experimental) (default true)
       --nodeport-addresses strings                                   A whitelist of CIDRs to limit which IPs are used for NodePort. If not set, primary IPv4 and/or IPv6 address of each native device is used.
       --pprof                                                        Enable serving pprof debugging API
       --pprof-address string                                         Address that pprof listens on (default "localhost")

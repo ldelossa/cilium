@@ -145,6 +145,7 @@ cilium-agent [flags]
       --enable-local-redirect-policy                                 Enable Local Redirect Policy
       --enable-masquerade-to-route-source                            Masquerade packets to the source IP provided from the routing layer rather than interface address
       --enable-monitor                                               Enable the monitor unix domain socket server (default true)
+      --enable-multi-network                                         Enable support for multiple pod networks
       --enable-nat46x64-gateway                                      Enable NAT46 and NAT64 gateway
       --enable-node-port                                             Enable NodePort type services by Cilium
       --enable-pmtu-discovery                                        Enable path MTU discovery to send ICMP fragmentation-needed replies to the client
@@ -301,6 +302,7 @@ cilium-agent [flags]
       --monitor-aggregation-interval duration                        Monitor report interval when monitor aggregation is enabled (default 5s)
       --monitor-queue-size int                                       Size of the event queue when reading monitor events
       --mtu int                                                      Overwrite auto-detected MTU of underlying network
+      --multi-network-auto-direct-node-routes                        Enable multi-network aware automatic L2 routing between nodes (experimental) (default true)
       --node-encryption-opt-out-labels string                        Label selector for nodes which will opt-out of node-to-node encryption (default "node-role.kubernetes.io/control-plane")
       --node-port-bind-protection                                    Reject application bind(2) requests to service ports in the NodePort range (default true)
       --node-port-range strings                                      Set the min/max NodePort port range (default [30000,32767])

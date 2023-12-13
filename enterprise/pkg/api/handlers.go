@@ -14,7 +14,6 @@ import (
 	"github.com/go-openapi/runtime/middleware"
 
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi"
-	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 )
 
 // Handler implements Handle() for the given parameter type.
@@ -36,12 +35,5 @@ func NewHandler[Params any](handler func(p Params) middleware.Responder) *Handle
 func newHealthzHandler() restapi.GetHealthzHandler {
 	return NewHandler[restapi.GetHealthzParams](func(p restapi.GetHealthzParams) middleware.Responder {
 		return restapi.NewGetHealthzOK()
-	})
-}
-
-// newNetworkHandler returns a default handler for the /network/attachments endpoint
-func newNetworkHandler() network.GetNetworkAttachmentHandler {
-	return NewHandler[network.GetNetworkAttachmentParams](func(p network.GetNetworkAttachmentParams) middleware.Responder {
-		return network.NewGetNetworkAttachmentDisabled()
 	})
 }
