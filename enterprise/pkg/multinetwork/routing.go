@@ -185,7 +185,12 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses() error {
 	nodeIPByNetworkName := extractNodeIPsforNetworks(networks, nodeIPv4, nodeIPv6)
 
 	m.mutex.Lock()
-	changed := maps.EqualFunc(m.nodeIPByNetworkName, nodeIPByNetworkName, nodeIPPair.Equal)
+	equal := maps.EqualFunc(m.nodeIPByNetworkName, nodeIPByNetworkName, nodeIPPair.Equal)
+	if equal {
+		m.mutex.Unlock()
+		return nil
+	}
+
 	m.nodeIPByNetworkName = nodeIPByNetworkName
 
 	nodeAddresses := make([]nodeTypes.Address, 0, len(m.nodeIPByNetworkName))
@@ -206,17 +211,15 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses() error {
 	m.mutex.Unlock()
 
 	// Make sure changes are reflected in CiliumNode resource
-	if changed {
-		m.localNodeStore.Update(func(localNode *node.LocalNode) {
-			// This removes all old secondary network addresses from the node object
-			// and then appends the new (current) ones
-			ipAddresses := slices.Clone(localNode.IPAddresses)
-			ipAddresses = slices.DeleteFunc(ipAddresses, func(address nodeTypes.Address) bool {
-				return strings.HasPrefix(string(address.Type), isovalentNetworkIP)
-			})
-			localNode.IPAddresses = append(ipAddresses, nodeAddresses...)
+	m.localNodeStore.Update(func(localNode *node.LocalNode) {
+		// This removes all old secondary network addresses from the node object
+		// and then appends the new (current) ones
+		ipAddresses := slices.Clone(localNode.IPAddresses)
+		ipAddresses = slices.DeleteFunc(ipAddresses, func(address nodeTypes.Address) bool {
+			return strings.HasPrefix(string(address.Type), isovalentNetworkIP)
 		})
-	}
+		localNode.IPAddresses = append(ipAddresses, nodeAddresses...)
+	})
 
 	return nil
 }
