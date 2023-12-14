@@ -16,6 +16,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	cniVersion "github.com/containernetworking/cni/pkg/version"
 
+	"github.com/cilium/cilium/enterprise/cilium-cni/pkg/multinetwork"
 	"github.com/cilium/cilium/pkg/version"
 	"github.com/cilium/cilium/plugins/cilium-cni/cmd"
 )
@@ -25,7 +26,7 @@ func init() {
 }
 
 func main() {
-	c := cmd.NewCmd()
+	c := cmd.NewCmd(cmd.WithEPConfigurator(multinetwork.NewEndpointConfigurator()))
 	skel.PluginMain(c.Add,
 		c.Check,
 		c.Del,
