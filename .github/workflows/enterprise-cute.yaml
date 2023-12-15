@@ -332,6 +332,13 @@ jobs:
           make startup_wait || true
           cilium status --wait 15m0s
 
+      - name: Run CuTE tests
+        id: tests
+        timeout-minutes: 90
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
+        run: |
+          make test
+
       - name: Check encryption type
         id: encryption
         run: |
@@ -344,7 +351,7 @@ jobs:
           fi
 
       - name: IPsec tests
-        # Step will be skipped for the CuTE version that Customer already uses
+        # Step will be skipped for the CuTE version that the customer already uses
         if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
         timeout-minutes: 420
         uses: ./.github/actions/cute-test-ipsec
@@ -369,11 +376,14 @@ jobs:
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 
-      - name: Run CuTE tests
-        timeout-minutes: 90
-        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
-        run: |
-          make test
+
+      - name: 'Upload Artifacts'
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: actions/upload-artifact@v3
+        with:
+          name: output
+          path: ./cute/${{ steps.vars.outputs.cute_dir }}/tests/results
+          retention-days: 15
 
       # If the creation step was run, always run the cleanup step, even if create or test steps failed
       - name: Clean up CuTE resources
