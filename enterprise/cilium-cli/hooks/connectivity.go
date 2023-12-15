@@ -143,6 +143,17 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 		}).
 		WithScenarios(enterpriseTests.EgressGatewayMultipleGateways())
 
+	newTest(ct, "egress-gateway-ha-az-affinity").
+		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+			Name:            "iegp-sample-client",
+			PodSelectorKind: "client",
+			EgressGroup:     enterpriseCheck.AllCiliumNodes,
+			// we are only e2e testing the localOnly mode for now.
+			// Other configurations are already thoroughly tested in unit tests and would require additional nodes
+			AZAffinity: "localOnly",
+		}).
+		WithScenarios(enterpriseTests.EgressGatewayAZAffinity())
+
 	return nil
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
 	"github.com/cilium/cilium-cli/utils/features"
+	jsonUtils "github.com/cilium/cilium-cli/utils/json"
 	"github.com/cilium/cilium-cli/utils/wait"
 
 	"github.com/google/go-cmp/cmp"
@@ -29,6 +30,8 @@ import (
 const (
 	EgressGroupLabelKey   = "egress-group"
 	EgressGroupLabelValue = "test"
+
+	K8sZoneLabel = "topology.kubernetes.io/zone"
 )
 
 // bpfEgressGatewayPolicyEntry represents an entry in the BPF egress gateway policy map
@@ -570,5 +573,111 @@ func (s *egressGatewayMultipleGateways) Run(ctx context.Context, t *check.Test) 
 		if _, ok := responsesByClientIP[gatewayIP]; !ok {
 			t.Fatalf("No request has gone through gateway %s", gatewayIP)
 		}
+	}
+}
+
+// EgressGatewayAZAffinity is a test case which, given the iegp-sample IsovalentEgressGatewayPolicy targeting:
+// - three client pods (kind=client) as source, in 2 different AZ
+// - the 0.0.0.0/0 destination CIDR
+// - nodes with the egress-group=test label as gateways (usually kind-control-plane, kind-worker and kind-worker3)
+//
+// tests that requests from the kind=client pods are redirected only to the "local" (i.e. same AZ) gateway as the source pod
+func EgressGatewayAZAffinity() check.Scenario {
+	return &egressGatewayAZAffinity{}
+}
+
+type egressGatewayAZAffinity struct{}
+
+func (s *egressGatewayAZAffinity) Name() string {
+	return "egress-gateway-az-affinity"
+}
+
+func (s *egressGatewayAZAffinity) Run(ctx context.Context, t *check.Test) {
+	ct := t.Context()
+
+	// apply the AZ label to all nodes
+	for nodeName, node := range ct.Nodes() {
+		if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
+			continue
+		}
+
+		addNodeLabelPatch := fmt.Sprintf(`[{"op":"add","path":"/metadata/labels/%s","value":"%s"}]`,
+			jsonUtils.EscapePatchString(K8sZoneLabel), fmt.Sprintf("zone-%s", nodeName))
+		if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(addNodeLabelPatch)); err != nil {
+			t.Fatalf("cannot add label to node %s: %s", node.Name, err)
+		}
+
+		addNodeLabelPatch = fmt.Sprintf(`[{"op":"add","path":"/metadata/labels/%s","value":"%s"}]`, EgressGroupLabelKey, EgressGroupLabelValue)
+		if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(addNodeLabelPatch)); err != nil {
+			t.Fatalf("cannot add %s=%s label to node %s: %w", EgressGroupLabelKey, EgressGroupLabelValue, node.Name, err)
+		}
+	}
+
+	// remove the labels after the test is done
+	t.WithFinalizer(func() error {
+		for _, node := range ct.Nodes() {
+			if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
+				continue
+			}
+
+			removeNodeLabelPatch := fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, jsonUtils.EscapePatchString(K8sZoneLabel))
+			if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(removeNodeLabelPatch)); err != nil {
+				return fmt.Errorf("cannot remove %s label from node %s: %w", EgressGroupLabelKey, node.Name, err)
+			}
+
+			removeNodeLabelPatch = fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, EgressGroupLabelKey)
+			if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(removeNodeLabelPatch)); err != nil {
+				return fmt.Errorf("cannot remove %s label from node %s: %w", EgressGroupLabelKey, node.Name, err)
+			}
+		}
+
+		return nil
+	})
+
+	// wait for the policy map to be populated
+	waitForBpfPolicyEntries(ctx, t, func(ciliumPod check.Pod) []bpfEgressGatewayPolicyEntry {
+		targetEntries := []bpfEgressGatewayPolicyEntry{}
+
+		for _, client := range ct.ClientPods() {
+			egressIP := "0.0.0.0"
+			if ciliumPod.Pod.Spec.NodeName == client.Pod.Spec.NodeName {
+				egressIP = getGatewayNodeInternalIP(ct, ciliumPod.Pod.Spec.NodeName).String()
+			}
+
+			egressGatewayNodeInternalIPs := []string{
+				getGatewayNodeInternalIP(ct, client.Pod.Spec.NodeName).String(),
+			}
+
+			targetEntries = append(targetEntries, bpfEgressGatewayPolicyEntry{
+				SourceIP:   client.Pod.Status.PodIP,
+				DestCIDR:   "0.0.0.0/0",
+				EgressIP:   egressIP,
+				GatewayIPs: egressGatewayNodeInternalIPs,
+			})
+		}
+
+		return targetEntries
+	})
+
+	// run the test
+	i := 0
+	for _, client := range ct.ClientPods() {
+		client := client
+
+		for _, externalEcho := range ct.ExternalEchoPods() {
+			externalEcho := externalEcho.ToEchoIPPod()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-pod-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandParallelWithOutput(externalEcho, features.IPFamilyV4, 100))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					if !clientIP.Equal(getGatewayNodeInternalIP(ct, client.Pod.Spec.NodeName)) {
+						t.Fatal("Request reached external echo service with wrong source IP")
+					}
+				}
+			})
+		}
+		i++
 	}
 }
