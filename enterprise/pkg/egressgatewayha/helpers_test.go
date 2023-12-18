@@ -101,6 +101,7 @@ type policyParams struct {
 	iface             string
 	egressIP          string
 	maxGatewayNodes   int
+	azAffinity        azAffinityMode
 	activeGatewayIPs  []string
 	healthyGatewayIPs []string
 }
@@ -132,6 +133,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		},
 		dstCIDRs:      []netip.Prefix{parsedDestinationCIDR},
 		excludedCIDRs: parsedExcludedCIDRs,
+		azAffinity:    params.azAffinity,
 		endpointSelectors: []api.EndpointSelector{
 			{
 				LabelSelector: &slimv1.LabelSelector{
@@ -189,6 +191,8 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 				v1.IPv4CIDR(params.destinationCIDR),
 			},
 			ExcludedCIDRs: excludedCIDRs,
+			AZAffinity:    params.azAffinity.toString(),
+
 			EgressGroups: []v1.EgressGroup{
 				{
 					NodeSelector: &slimv1.LabelSelector{
@@ -235,8 +239,9 @@ func addNode(tb testing.TB, nodes fakeResource[*cilium_api_v2.CiliumNode], node 
 }
 
 type gatewayStatus struct {
-	activeGatewayIPs  []string
-	healthyGatewayIPs []string
+	activeGatewayIPs     []string
+	activeGatewayIPsByAZ map[string][]string
+	healthyGatewayIPs    []string
 }
 
 func assertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset, policyName string, gs gatewayStatus) {
@@ -261,6 +266,10 @@ func tryAssertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset,
 
 	if !cmp.Equal(gs.activeGatewayIPs, iegpGs.ActiveGatewayIPs, cmpopts.EquateEmpty()) {
 		return fmt.Errorf("active gateway IPs don't match expected ones: %v vs expected %v", iegpGs.ActiveGatewayIPs, gs.activeGatewayIPs)
+	}
+
+	if !cmp.Equal(gs.activeGatewayIPsByAZ, iegpGs.ActiveGatewayIPsByAZ, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("active gateway IPs by AZ don't match expected ones: %v vs expected %v", iegpGs.ActiveGatewayIPsByAZ, gs.activeGatewayIPsByAZ)
 	}
 
 	if !cmp.Equal(gs.healthyGatewayIPs, iegpGs.HealthyGatewayIPs, cmpopts.EquateEmpty()) {

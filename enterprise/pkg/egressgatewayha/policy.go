@@ -15,10 +15,13 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
+	"sort"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/maps"
+	core_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -73,8 +76,52 @@ type gatewayConfig struct {
 }
 
 type groupStatus struct {
-	activeGatewayIPs  []netip.Addr
-	healthyGatewayIPs []netip.Addr
+	activeGatewayIPs     []netip.Addr
+	activeGatewayIPsByAZ map[string][]netip.Addr
+	healthyGatewayIPs    []netip.Addr
+}
+
+type azAffinityMode int
+
+const (
+	azAffinityDisabled azAffinityMode = iota
+	azAffinityLocalOnly
+	azAffinityLocalOnlyFirst
+	azAffinityLocalPriority
+)
+
+func azAffinityModeFromString(azAffinity string) (azAffinityMode, error) {
+	switch azAffinity {
+	case "disabled", "":
+		return azAffinityDisabled, nil
+	case "localOnly":
+		return azAffinityLocalOnly, nil
+	case "localOnlyFirst":
+		return azAffinityLocalOnlyFirst, nil
+	case "localPriority":
+		return azAffinityLocalPriority, nil
+	default:
+		return 0, fmt.Errorf("invalid azAffinity value \"%s\"", azAffinity)
+	}
+}
+
+func (m azAffinityMode) toString() string {
+	switch m {
+	case azAffinityDisabled:
+		return "disabled"
+	case azAffinityLocalOnly:
+		return "localOnly"
+	case azAffinityLocalOnlyFirst:
+		return "localOnlyFirst"
+	case azAffinityLocalPriority:
+		return "localPriority"
+	default:
+		return ""
+	}
+}
+
+func (m azAffinityMode) enabled() bool {
+	return m != azAffinityDisabled
 }
 
 // PolicyConfig is the internal representation of IsovalentEgressGatewayPolicy.
@@ -88,6 +135,8 @@ type PolicyConfig struct {
 	endpointSelectors []api.EndpointSelector
 	dstCIDRs          []netip.Prefix
 	excludedCIDRs     []netip.Prefix
+
+	azAffinity azAffinityMode
 
 	groupConfigs            []groupConfig
 	groupStatusesGeneration int64
@@ -153,83 +202,202 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGate
 	}
 }
 
+func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig) v1.IsovalentEgressGatewayPolicyGroupStatus {
+	activeGatewayIPs := []string{}
+	healthyGatewayIPs := []string{}
+
+	activeGatewayIPsByAZ := map[string][]string{}
+	healthyGatewayIPsByAZ := map[string][]string{}
+
+	for _, node := range operatorManager.nodes {
+		// if the group config doesn't match the node, ignore it and go to the next one
+		if !gc.selectsNodeAsGateway(node) {
+			continue
+		}
+
+		// if AZ affinity is enabled for the egress group, track the node's AZ.
+		//
+		// This will be used later on to ensure that even AZs with no healthy gateway nodes can get non
+		// local gateways asigned to (and because of this tracking needs to happen before ignoring an
+		// unhealthy node)
+		if config.azAffinity.enabled() {
+			if nodeAZ, ok := node.Labels[core_v1.LabelTopologyZone]; ok {
+				// as the healthyGatewayIPsByAZ map is used also to keep track of all the available AZs,
+				// always create an empty entry if it doesn't exist yet.
+				// In this way we can ensure all AZs will have a key in the map
+				if _, ok = healthyGatewayIPsByAZ[nodeAZ]; !ok {
+					healthyGatewayIPsByAZ[nodeAZ] = []string{}
+				}
+			}
+		}
+
+		// if the node is not healthy, ignore it and move to the next one
+		if !operatorManager.nodeIsHealthy(node.Name) {
+			continue
+		}
+
+		nodeIP := node.GetK8sNodeIP().String()
+
+		// add the node to the list of active and healthy gateway IPs.
+		// These lists are global (i.e. they do not take into account the AZ of the node)
+		healthyGatewayIPs = append(healthyGatewayIPs, nodeIP)
+		activeGatewayIPs = append(activeGatewayIPs, nodeIP)
+
+		// if AZ affinity is enabled, add the node IP also to the list of healthy gateway IPs
+		if config.azAffinity.enabled() {
+			if nodeAZ, ok := node.Labels[core_v1.LabelTopologyZone]; ok {
+				healthyGatewayIPsByAZ[nodeAZ] = append(healthyGatewayIPsByAZ[nodeAZ], nodeIP)
+			} else {
+				log.WithField(logfields.NodeName, node.Name).
+					Errorf("AZ affinity is enabled but node is missing %s label. Node will be ignored", core_v1.LabelTopologyZone)
+			}
+		}
+	}
+
+	// if AZ affinity is enabled, do a first pass to build the per-AZ list of active gateway IPs:
+	// initially the list of active gateways for a given AZ will be identical to the list of healthy gateways,
+	// then based on the selected AZ affinity mode and maxGatewayNodes settings, other nodes from different AZs can
+	// be added or already present nodes can be removed
+	if config.azAffinity.enabled() {
+		for az, healthyGatewayIPs := range healthyGatewayIPsByAZ {
+			activeGatewayIPsByAZ[az] = slices.Clone(healthyGatewayIPs)
+		}
+	}
+
+	// nonLocalActiveGatewayIPs is a helper that returns, given a particular AZ, a slice of non local gateways for
+	// that AZ.
+	//
+	// The slice is sorted by nodes' AZs, in lexicographical ordering, and starts from AZ next to the one passed to the function.
+	// In this way each AZ will have its own ordering of non local gateways, allowing different AZs to fallback to
+	// different set of non local gateways
+	nonLocalActiveGatewayIPs := func(az string) []string {
+		// sort the AZs lexicographically
+		sortedAZs := maps.Keys(healthyGatewayIPsByAZ)
+		sort.Strings(sortedAZs)
+
+		// shift the list so that it starts after the given AZ.
+		//
+		// For example [a, b, c, d] with local AZ "c" would result in [d, a, b]
+		if i, ok := slices.BinarySearch(sortedAZs, az); ok {
+			// first shift the list so that it starts with the given AZ.
+			//
+			// [a, b, c, d] -> [c, d, a, b]
+			sortedAZs = append(sortedAZs[i:], sortedAZs[:i]...)
+
+			// then delete the given AZ (first one in the list)
+			//
+			// [c, d, a, b] -> [d, a, b]
+			sortedAZs = sortedAZs[1:]
+		}
+
+		// then build a list of non local gateway IPs following the ordering of the sorted list of AZs
+		gwIPs := []string{}
+		for _, az := range sortedAZs {
+			gwIPs = append(gwIPs, healthyGatewayIPsByAZ[az]...)
+		}
+
+		return gwIPs
+	}
+
+	// next do a second pass to populate the per-AZ list of active gateways
+	switch config.azAffinity {
+	case azAffinityLocalOnly:
+		// for local only affinity there's nothing left to do
+
+	case azAffinityLocalOnlyFirst:
+		for az := range activeGatewayIPsByAZ {
+			// only if there are no local gateways, pick the ones from the other AZs
+			if len(activeGatewayIPsByAZ[az]) == 0 {
+				activeGatewayIPsByAZ[az] = nonLocalActiveGatewayIPs(az)
+			}
+		}
+
+	case azAffinityLocalPriority:
+		for az := range activeGatewayIPsByAZ {
+			// always append non local gateways to the local ones
+			activeGatewayIPsByAZ[az] = append(activeGatewayIPsByAZ[az],
+				nonLocalActiveGatewayIPs(az)...)
+		}
+	}
+
+	// if set, limit the number of gateways to maxGatewayNodes
+	if gc.maxGatewayNodes != 0 {
+		if len(activeGatewayIPs) > gc.maxGatewayNodes {
+			activeGatewayIPs = activeGatewayIPs[:gc.maxGatewayNodes]
+		}
+
+		if config.azAffinity.enabled() {
+			for az := range activeGatewayIPsByAZ {
+				if len(activeGatewayIPsByAZ[az]) > gc.maxGatewayNodes {
+					activeGatewayIPsByAZ[az] = activeGatewayIPsByAZ[az][:gc.maxGatewayNodes]
+				}
+			}
+		}
+	}
+
+	return v1.IsovalentEgressGatewayPolicyGroupStatus{
+		ActiveGatewayIPs:     activeGatewayIPs,
+		ActiveGatewayIPsByAZ: activeGatewayIPsByAZ,
+		HealthyGatewayIPs:    healthyGatewayIPs,
+	}
+}
+
 // updateGroupStatuses updates the list of active and healthy gateway IPs in the
 // IEGP k8s resource for the receiver PolicyConfig
 func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager) error {
 	groupStatuses := []v1.IsovalentEgressGatewayPolicyGroupStatus{}
-
 	for _, gc := range config.groupConfigs {
-		// we need a per-group slices to properly honor the maxGatewayNodes directive
-		activeGatewayIPs := []string{}
-		healthyGatewayIPs := []string{}
-
-		for _, node := range operatorManager.nodes {
-			if !gc.selectsNodeAsGateway(node) {
-				continue
-			}
-
-			if !operatorManager.nodeIsHealthy(node.Name) {
-				continue
-			}
-
-			nodeIP := node.GetK8sNodeIP().String()
-
-			healthyGatewayIPs = append(healthyGatewayIPs, nodeIP)
-			if gc.maxGatewayNodes == 0 || len(activeGatewayIPs) < gc.maxGatewayNodes {
-				activeGatewayIPs = append(activeGatewayIPs, nodeIP)
-			}
-		}
-
-		groupStatuses = append(groupStatuses, v1.IsovalentEgressGatewayPolicyGroupStatus{
-			ActiveGatewayIPs:  activeGatewayIPs,
-			HealthyGatewayIPs: healthyGatewayIPs,
-		})
+		groupStatuses = append(groupStatuses,
+			gc.computeGroupStatus(operatorManager, config))
 	}
 
 	// After building the list of active and healthy gateway IPs, update the
 	// status of the corresponding IEGP k8s resource
-	if iegp, ok := operatorManager.policyCache[config.id]; ok {
-		newIEGP := getIEGPForStatusUpdate(operatorManager.policyCache[config.id], groupStatuses)
-
-		// if the IEGP's status is already up to date, that is:
-		// - ObservedGeneration is already equal to the IEGP Generation
-		// - GroupStatuses are already in sync with the computed ones
-		// then skip updating the status to avoid emitting an update event for the policy
-		if config.generation == config.groupStatusesGeneration &&
-			cmp.Equal(iegp.Status.GroupStatuses, newIEGP.Status.GroupStatuses, cmpopts.EquateEmpty()) {
-			return nil
-		}
-
-		logger := log.WithField(logfields.IsovalentEgressGatewayPolicyName, config.id.Name)
-		logger.Debugf("Updating policy status: %+v", newIEGP.Status)
-
-		updatedIEGP, err := operatorManager.clientset.IsovalentV1().IsovalentEgressGatewayPolicies().
-			UpdateStatus(context.TODO(), newIEGP, meta_v1.UpdateOptions{})
-		if err != nil {
-			logger.WithField(logfields.K8sGeneration, newIEGP.Status.ObservedGeneration).
-				WithError(err).
-				Warn("Cannot update IsovalentEgressGatewayPolicy status, retrying")
-
-			return err
-		}
-		// Now we've updated the IsovalentEgressGatewayPolicy, we need to update our local cache. The UpdateStatus
-		// method on the Kubernetes client object helpfully returned the updated iegp. So we can just write that back to
-		// the cache. By definition, if that call did not error, it's the most up-to-date version of the object.
-		updatedPolicyConfig, err := ParseIEGP(updatedIEGP)
-		if err != nil {
-			// This is a super-strange case where we've written an updated object that we then cannot parse.
-			logger.WithField(logfields.K8sGeneration, updatedIEGP.Status.ObservedGeneration).
-				WithError(err).
-				Warn("Failed to parse IsovalentEgressGatewayPolicy after update")
-			return err
-		}
-		operatorManager.policyCache[config.id] = updatedIEGP
-		operatorManager.policyConfigs[config.id] = updatedPolicyConfig
-	} else {
+	iegp, ok := operatorManager.policyCache[config.id]
+	if !ok {
 		log.WithFields(logrus.Fields{
 			logfields.IsovalentEgressGatewayPolicyName: config.id.Name,
 		}).Error("Cannot find cached policy, group statuses will not be updated")
+
+		return nil
 	}
+
+	newIEGP := getIEGPForStatusUpdate(operatorManager.policyCache[config.id], groupStatuses)
+
+	// if the IEGP's status is already up to date, that is:
+	// - ObservedGeneration is already equal to the IEGP Generation
+	// - GroupStatuses are already in sync with the computed ones
+	// then skip updating the status to avoid emitting an update event for the policy
+	if config.generation == config.groupStatusesGeneration &&
+		cmp.Equal(iegp.Status.GroupStatuses, newIEGP.Status.GroupStatuses, cmpopts.EquateEmpty()) {
+		return nil
+	}
+
+	logger := log.WithField(logfields.IsovalentEgressGatewayPolicyName, config.id.Name)
+	logger.Debugf("Updating policy status: %+v", newIEGP.Status)
+
+	updatedIEGP, err := operatorManager.clientset.IsovalentV1().IsovalentEgressGatewayPolicies().
+		UpdateStatus(context.TODO(), newIEGP, meta_v1.UpdateOptions{})
+	if err != nil {
+		logger.WithField(logfields.K8sGeneration, newIEGP.Status.ObservedGeneration).
+			WithError(err).
+			Warn("Cannot update IsovalentEgressGatewayPolicy status, retrying")
+
+		return err
+	}
+	// Now we've updated the IsovalentEgressGatewayPolicy, we need to update our local cache. The UpdateStatus
+	// method on the Kubernetes client object helpfully returned the updated iegp. So we can just write that back to
+	// the cache. By definition, if that call did not error, it's the most up-to-date version of the object.
+	updatedPolicyConfig, err := ParseIEGP(updatedIEGP)
+	if err != nil {
+		// This is a super-strange case where we've written an updated object that we then cannot parse.
+		logger.WithField(logfields.K8sGeneration, updatedIEGP.Status.ObservedGeneration).
+			WithError(err).
+			Warn("Failed to parse IsovalentEgressGatewayPolicy after update")
+		return err
+	}
+	operatorManager.policyCache[config.id] = updatedIEGP
+	operatorManager.policyConfigs[config.id] = updatedPolicyConfig
 
 	return nil
 }
@@ -380,7 +548,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		return nil, fmt.Errorf("egressGroups can't be empty")
 	}
 
-	gc := []groupConfig{}
+	gcs := []groupConfig{}
 	for _, gcSpec := range egressGroups {
 		if gcSpec.Interface != "" && gcSpec.EgressIP != "" {
 			return nil, fmt.Errorf("group configuration can't specify both an interface and an egress IP")
@@ -389,7 +557,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		// EgressIP is not a required field.
 		egressIP, _ := netip.ParseAddr(gcSpec.EgressIP)
 
-		gc = append(gc, groupConfig{
+		gcs = append(gcs, groupConfig{
 			nodeSelector:    api.NewESFromK8sLabelSelector("", gcSpec.NodeSelector),
 			iface:           gcSpec.Interface,
 			egressIP:        egressIP,
@@ -450,10 +618,24 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		}
 	}
 
+	azAffinity, err := azAffinityModeFromString(iegp.Spec.AZAffinity)
+	if err != nil {
+		return nil, err
+	}
+
+	if azAffinity == azAffinityLocalPriority {
+		for _, gc := range gcs {
+			if gc.maxGatewayNodes == 0 {
+				return nil, fmt.Errorf("cannot have localPriority AZ affinity mode without maxGatewayNodes set")
+			}
+		}
+	}
+
 	gs := []groupStatus{}
 
 	for _, policyGroupStatus := range iegp.Status.GroupStatuses {
 		activeGatewayIPs := []netip.Addr{}
+		activeGatewayIPsByAZ := map[string][]netip.Addr{}
 		healthyGatewayIPs := []netip.Addr{}
 
 		for _, gwIP := range policyGroupStatus.ActiveGatewayIPs {
@@ -464,6 +646,18 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 			}
 
 			activeGatewayIPs = append(activeGatewayIPs, activeGatewayIP)
+		}
+
+		for az, gwIPs := range policyGroupStatus.ActiveGatewayIPsByAZ {
+			for _, gwIP := range gwIPs {
+				ip, err := netip.ParseAddr(gwIP)
+				if err != nil {
+					log.WithError(err).Error("Cannot parse AZ active gateway IP")
+					continue
+				}
+
+				activeGatewayIPsByAZ[az] = append(activeGatewayIPsByAZ[az], ip)
+			}
 		}
 
 		for _, gwIP := range policyGroupStatus.HealthyGatewayIPs {
@@ -478,6 +672,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 
 		gs = append(gs, groupStatus{
 			activeGatewayIPs,
+			activeGatewayIPsByAZ,
 			healthyGatewayIPs,
 		})
 	}
@@ -487,7 +682,8 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		dstCIDRs:                dstCidrList,
 		excludedCIDRs:           excludedCIDRs,
 		matchedEndpoints:        make(map[endpointID]*endpointMetadata),
-		groupConfigs:            gc,
+		azAffinity:              azAffinity,
+		groupConfigs:            gcs,
 		groupStatusesGeneration: iegp.Status.ObservedGeneration,
 		groupStatuses:           gs,
 		id: types.NamespacedName{

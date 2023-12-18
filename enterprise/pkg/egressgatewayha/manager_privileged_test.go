@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+	core_v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
@@ -43,9 +44,13 @@ const (
 
 	node1Name = "k8s1"
 	node2Name = "k8s2"
+	node3Name = "k8s3"
+	node4Name = "k8s4"
 
 	node1IP = "192.168.1.1"
 	node2IP = "192.168.1.2"
+	node3IP = "192.168.1.3"
+	node4IP = "192.168.1.4"
 
 	ep1IP = "10.0.0.1"
 	ep2IP = "10.0.0.2"
@@ -80,6 +85,9 @@ var (
 	noNodeGroup      = map[string]string{}
 	nodeGroup1Labels = map[string]string{"label1": "1"}
 	nodeGroup2Labels = map[string]string{"label2": "2"}
+
+	nodeGroup1LabelsAZ1 = map[string]string{"label1": "1", core_v1.LabelTopologyZone: "az-1"}
+	nodeGroup1LabelsAZ2 = map[string]string{"label1": "1", core_v1.LabelTopologyZone: "az-2"}
 )
 
 type egressRule struct {
