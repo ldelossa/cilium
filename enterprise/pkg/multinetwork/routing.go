@@ -128,6 +128,12 @@ func collectLocalNodeIPs(ifaces []netlink.Link, family int) deviceToIPMap {
 func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nodeIPv4, nodeIPv6 deviceToIPMap) map[string]nodeIPPair {
 	nodeIPByNetworkName := make(map[string]nodeIPPair, len(networks))
 
+	// ensure deterministic iteration order
+	nodeIPv4Devices := maps.Keys(nodeIPv4)
+	nodeIPv6Devices := maps.Keys(nodeIPv6)
+	slices.Sort(nodeIPv4Devices)
+	slices.Sort(nodeIPv6Devices)
+
 	for _, network := range networks {
 		networkName := network.Name
 		if networkName == defaultNetwork {
@@ -148,7 +154,8 @@ func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nod
 			}
 
 			if networkPrefix.IP.To4() != nil {
-				for dev, nodeIP := range nodeIPv4 {
+				for _, dev := range nodeIPv4Devices {
+					nodeIP := nodeIPv4[dev]
 					if networkPrefix.Contains(nodeIP) {
 						nodeIPs.ipv4 = nodeIP
 						nodeIPs.ipv4Device = dev
@@ -156,7 +163,8 @@ func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nod
 					}
 				}
 			} else {
-				for dev, nodeIP := range nodeIPv6 {
+				for _, dev := range nodeIPv6Devices {
+					nodeIP := nodeIPv6[dev]
 					if networkPrefix.Contains(nodeIP) {
 						nodeIPs.ipv6 = nodeIP
 						nodeIPs.ipv6Device = dev
