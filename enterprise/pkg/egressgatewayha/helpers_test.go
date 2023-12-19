@@ -13,26 +13,83 @@ package egressgatewayha
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net"
 	"net/netip"
 	"testing"
-	"time"
 
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
+	"github.com/cilium/cilium/pkg/identity"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
+	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy/api"
+	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	core_v1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+)
+
+const (
+	testInterface1 = "cilium_egwha1"
+	testInterface2 = "cilium_egwha2"
+
+	node1Name = "k8s1"
+	node2Name = "k8s2"
+	node3Name = "k8s3"
+	node4Name = "k8s4"
+
+	node1IP = "192.168.1.1"
+	node2IP = "192.168.1.2"
+	node3IP = "192.168.1.3"
+	node4IP = "192.168.1.4"
+
+	ep1IP = "10.0.0.1"
+	ep2IP = "10.0.0.2"
+	ep3IP = "10.0.0.3"
+
+	destCIDR        = "1.1.1.0/24"
+	destIP          = "1.1.1.1"
+	allZeroDestCIDR = "0.0.0.0/0"
+	excludedCIDR1   = "1.1.1.22/32"
+	excludedCIDR2   = "1.1.1.240/30"
+	excludedCIDR3   = "1.1.1.0/28"
+
+	egressIP1   = "192.168.101.1"
+	egressCIDR1 = "192.168.101.1/24"
+
+	egressIP2   = "192.168.102.1"
+	egressCIDR2 = "192.168.102.1/24"
+
+	zeroIP4 = "0.0.0.0"
+
+	// Special values for gatewayIP, see pkg/egressgateway/manager.go
+	gatewayNotFoundValue     = "0.0.0.0"
+	gatewayExcludedCIDRValue = "0.0.0.1"
+)
+
+var (
+	ep1Labels = map[string]string{"test-key": "test-value-1"}
+	ep2Labels = map[string]string{"test-key": "test-value-2"}
+
+	identityAllocator = testidentity.NewMockIdentityAllocator(nil)
+
+	noNodeGroup      = map[string]string{}
+	nodeGroup1Labels = map[string]string{"label1": "1"}
+	nodeGroup2Labels = map[string]string{"label2": "2"}
+
+	nodeGroup1LabelsAZ1 = map[string]string{"label1": "1", core_v1.LabelTopologyZone: "az-1"}
+	nodeGroup1LabelsAZ2 = map[string]string{"label1": "1", core_v1.LabelTopologyZone: "az-2"}
 )
 
 type fakeResource[T runtime.Object] chan resource.Event[T]
@@ -76,10 +133,19 @@ func (fr fakeResource[T]) Store(context.Context) (resource.Store[T], error) {
 	return nil, errors.New("not implemented")
 }
 
-func addPolicy(tb testing.TB, policies fakeResource[*Policy], params *policyParams) {
+func addPolicy(tb testing.TB, fakeSet *k8sClient.FakeClientset, policies fakeResource[*Policy], params *policyParams) {
 	tb.Helper()
 
 	policy, _ := newIEGP(params)
+
+	if fakeSet != nil {
+		_, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().
+			Create(context.TODO(), policy, metav1.CreateOptions{})
+		if !k8sErrors.IsAlreadyExists(err) {
+			assert.Nil(tb, err)
+		}
+	}
+
 	addIEGP(tb, policies, policy)
 }
 
@@ -90,6 +156,51 @@ func addIEGP(tb testing.TB, policies fakeResource[*Policy], policy *v1.Isovalent
 		Kind:   resource.Upsert,
 		Object: policy,
 	})
+}
+
+func addEndpoint(tb testing.TB, endpoints fakeResource[*k8sTypes.CiliumEndpoint], ep *k8sTypes.CiliumEndpoint) {
+	endpoints.process(tb, resource.Event[*k8sTypes.CiliumEndpoint]{
+		Kind:   resource.Upsert,
+		Object: ep,
+	})
+}
+
+func deleteEndpoint(tb testing.TB, endpoints fakeResource[*k8sTypes.CiliumEndpoint], ep *k8sTypes.CiliumEndpoint) {
+	endpoints.process(tb, resource.Event[*k8sTypes.CiliumEndpoint]{
+		Kind:   resource.Delete,
+		Object: ep,
+	})
+}
+
+func addNode(tb testing.TB, nodes fakeResource[*cilium_api_v2.CiliumNode], node nodeTypes.Node) {
+	nodes.process(tb, resource.Event[*cilium_api_v2.CiliumNode]{
+		Kind:   resource.Upsert,
+		Object: node.ToCiliumNode(),
+	})
+}
+
+type healthcheckerMock struct {
+	nodes  map[string]struct{}
+	events chan healthcheck.Event
+}
+
+func (h *healthcheckerMock) UpdateNodeList(nodes map[string]nodeTypes.Node) {
+}
+
+func (h *healthcheckerMock) NodeIsHealthy(nodeName string) bool {
+	_, ok := h.nodes[nodeName]
+	return ok
+}
+
+func (h *healthcheckerMock) Events() chan healthcheck.Event {
+	return h.events
+}
+
+func newHealthcheckerMock() *healthcheckerMock {
+	return &healthcheckerMock{
+		nodes:  make(map[string]struct{}),
+		events: make(chan healthcheck.Event),
+	}
 }
 
 type policyParams struct {
@@ -227,64 +338,53 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 	return iegp, policy
 }
 
-func addEndpoint(tb testing.TB, endpoints fakeResource[*k8sTypes.CiliumEndpoint], ep *k8sTypes.CiliumEndpoint) {
-	endpoints.process(tb, resource.Event[*k8sTypes.CiliumEndpoint]{
-		Kind:   resource.Upsert,
-		Object: ep,
-	})
-}
-
-func deleteEndpoint(tb testing.TB, endpoints fakeResource[*k8sTypes.CiliumEndpoint], ep *k8sTypes.CiliumEndpoint) {
-	endpoints.process(tb, resource.Event[*k8sTypes.CiliumEndpoint]{
-		Kind:   resource.Delete,
-		Object: ep,
-	})
-}
-
-func addNode(tb testing.TB, nodes fakeResource[*cilium_api_v2.CiliumNode], node nodeTypes.Node) {
-	nodes.process(tb, resource.Event[*cilium_api_v2.CiliumNode]{
-		Kind:   resource.Upsert,
-		Object: node.ToCiliumNode(),
-	})
-}
-
-type gatewayStatus struct {
-	activeGatewayIPs     []string
-	activeGatewayIPsByAZ map[string][]string
-	healthyGatewayIPs    []string
-}
-
-func assertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset, policyName string, gs gatewayStatus) {
-	var err error
-	for i := 0; i < 10; i++ {
-		if err = tryAssertIegpGatewayStatus(tb, fakeSet, policyName, gs); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+func newCiliumNode(name, nodeIP string, nodeLabels map[string]string) nodeTypes.Node {
+	n := nodeTypes.Node{
+		Name: name,
+		IPAddresses: []nodeTypes.Address{
+			{
+				Type: addressing.NodeInternalIP,
+				IP:   net.ParseIP(nodeIP),
+			},
+		},
 	}
 
-	assert.Nil(tb, err)
+	if len(nodeLabels) != 0 {
+		n.Labels = nodeLabels
+	}
+
+	return n
 }
 
-func tryAssertIegpGatewayStatus(tb testing.TB, fakeSet *k8sClient.FakeClientset, policyName string, gs gatewayStatus) error {
-	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), "policy-1", metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
+// Mock the creation of endpoint and its corresponding identity, returns endpoint and ID.
+func newEndpointAndIdentity(name, ip string, epLabels map[string]string, nodeIP string) (k8sTypes.CiliumEndpoint, *identity.Identity) {
+	id, _, _ := identityAllocator.AllocateIdentity(context.Background(), labels.Map2Labels(epLabels, labels.LabelSourceK8s), true, identity.InvalidIdentity)
 
-	iegpGs := iegp.Status.GroupStatuses[0]
+	return k8sTypes.CiliumEndpoint{
+		ObjectMeta: slimv1.ObjectMeta{
+			Name: name,
+			UID:  types.UID(uuid.New().String()),
+		},
+		Identity: &cilium_api_v2.EndpointIdentity{
+			ID: int64(id.ID),
+		},
+		Networking: &cilium_api_v2.EndpointNetworking{
+			Addressing: cilium_api_v2.AddressPairList{
+				&cilium_api_v2.AddressPair{
+					IPV4: ip,
+				},
+			},
+			NodeIP: nodeIP,
+		},
+	}, id
+}
 
-	if !cmp.Equal(gs.activeGatewayIPs, iegpGs.ActiveGatewayIPs, cmpopts.EquateEmpty()) {
-		return fmt.Errorf("active gateway IPs don't match expected ones: %v vs expected %v", iegpGs.ActiveGatewayIPs, gs.activeGatewayIPs)
-	}
+// Mock the update of endpoint and its corresponding identity, with new labels. Returns new ID.
+func updateEndpointAndIdentity(endpoint *k8sTypes.CiliumEndpoint, oldID *identity.Identity, newEpLabels map[string]string) *identity.Identity {
+	ctx := context.Background()
 
-	if !cmp.Equal(gs.activeGatewayIPsByAZ, iegpGs.ActiveGatewayIPsByAZ, cmpopts.EquateEmpty()) {
-		return fmt.Errorf("active gateway IPs by AZ don't match expected ones: %v vs expected %v", iegpGs.ActiveGatewayIPsByAZ, gs.activeGatewayIPsByAZ)
-	}
-
-	if !cmp.Equal(gs.healthyGatewayIPs, iegpGs.HealthyGatewayIPs, cmpopts.EquateEmpty()) {
-		return fmt.Errorf("healthy gateway IPs don't match expected ones: %v vs expected %v", iegpGs.HealthyGatewayIPs, gs.healthyGatewayIPs)
-	}
-
-	return nil
+	identityAllocator.Release(ctx, oldID, true)
+	newID, _, _ := identityAllocator.AllocateIdentity(ctx, labels.Map2Labels(newEpLabels, labels.LabelSourceK8s), true, identity.InvalidIdentity)
+	endpoint.Identity.ID = int64(newID.ID)
+	return newID
 }
