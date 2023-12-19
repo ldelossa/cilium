@@ -21,6 +21,7 @@ jobs:
           - "1.12-ce"
           - "1.13-ce"
           - "1.14-ce"
+          - "1.15-ce"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch

@@ -53,6 +53,7 @@
   "pruneStaleBranches": true,
   "baseBranches": [
     "main",
+    "v1.15",
     "v1.14",
     "v1.13",
     "v1.12"
@@ -138,6 +139,7 @@
       ],
       matchBaseBranches: [
         "main",
+        "v1.15",
         "v1.14",
         "v1.13",
         "v1.12"
@@ -153,6 +155,7 @@
         "go.sum"
       ],
       matchBaseBranches: [
+        "v1.15",
         "v1.14",
         "v1.13",
         "v1.12"
@@ -260,6 +263,7 @@
       "allowedVersions": "22.04",
       "matchBaseBranches": [
         "main",
+        "v1.15",
         "v1.14",
         "v1.13"
       ],
@@ -287,9 +291,9 @@
         "docker.io/library/golang",
         "go"
       ],
-      "allowedVersions": "<1.21",
+      "allowedVersions": "<1.22",
       "matchBaseBranches": [
-        "v1.14"
+        "v1.15"
       ]
     },
     {
@@ -299,17 +303,18 @@
       ],
       "allowedVersions": "<1.21",
       "matchBaseBranches": [
-        "v1.13"
-      ]
-    },
-    {
-      "matchPackageNames": [
-        "docker.io/library/golang",
-        "go"
-      ],
-      "allowedVersions": "<1.21",
-      "matchBaseBranches": [
+        "v1.14",
+        "v1.13",
         "v1.12"
+      ]
+    },
+    {
+      "matchPackageNames": [
+        "docker.io/library/alpine"
+      ],
+      "allowedVersions": "<3.20",
+      "matchBaseBranches": [
+        "v1.15"
       ]
     },
     {
@@ -352,6 +357,11 @@
       "matchDepNames": [
         "cilium/cilium-cli"
       ],
+      "matchBaseBranches": [
+        "main",
+        "v1.15",
+        "v1.14"
+      ]
     },
     {
       // Do not bump the minor version for Cilium <v1.14. Certain workflows
@@ -401,6 +411,7 @@
         "golangci/golangci-lint"
       ],
       "matchBaseBranches": [
+        "v1.15",
         "v1.14",
         "v1.13",
         "v1.12"
