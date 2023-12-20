@@ -221,11 +221,6 @@ func NewEgressGatewayManager(p Params) (out struct {
 		return out, fmt.Errorf("egress gateway HA requires healthchecking to be enabled")
 	}
 
-	if err := deleteStaleIPRulesAndRoutes(); err != nil {
-		err = fmt.Errorf("cannot delete stale IP rules and routes: %w", err)
-		return out, err
-	}
-
 	out.Manager, err = newEgressGatewayManager(p)
 	if err != nil {
 		return out, err
