@@ -20,6 +20,7 @@
   "pruneStaleBranches": true,
   "baseBranches": [
     "main-ce",
+    "v1.15-ce",
     "v1.14-ce",
     "v1.13-ce",
     "v1.12-ce",
@@ -71,17 +72,6 @@
       ]
     },
     // Ref: https://github.com/cilium/cilium-cli#releases
-    {
-      "groupName": "Cilium CLI",
-      "groupSlug": "cilium-cli",
-      "matchDepNames": [
-        "cilium/cilium-cli"
-      ],
-      "matchBaseBranches": [
-        "main-ce",
-        "v1.14-ce",
-      ]
-    },
     {
       "groupName": "Cilium CLI",
       "groupSlug": "cilium-cli",
