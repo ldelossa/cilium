@@ -73,8 +73,8 @@ github.com/cilium/charts v0.0.0-20231209073633-64e4ab472dbc h1:QhiqRsJlsyKihOMFR
 github.com/cilium/charts v0.0.0-20231209073633-64e4ab472dbc/go.mod h1:M3C9VOlFvRzuV+a01t07Tw4uFLSfkCH3L542IWjf6BU=
 github.com/cilium/checkmate v1.0.3 h1:CQC5eOmlAZeEjPrVZY3ZwEBH64lHlx9mXYdUehEwI5w=
 github.com/cilium/checkmate v1.0.3/go.mod h1:KiBTasf39/F2hf2yAmHw21YFl3hcEyP4Yk6filxc12A=
-github.com/cilium/cilium-cli v0.15.18 h1:BZsOYvJsNg9xa4o7wkv3NnoGa7bR9dwIrDfetSYtP0A=
-github.com/cilium/cilium-cli v0.15.18/go.mod h1:ZzWGtTpmZNdjzRKkkxTbZ1faQZG+xWxS46DKsv+ogkw=
+github.com/cilium/cilium-cli v0.15.19 h1:XSSf1KqNyvMqBN2P0bfZT4+moYXsQOiYazEntnSWLiM=
+github.com/cilium/cilium-cli v0.15.19/go.mod h1:ZzWGtTpmZNdjzRKkkxTbZ1faQZG+xWxS46DKsv+ogkw=
 github.com/cilium/ebpf v0.12.3 h1:8ht6F9MquybnY97at+VDZb3eQQr8ev79RueWeVaEcG4=
 github.com/cilium/ebpf v0.12.3/go.mod h1:TctK1ivibvI3znr66ljgi4hqOT8EYQjz1KWBfb1UVgM=
 github.com/cilium/hubble v0.12.3 h1:6WujW20zbZehNUBvhZXr/u2LFpfxjyf8IRaHkU5Orcs=
