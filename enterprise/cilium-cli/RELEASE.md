@@ -2,6 +2,11 @@
 
 Release process and checklist for `cilium-cli` enterprise edition.
 
+> [!NOTE]
+> `isovalent` is used as the remote for the enterprise repository, to avoid
+> accidental pushes of enterprise sources to the open source repository. You
+> may need to adjust the remote to match your local settings.
+
 ### Define environment variables
 
 Define the `OSS_VERSION`, `CEE_VERSION` and `CEE_VERSION_TAG` variables. For
@@ -29,7 +34,7 @@ environment variable definitions can be copied for the next release.
     git checkout -b pr/prepare-${CEE_VERSION}
     git add RELEASE.md release-notes/$CEE_VERSION.md
     git commit -s -m "enterprise/cilium-cli: prepare for $CEE_VERSION release"
-    git push origin HEAD
+    git push isovalent HEAD
 
 Then open a pull request against `main-ce` branch. Wait for the PR to be reviewed and merged.
 
@@ -38,7 +43,7 @@ Then open a pull request against `main-ce` branch. Wait for the PR to be reviewe
 Update your local checkout:
 
     git checkout main-ce
-    git pull origin main-ce
+    git pull isovalent main-ce
 
 Set the commit you want to tag:
 
@@ -46,11 +51,11 @@ Set the commit you want to tag:
 
 Usually this is the most recent commit on `main`, i.e.
 
-    export COMMIT_SHA=$(git rev-parse origin/main-ce)
+    export COMMIT_SHA=$(git rev-parse isovalent/main-ce)
 
 Then tag and push the release:
 
-    git tag -a $CEE_VERSION_TAG -m "$CEE_VERSION release" $COMMIT_SHA && git push origin $CEE_VERSION_TAG
+    git tag -a $CEE_VERSION_TAG -m "$CEE_VERSION release" $COMMIT_SHA && git push isovalent $CEE_VERSION_TAG
 
 Then, go to
 https://github.com/isovalent/cilium/actions/workflows/enterprise-release-cilium-cli.yaml?query=event%3Apush
