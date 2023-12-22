@@ -460,7 +460,7 @@ func addSRv6LocatorPoolSysdumpTasks(collector *sysdump.Collector) {
 			Task: func(ctx context.Context) error {
 				sidManagers := schema.GroupVersionResource{
 					Group:    "isovalent.com",
-					Resource: "isovalentsrv6sidmanager",
+					Resource: "isovalentsrv6sidmanagers",
 					Version:  "v1alpha1",
 				}
 				n := corev1.NamespaceAll
@@ -480,7 +480,7 @@ func addSRv6LocatorPoolSysdumpTasks(collector *sysdump.Collector) {
 			Task: func(ctx context.Context) error {
 				locatorPools := schema.GroupVersionResource{
 					Group:    "isovalent.com",
-					Resource: "isovalentsrv6locatorpool",
+					Resource: "isovalentsrv6locatorpools",
 					Version:  "v1alpha1",
 				}
 				n := corev1.NamespaceAll
