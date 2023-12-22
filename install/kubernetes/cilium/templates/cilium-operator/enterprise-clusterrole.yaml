@@ -19,6 +19,7 @@ rules:
   - isovalentsrv6egresspolicies.isovalent.com
   - isovalentsrv6sidmanagers.isovalent.com
   - isovalentsrv6locatorpools.isovalent.com
+  - isovalentvrfs.isovalent.com
 - apiGroups:
   - isovalent.com
   resources:
