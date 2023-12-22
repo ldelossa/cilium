@@ -449,6 +449,47 @@ func addSRv6SysdumpTasks(collector *sysdump.Collector) {
 				return nil
 			},
 		},
+		// For older versions (<= v1.14-ce)
+		{
+			Description: "Collecting CiliumSRv6EgressPolicy",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				locatorPools := schema.GroupVersionResource{
+					Group:    "cilium.io",
+					Resource: "ciliumsrv6egresspolicies",
+					Version:  "v2alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Cilium SRv6 Egress Policies: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-ciliumsrv6egresspolicies-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Cilium SRv6 Egress Policies: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			Description: "Collecting CiliumSRv6VRF",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				locatorPools := schema.GroupVersionResource{
+					Group:    "cilium.io",
+					Resource: "ciliumsrv6vrfs",
+					Version:  "v2alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Cilium SRv6 VRFs: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-ciliumsrv6vrfs-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Cilium SRv6 VRFs: %w", err)
+				}
+				return nil
+			},
+		},
 	})
 }
 
