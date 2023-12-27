@@ -48,12 +48,10 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        make apply AUTO_APPROVE=true
+        make upgrade AUTO_APPROVE=true
 
     - name: Wait for Cilium to be ready
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        # Temporary fix for the NWM CuTE to make cluster stable
-        make startup_wait || true
         cilium status --wait 15m0s

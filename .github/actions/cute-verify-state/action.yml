@@ -29,3 +29,5 @@ runs:
       run: |
         echo "Running CuTE tests ..."
         make test
+        # --flush-ct interrupts the flows, so we need to set up again.
+        cilium connectivity test --include-conn-disrupt-test --conn-disrupt-test-setup
