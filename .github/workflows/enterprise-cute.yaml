@@ -48,45 +48,56 @@ jobs:
       - name: Set up job variables
         id: vars
         run: |
-          input=${{ inputs.extra-args }}
-          upgrade=""
-          if [[ $input == *\^* ]]; then
-            upgrade="${input##*^}"
-            input=${input%%^*}
-          fi
-          deploy="current"
-          if [[ $input == *%* ]]; then
-            deploy="${input##*%}"
-            input=${input%%%*}
-          fi
+          repo=""
+          dir="."
+          branch=""
+          oss="false"
           region=""
-          if [[ $input == *~* ]]; then
-            region="${input##*~}"
-            input=${input%%~*}
-          fi
-          umbrella_chart="false"
-          if [[ $input == *+* ]]; then
-            umbrella_chart="true"
-            input=${input%%+*}
-          fi
-          ref=""
-          if [[ $input == *@* ]]; then
-            ref="${input##*@}"
-            input=${input%%@*}
-          fi
-          dir=""
-          repo=$input
-          if [[ $input == */* ]]; then
-            dir="${input##*/}"
-            repo=${input%%/*}
-          fi
-          
+          umbrella="false"
+          deploy="current"
+          upgrade=""
           quay_charts_org="${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"
+
+          input="${{ inputs.extra-args }}"
+          IFS='&' args=($input)
+          for a in "${args[@]}"; do
+            case $a in
+            repo=*)
+              repo="${a##*repo=}"
+              ;;
+            dir=*)
+              dir="${a##*dir=}"
+              ;;
+            ref=*)
+              ref="${a##*ref=}"
+              ;;
+            oss=*)
+              oss="${a##*oss=}"
+              ;;
+            region=*)
+              region="${a##*region=}"
+              ;;
+            umbrella=*)
+              umbrella="${a##*umbrella=}"
+              ;;
+            deploy=*)
+              deploy="${a##*deploy=}"
+              ;;
+            upgrade=*)
+              upgrade="${a##*upgrade=}"
+              ;;
+            *)
+              echo -n "unknown param: $a"
+              exit 1
+              ;;
+            esac
+          done
+
           [[ "$oss" == "true" ]] && quay_charts_org="${{ env.QUAY_OSS_CHARTS_ORGANIZATION_DEV }}"
 
           echo cute_repo=$repo >> $GITHUB_OUTPUT
           echo cute_dir=$dir >> $GITHUB_OUTPUT
-          echo umbrella_chart=$umbrella_chart >> $GITHUB_OUTPUT
+          echo umbrella_chart=$umbrella >> $GITHUB_OUTPUT
           echo cute_ref=$ref >> $GITHUB_OUTPUT
           echo cute_region=$region >> $GITHUB_OUTPUT
           echo deploy_type=$deploy >> $GITHUB_OUTPUT
