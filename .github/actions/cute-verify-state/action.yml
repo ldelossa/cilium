@@ -14,20 +14,20 @@ runs:
     - name: Verify conn-disrupt-test
       shell: bash
       run: |
-        echo "Verify no conn-disrupt-test pods restarted ..."
+        echo "🔎🔎🔎 Verify no conn-disrupt-test pods restarted ..."
         for ((i = 5; i >= 1; i--)); do
           echo "no restarts found [$i minutes left ...]"
           sleep 60
           cilium connectivity test --include-conn-disrupt-test --test 'no-interrupted-connections,no-ipsec-xfrm-errors' --conn-disrupt-test-setup
         done
-        echo "No restarts found."
+        echo "👍👍👍 No restarts found."
 
     - name: Run CuTE tests
       if: inputs.run-tests == 'true'
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        echo "Running CuTE tests ..."
+        echo "🏃🏃🏃 Running CuTE tests ..."
         make test
         # --flush-ct interrupts the flows, so we need to set up again.
         cilium connectivity test --include-conn-disrupt-test --conn-disrupt-test-setup

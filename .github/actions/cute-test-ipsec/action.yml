@@ -10,6 +10,7 @@ runs:
     - name: Start conn-disrupt-test
       shell: bash
       run: |
+        echo "🏃🏃🏃 Running conn-disrupt-tests ..."
         # Create pods which establish long lived connections. It will be used by
         # subsequent connectivity tests with --include-conn-disrupt-test to catch any
         # interruption in such flows.
@@ -19,13 +20,13 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        echo "Rotating IPsec keys ..."
+        echo "🏃🏃🏃 Rotating IPsec keys ..."
         make rotate_ipsec_key
 
     - name: Wait for 2 active keys
       shell: bash
       run: |
-        echo "Waiting for 2 active keys ..."
+        echo "⌛⌛⌛ Waiting for 2 active keys ..."
         TWO_KEYS_IN_USE=false
         CILIUM_NS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.namespace}{"\n"}{end}' | head -n 1)
         for (( i=1; i<=10; i++ )); do
@@ -44,7 +45,7 @@ runs:
           [[ $TWO_KEYS_IN_USE == "true" ]] && break
         done
         [[ $TWO_KEYS_IN_USE != "true" ]] && exit 1
-        echo "All the pods use 2 active keys now."
+        echo "🔑🔑🔑 All the pods use 2 active keys now."
 
     - name: Verify state
       uses: ./.github/actions/cute-verify-state
@@ -55,7 +56,7 @@ runs:
     - name: Wait for key rotation
       shell: bash
       run: |
-        echo "Waiting for key rotation ..."
+        echo "⌛⌛⌛ Waiting for key rotation ..."
         CILIUM_NS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.namespace}{"\n"}{end}' | head -n 1)
         CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}')
         while true; do
@@ -72,7 +73,7 @@ runs:
           [[ $ONE_KEY_IN_USE == "true" ]] && break
           sleep 60
         done
-        echo "IPsec key has been rotated."
+        echo "♻️♻️♻️ IPsec key has been rotated."
 
     - name: Verify state
       uses: ./.github/actions/cute-verify-state
@@ -83,7 +84,7 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        echo "Scaling up cluster ..."
+        echo "⬆⬆⬆ Scaling up cluster ..."
         make scaleup
 
     - name: Verify state
@@ -95,19 +96,20 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        echo "Scaling down cluster ..."
+        echo "⬇⬇⬇ Scaling down cluster ..."
         make scaledown
 
     - name: Display cluster pods
       shell: bash
       run: |
-        echo "Displaying cluster pods ..."
+        echo "ℹ️ℹ️ℹ️ Displaying cluster pods ..."
         kubectl get pods --all-namespaces -o wide
 
     - name: Fetch artifacts
       if: ${{ !success() }}
       shell: bash
       run: |
+        echo "📋📋📋️ Fetching artifacts ..."
         kubectl -n kube-system get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n kube-system exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
         kubectl get pods --all-namespaces -o wide
         cilium status
