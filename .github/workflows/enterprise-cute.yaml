@@ -170,7 +170,9 @@ jobs:
 
       - name: Install Cilium CLI
         run: |
-          curl -LO https://github.com/${{ env.CILIUM_CLI_REPO }}/releases/latest/download/cilium-linux-amd64.tar.gz
+          repo="${{ env.CILIUM_CLI_REPO }}"
+          [[ "${{ steps.vars.outputs.oss }}" == "true" ]] && repo="${{ env.CILIUM_OSS_CLI_REPO }}"
+          curl -LO https://github.com/$repo/releases/latest/download/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
