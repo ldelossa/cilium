@@ -16,6 +16,9 @@ inputs:
   cute-dir:
     description: 'Directory with a CuTE code/config.'
     required: true
+  quay-org:
+    description: 'Quay repo organization.'
+    required: true
 runs:
   using: composite
   steps:
@@ -23,7 +26,7 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
+        HELM_CHART="oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium"
         HELM_CHART_VERSION=${{ inputs.helm-version }}
         if [[ ${{ inputs.use-umbrella }} == 'true' ]]; then
           HELM_CHART=${{ inputs.umbrella-chart-path }}

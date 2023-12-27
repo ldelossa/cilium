@@ -13,6 +13,9 @@ inputs:
   quay-password:
     description: 'Quay repo password.'
     required: true
+  quay-org:
+    description: 'Quay repo organization.'
+    required: true
   isovalent-bot:
     description: 'Isovalent bot token.'
     required: true
@@ -47,7 +50,7 @@ runs:
       shell: bash
       run: |
         helm registry login quay.io -u ${{ inputs.quay-user }} -p ${{ inputs.quay-password }}
-        until helm pull oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium --version ${{ steps.helm.outputs.version }} &> /dev/null;
+        until helm pull oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium --version ${{ steps.helm.outputs.version }} &> /dev/null;
           do sleep 15s;
         done
 
@@ -67,7 +70,7 @@ runs:
       shell: bash
       run: |
         yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
-        yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"' ./cilium-enterprise/Chart.yaml
+        yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ inputs.quay-org }}"' ./cilium-enterprise/Chart.yaml
 
     - name: Build umbrella helm chart
       if: inputs.umbrella == 'true'

@@ -80,6 +80,9 @@ jobs:
             dir="${input##*/}"
             repo=${input%%/*}
           fi
+          
+          quay_charts_org="${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"
+          [[ "$oss" == "true" ]] && quay_charts_org="${{ env.QUAY_OSS_CHARTS_ORGANIZATION_DEV }}"
 
           echo cute_repo=$repo >> $GITHUB_OUTPUT
           echo cute_dir=$dir >> $GITHUB_OUTPUT
@@ -88,6 +91,8 @@ jobs:
           echo cute_region=$region >> $GITHUB_OUTPUT
           echo deploy_type=$deploy >> $GITHUB_OUTPUT
           echo upgrade_branch=$upgrade >> $GITHUB_OUTPUT
+          echo oss=$oss >> $GITHUB_OUTPUT
+          echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
 
       - name: Checkout CuTE repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -153,11 +158,13 @@ jobs:
           echo "CuTE repo: ${{ steps.vars.outputs.cute_repo }}"
           echo "CuTE dir: ${{ steps.vars.outputs.cute_dir }}"
           echo "CuTE ref: ${{ steps.vars.outputs.cute_ref }}"
+          echo "CuTE OSS: ${{ steps.vars.outputs.oss }}"
           echo "Cloud provider: ${{ steps.cute_props.outputs.provider }}"
           echo "Region: ${{ steps.cute_props.outputs.region }}"
           echo "Deploy type: ${{ steps.vars.outputs.deploy_type }}"
           echo "Deploy branch: ${{ steps.cute_props.outputs.deploy_branch }}"
           echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
+          echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
           echo "Upgrade branch: ${{ steps.vars.outputs.upgrade_branch }}"
 
@@ -250,10 +257,11 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$( jq -r '.subscriptionId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
 
-      - name: Set helm repository
+      - name: Set helm repositories
         run: |
           # Required for Terraform provisioner script:
           helm repo add ${{ env.CILIUM_HELM_REPO_NAME }} ${{ env.CILIUM_HELM_REPO_URL }}
+          helm repo add ${{ env.CILIUM_OSS_HELM_REPO_NAME }} ${{ env.CILIUM_OSS_HELM_REPO_URL }}
 
       - name: Prepare helm chart
         id: cute_helm
@@ -266,6 +274,7 @@ jobs:
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
           isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
 
       - name: Prepare upgrade helm chart
@@ -278,6 +287,7 @@ jobs:
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
           isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
 
       - name: CuTE Terraform variables file
@@ -290,7 +300,7 @@ jobs:
           region="${{ steps.cute_props.outputs.region }}"
           EOF
           if [[ "${{ steps.vars.outputs.deploy_type }}" != "cute" ]]; then
-            HELM_CHART="oci://${{ env.helm_registry }}/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium"
+            HELM_CHART="oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium"
             HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
             if [[ ${{ steps.vars.outputs.umbrella_chart }} == 'true' ]]; then
               HELM_CHART="${{ steps.cute_helm.outputs.umbrella-chart-path }}"
@@ -368,6 +378,7 @@ jobs:
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
           umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
+          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
 
       - name: IPsec tests after upgrade
         if: steps.vars.outputs.upgrade_branch != '' && steps.encryption.outputs.type == 'ipsec'
