@@ -193,6 +193,7 @@ cilium-agent [flags]
       --external-dns-proxy                                           Enable Cilium agent to use an external DNS proxy
       --external-envoy-proxy                                         whether the Envoy is deployed externally in form of a DaemonSet or not
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
+      --feature-gates strings                                        Slice of alpha features to enable, passing AllAlpha, AllBeta, AllLimited enables all alpha, beta and limited features (respectively).
       --fixed-identity-mapping map                                   Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
   -h, --help                                                         help for cilium-agent
