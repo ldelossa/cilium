@@ -5,19 +5,16 @@ runs:
   steps:
     - shell: bash
       run: |
-        echo "QUAY_ORGANIZATION=isovalent" >> $GITHUB_ENV
-        echo "QUAY_ORGANIZATION_DEV=isovalent-dev" >> $GITHUB_ENV
-        echo "CILIUM_HELM_REPO_NAME=isovalent" >> $GITHUB_ENV
-        echo "CILIUM_HELM_REPO_URL=https://helm.isovalent.com" >> $GITHUB_ENV
-        echo "CILIUM_CLI_REPO=isovalent/cilium-cli-releases" >> $GITHUB_ENV
+        echo "QUAY_ORGANIZATION=cilium" >> $GITHUB_ENV
+        echo "QUAY_ORGANIZATION_DEV=cilium" >> $GITHUB_ENV
         # no prod yet
-        echo "QUAY_CHARTS_ORGANIZATION_DEV=isovalent-charts-dev" >> $GITHUB_ENV
-        echo "BRANCH_SUFFIX=-ce" >> $GITHUB_ENV
-        echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true --helm-set=enterprise.egressGatewayHA.enabled=true" >> $GITHUB_ENV
+        echo "QUAY_CHARTS_ORGANIZATION_DEV=cilium-charts-dev" >> $GITHUB_ENV
+        echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true" >> $GITHUB_ENV
         echo "CILIUM_CLI_RELEASE_REPO=cilium/cilium-cli" >> $GITHUB_ENV
         # renovate: datasource=github-releases depName=cilium/cilium-cli
         CILIUM_CLI_VERSION="v0.15.19"
         echo "CILIUM_CLI_VERSION=$CILIUM_CLI_VERSION" >> $GITHUB_ENV
+        echo "PUSH_TO_DOCKER_HUB=true" >> $GITHUB_ENV
 
     - shell: bash
       name: enterprise overrides
