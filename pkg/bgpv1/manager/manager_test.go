@@ -171,6 +171,7 @@ func TestGetRoutes(t *testing.T) {
 				Servers: map[int64]*instance.ServerWithConfig{
 					int64(testRouterASN): testSC,
 				},
+				running: true,
 			}
 
 			// add a neighbor
@@ -181,7 +182,6 @@ func TestGetRoutes(t *testing.T) {
 			n.SetDefaults()
 			err = testSC.Server.AddNeighbor(context.Background(), types.NeighborRequest{
 				Neighbor: n,
-				VR:       testSC.Config,
 			})
 			require.NoError(t, err)
 
