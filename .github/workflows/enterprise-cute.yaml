@@ -29,7 +29,7 @@ env:
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  kubectl_version: v1.28.5
+  kubectl_version: v1.29.0
 
 jobs:
   cute-ci:
@@ -193,7 +193,7 @@ jobs:
 
       - name: Set up AWS CLI credentials
         if: steps.cute_props.outputs.provider == 'aws'
-        uses: aws-actions/configure-aws-credentials@f749619a9bd295c431b5a3fff1885bc7059e9c16
+        uses: aws-actions/configure-aws-credentials@dca38186811c8a0dd295aa416daa974a40eeb950
         with:
           aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
           aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
@@ -202,13 +202,13 @@ jobs:
       - name: Set up gcloud credentials
         if: steps.cute_props.outputs.provider == 'gcp'
         id: auth
-        uses: google-github-actions/auth@b372ba41cfc0e5301e0449b0917f711f2cc3458d
+        uses: google-github-actions/auth@56562ddf6ace6336b8df0ea82133bdb6aab40121
         with:
           credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
 
       - name: Set up gcloud CLI
         if: steps.cute_props.outputs.provider == 'gcp'
-        uses: google-github-actions/setup-gcloud@825196879a077b7efa50db2e88409f44de4635c2
+        uses: google-github-actions/setup-gcloud@5a5f7b85fca43e76e53463acaa9d408a03c98d3a
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
