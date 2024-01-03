@@ -73,11 +73,12 @@ func newReconciler(
 }
 
 func (r *reconciler) start() error {
+	name := "reconciler-" + r.fqdnGroup
 	id, stream := r.store.events()
 	r.streamID = id
 	var cache []netip.Prefix
 	return r.wp.Submit(
-		"reconciler-"+r.fqdnGroup,
+		name,
 		func(_ context.Context) error {
 			for range stream {
 				prefixes := r.store.get(r.fqdns...)
@@ -90,6 +91,7 @@ func (r *reconciler) start() error {
 				r.ctrMgr.UpdateController(
 					r.fqdnGroup,
 					controller.ControllerParams{
+						Group: controller.NewGroup(name),
 						DoFunc: func(ctx context.Context) error {
 							return r.upsertCIDRGroup(ctx, cidrs)
 						},
