@@ -23,5 +23,5 @@ func IsovalentFQDNGroup(lc hive.Lifecycle, cs client.Clientset) (resource.Resour
 		return nil, nil
 	}
 	lw := utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentFQDNGroupList](cs.IsovalentV1alpha1().IsovalentFQDNGroups())
-	return resource.New[*isovalent_api_v1alpha1.IsovalentFQDNGroup](lc, lw), nil
+	return resource.New[*isovalent_api_v1alpha1.IsovalentFQDNGroup](lc, lw, resource.WithMetric("IsovalentFQDNGroup")), nil
 }
