@@ -39,6 +39,7 @@ var Cell = cell.Module(
 
 	cell.Config(defaultConfig),
 	cell.Invoke(newManager),
+	cell.Metric(newMetrics),
 )
 
 // Config contains the configuration for the identity-gc.
@@ -68,4 +69,6 @@ type resolverManagerParams struct {
 	DNSClient         dnsclient.Resolver
 	Clientset         k8sClient.Clientset
 	FQDNGroupResource resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup]
+
+	Metrics *Metrics
 }

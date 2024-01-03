@@ -54,6 +54,8 @@ type manager struct {
 	store *fqdnStore
 
 	wp *workerpool.WorkerPool
+
+	metrics *Metrics
 }
 
 func newManager(params resolverManagerParams) *manager {
@@ -74,6 +76,7 @@ func newManager(params resolverManagerParams) *manager {
 		cache:       make(status),
 		store:       newStore(),
 		wp:          workerpool.New(1),
+		metrics:     params.Metrics,
 	}
 	params.LC.Append(mgr)
 
@@ -132,6 +135,9 @@ func (mgr *manager) run(ctx context.Context) error {
 }
 
 func (mgr *manager) onUpdate(ctx context.Context, obj *v1alpha1.IsovalentFQDNGroup) error {
+	// wrap the deferred Set into a naked func() to correctly evaluate len(mgr.reconcilers)
+	defer func() { mgr.metrics.FQDNGroupReconcilers.Set(float64(len(mgr.reconcilers))) }()
+
 	fqdnGroup := obj.Name
 	mgr.logger.WithField("fqdnGroup", fqdnGroup).Debug(
 		"resyncing streams and restarting cidr group reconciler",
@@ -170,6 +176,9 @@ func (mgr *manager) onUpdate(ctx context.Context, obj *v1alpha1.IsovalentFQDNGro
 }
 
 func (mgr *manager) onDelete(ctx context.Context, obj *v1alpha1.IsovalentFQDNGroup) error {
+	// wrap the deferred Set into a naked func() to correctly evaluate len(mgr.reconcilers)
+	defer func() { mgr.metrics.FQDNGroupReconcilers.Set(float64(len(mgr.reconcilers))) }()
+
 	fqdnGroup := obj.Name
 	mgr.logger.WithField("fqdnGroup", fqdnGroup).Debug(
 		"deleting streams and cidr group reconciler",
@@ -205,6 +214,9 @@ func toStrings(objFQDNs []v1alpha1.FQDN) []string {
 }
 
 func (mgr *manager) syncResolvers(fqdnGroup string, fqdns []string) error {
+	// wrap the deferred Set into a naked func() to correctly evaluate len(mgr.reconcilers)
+	defer func() { mgr.metrics.FQDNResolvers.Set(float64(len(mgr.resolvers))) }()
+
 	newStatus := mgr.cache.deepCopy()
 	newStatus[fqdnGroup] = fqdns
 

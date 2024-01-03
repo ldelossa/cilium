@@ -488,6 +488,7 @@ func TestManagerPeriodicResolver(t *testing.T) {
 			}
 		}),
 		cell.Invoke(newManager),
+		cell.Metric(newMetrics),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
