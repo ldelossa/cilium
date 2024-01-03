@@ -1632,6 +1632,54 @@
      - Whether Hubble should prefer to announce IPv6 or IPv4 addresses if both are available.
      - bool
      - ``false``
+   * - :spelling:ignore:`hubble.rbac`
+     - Enables experimental support for using Hubble RBAC with Hubble Relay. This is incompatible with Hubble RBAC installed via the Hubble Enterprise chart.
+     - object
+     - ``{"auth":{"oidc":{"ca":{"configMap":{"key":"ca.crt","name":null}},"clientID":null,"issuerUrl":null}},"enabled":false,"extraArgs":{},"extraEnv":[],"image":{"digest":"","override":null,"pullPolicy":"Always","repository":"quay.io/isovalent/hubble-rbac","tag":"v1.4.2","useDigest":false},"listenPort":4245,"loggingLevel":"info","policy":{"configMap":{"bindings":[{"field":"groups","role":"admin","type":"oidc","value":"admins"}],"create":true,"key":"hubble-rbac-policy.yaml","name":"hubble-rbac-policy","roles":[{"name":"admin","rules":[{"actions":["*"],"allowAllContexts":true,"kind":"*"}]}]},"logRoles":false},"resources":{},"securityContext":{}}``
+   * - :spelling:ignore:`hubble.rbac.enabled`
+     - Enables hubble-rbac by running it as a sidecar in hubble-relay.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`hubble.rbac.policy`
+     - Options to configure the Hubble RBAC authorization policy. The policy can be defined inline in the configMap.bindings and configMap.roles field, or in a separate configMap specified by the configMap.name.
+     - object
+     - ``{"configMap":{"bindings":[{"field":"groups","role":"admin","type":"oidc","value":"admins"}],"create":true,"key":"hubble-rbac-policy.yaml","name":"hubble-rbac-policy","roles":[{"name":"admin","rules":[{"actions":["*"],"allowAllContexts":true,"kind":"*"}]}]},"logRoles":false}``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.bindings`
+     - The list of bindings between scope values and roles.
+     - list
+     - ``[{"field":"groups","role":"admin","type":"oidc","value":"admins"}]``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.bindings[0].field`
+     - JWT claim to use
+     - string
+     - ``"groups"``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.bindings[0].role`
+     - Role to assign to identities with the matching claim
+     - string
+     - ``"admin"``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.bindings[0].value`
+     - Value of the JWT claim that needs to match to assign the configured role
+     - string
+     - ``"admins"``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.create`
+     - Whether to create the config map from where the mapping between scope and roles is read. If set to 'false' the user must create the config map out-of-band. Hubble Relay will not start until the config map is in place.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.key`
+     - The name of the config map key containing the policy document. If managed out-of-band, the config map must contain the policy document under this key. Most users won't need to customize this.
+     - Advanced
+     - ``"hubble-rbac-policy.yaml"``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.name`
+     - The name of the config map containing the policy document. If managed out-of-band, the config map must have the name defined here. Most users won't need to customize this.
+     - Advanced
+     - ``"hubble-rbac-policy"``
+   * - :spelling:ignore:`hubble.rbac.policy.configMap.roles`
+     - The list of roles to define.
+     - list
+     - ``[{"name":"admin","rules":[{"actions":["*"],"allowAllContexts":true,"kind":"*"}]}]``
+   * - :spelling:ignore:`hubble.rbac.policy.logRoles`
+     - Whether to enable logging of a user's roles to debug logs when they authenticate and make requests.
+     - bool
+     - ``false``
    * - :spelling:ignore:`hubble.redact`
      - Enables redacting sensitive information present in Layer 7 flows.
      - object

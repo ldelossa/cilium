@@ -66,3 +66,84 @@ enterprise:
   multicast:
     # -- Enables multicast in cilium, multicast replication works only in tunnel mode.
     enabled: false
+
+hubble:
+  # -- Enables experimental support for using Hubble RBAC with Hubble Relay.
+  # This is incompatible with Hubble RBAC installed via the Hubble Enterprise chart.
+  rbac:
+    # -- Enables hubble-rbac by running it as a sidecar in hubble-relay.
+    enabled: false
+    image:
+      override: ~
+      repository: quay.io/isovalent/hubble-rbac
+      tag: v1.4.2
+      digest: ""
+      useDigest: false
+      pullPolicy: "Always"
+    extraArgs: {}
+    extraEnv: []
+    # extraEnv:
+    #   - name: foo
+    #     value: bar
+    resources: {}
+    securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+    loggingLevel: info
+
+    listenPort: 4245
+
+    auth:
+      oidc:
+        issuerUrl: ~
+        clientID: ~
+        ca:
+          configMap:
+            name: ~
+            key: "ca.crt"
+
+    # -- Options to configure the Hubble RBAC authorization policy.
+    # The policy can be defined inline in the configMap.bindings and
+    # configMap.roles field, or in a separate configMap specified by the
+    # configMap.name.
+    policy:
+      # -- Whether to enable logging of a user's roles to debug logs when they
+      # authenticate and make requests.
+      logRoles: false
+      configMap:
+        # -- Whether to create the config map from where the mapping between scope
+        # and roles is read. If set to 'false' the user must create the config map
+        # out-of-band. Hubble Relay will not start until the config map is
+        # in place.
+        create: true
+        # -- (Advanced) The name of the config map containing the policy document.
+        # If managed out-of-band, the config map must have the name defined here.
+        # Most users won't need to customize this.
+        name: hubble-rbac-policy
+        # -- (Advanced) The name of the config map key containing the policy
+        # document. If managed out-of-band, the config map must contain the policy
+        # document under this key. Most users won't need to customize this.
+        key: hubble-rbac-policy.yaml
+
+        # -- The list of roles to define.
+        roles:
+          - name: admin
+            rules:
+              - actions:
+                  - "*"
+                kind: "*"
+                allowAllContexts: true
+        # -- The list of bindings between scope values and roles.
+        bindings:
+          - type: oidc
+            # -- JWT claim to use
+            field: groups
+            # -- Value of the JWT claim that needs to match to assign the configured role
+            value: admins
+            # -- Role to assign to identities with the matching claim
+            role: admin

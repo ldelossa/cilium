@@ -583,6 +583,7 @@ qede
 qemu
 queryable
 queueing
+rbac
 rc
 reStructuredText
 reachability
