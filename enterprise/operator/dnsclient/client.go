@@ -52,19 +52,23 @@ type params struct {
 
 	Logger    logrus.FieldLogger
 	Lifecycle hive.Lifecycle
+
+	Metrics *Metrics
 }
 
 type client struct {
 	logger logrus.FieldLogger
 
-	client *dns.Client
-	addrs  []string
+	client  *dns.Client
+	addrs   []string
+	metrics *Metrics
 }
 
 func newClient(p params) (Resolver, error) {
 	client := &client{
-		logger: p.Logger,
-		client: &dns.Client{},
+		logger:  p.Logger,
+		client:  &dns.Client{},
+		metrics: p.Metrics,
 	}
 
 	if len(p.Cfg.DNSServerAddresses) > 0 {
@@ -120,6 +124,9 @@ func (c *client) query(ctx context.Context, fqdn string, ipv6 bool) ([]netip.Add
 	if err != nil {
 		return nil, nil, fmt.Errorf("dns query failed: %w", err)
 	}
+
+	c.metrics.RTTStats.WithLabelValues(fqdn).Observe(rtt.Seconds())
+
 	if response.Rcode == dns.RcodeNameError {
 		return nil, nil, ErrNonExistentDomain
 	}

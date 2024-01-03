@@ -93,6 +93,7 @@ func TestClient(t *testing.T) {
 			}
 		}),
 		cell.Provide(newClient),
+		cell.Provide(newMetrics),
 
 		cell.Invoke(func(lc hive.Lifecycle) error {
 			lc.Append(hive.Hook{

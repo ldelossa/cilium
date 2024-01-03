@@ -29,6 +29,7 @@ var Cell = cell.Module(
 
 	cell.Config(Config{}),
 	cell.Provide(newClient),
+	cell.Metric(newMetrics),
 )
 
 type Config struct {
