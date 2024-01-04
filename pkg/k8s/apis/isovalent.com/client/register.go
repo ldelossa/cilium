@@ -293,7 +293,7 @@ func constructV1CRD(
 			},
 		},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: k8sconstv1alpha1.CustomResourceDefinitionGroup,
+			Group: k8sconst.CustomResourceDefinitionGroup,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
 				Kind:       template.Spec.Names.Kind,
 				Plural:     template.Spec.Names.Plural,
