@@ -24,14 +24,15 @@ runs:
         make rotate_ipsec_key
 
     - name: Wait for 2 active keys
+      working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
         echo "⌛⌛⌛ Waiting for 2 active keys ..."
         TWO_KEYS_IN_USE=false
-        CILIUM_NS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.namespace}{"\n"}{end}' | head -n 1)
+        CILIUM_NS=$(terraform output --raw cilium_namespace)
         for (( i=1; i<=10; i++ )); do
           sleep 30
-          CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}')
+          CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}' || true)
           TWO_KEYS_IN_USE=true
           for POD in $CILIUM_PODS; do
             KEY_COUNT=$(kubectl -n "$CILIUM_NS" exec "$POD" -c cilium-agent -- cilium encrypt status | grep "Keys in use:" || true)
@@ -54,13 +55,14 @@ runs:
         run-tests: false
 
     - name: Wait for key rotation
+      working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
         echo "⌛⌛⌛ Waiting for key rotation ..."
-        CILIUM_NS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.namespace}{"\n"}{end}' | head -n 1)
-        CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}')
+        CILIUM_NS=$(terraform output --raw cilium_namespace)
         while true; do
           ONE_KEY_IN_USE=true
+          CILIUM_PODS=$(kubectl get pod -A -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}'|| true)
           for POD in $CILIUM_PODS; do
             KEY_COUNT=$(kubectl -n "$CILIUM_NS" exec "$POD" -c cilium-agent -- cilium encrypt status | grep "Keys in use:" || true)
             KEY_COUNT="${KEY_COUNT##*Keys in use: }"
@@ -71,7 +73,7 @@ runs:
             fi
           done
           [[ $ONE_KEY_IN_USE == "true" ]] && break
-          sleep 60
+          sleep 30
         done
         echo "♻️♻️♻️ IPsec key has been rotated."
 
