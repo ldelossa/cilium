@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
+	"github.com/cilium/cilium/enterprise/pkg/features"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/mixedrouting"
@@ -42,6 +43,7 @@ var (
 		ControlPlane,
 		Datapath,
 
+		features.Cell,
 		featurelist.Cell,
 	)
 
