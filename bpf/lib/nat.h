@@ -152,6 +152,8 @@ struct {
 } IP_MASQ_AGENT_IPV4 __section_maps_btf;
 #endif
 
+#include "lib/enterprise_nat.h"
+
 static __always_inline void *
 get_cluster_snat_map_v4(__u32 cluster_id __maybe_unused)
 {
