@@ -41,6 +41,9 @@ egress-gateway-ha-healthcheck-timeout: {{ .Values.egressGateway.healthcheckTimeo
 fallback-routing-mode: tunnel
 {{- end }}
 
+# Allows Cilium to enable features marked as alpha.
+feature-gates: {{ .Values.enterprise.featureGates | join "," | quote }}
+
 {{- if .Values.enterprise.multiNetwork.enabled }}
 # Multi-network support
 enable-multi-network: {{ .Values.enterprise.multiNetwork.enabled | quote }}
