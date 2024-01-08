@@ -31,6 +31,9 @@ runs:
           --helm-set=debug.enabled=true \
           --helm-set=bpf.monitorAggregation=none"
 
+        # Enterprise specific defaults
+        CILIUM_INSTALL_DEFAULTS+=" --helm-set=\"enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}\""
+
         # only add SHA to the image tags if it was set
         if [ -n "${SHA}" ]; then
           echo sha=${SHA} >> $GITHUB_OUTPUT
