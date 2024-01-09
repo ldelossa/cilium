@@ -263,6 +263,10 @@ errors.
    errors can also happen under memory pressure when the kernel fails to
    allocate memory.
 
+ * ``XfrmInStateInvalid`` can happen on rare occasions if packets are received
+   while an XFRM state is being deleted. XFRM states get deleted as part of
+   node scale-downs and for some upgrades and downgrades.
+
  * The following table documents the known explanations for several XFRM errors
    that were observed in the past. Many other error types exist, but they are
    usually for Linux subfeatures that Cilium doesn't use (e.g., XFRM
@@ -276,6 +280,8 @@ errors.
                             allocate memory.
    XfrmInNoStates           Bug in the XFRM configuration for decryption.
    XfrmInStateProtoError    There is a key mismatch between nodes.
+   XfrmInStateInvalid       A received packet matched an XFRM state that is
+                            being deleted.
    XfrmInTmplMismatch       Bug in the XFRM configuration for decryption.
    XfrmInNoPols             Bug in the XFRM configuration for decryption.
    XfrmInPolBlock           Explicit drop, not used by Cilium.
