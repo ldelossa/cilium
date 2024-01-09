@@ -8,35 +8,33 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package main
+package daemonplugins
 
 import (
 	"log"
+	"testing"
 
-	"github.com/cilium/cilium/daemon/cmd"
-	"github.com/cilium/cilium/enterprise/daemon/daemonplugins"
-	"github.com/cilium/cilium/pkg/hive"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
+
+	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
+	export "github.com/cilium/cilium/enterprise/plugins/hubble-flow-export"
 )
 
-func main() {
-	agentHive := hive.New(
-		EnterpriseAgent,
-	)
-	vp := agentHive.Viper()
-
-	list, err := daemonplugins.Initialize(vp, daemonplugins.DefaultPlugins)
+func TestPlugins(t *testing.T) {
+	vp := viper.New()
+	list, err := Initialize(vp, DefaultPlugins)
 	if err != nil {
 		log.Fatalf("failed to initialize plugins: %v", err)
 	}
 
-	agentCmd := cmd.NewAgentCmd(agentHive)
-	if err := daemonplugins.AddFlags(vp, agentCmd, list); err != nil {
-		log.Fatalf("unable to apply cilium CLI options: %v", err)
-	}
-
-	if err := daemonplugins.AddServerOptions(list); err != nil {
+	if err := AddServerOptions(list); err != nil {
 		log.Fatalf("unable to add server options: %v", err)
 	}
 
-	cmd.Execute(agentCmd)
+	_, ok := list[0].(aggregation.Plugin)
+	require.True(t, ok, "first plugin should be aggregation plugin")
+	// export must come after aggregation
+	_, ok = list[1].(export.Plugin)
+	require.True(t, ok, "second plugin should be export plugin")
 }

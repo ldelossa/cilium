@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/cilium/cilium/api/v1/flow"
+	flowpb "github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/enterprise/plugins"
 	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/aggregator"
@@ -52,6 +53,10 @@ var (
 	_ plugins.DepAcceptor = (*export)(nil)
 	_ metricsAPI.Handler  = (*metricsHandler)(nil)
 )
+
+type Plugin interface {
+	exportFlow(ctx context.Context, f *flowpb.Flow) error
+}
 
 func New(vp *viper.Viper) (plugins.Instance, error) {
 	// Actual initialization of the struct is done in OnServerInit after

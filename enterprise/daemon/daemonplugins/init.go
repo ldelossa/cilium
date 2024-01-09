@@ -9,7 +9,7 @@
 // or reproduction of this material is strictly forbidden unless prior written
 // permission is obtained from Isovalent Inc.
 
-package main
+package daemonplugins
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 )
 
-var pluginInits = []plugins.Init{
+var DefaultPlugins = []plugins.Init{
 	aggregation.New,
 	export.New,
 }
