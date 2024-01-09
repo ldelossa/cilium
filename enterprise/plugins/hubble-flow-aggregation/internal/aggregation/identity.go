@@ -13,6 +13,8 @@ package aggregation
 import (
 	"time"
 
+	"github.com/jonboulle/clockwork"
+
 	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/cache"
@@ -47,8 +49,8 @@ func identityHashFunc(f types.AggregatableFlow) types.Hash {
 //   - Destination port
 //   - Verdict & drop reason
 //   - Direction
-func NewIdentityAggregator(expiration time.Duration, renewTTL bool) *Aggregator {
-	return NewAggregator(cache.Configuration{
+func NewIdentityAggregator(clock clockwork.Clock, expiration time.Duration, renewTTL bool) *Aggregator {
+	return NewAggregator(clock, cache.Configuration{
 		CompareFunc:   identityCompareFunc,
 		HashFunc:      identityHashFunc,
 		AggregateFunc: aggregateIdentity,

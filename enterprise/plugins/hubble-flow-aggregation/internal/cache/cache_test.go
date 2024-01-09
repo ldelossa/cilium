@@ -26,7 +26,7 @@ import (
 
 func TestAggregationCacheWithoutExpiration(t *testing.T) {
 	// expiration may never be 0, it will default to some value
-	assert.NotEqual(t, time.Duration(0), NewCache(Configuration{}).conf.Expiration)
+	assert.NotEqual(t, time.Duration(0), NewCache(clockwork.NewFakeClock(), Configuration{}).conf.Expiration)
 }
 
 func TestAggregationStateChange(t *testing.T) {
@@ -43,7 +43,7 @@ func TestAggregationStateChange(t *testing.T) {
 		FlowState:   types.FlowState{ConnectionRequest: true, ACK: true},
 	}
 
-	c := NewCache(Configuration{
+	c := NewCache(clockwork.NewFakeClock(), Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 	})
@@ -85,7 +85,7 @@ func TestAggregationCache(t *testing.T) {
 		Reply:       true,
 	}
 
-	c := NewCache(Configuration{
+	c := NewCache(clockwork.NewFakeClock(), Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 	})
@@ -105,7 +105,7 @@ func TestAggregationCacheExpiration(t *testing.T) {
 		VerdictStr:  "10",
 		DropReason:  20,
 	}
-	c := NewCache(Configuration{
+	c := NewCache(clockwork.NewFakeClock(), Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 		Expiration:  30 * time.Second,

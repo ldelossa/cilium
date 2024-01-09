@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cilium/cilium/api/v1/observer"
@@ -114,7 +115,7 @@ func TestConnectionHash(t *testing.T) {
 
 func TestConnectionAggregationTCP(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ca := NewConnectionAggregator(10*time.Second, false, true)
+	ca := NewConnectionAggregator(clockwork.NewFakeClock(), 10*time.Second, false, true)
 	go ca.Start(ctx)
 	defer cancel()
 	r := ca.Aggregate(p1)
@@ -164,7 +165,7 @@ func TestConnectionAggregationTCP(t *testing.T) {
 
 func TestConnectionAggregationReply(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ca := NewConnectionAggregator(10*time.Second, false, true)
+	ca := NewConnectionAggregator(clockwork.NewFakeClock(), 10*time.Second, false, true)
 	go ca.Start(ctx)
 	defer cancel()
 	r := ca.Aggregate(p2)
@@ -213,7 +214,7 @@ func TestConnectionAggregationReply(t *testing.T) {
 
 func TestConnectionAggregationUDP(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ca := NewConnectionAggregator(10*time.Second, false, true)
+	ca := NewConnectionAggregator(clockwork.NewFakeClock(), 10*time.Second, false, true)
 	go ca.Start(ctx)
 	defer cancel()
 	r := ca.Aggregate(&testflow.Flow{
@@ -338,7 +339,8 @@ func TestCompareKafka(t *testing.T) {
 
 func TestConnectionExpiration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ca := NewConnectionAggregator(1*time.Second, false, false)
+	clock := clockwork.NewFakeClock()
+	ca := NewConnectionAggregator(clock, 1*time.Second, false, false)
 	go ca.Start(ctx)
 	defer cancel()
 	flow := testflow.Flow{
@@ -353,17 +355,14 @@ func TestConnectionExpiration(t *testing.T) {
 	result := ca.Aggregate(&flow)
 	assert.Equal(t, aggregationpb.StateChange_new, result.StateChange)
 
-	for i := 0; i < 100; i++ {
-		// Subsequent aggregations don't set any state change flag until the flow expires from
-		// the aggregation cache. Flows without any state change flags don't get included in
-		// the GetFlows() response.
-		result = ca.Aggregate(&flow)
+	result = ca.Aggregate(&flow)
+	assert.Equal(t, aggregationpb.StateChange_unspec, result.StateChange)
 
-		// The flow expires after 1 second, and the next flow gets the "new" flags again.
-		if result.StateChange == aggregationpb.StateChange_new {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	assert.Fail(t, "flow didn't expire")
+	clock.Advance(2 * time.Second)
+	// Subsequent aggregations don't set any state change flag until the flow expires from
+	// the aggregation cache. Flows without any state change flags don't get included in
+	// the GetFlows() response.
+	result = ca.Aggregate(&flow)
+	// The flow expires after 1 second, and the next flow gets the "new" flags again.
+	assert.Equal(t, aggregationpb.StateChange_new, result.StateChange)
 }

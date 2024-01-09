@@ -14,6 +14,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 
 	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
@@ -27,19 +28,20 @@ func Test_flowAggregation_OnFlowDelivery(t *testing.T) {
 }
 
 func TestConfigureAggregator(t *testing.T) {
-	a, err := ConfigureAggregator([]*aggregationpb.Aggregator{})
+	clock := clockwork.NewFakeClock()
+	a, err := ConfigureAggregator(clock, []*aggregationpb.Aggregator{})
 	assert.True(t, err == nil)
 	assert.True(t, a == nil)
 
-	a, err = ConfigureAggregator([]*aggregationpb.Aggregator{{Type: 10000}})
+	a, err = ConfigureAggregator(clock, []*aggregationpb.Aggregator{{Type: 10000}})
 	assert.True(t, err != nil)
 	assert.True(t, a == nil)
 
-	a, err = ConfigureAggregator([]*aggregationpb.Aggregator{{Type: aggregationpb.AggregatorType_identity}})
+	a, err = ConfigureAggregator(clock, []*aggregationpb.Aggregator{{Type: aggregationpb.AggregatorType_identity}})
 	assert.True(t, err == nil)
 	assert.True(t, a.String() == "compare")
 
-	a, err = ConfigureAggregator([]*aggregationpb.Aggregator{{Type: aggregationpb.AggregatorType_identity}, {Type: aggregationpb.AggregatorType_connection}})
+	a, err = ConfigureAggregator(clock, []*aggregationpb.Aggregator{{Type: aggregationpb.AggregatorType_identity}, {Type: aggregationpb.AggregatorType_connection}})
 	assert.True(t, err == nil)
 	assert.True(t, a.String()[0] == '[')
 }

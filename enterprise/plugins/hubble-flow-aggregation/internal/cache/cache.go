@@ -103,13 +103,13 @@ type Configuration struct {
 }
 
 // NewCache returns a new aggregation cache
-func NewCache(conf Configuration) *Cache {
+func NewCache(clock clockwork.Clock, conf Configuration) *Cache {
 	if conf.Expiration == time.Duration(0) {
 		conf.Expiration = time.Minute
 	}
 
 	c := &Cache{
-		clock:    clockwork.NewRealClock(),
+		clock:    clock,
 		conf:     conf,
 		cache:    map[types.Hash][]*types.AggregatedFlow{},
 		shutdown: make(chan struct{}, 1),

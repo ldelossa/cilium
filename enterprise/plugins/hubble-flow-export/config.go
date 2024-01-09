@@ -33,21 +33,25 @@ const (
 )
 
 type config struct {
-	filePath                    string
-	fileMaxSize                 int
-	fileRotationInterval        time.Duration
-	fileMaxBackups              int
-	fileCompress                bool
-	flowAllowlist               string
-	flowDenylist                string
-	aggregation                 []string
-	aggregationIgnoreSourcePort bool
-	aggregationRenewTTL         bool
-	aggregationStateFilter      []string
-	aggregationTTL              time.Duration
-	formatVersion               string
-	rateLimit                   int
-	nodeName                    string
+	filePath             string
+	fileMaxSize          int
+	fileRotationInterval time.Duration
+	fileMaxBackups       int
+	fileCompress         bool
+	flowAllowlist        string
+	flowDenylist         string
+	formatVersion        string
+	rateLimit            int
+	nodeName             string
+	aggregation          aggregationConfig
+}
+
+type aggregationConfig struct {
+	aggregations      []string
+	ignoreSourcePort  bool
+	renewTTL          bool
+	stateChangeFilter []string
+	ttl               time.Duration
 }
 
 func (e *export) getConfigFromViper() *config {
@@ -64,20 +68,22 @@ func (e *export) getConfigFromViper() *config {
 		denylist = vp.GetString(exportFlowBlacklist)
 	}
 	return &config{
-		filePath:                    vp.GetString(exportFilePath),
-		fileMaxSize:                 vp.GetInt(exportFileMaxSize),
-		fileRotationInterval:        vp.GetDuration(exportFileRotationInterval),
-		fileMaxBackups:              vp.GetInt(exportFileMaxBackups),
-		fileCompress:                vp.GetBool(exportFileCompress),
-		flowAllowlist:               allowlist,
-		flowDenylist:                denylist,
-		aggregation:                 vp.GetStringSlice(exportAggregation),
-		aggregationIgnoreSourcePort: vp.GetBool(exportAggregationIgnoreSourcePort),
-		aggregationRenewTTL:         vp.GetBool(exportAggregationRenewTTL),
-		aggregationStateFilter:      vp.GetStringSlice(exportAggregationStateFilter),
-		aggregationTTL:              vp.GetDuration(exportAggregationTTL),
-		formatVersion:               vp.GetString(exportFormatVersion),
-		rateLimit:                   vp.GetInt(exportRateLimit),
-		nodeName:                    vp.GetString(exportNodeName),
+		filePath:             vp.GetString(exportFilePath),
+		fileMaxSize:          vp.GetInt(exportFileMaxSize),
+		fileRotationInterval: vp.GetDuration(exportFileRotationInterval),
+		fileMaxBackups:       vp.GetInt(exportFileMaxBackups),
+		fileCompress:         vp.GetBool(exportFileCompress),
+		flowAllowlist:        allowlist,
+		flowDenylist:         denylist,
+		aggregation: aggregationConfig{
+			aggregations:      vp.GetStringSlice(exportAggregation),
+			ignoreSourcePort:  vp.GetBool(exportAggregationIgnoreSourcePort),
+			renewTTL:          vp.GetBool(exportAggregationRenewTTL),
+			stateChangeFilter: vp.GetStringSlice(exportAggregationStateFilter),
+			ttl:               vp.GetDuration(exportAggregationTTL),
+		},
+		formatVersion: vp.GetString(exportFormatVersion),
+		rateLimit:     vp.GetInt(exportRateLimit),
+		nodeName:      vp.GetString(exportNodeName),
 	}
 }

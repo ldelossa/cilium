@@ -13,6 +13,7 @@ package aggregation
 import (
 	"context"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/spf13/viper"
 
 	"github.com/cilium/cilium/api/v1/flow"
@@ -42,8 +43,9 @@ type flowAggregationPlugin struct {
 // New returns a new flow aggregation plugin
 func New(_ *viper.Viper) (plugins.Instance, error) {
 	logger := logging.DefaultLogger.WithField(logfields.LogSubsys, "hubble-flow-aggregation")
+	clock := clockwork.NewRealClock()
 	return &flowAggregationPlugin{
-		flowAggregator: aggregator.NewFlowAggregator(logger),
+		flowAggregator: aggregator.NewFlowAggregator(clock, logger),
 	}, nil
 }
 

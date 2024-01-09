@@ -13,6 +13,8 @@ package aggregation
 import (
 	"context"
 
+	"github.com/jonboulle/clockwork"
+
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/cache"
 )
@@ -27,8 +29,8 @@ type Aggregator struct {
 }
 
 // NewAggregator returns a new compare aggregator
-func NewAggregator(conf cache.Configuration) *Aggregator {
-	return &Aggregator{cache: cache.NewCache(conf)}
+func NewAggregator(clock clockwork.Clock, conf cache.Configuration) *Aggregator {
+	return &Aggregator{cache: cache.NewCache(clock, conf)}
 }
 
 // Start the aggregator

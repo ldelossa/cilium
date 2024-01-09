@@ -15,6 +15,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 
 	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
@@ -41,7 +42,7 @@ var (
 
 func TestAggregatorCache(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ca := NewAggregator(cache.Configuration{
+	ca := NewAggregator(clockwork.NewFakeClock(), cache.Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 	})

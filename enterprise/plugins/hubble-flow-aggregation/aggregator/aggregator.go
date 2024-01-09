@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -49,11 +50,12 @@ type FlowAggregator interface {
 	OnFlowDelivery(context.Context, *flow.Flow) (bool, error)
 }
 
-func NewFlowAggregator(logger logrus.FieldLogger) FlowAggregator {
-	return &flowAggregation{logger: logger}
+func NewFlowAggregator(clock clockwork.Clock, logger logrus.FieldLogger) FlowAggregator {
+	return &flowAggregation{clock: clock, logger: logger}
 }
 
 type flowAggregation struct {
+	clock  clockwork.Clock
 	logger logrus.FieldLogger
 }
 
@@ -113,7 +115,7 @@ func (p *flowAggregation) OnGetFlows(ctx context.Context, req *observer.GetFlows
 }
 
 func (p *flowAggregation) newContext(ctx context.Context, agg *aggregationpb.Aggregation) (context.Context, error) {
-	aggregator, err := ConfigureAggregator(agg.Aggregators)
+	aggregator, err := ConfigureAggregator(p.clock, agg.Aggregators)
 	p.logger.Debugf("Configured flow aggregator %#v", aggregator)
 	if err != nil {
 		return ctx, err
@@ -145,9 +147,6 @@ func (p *flowAggregation) OnFlowDelivery(ctx context.Context, f *flow.Flow) (boo
 		return false, nil
 	}
 
-	fmt.Printf("aggregation %#v\n", aggCtx.aggregation)
-	fmt.Printf("aggregator %#v\n", aggCtx.aggregator)
-
 	result := aggCtx.aggregator.Aggregate(&aggregation.AggregatableFlow{Flow: f})
 	if result != nil && (result.StateChange&aggCtx.aggregation.StateChangeFilter) == 0 {
 		return true, nil
@@ -172,7 +171,7 @@ func (p *flowAggregation) GetAggregationContext(
 }
 
 // ConfigureAggregator configures a set of aggregators as a chain
-func ConfigureAggregator(aggregators []*aggregationpb.Aggregator) (types.Aggregator, error) {
+func ConfigureAggregator(clock clockwork.Clock, aggregators []*aggregationpb.Aggregator) (types.Aggregator, error) {
 	var as []types.Aggregator
 	ttl := 30 * time.Second
 	renewTTL := true
@@ -188,9 +187,9 @@ func ConfigureAggregator(aggregators []*aggregationpb.Aggregator) (types.Aggrega
 
 		switch requestedAggregator.Type {
 		case aggregationpb.AggregatorType_connection:
-			a = aggregation.NewConnectionAggregator(ttl, requestedAggregator.IgnoreSourcePort, renewTTL)
+			a = aggregation.NewConnectionAggregator(clock, ttl, requestedAggregator.IgnoreSourcePort, renewTTL)
 		case aggregationpb.AggregatorType_identity:
-			a = aggregation.NewIdentityAggregator(ttl, renewTTL)
+			a = aggregation.NewIdentityAggregator(clock, ttl, renewTTL)
 		default:
 			return nil, fmt.Errorf("unknown aggregator: %d", requestedAggregator.Type)
 		}

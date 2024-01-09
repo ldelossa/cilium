@@ -85,11 +85,11 @@ func (e *export) OnServerInit(_ observeroption.Server) error {
 	if e.flowAggregator != nil {
 		e.logger.Info("Enabling aggregation for json export")
 		e.aggregationContext, err = e.flowAggregator.GetAggregationContext(
-			conf.aggregation,
-			conf.aggregationStateFilter,
-			conf.aggregationIgnoreSourcePort,
-			conf.aggregationTTL,
-			conf.aggregationRenewTTL)
+			conf.aggregation.aggregations,
+			conf.aggregation.stateChangeFilter,
+			conf.aggregation.ignoreSourcePort,
+			conf.aggregation.ttl,
+			conf.aggregation.renewTTL)
 		if err != nil {
 			return err
 		}

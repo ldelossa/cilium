@@ -17,6 +17,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/jonboulle/clockwork"
+
 	"github.com/cilium/cilium/api/v1/observer"
 	aggregationpb "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/api/aggregation"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
@@ -237,8 +239,8 @@ func aggregateConnection(a *types.AggregatedFlow, _ *aggregationpb.DirectionStat
 
 // NewConnectionAggregator returns a new connection based aggregator with the
 // specified expiration time for flows
-func NewConnectionAggregator(expiration time.Duration, ignoreSourcePort bool, renewTTL bool) *Aggregator {
-	return NewAggregator(cache.Configuration{
+func NewConnectionAggregator(clock clockwork.Clock, expiration time.Duration, ignoreSourcePort bool, renewTTL bool) *Aggregator {
+	return NewAggregator(clock, cache.Configuration{
 		CompareFunc: func(a, b types.AggregatableFlow) bool {
 			ca1, ca2 := newConnectionAggregation(a, ignoreSourcePort), newConnectionAggregation(b, ignoreSourcePort)
 			return ca1.Compare(ca2)

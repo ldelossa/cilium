@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cilium/cilium/api/v1/flow"
@@ -26,7 +27,7 @@ import (
 
 func TestIdentityggregation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ia := NewIdentityAggregator(10*time.Second, true)
+	ia := NewIdentityAggregator(clockwork.NewFakeClock(), 10*time.Second, true)
 	go ia.Start(ctx)
 	defer cancel()
 	r := ia.Aggregate(&testflow.Flow{
@@ -144,7 +145,7 @@ func TestIdentityggregation(t *testing.T) {
 
 func TestHTTPAggregation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ia := NewIdentityAggregator(10*time.Second, true)
+	ia := NewIdentityAggregator(clockwork.NewFakeClock(), 10*time.Second, true)
 	go ia.Start(ctx)
 	defer cancel()
 	r := ia.Aggregate(&testflow.Flow{
@@ -215,8 +216,9 @@ func TestHTTPAggregation(t *testing.T) {
 }
 
 func TestExpiredFlows(t *testing.T) {
+	clock := clockwork.NewFakeClock()
 	// Not starting the aggregator so no GC
-	ia := NewAggregator(cache.Configuration{
+	ia := NewAggregator(clock, cache.Configuration{
 		CompareFunc:   identityCompareFunc,
 		HashFunc:      identityHashFunc,
 		AggregateFunc: aggregateIdentity,
@@ -238,7 +240,7 @@ func TestExpiredFlows(t *testing.T) {
 	assert.Equal(t, aggregationpb.StateChange_new|aggregationpb.StateChange_established, r.StateChange)
 
 	// Sorry for sleeping...
-	time.Sleep(1 * time.Second)
+	clock.Advance(1 * time.Second)
 
 	// The first flow has expired. The next flow should be considered 'new' again.
 	r = ia.Aggregate(&f1)
@@ -251,7 +253,8 @@ func TestExpiredFlows(t *testing.T) {
 
 func TestIdentityExpiration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ia := NewIdentityAggregator(1*time.Second, false)
+	clock := clockwork.NewFakeClock()
+	ia := NewIdentityAggregator(clock, 1*time.Second, false)
 	go ia.Start(ctx)
 	defer cancel()
 	f := testflow.Flow{
@@ -266,17 +269,17 @@ func TestIdentityExpiration(t *testing.T) {
 	result := ia.Aggregate(&f)
 	assert.Equal(t, aggregationpb.StateChange_new|aggregationpb.StateChange_established, result.StateChange)
 
-	for i := 0; i < 100; i++ {
-		// Subsequent aggregations don't set any state change flag until the flow expires from
-		// the aggregation cache. Flows without any state change flags don't get included in
-		// the GetFlows() response.
-		result = ia.Aggregate(&f)
+	// A subsequent flow shouldn't have any state change since the flow is now in the cache again.
+	result = ia.Aggregate(&f)
+	assert.Equal(t, aggregationpb.StateChange_unspec, result.StateChange)
 
-		// The flow expires after 1 second, and the next flow gets the "new" and "established" flags again.
-		if result.StateChange == aggregationpb.StateChange_new|aggregationpb.StateChange_established {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	assert.Fail(t, "flow didn't expire")
+	// Expire the flow by advancing the clock
+	clock.Advance(2 * time.Second)
+
+	// Subsequent aggregations don't set any state change flag until the flow expires from
+	// the aggregation cache. Flows without any state change flags don't get included in
+	// the GetFlows() response.
+	result = ia.Aggregate(&f)
+	// The flow expires after 1 second, and the next flow gets the "new" and "established" flags again.
+	assert.Equal(t, aggregationpb.StateChange_new|aggregationpb.StateChange_established, result.StateChange)
 }
