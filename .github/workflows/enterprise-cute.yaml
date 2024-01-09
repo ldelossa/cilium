@@ -101,7 +101,7 @@ jobs:
           echo cute_ref=$ref >> $GITHUB_OUTPUT
           echo cute_region=$region >> $GITHUB_OUTPUT
           echo deploy_type=$deploy >> $GITHUB_OUTPUT
-          echo upgrade_branch=$upgrade >> $GITHUB_OUTPUT
+          echo upgrade_type=$upgrade >> $GITHUB_OUTPUT
           echo oss=$oss >> $GITHUB_OUTPUT
           echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
 
@@ -160,6 +160,9 @@ jobs:
             cute_chart_version="$major.$minor"
           fi
 
+          branch_suffix=""
+          [[ "${{ steps.vars.outputs.oss }}" != "true" ]] && branch_suffix="${{ env.BRANCH_SUFFIX }}"
+
           echo "getting deploy branch and chart version ..."
           deploy_branch=""
           deploy_chart_version=""
@@ -168,13 +171,26 @@ jobs:
           elif [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
             deploy_chart_version=$(helm search repo cilium/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.deploy_type }}" == "latest" ]]; then
-            deploy_branch="v$cute_chart_version${{ env.BRANCH_SUFFIX }}"
+            deploy_branch="v$cute_chart_version$branch_suffix"
+          fi
+
+          echo "getting upgrade branch and chart version ..."
+          upgrade_branch=""
+          upgrade_stable_version=""
+          if [[ "${{ steps.vars.outputs.upgrade_type }}" == "stable" ]]; then
+            upgrade_stable_version=$(helm search repo cilium/cilium --version $cute_chart_version -o json | jq '.[0] .version')
+          elif [[ "${{ steps.vars.outputs.upgrade_type }}" == "latest" ]]; then
+            upgrade_branch="v$cute_chart_version$branch_suffix"
+          elif [[ -n "${{ steps.vars.outputs.upgrade_type }}" ]]; then
+            upgrade_branch="${{ steps.vars.outputs.upgrade_type }}"
           fi
 
           echo provider=$provider >> $GITHUB_OUTPUT
           echo region=$region >> $GITHUB_OUTPUT
           echo deploy_branch=$deploy_branch >> $GITHUB_OUTPUT
           echo deploy_chart_version=$deploy_chart_version >> $GITHUB_OUTPUT
+          echo upgrade_branch=$upgrade_branch >> $GITHUB_OUTPUT
+          echo upgrade_stable_version=$upgrade_stable_version >> $GITHUB_OUTPUT
 
       - name: Print CuTE properties
         run: |
@@ -190,7 +206,9 @@ jobs:
           echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
           echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
-          echo "Upgrade branch: ${{ steps.vars.outputs.upgrade_branch }}"
+          echo "Upgrade type: ${{ steps.vars.outputs.upgrade_type }}"
+          echo "Upgrade branch: ${{ steps.cute_props.outputs.upgrade_branch }}"
+          echo "Upgrade stable version: ${{ steps.cute_props.outputs.upgrade_stable_version }}"
 
       - name: Install Cilium CLI
         run: |
@@ -299,11 +317,12 @@ jobs:
 
       - name: Prepare upgrade helm chart
         id: cute_helm_upgrade
-        if: steps.vars.outputs.upgrade_branch != ''
+        # Skip for `stable` type because Helm chart already exists
+        if: steps.vars.outputs.upgrade_type != '' && steps.vars.outputs.upgrade_type != 'stable'
         timeout-minutes: 30
         uses: ./.github/actions/cute-helm-chart
         with:
-          branch: ${{ steps.vars.outputs.upgrade_branch }}
+          branch: ${{ steps.cute_props.outputs.upgrade_branch }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
@@ -393,19 +412,19 @@ jobs:
           cute-dir: cute/${{ steps.vars.outputs.cute_dir }}
 
       - name: Run CuTE upgrade
-        if: steps.vars.outputs.upgrade_branch != ''
+        if: steps.vars.outputs.upgrade_type != ''
         timeout-minutes: 40
         uses: ./.github/actions/cute-upgrade
         with:
           deploy-type: ${{ steps.vars.outputs.deploy_type }}
-          use-umbrella: ${{ steps.vars.outputs.umbrella_chart }}
+          upgrade-stable-version: ${{ steps.cute_props.outputs.upgrade_stable_version }}
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
           umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
           quay-org: ${{ steps.vars.outputs.quay_charts_org }}
 
       - name: IPsec tests after upgrade
-        if: steps.vars.outputs.upgrade_branch != '' && steps.encryption.outputs.type == 'ipsec'
+        if: steps.vars.outputs.upgrade_type != '' && steps.encryption.outputs.type == 'ipsec'
         timeout-minutes: 420
         uses: ./.github/actions/cute-test-ipsec
         with:

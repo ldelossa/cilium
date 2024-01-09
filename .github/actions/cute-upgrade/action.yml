@@ -4,8 +4,8 @@ inputs:
   deploy-type:
     description: 'CI deploy type.'
     required: true
-  use-umbrella:
-    description: 'Indicates if CuTE uses Cilium umbrella helm chart.'
+  upgrade-stable-version:
+    description: 'Cilium stable Helm chart version.'
     required: true
   helm-version:
     description: 'Cilium Helm chart version.'
@@ -22,17 +22,34 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: CuTE Terraform variables file
+    - name: CuTE Terraform variables file for stable upgrade
+      if: inputs.upgrade-stable-version != ''
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        HELM_CHART="oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium"
+        if [[ ${{ inputs.deploy-type }} == 'cute' ]]; then
+          echo "cilium_helm_version=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
+          # the below variables are for cluster mesh scenario
+          echo "cilium_helm_version_1=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
+          echo "cilium_helm_version_2=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
+        else
+          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.upgrade-stable-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.upgrade-stable-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.upgrade-stable-version }}\"/g" terraform.tfvars
+        fi
+        cat terraform.tfvars
+
+    - name: CuTE Terraform variables file for non-stable upgrade
+      if: inputs.upgrade-stable-version == ''
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
         HELM_CHART_VERSION=${{ inputs.helm-version }}
-        if [[ ${{ inputs.use-umbrella }} == 'true' ]]; then
+        if [[ -n ${{ inputs.umbrella-chart-path }} ]]; then
           HELM_CHART=${{ inputs.umbrella-chart-path }}
         fi
         if [[ ${{ inputs.deploy-type }} == 'cute' ]]; then
-          echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
+          echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium\"" >> terraform.tfvars
           echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
           # the below variables are for cluster mesh scenario
           echo "cilium_helm_version_1=\"$HELM_CHART_VERSION\"" >> terraform.tfvars

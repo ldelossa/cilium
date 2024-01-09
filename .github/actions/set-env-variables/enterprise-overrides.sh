@@ -10,8 +10,12 @@ echo "QUAY_ORGANIZATION_DEV=isovalent-dev" >> "$GITHUB_ENV"
 echo "CILIUM_HELM_REPO_NAME=isovalent" >> "$GITHUB_ENV"
 echo "CILIUM_HELM_REPO_URL=https://helm.isovalent.com" >> "$GITHUB_ENV"
 echo "CILIUM_CLI_REPO=isovalent/cilium-cli-releases" >> "$GITHUB_ENV"
+echo "CILIUM_OSS_HELM_REPO_NAME=cilium" >> $GITHUB_ENV
+echo "CILIUM_OSS_HELM_REPO_URL=https://helm.cilium.io" >> $GITHUB_ENV
+echo "CILIUM_OSS_CLI_REPO=cilium/cilium-cli" >> $GITHUB_ENV
 
 echo "QUAY_CHARTS_ORGANIZATION_DEV=isovalent-charts-dev" >> "$GITHUB_ENV"
+echo "QUAY_OSS_CHARTS_ORGANIZATION_DEV=cilium-charts-dev" >> $GITHUB_ENV
 echo "BRANCH_SUFFIX=-ce" >> "$GITHUB_ENV"
 echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true --helm-set=enterprise.egressGatewayHA.enabled=true" >> "$GITHUB_ENV"
 
