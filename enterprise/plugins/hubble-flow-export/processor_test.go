@@ -79,6 +79,20 @@ func Test_export_OnDecodedFlow(t *testing.T) {
 			expectedCount: 2,
 			formatVersion: "",
 		},
+		{
+			name:    "override node name",
+			enabled: true,
+			flows: []*flow.Flow{
+				{NodeName: "foo"},
+				{NodeName: "bar"},
+			},
+			expected: `{"flow":{"node_name":"overridden"},"node_name":"overridden"}
+{"flow":{"node_name":"overridden"},"node_name":"overridden"}
+`,
+			expectedCount: 2,
+			formatVersion: formatVersionV1,
+			nodeName:      "overridden",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -232,22 +246,4 @@ func Test_rateLimitExport(t *testing.T) {
 			checkEvents(t, bb.Bytes(), tt.wantFlows, tt.wantRateLimitInfo, tt.wantDropped)
 		})
 	}
-}
-
-func Test_export_exportFlowOverrideNodeName(t *testing.T) {
-	log := logrus.New()
-	log.SetOutput(io.Discard)
-	var bb bytes.Buffer
-	encoder := json.NewEncoder(&bb)
-	exportPlugin := &export{
-		viper:         viper.New(),
-		enabled:       true,
-		encoder:       encoder,
-		logger:        log,
-		formatVersion: formatVersionV1,
-		nodeName:      "new-node-name",
-	}
-	expected := `{"flow":{},"node_name":"new-node-name"}`
-	assert.NoError(t, exportPlugin.exportFlow(context.Background(), &flow.Flow{}))
-	assert.Equal(t, expected+"\n", bb.String())
 }

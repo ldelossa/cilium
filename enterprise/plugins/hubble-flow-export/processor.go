@@ -105,10 +105,9 @@ func (e *export) exportFlow(ctx context.Context, f *flowpb.Flow) error {
 		atomic.AddUint64(&e.rateLimiter.dropped, 1)
 		return nil
 	}
-	nodeName := f.NodeName
 	if e.nodeName != "" {
 		// Override node_name with the value specified in --export-node-name flag.
-		nodeName = e.nodeName
+		f.NodeName = e.nodeName
 	}
 
 	if e.metricsHandler != nil {
@@ -121,7 +120,7 @@ func (e *export) exportFlow(ctx context.Context, f *flowpb.Flow) error {
 	if e.formatVersion == formatVersionV1 {
 		return e.encoder.Encode(&observer.GetFlowsResponse{
 			ResponseTypes: &observer.GetFlowsResponse_Flow{Flow: f},
-			NodeName:      nodeName,
+			NodeName:      f.NodeName,
 			Time:          f.Time,
 		})
 	}
