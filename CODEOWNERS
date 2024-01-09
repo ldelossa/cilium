@@ -588,6 +588,12 @@ Vagrantfile @cilium/ci-structure
 #   Responsible for maintaining DNS Proxy HA
 # - @isovalent/egress-gateway
 #   Responsible for maintaining egress-gateway and egress-gateway-ha
+# - @isovalent/helm:
+#   Provide input on the way that Helm can be used to configure features. These
+#   owners are a stand-in for the user community to bring a user perspective to
+#   the review process. Ensure that Helm changes are defined in manners that
+#   will be forward-compatible for upgrade and follow best practices for
+#   deployment (for example, being GitOps-friendly).
 # - @isovalent/hubble
 #   Responsible for maintaining enterprise Hubble products and features
 # - @isovalent/security
