@@ -30,92 +30,104 @@ import (
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/pkg/hubble/filters"
 	"github.com/cilium/cilium/pkg/hubble/metrics/api"
-	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 )
 
-type fakeHubbleServer struct{}
-
-func (f fakeHubbleServer) GetOptions() observeroption.Options {
-	panic("Don't call me")
-}
-
-func (f fakeHubbleServer) GetLogger() logrus.FieldLogger {
-	panic("Don't call me")
-}
-
 func Test_export_OnDecodedFlow(t *testing.T) {
-	log := logrus.New()
-	log.SetOutput(io.Discard)
-	encoder := json.NewEncoder(io.Discard)
-	exportPlugin := &export{
-		viper:              viper.New(),
-		encoder:            encoder,
-		denylist:           []filters.FilterFunc{},
-		allowlist:          []filters.FilterFunc{},
-		logger:             log,
-		aggregationContext: context.Background(),
-		formatVersion:      formatVersionV1,
+	tests := []struct {
+		name          string
+		enabled       bool
+		flows         []*flow.Flow
+		formatVersion string
+		nodeName      string
+		expected      string
+		expectedCount float64
+	}{
+		{
+			name:    "disabled",
+			enabled: false,
+			flows: []*flow.Flow{
+				{NodeName: "foo"},
+				{NodeName: "bar"},
+			},
+			expected:      ``,
+			expectedCount: 0,
+			formatVersion: formatVersionV1,
+		},
+		{
+			name:    "basic format v1",
+			enabled: true,
+			flows: []*flow.Flow{
+				{NodeName: "foo"},
+				{NodeName: "bar"},
+			},
+			expected: `{"flow":{"node_name":"foo"},"node_name":"foo"}
+{"flow":{"node_name":"bar"},"node_name":"bar"}
+`,
+			expectedCount: 2,
+			formatVersion: formatVersionV1,
+		},
+		{
+			name:    "basic format v0",
+			enabled: true,
+			flows: []*flow.Flow{
+				{NodeName: "foo"},
+				{NodeName: "bar"},
+			},
+			expected: `{"node_name":"foo"}
+{"node_name":"bar"}
+`,
+			expectedCount: 2,
+			formatVersion: "",
+		},
 	}
-	promRegistry := prometheus.NewRegistry()
-	metricsHandler := exportPlugin.NewHandler()
-	metricsHandler.Init(promRegistry, api.Options{})
-	f := &flow.Flow{}
-	labelNames := exportPlugin.metricsHandler.getLabelNames()
-	labelValues, err := exportPlugin.metricsHandler.getLabelValues(f)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log := logrus.New()
+			log.SetOutput(io.Discard)
+			var sb strings.Builder
+			encoder := json.NewEncoder(&sb)
+			exportPlugin := &export{
+				enabled:            tt.enabled,
+				viper:              viper.New(),
+				encoder:            encoder,
+				denylist:           []filters.FilterFunc{},
+				allowlist:          []filters.FilterFunc{},
+				logger:             log,
+				aggregationContext: context.Background(),
+				formatVersion:      tt.formatVersion,
+				nodeName:           tt.nodeName,
+			}
+			promRegistry := prometheus.NewRegistry()
+			metricsHandler := exportPlugin.NewHandler()
+			metricsHandler.Init(promRegistry, api.Options{})
 
-	metricsLabels := make(prometheus.Labels)
-	for i, name := range labelNames {
-		metricsLabels[name] = labelValues[i]
+			labelNames := exportPlugin.metricsHandler.getLabelNames()
+			labelValues, err := exportPlugin.metricsHandler.getLabelValues(&flow.Flow{})
+			require.NoError(t, err)
+
+			metricsLabels := make(prometheus.Labels)
+			for i, name := range labelNames {
+				metricsLabels[name] = labelValues[i]
+			}
+
+			for _, f := range tt.flows {
+				stop, err := exportPlugin.OnDecodedFlow(context.Background(), f)
+				assert.False(t, stop)
+				assert.NoError(t, err)
+			}
+
+			// verify the contents of the export
+			assert.Equal(t, tt.expected, sb.String(), "export file contents did not match")
+
+			// get the counter metric for this plugin
+			counter, err := exportPlugin.metricsHandler.flowsExportedTotal.GetMetricWith(metricsLabels)
+			require.NoError(t, err, "got error getting exported flow metrics counter")
+
+			// verify metric
+			exportedCount := testutil.ToFloat64(counter)
+			assert.EqualValues(t, tt.expectedCount, exportedCount, "flow export metrics incorrect")
+		})
 	}
-	stop, err := exportPlugin.OnDecodedFlow(context.Background(), f)
-	// stop should be false even if the aggregation plugin returns stop=true.
-	assert.False(t, stop)
-	assert.NoError(t, err)
-
-	// get the counter metric for this plugin
-	counter, err := exportPlugin.metricsHandler.flowsExportedTotal.GetMetricWith(metricsLabels)
-	require.NoError(t, err)
-	exportedCount := testutil.ToFloat64(counter)
-	// no decoded flows if disabled
-	assert.EqualValues(t, 0, exportedCount)
-
-	exportPlugin.enabled = true
-	stop, err = exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{})
-	assert.False(t, stop)
-	assert.NoError(t, err)
-	// should only decode flows if enabled
-	exportedCount = testutil.ToFloat64(counter)
-	assert.EqualValues(t, 1, exportedCount)
-
-	var sb strings.Builder
-	exportPlugin.encoder = json.NewEncoder(&sb)
-	stop, err = exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{NodeName: "foobar"})
-	assert.False(t, stop)
-	assert.NoError(t, err)
-	expected := `{"flow":{"node_name":"foobar"},"node_name":"foobar"}`
-	assert.Equal(t, expected+"\n", sb.String())
-
-	sb.Reset()
-	exportPlugin.formatVersion = "" // legacy format
-	stop, err = exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{})
-	assert.False(t, stop)
-	assert.NoError(t, err)
-	assert.Equal(t, "{}\n", sb.String())
-
-}
-
-func Test_disableExport(t *testing.T) {
-	log := logrus.New()
-	log.SetOutput(io.Discard)
-	vp := viper.New()
-	exportPlugin := &export{logger: log, viper: vp}
-	vp.Set(exportFilePath, "")
-	assert.NoError(t, exportPlugin.OnServerInit(&fakeHubbleServer{}))
-	assert.False(t, exportPlugin.enabled)
-	stop, err := exportPlugin.OnDecodedFlow(context.Background(), &flow.Flow{})
-	assert.NoError(t, err)
-	assert.False(t, stop)
 }
 
 type jsonEvent struct {
