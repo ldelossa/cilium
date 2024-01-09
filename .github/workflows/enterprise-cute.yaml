@@ -105,6 +105,12 @@ jobs:
           echo oss=$oss >> $GITHUB_OUTPUT
           echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
 
+      - name: Set helm repositories
+        run: |
+          # Required for Terraform provisioner script:
+          helm repo add ${{ env.CILIUM_HELM_REPO_NAME }} ${{ env.CILIUM_HELM_REPO_URL }}
+          helm repo add ${{ env.CILIUM_OSS_HELM_REPO_NAME }} ${{ env.CILIUM_OSS_HELM_REPO_URL }}
+
       - name: Checkout CuTE repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
@@ -143,26 +149,32 @@ jobs:
             region=${{ steps.vars.outputs.cute_region }}
           fi
 
-          echo "getting deploy type and chart version ..."
-          deploy_branch=${{ inputs.context-ref }} # use current branch version by default
-          if [[ "${{ steps.vars.outputs.deploy_type }}" == "cute" ]]; then
-            deploy_branch=""
+          echo "getting cute helm chart used version ..."
+          cute_chart_version=$(grep -A 3 '^variable "cilium_helm_version.*" {' *.tf | grep 'default')
+          cute_chart_version=$(echo "${cute_chart_version##*=}" | xargs)
+          # remove patch version number
+          if [[ $cute_chart_version =~ ^[[:digit:]]+.[[:digit:]]+..* ]]; then
+            major="${cute_chart_version%%\.*}"
+            minor="${cute_chart_version#*.}"
+            minor="${minor%%\.*}"
+            cute_chart_version="$major.$minor"
+          fi
+
+          echo "getting deploy branch and chart version ..."
+          deploy_branch=""
+          deploy_chart_version=""
+          if [[ "${{ steps.vars.outputs.deploy_type }}" == "current" ]]; then
+            deploy_branch="${{ inputs.context-ref }}"
           elif [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
-            chart_version=$(grep -A 3 '^variable "cilium_helm_version.*" {' *.tf | grep 'default')
-            chart_version=$(echo "${chart_version##*=}" | xargs)
-            # remove patch version number
-            if [[ $chart_version =~ ^[[:digit:]]+.[[:digit:]]+..* ]]; then
-              major="${chart_version%%\.*}"
-              minor="${chart_version#*.}"
-              minor="${minor%%\.*}"
-              chart_version="$major.$minor"
-            fi
-            deploy_branch="v$chart_version${{ env.BRANCH_SUFFIX }}"
+            deploy_chart_version=$(helm search repo cilium/cilium --version $cute_chart_version -o json | jq '.[0] .version')
+          elif [[ "${{ steps.vars.outputs.deploy_type }}" == "latest" ]]; then
+            deploy_branch="v$cute_chart_version${{ env.BRANCH_SUFFIX }}"
           fi
 
           echo provider=$provider >> $GITHUB_OUTPUT
           echo region=$region >> $GITHUB_OUTPUT
           echo deploy_branch=$deploy_branch >> $GITHUB_OUTPUT
+          echo deploy_chart_version=$deploy_chart_version >> $GITHUB_OUTPUT
 
       - name: Print CuTE properties
         run: |
@@ -174,6 +186,7 @@ jobs:
           echo "Region: ${{ steps.cute_props.outputs.region }}"
           echo "Deploy type: ${{ steps.vars.outputs.deploy_type }}"
           echo "Deploy branch: ${{ steps.cute_props.outputs.deploy_branch }}"
+          echo "Deploy chart version: ${{ steps.cute_props.outputs.deploy_chart_version }}"
           echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
           echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
@@ -270,16 +283,10 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$( jq -r '.subscriptionId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=$( jq -r '.tenantId' <<< $AZURE_CREDENTIALS )" >> $GITHUB_ENV
 
-      - name: Set helm repositories
-        run: |
-          # Required for Terraform provisioner script:
-          helm repo add ${{ env.CILIUM_HELM_REPO_NAME }} ${{ env.CILIUM_HELM_REPO_URL }}
-          helm repo add ${{ env.CILIUM_OSS_HELM_REPO_NAME }} ${{ env.CILIUM_OSS_HELM_REPO_URL }}
-
       - name: Prepare helm chart
         id: cute_helm
-        # `cute` type means that CuTE Helm chart will be used (it already exists)
-        if: steps.vars.outputs.deploy_type != 'cute'
+        # Skip for `cute` or `stable` type because Helm chart already exists
+        if: steps.vars.outputs.deploy_type != 'cute' && steps.vars.outputs.deploy_type != 'stable'
         timeout-minutes: 30
         uses: ./.github/actions/cute-helm-chart
         with:
@@ -312,17 +319,21 @@ jobs:
           owner="ci"
           region="${{ steps.cute_props.outputs.region }}"
           EOF
-          if [[ "${{ steps.vars.outputs.deploy_type }}" != "cute" ]]; then
-            HELM_CHART="oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium"
-            HELM_CHART_VERSION=${{ steps.cute_helm.outputs.version }}
-            if [[ ${{ steps.vars.outputs.umbrella_chart }} == 'true' ]]; then
-              HELM_CHART="${{ steps.cute_helm.outputs.umbrella-chart-path }}"
-            fi
-            echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
-            echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+          if [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
+            echo "cilium_helm_version=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
             # the below variables are for cluster mesh scenario
-            echo "cilium_helm_version_1=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
-            echo "cilium_helm_version_2=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
+            echo "cilium_helm_version_1=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
+            echo "cilium_helm_version_2=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
+          elif [[ "${{ steps.vars.outputs.deploy_type }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy_type }}" == "latest" ]]; then
+            if [[ ${{ steps.vars.outputs.umbrella_chart }} != 'true' ]]; then
+              echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium\"" >> terraform.tfvars
+            else
+              echo "cilium_helm_chart=\"${{ steps.cute_helm.outputs.umbrella-chart-path }}\"" >> terraform.tfvars
+            fi
+            echo "cilium_helm_version=\"${{ steps.cute_helm.outputs.version }}\"" >> terraform.tfvars
+            # the below variables are for cluster mesh scenario
+            echo "cilium_helm_version_1=\"${{ steps.cute_helm.outputs.version }}\"" >> terraform.tfvars
+            echo "cilium_helm_version_2=\"${{ steps.cute_helm.outputs.version }}\"" >> terraform.tfvars
           fi
           if [[ "${{ inputs.helm-override-file }}" != "" ]]; then
             echo "cilium_helm_values_override_file_path=\"${{ inputs.helm-override-file }}\"" >> terraform.tfvars
