@@ -597,6 +597,8 @@ Vagrantfile @cilium/ci-structure
 #   deployment (for example, being GitOps-friendly).
 # - @isovalent/hubble
 #   Responsible for maintaining enterprise Hubble products and features
+# - @isovalent/multi-network
+#   Responsible for maintaining the Cilium-native multi-network feature
 # - @isovalent/security
 #   Responsible for security related features and issues.
 # - @isovalent/sig-k8s:
@@ -608,6 +610,7 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
+/.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
@@ -615,17 +618,21 @@ Vagrantfile @cilium/ci-structure
 /.openvex.json @isovalent/security
 /enterprise @isovalent/void
 *enterprise* @isovalent/void
+*podnetwork* @isovalent/multi-network
 /enterprise/cilium-cli/ @isovalent/cli
 /enterprise/cilium-cli/hooks/connectivity/tests/egressgateway.go @isovalent/egress-gateway
 /enterprise/cilium-cli/hooks/connectivity/tests/external_dns_proxy*.go @isovalent/dns-proxy
 /enterprise/cilium-cli/hooks/connectivity/tests/hubble-cli-version.go @isovalent/hubble
 /enterprise/cilium-cli/hooks/connectivity/tests/phantom.go @isovalent/clustermesh
+/enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/operator/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
 /enterprise/pkg/maps/ctnat/ @isovalent/clustermesh
 /enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
+/enterprise/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/mixedrouting/ @isovalent/clustermesh
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
 /install/kubernetes/cilium/templates/cilium-agent/*enterprise* @isovalent/sig-k8s @isovalent/helm
@@ -633,6 +640,8 @@ Vagrantfile @cilium/ci-structure
 /install/kubernetes/cilium/templates/cilium-preflight/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /pkg/clustermesh/enterprise_* @isovalent/clustermesh
+/pkg/k8s/apis/isovalent.com/client/crds/v1alpha1/isovalentpodnetworks.yaml @isovalent/multi-network
+/pkg/k8s/apis/isovalent.com/v1alpha1/podnetwork_types.go @isovalent/multi-network
 /pkg/k8s/enterprise_overlapping_podcidr* @isovalent/clustermesh
 /pkg/k8s/enterprise_phantom* @isovalent/clustermesh
 /pkg/k8s/enterprise_service_merger* @isovalent/clustermesh
