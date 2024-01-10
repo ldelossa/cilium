@@ -1,0 +1,560 @@
+name: Cilium Cluster Mesh with Mixed Routing Mode Support (ci-clustermesh)
+
+# Any change in triggers needs to be reflected in the concurrency group.
+on:
+  workflow_dispatch:
+    inputs:
+      PR-number:
+        description: "Pull request number."
+        required: true
+      context-ref:
+        description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
+        required: true
+      SHA:
+        description: "SHA under test (head of the PR branch)."
+        required: true
+      extra-args:
+        description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
+        required: false
+        default: '{}'
+  # Run every 6 hours
+  schedule:
+    - cron:  '0 3/6 * * *'
+
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # To be able to set commit status
+  statuses: write
+
+concurrency:
+  # Structure:
+  # - Workflow name
+  # - Event type
+  # - A unique identifier depending on event type:
+  #   - push: SHA
+  #   - workflow_dispatch: PR number
+  #
+  # This structure ensures a unique concurrency group name is generated for each
+  # type of testing, such that re-runs will cancel the previous run.
+  group: |
+    ${{ github.workflow }}
+    ${{ github.event_name }}
+    ${{
+      (github.event_name == 'schedule' && github.sha) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.PR-number)
+    }}
+  cancel-in-progress: true
+
+env:
+  cilium_cli_ci_version:
+  helmChartPath: ./untrusted/install/kubernetes/cilium
+  clusterName1: cluster1-${{ github.run_id }}
+  clusterName2: cluster2-${{ github.run_id }}
+  contextName1: kind-cluster1-${{ github.run_id }}
+  contextName2: kind-cluster2-${{ github.run_id }}
+
+jobs:
+  commit-status-start:
+    name: Commit Status Start
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set initial commit status
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+
+  installation-and-connectivity:
+    name: Installation and Connectivity Test
+    runs-on: ${{ vars.GH_RUNNER_EXTRA_POWER }}
+    timeout-minutes: 60
+    env:
+      job_name: "Installation and Connectivity Test"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Each matrix entry is repeated three times to cover the native-native,
+          # tunnel-tunnel and native-tunnel combinations. While only the last one
+          # explicitly tests a mixed routing mode configuration, the others ensure
+          # that the enabling mixed routing mode does not affect clusters which
+          # already use the same routing mode, and thus are already meshed together.
+
+          - name: '1'
+            routing: 'native'
+            tunnel: 'vxlan'
+            kube-proxy: 'iptables'
+            encryption: 'disabled'
+            endpoint-routes: true # C1=T, C2=F (C2 is fixed).
+            mode: 'clustermesh'
+
+          - name: '2'
+            routing: 'tunnel'
+            tunnel: 'vxlan'
+            kube-proxy: 'iptables'
+            encryption: 'disabled'
+            endpoint-routes: true # C1=T, C2=F (C2 is fixed).
+            mode: 'clustermesh'
+
+          - name: '3'
+            routing: 'mixed'
+            tunnel: 'vxlan'
+            kube-proxy: 'iptables'
+            encryption: 'disabled'
+            endpoint-routes: true # C1=T, C2=F (C2 is fixed).
+            mode: 'clustermesh'
+
+          - name: '4'
+            routing: 'native'
+            tunnel: 'geneve'
+            kube-proxy: 'none'
+            encryption: 'disabled'
+            endpoint-routes: false # C1=F, C2=F (C2 is fixed).
+            mode: 'kvstoremesh'
+
+          - name: '5'
+            routing: 'tunnel'
+            tunnel: 'geneve'
+            kube-proxy: 'none'
+            encryption: 'disabled'
+            endpoint-routes: false # C1=F, C2=F (C2 is fixed).
+            mode: 'kvstoremesh'
+
+          - name: '6'
+            routing: 'mixed'
+            tunnel: 'geneve'
+            kube-proxy: 'none'
+            encryption: 'disabled'
+            endpoint-routes: false # C1=F, C2=F (C2 is fixed).
+            mode: 'kvstoremesh'
+
+          - name: '7'
+            routing: 'native'
+            tunnel: 'vxlan'
+            kube-proxy: 'none'
+            encryption: 'wireguard'
+            endpoint-routes: true # C1=T, C2=F (C2 is fixed).
+            mode: 'external'
+
+          - name: '8'
+            routing: 'tunnel'
+            tunnel: 'vxlan'
+            kube-proxy: 'none'
+            encryption: 'wireguard'
+            endpoint-routes: true # C1=T, C2=F (C2 is fixed).
+            mode: 'external'
+
+          - name: '9'
+            routing: 'mixed'
+            tunnel: 'vxlan'
+            kube-proxy: 'none'
+            encryption: 'wireguard'
+            endpoint-routes: true # C1=T, C2=F (C2 is fixed).
+            mode: 'external'
+
+
+    steps:
+      - name: Checkout context ref (trusted)
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set Environment Variables
+        uses: ./.github/actions/set-env-variables
+
+      - name: Get Cilium's default values
+        id: default_vars
+        uses: ./.github/actions/helm-default
+        with:
+          image-tag: ${{ inputs.SHA }}
+          chart-dir: ${{ env.helmChartPath }}
+
+      - name: Set up job variables for GHA environment
+        id: vars
+        run: |
+          # * RollOutCiliumPods ensures that Cilium agent pods are automatically
+          #   restarted when the ConfigMap is updated.
+          # * We explicitly configure the sync timeout to a higher value to
+          #   give enough time to the clustermesh-apiserver to restart after
+          #   the upgrade/downgrade before that agents regenerate the endpoints.
+          # * The ingress controller requires KPR to be enabled.
+          # * Host firewall is not compatible with IPSec (#11969), nor with IPv6
+          #   BPF masquerade (#26074)
+          # * We disable the standalone Envoy Proxy DaemonSet (enabled by default
+          #   since cilium/cilium#30034) as it appears to be currently affected
+          #   a bug causing traffic matched by FQDN and L7 policies to be incorrectly
+          #   dropped by Envoy after agent restart (due to wrong identity).
+          #   https://isovalent.slack.com/archives/C01FJ2PLRT7/p1710153045844129
+          CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
+            --set rollOutCiliumPods=true \
+            --set ipv4.enabled=true \
+            --set ipv6.enabled=true \
+            --set tunnelProtocol=${{ matrix.tunnel }} \
+            --set kubeProxyReplacement=${{ matrix.kube-proxy == 'none' }} \
+            --set ingressController.enabled=${{ matrix.kube-proxy == 'none' }} \
+            --set ipv4NativeRoutingCIDR=10.240.0.0/12 \
+            --set ipv6NativeRoutingCIDR=fd00:10:240::/44 \
+            --set encryption.enabled=${{ matrix.encryption != 'disabled' }} \
+            --set encryption.type=${{ matrix.encryption }} \
+            --set hostFirewall.enabled=${{ matrix.encryption != 'ipsec' }} \
+            --set clustermesh.useAPIServer=${{ matrix.mode != 'external' }} \
+            --set clustermesh.apiserver.kvstoremesh.enabled=${{ matrix.mode == 'kvstoremesh' }} \
+            --set clustermesh.config.enabled=true \
+            --set hubble.enabled=true \
+            --set hubble.eventBufferCapacity=65535 \
+            --set extraConfig.clustermesh-ip-identities-sync-timeout=10m \
+            --set envoy.enabled=false \
+          "
+
+          CILIUM_INSTALL_CLUSTER1="$CILIUM_INSTALL_DEFAULTS \
+            --set cluster.name=${{ env.clusterName1 }} \
+            --set cluster.id=1 \
+            --set clustermesh.apiserver.service.nodePort=32379 \
+            --set routingMode=${{ (matrix.routing == 'native' || matrix.routing == 'mixed') && 'native' || 'tunnel' }} \
+            --set autoDirectNodeRoutes=${{ matrix.routing == 'native' || matrix.routing == 'mixed' }} \
+            --set bpf.masquerade=${{ matrix.kube-proxy == 'none' }} \
+            --set enableIPv6Masquerade=${{ matrix.kube-proxy != 'none' }} \
+            --set endpointRoutes.enabled=${{ matrix.endpoint-routes }} \
+          "
+
+          CILIUM_INSTALL_CLUSTER2="$CILIUM_INSTALL_DEFAULTS \
+            --set cluster.name=${{ env.clusterName2 }} \
+            --set cluster.id=255 \
+            --set clustermesh.apiserver.service.nodePort=32380 \
+            --set routingMode=${{ (matrix.routing == 'native') && 'native' || 'tunnel' }} \
+            --set autoDirectNodeRoutes=${{ matrix.routing == 'native' }} \
+            --set bpf.masquerade=false \
+            --set endpointRoutes.enabled=false \
+          "
+
+          echo cilium_install_cluster1=$CILIUM_INSTALL_CLUSTER1 >> $GITHUB_OUTPUT
+          echo cilium_install_cluster2=$CILIUM_INSTALL_CLUSTER2 >> $GITHUB_OUTPUT
+
+      - name: Install Cilium CLI
+        uses: cilium/cilium-cli@ca0d5a23b842d78ce3b5c79a80d546867493daf7 # v0.16.0
+        with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
+          release-version: ${{ env.CILIUM_CLI_VERSION }}
+          ci-version: ${{ env.cilium_cli_ci_version }}
+
+      - name: Generate Kind configuration files
+        env:
+          K8S_VERSION: ${{ env.k8s_version }}
+          IPFAMILY: dual
+          KUBEPROXYMODE: ${{ matrix.kube-proxy }}
+        run: |
+          PODCIDR=10.242.0.0/16,fd00:10:242::/48 \
+            SVCCIDR=10.243.0.0/16,fd00:10:243::/112 \
+            envsubst < ./.github/kind-config.yaml.tmpl > ./.github/kind-config-cluster1.yaml
+
+          PODCIDR=10.244.0.0/16,fd00:10:244::/48 \
+            SVCCIDR=10.245.0.0/16,fd00:10:245::/112 \
+            envsubst < ./.github/kind-config.yaml.tmpl > ./.github/kind-config-cluster2.yaml
+
+      - name: Create Kind cluster 1
+        uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
+        with:
+          cluster_name: ${{ env.clusterName1 }}
+          version: ${{ env.KIND_VERSION }}
+          node_image: ${{ env.KIND_K8S_IMAGE }}
+          kubectl_version: ${{ env.KIND_K8S_VERSION }}
+          config: ./.github/kind-config-cluster1.yaml
+          wait: 0 # The control-plane never becomes ready, since no CNI is present
+
+      - name: Create Kind cluster 2
+        uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
+        with:
+          cluster_name: ${{ env.clusterName2 }}
+          version: ${{ env.KIND_VERSION }}
+          node_image: ${{ env.KIND_K8S_IMAGE }}
+          kubectl_version: ${{ env.KIND_K8S_VERSION }}
+          config: ./.github/kind-config-cluster2.yaml
+          wait: 0 # The control-plane never becomes ready, since no CNI is present
+
+      - name: Label one of the nodes as external to the cluster
+        run: |
+          kubectl --context ${{ env.contextName1 }} label node \
+            ${{ env.clusterName1 }}-worker2 cilium.io/no-schedule=true
+
+      # Make sure that coredns uses IPv4-only upstream DNS servers also in case of clusters
+      # with IP family dual, since IPv6 ones are not reachable and cause spurious failures.
+      # Additionally, this is also required to workaround #23283.
+      - name: Configure the coredns nameservers
+        run: |
+          COREDNS_PATCH="
+          spec:
+            template:
+              spec:
+                dnsPolicy: None
+                dnsConfig:
+                  nameservers:
+                  - 8.8.4.4
+                  - 8.8.8.8
+          "
+
+          kubectl --context ${{ env.contextName1 }} patch deployment -n kube-system coredns --patch="$COREDNS_PATCH"
+          kubectl --context ${{ env.contextName2 }} patch deployment -n kube-system coredns --patch="$COREDNS_PATCH"
+
+      - name: Create the IPSec secret in all clusters
+        if: matrix.encryption == 'ipsec'
+        run: |
+          SECRET="3 rfc4106(gcm(aes)) $(openssl rand -hex 20) 128"
+          kubectl --context ${{ env.contextName1 }} create -n kube-system secret generic cilium-ipsec-keys --from-literal=keys="${SECRET}"
+          kubectl --context ${{ env.contextName2 }} create -n kube-system secret generic cilium-ipsec-keys --from-literal=keys="${SECRET}"
+
+      - name: Start kvstore clusters
+        id: kvstore
+        if: matrix.mode == 'external'
+        uses: ./.github/actions/kvstore
+        with:
+          clusters: 2
+
+      - name: Create the secret containing the kvstore credentials
+        if: matrix.mode == 'external'
+        run: |
+          kubectl --context ${{ env.contextName1 }} create -n kube-system -f ${{ steps.kvstore.outputs.cilium_etcd_secrets_path }}
+          kubectl --context ${{ env.contextName2 }} create -n kube-system -f ${{ steps.kvstore.outputs.cilium_etcd_secrets_path }}
+
+      - name: Set clustermesh connection parameters
+        id: clustermesh-vars
+        run: |
+          CILIUM_INSTALL_CONFIG=" \
+            --set clustermesh.config.clusters[0].name=${{ env.clusterName1 }} \
+            --set clustermesh.config.clusters[1].name=${{ env.clusterName2 }} \
+          "
+
+          if [ "${{ matrix.mode }}" == "external" ]; then
+            CILIUM_INSTALL_CONFIG="$CILIUM_INSTALL_CONFIG \
+              ${{ steps.kvstore.outputs.cilium_install_clustermesh }}"
+          else
+            IP1=$(kubectl --context ${{ env.contextName1 }} get nodes \
+              ${{ env.clusterName1 }}-worker -o wide --no-headers | awk '{ print $6 }')
+            IP2=$(kubectl --context ${{ env.contextName2 }} get nodes \
+              ${{ env.clusterName2 }}-worker -o wide --no-headers | awk '{ print $6 }')
+
+            CILIUM_INSTALL_CONFIG="$CILIUM_INSTALL_CONFIG \
+              --set clustermesh.config.clusters[0].ips={$IP1} \
+              --set clustermesh.config.clusters[0].port=32379 \
+              --set clustermesh.config.clusters[1].ips={$IP2} \
+              --set clustermesh.config.clusters[1].port=32380 \
+            "
+          fi
+
+          echo "cilium_install_config=$CILIUM_INSTALL_CONFIG" >> $GITHUB_OUTPUT
+          if [ "${{ matrix.routing }}" != "mixed" ]; then
+            # We mesh the two clusters together at installation time only if
+            # they are already configured with the same routing mode.
+            echo "cilium_install_config_initial=$CILIUM_INSTALL_CONFIG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Wait for images to be available
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          for image in cilium-ci operator-generic-ci clustermesh-apiserver-ci ; do
+            until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.default_vars.outputs.sha }} &> /dev/null; do sleep 45s; done
+          done
+
+      # Warning: since this is a privileged workflow, subsequent workflow job
+      # steps must take care not to execute untrusted code.
+      - name: Checkout pull request branch (NOT TRUSTED)
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          path: untrusted
+          ref: ${{ steps.default_vars.outputs.sha }}
+          sparse-checkout: |
+            install/kubernetes/cilium
+          persist-credentials: false
+
+      - name: Install Cilium in cluster1
+        id: install-cilium-cluster1
+        env:
+          KVSTORE_ID: 1
+        run: |
+          cilium --context ${{ env.contextName1 }} install \
+            ${{ steps.vars.outputs.cilium_install_cluster1 }} \
+            ${{ steps.kvstore.outputs.cilium_install_kvstore }} \
+            ${{ steps.clustermesh-vars.outputs.cilium_install_config_initial }} \
+            --nodes-without-cilium
+
+      - name: Copy the Cilium CA secret to cluster2, as they must match
+        run: |
+          kubectl --context ${{ env.contextName1 }} get secret -n kube-system cilium-ca -o yaml |
+            kubectl --context ${{ env.contextName2 }} create -f -
+
+      - name: Install Cilium in cluster2
+        env:
+          KVSTORE_ID: 2
+        run: |
+          cilium --context ${{ env.contextName2 }} install \
+            ${{ steps.vars.outputs.cilium_install_cluster2 }} \
+            ${{ steps.kvstore.outputs.cilium_install_kvstore }} \
+            ${{ steps.clustermesh-vars.outputs.cilium_install_config_initial }}
+
+      - name: Wait for cluster mesh status to be ready
+        run: |
+          cilium --context ${{ env.contextName1 }} status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName2 }} status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName1 }} clustermesh status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName2 }} clustermesh status --wait --wait-duration=5m
+
+      - name: Make JUnit report directory
+        run: |
+          mkdir -p cilium-junits
+
+
+      - name: Start the Cilium CLI connectivity disruption tests
+        run: |
+          cilium --context ${{ env.contextName1 }} connectivity test \
+            --multi-cluster=${{ matrix.routing != 'mixed' && env.contextName2 || '' }} \
+            --hubble=false \
+            --include-conn-disrupt-test --conn-disrupt-test-setup \
+            --conn-disrupt-dispatch-interval 0ms
+
+      - name: Perform an early sanity check for unexpected packet drops (${{ join(matrix.*, ', ') }})
+        run: |
+          cilium --context ${{ env.contextName1 }} connectivity test \
+            --multi-cluster=${{ matrix.routing != 'mixed' && env.contextName2 || '' }} \
+            --hubble=false \
+            --flow-validation=disabled \
+            --test=no-unexpected-packet-drops \
+            --collect-sysdump-on-failure \
+            --sysdump-hubble-flows-count=100000 \
+            --junit-file "cilium-junits/${{ env.job_name }} - initial sanity check (${{ join(matrix.*, ', ') }}).xml" \
+            --junit-property github_job_step="Perform an early sanity check for unexpected packet drops (${{ join(matrix.*, ', ') }})"
+
+      - name: Enable mixed routing mode in all clusters
+        run: |
+          cilium --context ${{ env.contextName1 }} upgrade --chart-directory=${{ env.helmChartPath }} \
+            --reuse-values --set enterprise.clustermesh.mixedRoutingMode.enabled=true
+          cilium --context ${{ env.contextName2 }} upgrade --chart-directory=${{ env.helmChartPath }} \
+            --reuse-values --set enterprise.clustermesh.mixedRoutingMode.enabled=true
+
+      - name: Wait for cluster mesh status to be ready
+        run: |
+          cilium --context ${{ env.contextName1 }} status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName2 }} status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName1 }} clustermesh status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName2 }} clustermesh status --wait --wait-duration=5m
+
+      - name: Gather additional troubleshooting information
+        shell: bash -ex {0}
+        run: |
+          CLIENT_CTX=${{ matrix.routing != 'mixed' && env.contextName2 || env.contextName1 }}
+          kubectl --context ${{ env.contextName1 }} get po -n cilium-test -o wide -l kind=test-conn-disrupt
+          kubectl --context $CLIENT_CTX get po -n cilium-test -o wide -l kind=test-conn-disrupt
+          kubectl --context ${{ env.contextName1 }} logs -n cilium-test -l kind=test-conn-disrupt --prefix --timestamps
+          kubectl --context $CLIENT_CTX logs -n cilium-test -l kind=test-conn-disrupt --prefix --timestamps
+          kubectl --context $CLIENT_CTX logs -n cilium-test -l kind=test-conn-disrupt --prefix --previous --ignore-errors --timestamps
+
+      - name: Assert that long running connections were not disrupted (${{ join(matrix.*, ', ') }})
+        run: |
+          cilium --context ${{ env.contextName1 }} connectivity test \
+            --multi-cluster=${{ matrix.routing != 'mixed' && env.contextName2 || '' }} \
+            --hubble=false \
+            --flow-validation=disabled \
+            --test=no-interrupted-connections \
+            --test=no-unexpected-packet-drops \
+            --include-conn-disrupt-test \
+            --collect-sysdump-on-failure \
+            --sysdump-hubble-flows-count=100000 \
+            --junit-file "cilium-junits/${{ env.job_name }} - connection disruption (${{ join(matrix.*, ', ') }}).xml" \
+            --junit-property github_job_step="Assert that long running connections were not disrupted (${{ join(matrix.*, ', ') }})"
+
+
+      - name: Mesh clusters together
+        if: matrix.routing == 'mixed'
+        run: |
+          cilium --context ${{ env.contextName1 }} upgrade --chart-directory=${{ env.helmChartPath }} \
+            --reuse-values ${{ steps.clustermesh-vars.outputs.cilium_install_config }}
+          cilium --context ${{ env.contextName2 }} upgrade --chart-directory=${{ env.helmChartPath }} \
+            --reuse-values ${{ steps.clustermesh-vars.outputs.cilium_install_config }}
+
+      - name: Wait for cluster mesh status to be ready
+        if: matrix.routing == 'mixed'
+        run: |
+          cilium --context ${{ env.contextName1 }} status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName2 }} status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName1 }} clustermesh status --wait --wait-duration=5m
+          cilium --context ${{ env.contextName2 }} clustermesh status --wait --wait-duration=5m
+
+
+      - name: Run connectivity test (${{ join(matrix.*, ', ') }})
+        run: |
+          cilium --context ${{ env.contextName1 }} connectivity test \
+            --multi-cluster=${{ env.contextName2 }} \
+            --force-deploy \
+            --hubble=false \
+            --flow-validation=disabled \
+            --external-target=google.com \
+            --include-unsafe-tests \
+            --collect-sysdump-on-failure \
+            --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml" \
+            --junit-property github_job_step="Run connectivity test (${{ join(matrix.*, ', ') }})"
+
+
+      - name: Post-test information gathering
+        if: ${{ !success() && steps.install-cilium-cluster1.outcome != 'skipped' }}
+        run: |
+          cilium --context ${{ env.contextName1 }} status
+          cilium --context ${{ env.contextName1 }} clustermesh status
+          cilium --context ${{ env.contextName2 }} status
+          cilium --context ${{ env.contextName2 }} clustermesh status
+
+          kubectl config use-context ${{ env.contextName1 }}
+          kubectl get pods --all-namespaces -o wide
+          cilium sysdump --output-filename cilium-sysdump-context1-final-${{ join(matrix.*, '-') }}
+
+          kubectl config use-context ${{ env.contextName2 }}
+          kubectl get pods --all-namespaces -o wide
+          cilium sysdump --output-filename cilium-sysdump-context2-final-${{ join(matrix.*, '-') }}
+
+          if [ "${{ matrix.mode }}" == "external" ]; then
+            for i in {1..2}; do
+              echo
+              echo "# Retrieving logs from kvstore$i docker container"
+              docker logs kvstore$i
+            done
+          fi
+        shell: bash -x {0} # Disable default fail-fast behaviour so that all commands run independently
+
+      - name: Upload artifacts
+        if: ${{ !success() }}
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: cilium-sysdumps
+          path: cilium-sysdump-*.zip
+          retention-days: 5
+
+      - name: Upload JUnits [junit]
+        if: ${{ always() }}
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: cilium-junits
+          path: cilium-junits/*.xml
+          retention-days: 5
+
+      - name: Publish Test Results As GitHub Summary
+        if: ${{ always() }}
+        uses: aanm/junit2md@332ebf0fddd34e91b03a832cfafaa826306558f9 # v0.0.3
+        with:
+          junit-directory: "cilium-junits"
+
+
+  commit-status-final:
+    if: ${{ always() && github.event_name != 'push' }}
+    name: Commit Status Final
+    needs: installation-and-connectivity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set final commit status
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+          status: ${{ needs.installation-and-connectivity.result }}

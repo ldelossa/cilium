@@ -4,12 +4,14 @@ allowed-teams:
 triggers:
   /test:
     workflows:
+    - enterprise-clustermesh-mixed-routing.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
     - enterprise-fqdn-ha.yaml
     - enterprise-multi-network.yaml
     - enterprise-srv6-datapath.yaml
   /ci-clustermesh:
     workflows:
+    - enterprise-clustermesh-mixed-routing.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
   # `(.+)` is regex capture group that is used as `extra-args` inputs parameter in the CuTE workflow
   # For example: `/cute bloomberg` or `/cute form3/MAKS`
@@ -27,6 +29,8 @@ triggers:
     - enterprise-srv6-datapath.yaml
 
 workflows:
+  enterprise-clustermesh-mixed-routing.yaml:
+    paths-ignore-regex: (test|Documentation)/
   enterprise-clustermesh-overlapping-podcidr.yaml:
     paths-ignore-regex: (test|Documentation)/
   enterprise-fqdn-ha.yaml:
