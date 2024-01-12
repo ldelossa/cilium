@@ -27,7 +27,7 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        if [[ ${{ inputs.deploy-type }} == 'cute' ]]; then
+        if [[ "${{ inputs.deploy-type }}" == "cute" ]]; then
           echo "cilium_helm_version=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
           # the below variables are for cluster mesh scenario
           echo "cilium_helm_version_1=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
@@ -45,10 +45,10 @@ runs:
       shell: bash
       run: |
         HELM_CHART_VERSION=${{ inputs.helm-version }}
-        if [[ -n ${{ inputs.umbrella-chart-path }} ]]; then
+        if [[ -n "${{ inputs.umbrella-chart-path }}" ]]; then
           HELM_CHART=${{ inputs.umbrella-chart-path }}
         fi
-        if [[ ${{ inputs.deploy-type }} == 'cute' ]]; then
+          if [[ "${{ inputs.deploy-type }}" == "cute" ]]; then
           echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium\"" >> terraform.tfvars
           echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
           # the below variables are for cluster mesh scenario

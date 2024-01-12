@@ -181,6 +181,8 @@ jobs:
             upgrade_stable_version=$(helm search repo cilium/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.upgrade_type }}" == "latest" ]]; then
             upgrade_branch="v$cute_chart_version$branch_suffix"
+          elif [[ "${{ steps.vars.outputs.upgrade_type }}" =~ ^(v){0,1}[0-9]+.[0-9]+.*$ ]]; then
+            upgrade_stable_version="${{ steps.vars.outputs.upgrade_type }}"
           elif [[ -n "${{ steps.vars.outputs.upgrade_type }}" ]]; then
             upgrade_branch="${{ steps.vars.outputs.upgrade_type }}"
           fi
@@ -317,8 +319,8 @@ jobs:
 
       - name: Prepare upgrade helm chart
         id: cute_helm_upgrade
-        # Skip for `stable` type because Helm chart already exists
-        if: steps.vars.outputs.upgrade_type != '' && steps.vars.outputs.upgrade_type != 'stable'
+        # Skip for `stable` type and `upgrade_stable_version` because Helm chart already exists
+        if: steps.vars.outputs.upgrade_type != '' && steps.vars.outputs.upgrade_type != 'stable' && steps.cute_props.outputs.upgrade_stable_version == ''
         timeout-minutes: 30
         uses: ./.github/actions/cute-helm-chart
         with:
