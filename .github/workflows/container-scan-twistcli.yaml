@@ -58,7 +58,7 @@ jobs:
         uses: PaloAltoNetworks/prisma-cloud-scan@v1
         with:
           pcc_console_url: https://us-east1.cloud.twistlock.com/us-1-111576212
-          pcc_user: 0541c4a6-1f9a-4dfd-8e86-86829fda7205
+          pcc_user: c2cb4b51-b118-44a6-a13b-e1f8647f2692
           pcc_pass: ${{ secrets.TWISTCLI_PASSWORD }} 
           image_name: ${{ matrix.image.name }}:${{ matrix.branch }}
       - name: Set up Go
