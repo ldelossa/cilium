@@ -5,9 +5,9 @@ Release process and checklist for `cilium-cli` enterprise edition.
 ### Define environment variables
 
 Define the `OSS_VERSION`, `CEE_VERSION` and `CEE_VERSION_TAG` variables. For
-example, if you are releasing v0.15.20-cee.1 based on v0.15.20 OSS:
+example, if you are releasing v0.15.21-cee.1 based on v0.15.21 OSS:
 
-    export OSS_VERSION=v0.15.20
+    export OSS_VERSION=v0.15.21
     export CEE_VERSION=${OSS_VERSION}-cee.1
     export CEE_VERSION_TAG=enterprise/cilium-cli/${CEE_VERSION}
 
@@ -23,10 +23,11 @@ In this directory, update to the given `cilium-cli` OSS upstream version:
 
 Release notes need to be added to the  `release-notes` directory with a
 filename `$CEE_VERSION.md` (e.g. `release-notes/v0.15.0-cee.1.md`) before you
-make a release.
+make a release. Also update the versions in the section at the top so the
+environment variable definitions can be copied for the next release.
 
     git checkout -b pr/prepare-${CEE_VERSION}
-    git add release-notes/$CEE_VERSION.md
+    git add RELEASE.md release-notes/$CEE_VERSION.md
     git commit -s -m "enterprise/cilium-cli: prepare for $CEE_VERSION release"
     git push origin HEAD
 
@@ -52,7 +53,7 @@ Then tag and push the release:
     git tag -a $CEE_VERSION_TAG -m "$CEE_VERSION release" $COMMIT_SHA && git push origin $CEE_VERSION_TAG
 
 Then, go to
-https://github.com/isovalent/cilium/actions/workflows/enterprise-release-cilium-cli.yaml
+https://github.com/isovalent/cilium/actions/workflows/enterprise-release-cilium-cli.yaml?query=event%3Apush
 and you can stare at the Github Actions output while it creates a release.
 
 ## Review release draft and publish
