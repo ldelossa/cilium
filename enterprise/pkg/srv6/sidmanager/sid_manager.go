@@ -182,7 +182,7 @@ func (m *sidManager) ManageSID(poolName string, fn func(allocator SIDAllocator) 
 
 	allocator, ok := m.allocators[poolName]
 	if !ok {
-		return fmt.Errorf("allocator with pool %s doesn't exist", poolName)
+		return ErrAllocatorNotFound
 	}
 
 	needsSync, err := fn(allocator)
