@@ -34,16 +34,14 @@ const (
 )
 
 func Detect(ctx context.Context, ct *check.ConnectivityTest) error {
-	for range ct.CiliumPods() {
-		err := extractExternalDNSProxyFeature(ctx, ct)
-		if err != nil {
-			return fmt.Errorf("failed to extract feature %s", CiliumDNSProxyDeployed)
-		}
+	err := extractExternalDNSProxyFeature(ctx, ct)
+	if err != nil {
+		return fmt.Errorf("failed to extract feature %s", CiliumDNSProxyDeployed)
+	}
 
-		err = extractFromConfigMap(ctx, ct)
-		if err != nil {
-			return err
-		}
+	err = extractFromConfigMap(ctx, ct)
+	if err != nil {
+		return err
 	}
 
 	return nil
