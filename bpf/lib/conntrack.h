@@ -292,7 +292,7 @@ __ct_lookup(const void *map, struct __ctx_buff *ctx, const void *tuple,
 		if (dir == CT_INGRESS) {
 			__sync_fetch_and_add(&entry->rx_packets, 1);
 			__sync_fetch_and_add(&entry->rx_bytes, ctx_full_len(ctx));
-		} else if (dir == CT_EGRESS || dir == CT_SERVICE) {
+		} else if (dir == CT_EGRESS) {
 			__sync_fetch_and_add(&entry->tx_packets, 1);
 			__sync_fetch_and_add(&entry->tx_bytes, ctx_full_len(ctx));
 		}
@@ -390,11 +390,12 @@ ct_is_reply ## FAMILY(const void *map,						\
 }
 
 static __always_inline int
-ipv6_extract_tuple(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple)
+ipv6_extract_tuple(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple,
+		   int *l4_off)
 {
+	int ret, l3_off = ETH_HLEN;
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
-	int ret;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
@@ -414,10 +415,10 @@ ipv6_extract_tuple(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple)
 		     tuple->nexthdr != IPPROTO_UDP))
 		return DROP_CT_UNKNOWN_PROTO;
 
-	ret = l4_load_ports(ctx, ETH_HLEN + ret, &tuple->dport);
 	if (ret < 0)
-		return DROP_CT_INVALID_HDR;
+		return ret;
 
+	*l4_off = l3_off + ret;
 	return CTX_ACT_OK;
 }
 
@@ -620,11 +621,12 @@ static __always_inline int ct_lookup6(const void *map,
 }
 
 static __always_inline int
-ipv4_extract_tuple(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple)
+ipv4_extract_tuple(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
+		   int *l4_off)
 {
+	int l3_off = ETH_HLEN;
 	void *data, *data_end;
 	struct iphdr *ip4;
-	int ret;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -641,11 +643,7 @@ ipv4_extract_tuple(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple)
 	tuple->daddr = ip4->daddr;
 	tuple->saddr = ip4->saddr;
 
-	ret = ipv4_load_l4_ports(ctx, ip4, ETH_HLEN + ipv4_hdrlen(ip4),
-				 CT_EGRESS, &tuple->dport, NULL);
-	if (ret < 0)
-		return ret;
-
+	*l4_off = l3_off + ipv4_hdrlen(ip4);
 	return CTX_ACT_OK;
 }
 
@@ -924,15 +922,13 @@ static __always_inline int ct_create6(const void *map_main, const void *map_rela
 	seen_flags.value |= is_tcp ? TCP_FLAG_SYN : 0;
 	ct_update_timeout(&entry, is_tcp, dir, seen_flags);
 
-#ifdef CONNTRACK_ACCOUNTING
 	if (dir == CT_INGRESS) {
 		entry.rx_packets = 1;
 		entry.rx_bytes = ctx_full_len(ctx);
-	} else if (dir == CT_EGRESS || dir == CT_SERVICE) {
+	} else if (dir == CT_EGRESS) {
 		entry.tx_packets = 1;
 		entry.tx_bytes = ctx_full_len(ctx);
 	}
-#endif
 
 	cilium_dbg3(ctx, DBG_CT_CREATED6, entry.rev_nat_index, ct_state->src_sec_id, 0);
 
@@ -1003,15 +999,13 @@ static __always_inline int ct_create4(const void *map_main,
 	seen_flags.value |= is_tcp ? TCP_FLAG_SYN : 0;
 	ct_update_timeout(&entry, is_tcp, dir, seen_flags);
 
-#ifdef CONNTRACK_ACCOUNTING
 	if (dir == CT_INGRESS) {
 		entry.rx_packets = 1;
 		entry.rx_bytes = ctx_full_len(ctx);
-	} else if (dir == CT_EGRESS || dir == CT_SERVICE) {
+	} else if (dir == CT_EGRESS) {
 		entry.tx_packets = 1;
 		entry.tx_bytes = ctx_full_len(ctx);
 	}
-#endif
 
 	cilium_dbg3(ctx, DBG_CT_CREATED4, entry.rev_nat_index,
 		    ct_state->src_sec_id, 0);

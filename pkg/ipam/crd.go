@@ -202,26 +202,30 @@ func newNodeStore(nodeName string, conf Configuration, owner Owner, clientset cl
 }
 
 func deriveVpcCIDRs(node *ciliumv2.CiliumNode) (primaryCIDR *cidr.CIDR, secondaryCIDRs []*cidr.CIDR) {
-	// A node belongs to a single VPC so we can pick the first ENI
-	// in the list and derive the VPC CIDR from it.
-	for _, eni := range node.Status.ENI.ENIs {
-		c, err := cidr.ParseCIDR(eni.VPC.PrimaryCIDR)
-		if err == nil {
-			primaryCIDR = c
-			for _, sc := range eni.VPC.CIDRs {
-				c, err = cidr.ParseCIDR(sc)
-				if err == nil {
-					secondaryCIDRs = append(secondaryCIDRs, c)
+	if len(node.Status.ENI.ENIs) > 0 {
+		// A node belongs to a single VPC so we can pick the first ENI
+		// in the list and derive the VPC CIDR from it.
+		for _, eni := range node.Status.ENI.ENIs {
+			c, err := cidr.ParseCIDR(eni.VPC.PrimaryCIDR)
+			if err == nil {
+				primaryCIDR = c
+				for _, sc := range eni.VPC.CIDRs {
+					c, err = cidr.ParseCIDR(sc)
+					if err == nil {
+						secondaryCIDRs = append(secondaryCIDRs, c)
+					}
 				}
+				return
 			}
-			return
 		}
 	}
-	for _, azif := range node.Status.Azure.Interfaces {
-		c, err := cidr.ParseCIDR(azif.CIDR)
-		if err == nil {
-			primaryCIDR = c
-			return
+	if len(node.Status.Azure.Interfaces) > 0 {
+		for _, azif := range node.Status.Azure.Interfaces {
+			c, err := cidr.ParseCIDR(azif.CIDR)
+			if err == nil {
+				primaryCIDR = c
+				return
+			}
 		}
 	}
 	// return AlibabaCloud vpc CIDR
@@ -345,12 +349,14 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 	n.ownNode = node
 	n.allocationPoolSize[IPv4] = 0
 	n.allocationPoolSize[IPv6] = 0
-	for ipString := range node.Spec.IPAM.Pool {
-		if ip := net.ParseIP(ipString); ip != nil {
-			if ip.To4() != nil {
-				n.allocationPoolSize[IPv4]++
-			} else {
-				n.allocationPoolSize[IPv6]++
+	if node.Spec.IPAM.Pool != nil {
+		for ipString := range node.Spec.IPAM.Pool {
+			if ip := net.ParseIP(ipString); ip != nil {
+				if ip.To4() != nil {
+					n.allocationPoolSize[IPv4]++
+				} else {
+					n.allocationPoolSize[IPv6]++
+				}
 			}
 		}
 	}

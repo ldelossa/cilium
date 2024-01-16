@@ -343,10 +343,8 @@ jobs:
           fi
 
           if [ "${{ matrix.host-fw }}" == "true" ]; then
-            # Missed tail calls until https://github.com/cilium/cilium/issues/28088 is fixed,
-            # host datapath once cilium-cli is upgraded to a version that includes 
-            # https://github.com/cilium/cilium-cli/pull/2206.
-            EXTRA+=("--expected-drop-reasons=+Missed tail call,+Host datapath not ready")
+            # Until https://github.com/cilium/cilium/issues/28088 is fixed
+            EXTRA+=("--expected-drop-reasons=+Missed tail call")
           fi
 
           ./cilium-cli connectivity test --include-unsafe-tests --collect-sysdump-on-failure \
@@ -355,7 +353,6 @@ jobs:
             --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>" \
             --junit-file "cilium-junits/${{ env.job_name }} (${{ matrix.name }}).xml" \
             --junit-property github_job_step="Run tests (${{ matrix.name }})" \
-            --request-timeout 30s
 
       - name: Fetch artifacts
         if: ${{ !success() && steps.run-tests.outcome != 'skipped' }}

@@ -241,15 +241,11 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 	int ret;
 	__u8 encrypt_key __maybe_unused = 0;
 	__u32 magic = MARK_MAGIC_IDENTITY;
-	bool from_proxy = false;
+	bool from_ingress_proxy = false;
 
 	if (from_host && tc_index_from_ingress_proxy(ctx)) {
-		from_proxy = true;
+		from_ingress_proxy = true;
 		magic = MARK_MAGIC_PROXY_INGRESS;
-	}
-	if (from_host && tc_index_from_egress_proxy(ctx)) {
-		from_proxy = true;
-		magic = MARK_MAGIC_PROXY_EGRESS;
 	}
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
@@ -359,7 +355,7 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 
 #ifdef ENABLE_IPSEC
 	/* See IPv4 comment. */
-	if (from_proxy && info)
+	if (from_ingress_proxy && info)
 		encrypt_key = get_min_encrypt_key(info->key);
 #endif
 
@@ -372,7 +368,9 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 		struct tunnel_key key = {};
 
 		/* IPv6 lookup key: daddr/96 */
-		ipv6_addr_copy(&key.ip6, dst);
+		key.ip6.p1 = dst->p1;
+		key.ip6.p2 = dst->p2;
+		key.ip6.p3 = dst->p3;
 		key.ip6.p4 = 0;
 		key.family = ENDPOINT_KEY_IPV6;
 
@@ -382,7 +380,7 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 	}
 #endif
 
-	if (!info || (!from_proxy &&
+	if (!info || (!from_ingress_proxy &&
 		      identity_is_world_ipv6(info->sec_identity))) {
 		/* See IPv4 comment. */
 		return DROP_UNROUTABLE;
@@ -390,7 +388,7 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 
 #if defined(ENABLE_IPSEC) && !defined(TUNNEL_MODE)
 	/* See IPv4 comment. */
-	if (from_proxy && info->tunnel_endpoint && encrypt_key)
+	if (from_ingress_proxy && info->tunnel_endpoint && encrypt_key)
 		return set_ipsec_encrypt(ctx, encrypt_key, info->tunnel_endpoint,
 					 info->sec_identity, true);
 #endif
@@ -443,13 +441,11 @@ tail_handle_ipv6(struct __ctx_buff *ctx, __u32 ipcache_srcid, const bool from_ho
 		if (from_host)
 			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
 						 CILIUM_CALL_IPV6_CONT_FROM_HOST,
-						 tail_handle_ipv6_cont_from_host,
-						 &ext_err);
+						 tail_handle_ipv6_cont_from_host);
 		else
 			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
 						 CILIUM_CALL_IPV6_CONT_FROM_NETDEV,
-						 tail_handle_ipv6_cont_from_netdev,
-						 &ext_err);
+						 tail_handle_ipv6_cont_from_netdev);
 	}
 
 	/* Catch errors from both handle_ipv6 and invoke_tailcall_if here. */
@@ -667,15 +663,11 @@ handle_ipv4_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 	int ret;
 	__u8 encrypt_key __maybe_unused = 0;
 	__u32 magic = MARK_MAGIC_IDENTITY;
-	bool from_proxy = false;
+	bool from_ingress_proxy = false;
 
 	if (from_host && tc_index_from_ingress_proxy(ctx)) {
-		from_proxy = true;
+		from_ingress_proxy = true;
 		magic = MARK_MAGIC_PROXY_INGRESS;
-	}
-	if (from_host && tc_index_from_egress_proxy(ctx)) {
-		from_proxy = true;
-		magic = MARK_MAGIC_PROXY_EGRESS;
 	}
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
@@ -802,8 +794,8 @@ skip_vtep:
 	info = lookup_ip4_remote_endpoint(ip4->daddr, 0);
 
 #ifdef ENABLE_IPSEC
-	/* We encrypt host to remote pod packets only if they are from proxy. */
-	if (from_proxy && info)
+	/* We encrypt host to remote pod packets only if they are from ingress proxy. */
+	if (from_ingress_proxy && info)
 		encrypt_key = get_min_encrypt_key(info->key);
 #endif
 
@@ -826,7 +818,7 @@ skip_vtep:
 	}
 #endif
 
-	if (!info || (!from_proxy &&
+	if (!info || (!from_ingress_proxy &&
 		      identity_is_world_ipv4(info->sec_identity))) {
 		/* We have received a packet for which no ipcache entry exists,
 		 * we do not know what to do with this packet, drop it.
@@ -837,7 +829,7 @@ skip_vtep:
 		 * wrong to route a ctx to cilium_host for which we don't know
 		 * anything about it as otherwise we'll run into a routing loop.
 		 *
-		 * Note that we do not drop packets from proxy even if
+		 * Note that we do not drop packets from ingress proxy even if
 		 * they are going to WORLD_ID. This is to avoid
 		 * https://github.com/cilium/cilium/issues/21954.
 		 */
@@ -845,8 +837,8 @@ skip_vtep:
 	}
 
 #if defined(ENABLE_IPSEC) && !defined(TUNNEL_MODE)
-	/* We encrypt host to remote pod packets only if they are from proxy. */
-	if (from_proxy && info->tunnel_endpoint && encrypt_key)
+	/* We encrypt host to remote pod packets only if they are from ingress proxy. */
+	if (from_ingress_proxy && info->tunnel_endpoint && encrypt_key)
 		return set_ipsec_encrypt(ctx, encrypt_key, info->tunnel_endpoint,
 					 info->sec_identity, true);
 #endif
@@ -899,13 +891,11 @@ tail_handle_ipv4(struct __ctx_buff *ctx, __u32 ipcache_srcid, const bool from_ho
 		if (from_host)
 			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
 						 CILIUM_CALL_IPV4_CONT_FROM_HOST,
-						 tail_handle_ipv4_cont_from_host,
-						 &ext_err);
+						 tail_handle_ipv4_cont_from_host);
 		else
 			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
 						 CILIUM_CALL_IPV4_CONT_FROM_NETDEV,
-						 tail_handle_ipv4_cont_from_netdev,
-						 &ext_err);
+						 tail_handle_ipv4_cont_from_netdev);
 	}
 
 	/* Catch errors from both handle_ipv4 and invoke_tailcall_if here. */
@@ -1585,7 +1575,6 @@ static __always_inline int
 to_host_from_lxc(struct __ctx_buff *ctx __maybe_unused)
 {
 	int ret = CTX_ACT_OK;
-	__s8 ext_err = 0;
 	__u16 proto = 0;
 
 	if (!validate_ethertype(ctx, &proto)) {
@@ -1605,8 +1594,7 @@ to_host_from_lxc(struct __ctx_buff *ctx __maybe_unused)
 						    is_defined(ENABLE_IPV6)),
 					      is_defined(DEBUG)),
 					 CILIUM_CALL_IPV6_TO_HOST_POLICY_ONLY,
-					 tail_ipv6_host_policy_ingress,
-					 &ext_err);
+					 tail_ipv6_host_policy_ingress);
 		break;
 # endif
 # ifdef ENABLE_IPV4
@@ -1615,8 +1603,7 @@ to_host_from_lxc(struct __ctx_buff *ctx __maybe_unused)
 						    is_defined(ENABLE_IPV6)),
 					      is_defined(DEBUG)),
 					 CILIUM_CALL_IPV4_TO_HOST_POLICY_ONLY,
-					 tail_ipv4_host_policy_ingress,
-					 &ext_err);
+					 tail_ipv4_host_policy_ingress);
 		break;
 # endif
 	default:
@@ -1626,8 +1613,8 @@ to_host_from_lxc(struct __ctx_buff *ctx __maybe_unused)
 
 out:
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
-						  CTX_ACT_DROP, METRIC_INGRESS);
+		return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP,
+					      METRIC_INGRESS);
 	return ret;
 }
 

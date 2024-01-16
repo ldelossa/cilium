@@ -46,7 +46,10 @@ func flushCt(eID string) {
 		maps = ctmap.LocalMaps(&dummyEndpoint{ID: id}, true, true)
 	}
 	for _, m := range maps {
-		path, err := ctmap.OpenCTMap(m)
+		path, err := m.Path()
+		if err == nil {
+			err = m.Open()
+		}
 		if err != nil {
 			if os.IsNotExist(err) {
 				msg := "Unable to open %s: %s."

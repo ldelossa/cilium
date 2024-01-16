@@ -25,7 +25,6 @@ const (
 	EACCES     = linux.EACCES
 	EILSEQ     = linux.EILSEQ
 	EOPNOTSUPP = linux.EOPNOTSUPP
-	ESTALE     = linux.ESTALE
 )
 
 const (

@@ -90,7 +90,6 @@ type ServiceSyncParameters struct {
 	Backend      store.SyncStoreBackend
 	SharedOnly   bool
 	StoreFactory store.Factory
-	SyncCallback func(context.Context)
 }
 
 // StartSynchronizingServices starts a controller for synchronizing services from k8s to kvstore
@@ -151,7 +150,7 @@ func StartSynchronizingServices(ctx context.Context, wg *sync.WaitGroup, cfg Ser
 			close(k8sSvcCacheSynced)
 
 			log.Info("Initial list of services successfully received from Kubernetes")
-			kvs.Synced(ctx, cfg.SyncCallback)
+			kvs.Synced(ctx)
 		}
 
 		for serviceEvents != nil || endpointEvents != nil {

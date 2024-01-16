@@ -38,7 +38,6 @@ var Cell = cell.Module(
 			EnableIPSec:                 cfg.EnableIPSec,
 			MasqueradeInterfaces:        cfg.MasqueradeInterfaces,
 			EnableMasqueradeRouteSource: cfg.EnableMasqueradeRouteSource,
-			EnableL7Proxy:               cfg.EnableL7Proxy,
 		}
 	}),
 	cell.Provide(newIptablesManager),
@@ -91,5 +90,4 @@ type SharedConfig struct {
 	EnableIPSec                 bool
 	MasqueradeInterfaces        []string
 	EnableMasqueradeRouteSource bool
-	EnableL7Proxy               bool
 }

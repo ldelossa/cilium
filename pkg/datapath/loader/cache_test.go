@@ -108,10 +108,10 @@ func (s *LoaderTestSuite) TestobjectCacheParallel(c *C) {
 				ep := testutils.NewTestEndpoint()
 				opt := fmt.Sprintf("OPT%d", i/t.divisor)
 				ep.Opts.SetBool(opt, true)
-				file, isNew, err := cache.fetchOrCompile(ctx, &ep, nil)
+				path, isNew, err := cache.fetchOrCompile(ctx, &ep, nil)
 				results <- buildResult{
 					goroutine: i,
-					path:      file.Name(),
+					path:      path,
 					compiled:  isNew,
 					err:       err,
 				}

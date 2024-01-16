@@ -6,6 +6,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -90,9 +91,27 @@ type Attributes struct {
 // ASN its annotating.
 type AnnotationMap map[int64]Attributes
 
+// ErrMulti holds multiple errors and formats them sanely when printed.
+type ErrMulti struct {
+	errs []error
+}
+
+func (e ErrMulti) Error() string {
+	s := strings.Builder{}
+	for _, err := range e.errs {
+		s.WriteString(err.Error() + ",")
+	}
+	return s.String()
+}
+
 func (a AnnotationMap) ResolveRouterID(localASN int64) (string, error) {
-	if attr, ok := a[localASN]; ok && attr.RouterID != "" {
-		return attr.RouterID, nil
+	if _, ok := a[localASN]; ok {
+		var err error
+		var parsed netip.Addr
+		if parsed, err = netip.ParseAddr(a[localASN].RouterID); err == nil && !parsed.IsUnspecified() {
+			return parsed.String(), nil
+		}
+		return "", fmt.Errorf("failed to parse RouterID for local ASN %v: %w", localASN, err)
 	}
 	return "", fmt.Errorf("router id not specified by annotation, cannot resolve router id for local ASN %v", localASN)
 }
@@ -117,7 +136,7 @@ func NewAnnotationMap(a map[string]string) (AnnotationMap, error) {
 		am[asn] = attrs
 	}
 	if len(errs) > 0 {
-		return am, errors.Join(errs...)
+		return am, ErrMulti{errs}
 	}
 	return am, nil
 }
@@ -138,11 +157,11 @@ func parseAnnotation(key string, value string) (int64, Attributes, error) {
 	if anno := strings.Split(key, "."); len(anno) != 3 {
 		return 0, out, ErrNoASNAnno{key}
 	} else {
-		asn64, err := strconv.ParseUint(anno[2], 10, 32)
+		var err error
+		asn, err = strconv.ParseInt(anno[2], 10, 64)
 		if err != nil {
-			return 0, out, ErrASNAnno{"could not parse ASN as a 32bit integer", anno[2], key}
+			return 0, out, ErrASNAnno{}
 		}
-		asn = int64(asn64)
 	}
 	out.ASN = asn
 
@@ -159,18 +178,18 @@ func parseAnnotation(key string, value string) (int64, Attributes, error) {
 		}
 		switch kv[0] {
 		case "router-id":
-			addr, err := netip.ParseAddr(kv[1])
-			if err != nil {
-				return 0, out, ErrAttrib{key, kv[0], "could not parse router-id as an IPv4 address"}
-			}
-			if !addr.Is4() {
-				return 0, out, ErrAttrib{key, kv[0], "router-id must be a valid IPv4 address"}
+			addr, _ := netip.ParseAddr(kv[1])
+			if addr.IsUnspecified() {
+				return 0, out, ErrAttrib{key, kv[0], "could not parse in an IPv4 address"}
 			}
 			out.RouterID = kv[1]
 		case "local-port":
-			port, err := strconv.ParseInt(kv[1], 10, 16)
+			port, err := strconv.ParseInt(kv[1], 10, 0)
 			if err != nil {
-				return 0, out, ErrAttrib{key, kv[0], "could not parse into port number as 16bit integer"}
+				return 0, out, ErrAttrib{key, kv[0], "could not parse into port number"}
+			}
+			if port > math.MaxUint16 {
+				return 0, out, ErrAttrib{key, kv[0], "local port must be smaller then 65535"}
 			}
 			out.LocalPort = int32(port)
 		}

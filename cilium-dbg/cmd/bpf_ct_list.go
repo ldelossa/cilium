@@ -33,8 +33,13 @@ var (
 				cmd.PrintErrf("Invalid argument: %s", err.Error())
 				return
 			}
+			maps := getMaps(t, id)
+			ctMaps := make([]interface{}, len(maps))
+			for i, m := range maps {
+				ctMaps[i] = m
+			}
 			common.RequireRootPrivilege("cilium bpf ct list")
-			dumpCt(getMaps(t, id), t)
+			dumpCt(ctMaps, t)
 		},
 	}
 
@@ -86,23 +91,19 @@ func parseArgs(args []string) (string, uint32, error) {
 	}
 }
 
-func getMaps(t string, id uint32) []ctmap.CtMap {
-	var m []*ctmap.Map
-	var r []ctmap.CtMap
+func getMaps(t string, id uint32) []*ctmap.Map {
 	if t == "global" {
-		m = ctmap.GlobalMaps(true, getIpv6EnableStatus())
+		return ctmap.GlobalMaps(true, getIpv6EnableStatus())
 	}
 	if t == "endpoint" {
-		m = ctmap.LocalMaps(&dummyEndpoint{ID: int(id)}, true, true)
+		return ctmap.LocalMaps(&dummyEndpoint{ID: int(id)}, true, true)
 	}
 	if t == "cluster" {
 		// Ignoring the error, as we already validated the cluster ID.
-		m, _ = ctmap.GetClusterCTMaps(id, true, getIpv6EnableStatus())
+		maps, _ := ctmap.GetClusterCTMaps(id, true, getIpv6EnableStatus())
+		return maps
 	}
-	for _, v := range m {
-		r = append(r, v)
-	}
-	return r
+	return []*ctmap.Map{}
 }
 
 func getClockSource() (*models.ClockSource, error) {
@@ -153,13 +154,18 @@ func doDumpEntries(m ctmap.CtMap) {
 	fmt.Println(out)
 }
 
-func dumpCt(maps []ctmap.CtMap, args ...interface{}) {
+func dumpCt(maps []interface{}, args ...interface{}) {
 	entries := make([]ctmap.CtMapRecord, 0)
 
 	t := args[0].(string)
 
 	for _, m := range maps {
-		path, err := ctmap.OpenCTMap(m)
+		m := m.(ctmap.CtMap)
+
+		path, err := m.Path()
+		if err == nil {
+			err = m.Open()
+		}
 		if err != nil {
 			if os.IsNotExist(err) {
 				msg := "Unable to open %s: %s."

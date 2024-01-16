@@ -212,7 +212,9 @@ type scope struct {
 func (s *scope) Close() {
 	s.base.Lock()
 	s.base.removeRefLocked(s.id)
-	s.base.removeTreeLocked(s.id)
+	if s.base.canRemoveTreeLocked(s.id) {
+		s.base.removeTreeLocked(s.id)
+	}
 	s.base.Unlock()
 	s.scheduleRealize()
 }

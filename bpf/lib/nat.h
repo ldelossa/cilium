@@ -745,7 +745,6 @@ snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
 {
 	struct icmphdr icmphdr __align_stack_8;
 	__u16 port_off;
-	int ret;
 
 	build_bug_on(sizeof(struct ipv4_nat_entry) > 64);
 
@@ -755,10 +754,9 @@ snat_v4_nat(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		ret = ipv4_load_l4_ports(ctx, ip4, off, CT_EGRESS,
-					 &tuple->dport, &has_l4_header);
-		if (ret < 0)
-			return ret;
+		if (ipv4_load_l4_ports(ctx, ip4, off, CT_EGRESS,
+				       &tuple->dport, &has_l4_header) < 0)
+			return DROP_INVALID;
 
 		ipv4_ct_tuple_swap_ports(tuple);
 		port_off = TCP_SPORT_OFF;
@@ -892,11 +890,9 @@ snat_v4_rev_nat(struct __ctx_buff *ctx, const struct ipv4_nat_target *target,
 #ifdef ENABLE_SCTP
 	case IPPROTO_SCTP:
 #endif  /* ENABLE_SCTP */
-		ret = ipv4_load_l4_ports(ctx, ip4, off, CT_INGRESS,
-					 &tuple.dport, &has_l4_header);
-		if (ret < 0)
-			return ret;
-
+		if (ipv4_load_l4_ports(ctx, ip4, off, CT_INGRESS,
+				       &tuple.dport, &has_l4_header) < 0)
+			return DROP_INVALID;
 		ipv4_ct_tuple_swap_ports(&tuple);
 		port_off = TCP_DPORT_OFF;
 		break;

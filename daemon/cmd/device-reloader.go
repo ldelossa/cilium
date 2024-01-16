@@ -64,7 +64,7 @@ func (d *deviceReloader) Start(ctx hive.HookContext) error {
 	// Force an initial reload by supplying a closed channel.
 	c := make(chan struct{})
 	close(c)
-	d.addrsChanged = c
+	d.devsChanged = c
 
 	jg := d.params.Jobs.NewGroup(d.params.Scope)
 	jg.Add(job.Timer("device-reloader", d.reload, time.Second))
@@ -79,10 +79,13 @@ func (d *deviceReloader) Stop(ctx hive.HookContext) error {
 	return nil
 }
 
-func (d *deviceReloader) queryDevices(rxn statedb.ReadTxn) []string {
-	var nativeDevices []*tables.Device
-	nativeDevices, d.devsChanged = tables.SelectedDevices(d.params.Devices, rxn)
-	return tables.DeviceNames(nativeDevices)
+func (d *deviceReloader) query() []string {
+	rxn := d.params.DB.ReadTxn()
+	_, d.addrsChanged = d.params.NodeAddresses.All(rxn)
+
+	var devices []*tables.Device
+	devices, d.devsChanged = tables.SelectedDevices(d.params.Devices, rxn)
+	return tables.DeviceNames(devices)
 }
 
 func (d *deviceReloader) reload(ctx context.Context) error {
@@ -100,12 +103,7 @@ func (d *deviceReloader) reload(ctx context.Context) error {
 	// consistent.
 
 	// Setup new watch channels.
-	rxn := d.params.DB.ReadTxn()
-	if addrsChanged {
-		_, d.addrsChanged = d.params.NodeAddresses.All(rxn)
-	}
-	devices := d.queryDevices(rxn)
-
+	devices := d.query()
 	// Don't do any work if we don't need to.
 	if slices.Equal(d.prevDevices, devices) && !addrsChanged {
 		return nil

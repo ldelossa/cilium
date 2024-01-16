@@ -208,14 +208,13 @@ func ToAgentPaths(ms []*models.BgpPath) ([]*types.Path, error) {
 	return ret, nil
 }
 
-func ToAPIRoute(r *types.Route, routerASN int64, neighbor string) (*models.BgpRoute, error) {
+func ToAPIRoute(r *types.Route, routerASN int64) (*models.BgpRoute, error) {
 	paths, err := ToAPIPaths(r.Paths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize Paths: %w", err)
 	}
 	return &models.BgpRoute{
 		RouterAsn: routerASN,
-		Neighbor:  neighbor,
 		Prefix:    r.Prefix,
 		Paths:     paths,
 	}, nil
@@ -232,12 +231,12 @@ func ToAgentRoute(m *models.BgpRoute) (*types.Route, error) {
 	}, nil
 }
 
-func ToAPIRoutes(rs []*types.Route, routerASN int64, neighbor string) ([]*models.BgpRoute, error) {
+func ToAPIRoutes(rs []*types.Route, routerASN int64) ([]*models.BgpRoute, error) {
 	errs := []error{}
 	ret := []*models.BgpRoute{}
 
 	for _, r := range rs {
-		route, err := ToAPIRoute(r, routerASN, neighbor)
+		route, err := ToAPIRoute(r, routerASN)
 		if err != nil {
 			errs = append(errs, err)
 			continue

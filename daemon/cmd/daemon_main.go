@@ -871,16 +871,13 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Duration(option.DNSProxyConcurrencyProcessingGracePeriod, 0, "Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing")
 	option.BindEnv(vp, option.DNSProxyConcurrencyProcessingGracePeriod)
 
-	flags.Int(option.DNSProxyLockCount, 131, "Array size containing mutexes which protect against parallel handling of DNS response names. Preferably use prime numbers")
-	flags.MarkHidden(option.DNSProxyLockCount)
+	flags.Int(option.DNSProxyLockCount, 131, "Array size containing mutexes which protect against parallel handling of DNS response IPs. Preferably use prime numbers")
+	flags.MarkDeprecated(option.DNSProxyLockCount, "This option no longer has any effect, and will be removed in v1.16")
 	option.BindEnv(vp, option.DNSProxyLockCount)
 
 	flags.Duration(option.DNSProxyLockTimeout, 500*time.Millisecond, fmt.Sprintf("Timeout when acquiring the locks controlled by --%s", option.DNSProxyLockCount))
-	flags.MarkHidden(option.DNSProxyLockTimeout)
+	flags.MarkDeprecated(option.DNSProxyLockTimeout, "This option no longer has any effect, and will be removed in v1.16")
 	option.BindEnv(vp, option.DNSProxyLockTimeout)
-
-	flags.Bool(option.DNSProxyEnableTransparentMode, defaults.DNSProxyEnableTransparentMode, "Enable DNS proxy transparent mode")
-	option.BindEnv(vp, option.DNSProxyEnableTransparentMode)
 
 	flags.Int(option.PolicyQueueSize, defaults.PolicyQueueSize, "Size of queues for policy-related events")
 	option.BindEnv(vp, option.PolicyQueueSize)
@@ -894,9 +891,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.PolicyAuditModeArg, false, "Enable policy audit (non-drop) mode")
 	option.BindEnv(vp, option.PolicyAuditModeArg)
-
-	flags.Bool(option.PolicyAccountingArg, true, "Enable policy accounting")
-	option.BindEnv(vp, option.PolicyAccountingArg)
 
 	flags.Bool(option.EnableHubble, false, "Enable hubble server")
 	option.BindEnv(vp, option.EnableHubble)
@@ -1311,10 +1305,9 @@ func initEnv(vp *viper.Viper) {
 	option.Config.Opts.SetBool(option.TraceNotify, true)
 	option.Config.Opts.SetBool(option.PolicyVerdictNotify, true)
 	option.Config.Opts.SetBool(option.PolicyTracing, option.Config.EnableTracing)
-	option.Config.Opts.SetBool(option.ConntrackAccounting, false)
+	option.Config.Opts.SetBool(option.ConntrackAccounting, true)
 	option.Config.Opts.SetBool(option.ConntrackLocal, false)
 	option.Config.Opts.SetBool(option.PolicyAuditMode, option.Config.PolicyAuditMode)
-	option.Config.Opts.SetBool(option.PolicyAccounting, option.Config.PolicyAccounting)
 	option.Config.Opts.SetBool(option.SourceIPVerification, true)
 
 	monitorAggregationLevel, err := option.ParseMonitorAggregationLevel(option.Config.MonitorAggregation)
@@ -1365,10 +1358,6 @@ func initEnv(vp *viper.Viper) {
 
 	if option.Config.EnableL7Proxy && !option.Config.InstallIptRules {
 		log.Fatal("L7 proxy requires iptables rules (--install-iptables-rules=\"true\")")
-	}
-
-	if option.Config.EnableIPSec && option.Config.EnableL7Proxy && !option.Config.DNSProxyEnableTransparentMode {
-		log.Fatal("IPSec requires DNS proxy transparent mode to be enabled (--dnsproxy-enable-transparent-mode=\"true\")")
 	}
 
 	if option.Config.EnableIPSec && !option.Config.EnableIPv4 {
@@ -1652,7 +1641,6 @@ type daemonParams struct {
 	L2Announcer          *l2announcer.L2Announcer
 	ServiceManager       service.ServiceManager
 	L7Proxy              *proxy.Proxy
-	EnvoyXdsServer       envoy.XDSServer
 	DB                   *statedb.DB
 	APILimiterSet        *rate.APILimiterSet
 	AuthManager          *auth.AuthManager

@@ -31,7 +31,6 @@ import (
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/labels"
-	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/metrics"
@@ -79,7 +78,6 @@ type parameters struct {
 	Resources      cmk8s.Resources
 	BackendPromise promise.Promise[kvstore.BackendOperations]
 	StoreFactory   store.Factory
-	SyncState      *SyncState
 }
 
 func registerHooks(lc hive.Lifecycle, params parameters) error {
@@ -94,55 +92,25 @@ func registerHooks(lc hive.Lifecycle, params parameters) error {
 				return err
 			}
 
-			startServer(ctx, params.ClusterInfo, params.EnableExternalWorkloads, params.Clientset, backend, params.Resources, params.StoreFactory, params.SyncState)
+			startServer(ctx, params.ClusterInfo, params.EnableExternalWorkloads, params.Clientset, backend, params.Resources, params.StoreFactory)
 			return nil
 		},
 	})
 	return nil
 }
 
-func NewSyncState() *SyncState {
-	return &SyncState{StoppableWaitGroup: *lock.NewStoppableWaitGroup()}
-}
-
-// SyncState is a wrapper around lock.StoppableWaitGroup used to keep track of the synchronization
-// of various resources to the kvstore.
-type SyncState struct {
-	lock.StoppableWaitGroup
-}
-
-// Complete returns true if all resources have been synchronized to the kvstore.
-func (ss *SyncState) Complete() bool {
-	select {
-	case <-ss.WaitChannel():
-		return true
-	default:
-		return false
-	}
-}
-
-// WaitForResource adds a resource to the SyncState and returns a callback function that should be
-// called when the resource has been synchronized.
-func (ss *SyncState) WaitForResource() func(context.Context) {
-	ss.Add()
-	return func(_ context.Context) {
-		ss.Done()
-	}
-}
-
 type identitySynchronizer struct {
-	store        store.SyncStore
-	encoder      func([]byte) string
-	syncCallback func(context.Context)
+	store   store.SyncStore
+	encoder func([]byte) string
 }
 
-func newIdentitySynchronizer(ctx context.Context, cinfo cmtypes.ClusterInfo, backend kvstore.BackendOperations, factory store.Factory, syncCallback func(context.Context)) synchronizer {
+func newIdentitySynchronizer(ctx context.Context, cinfo cmtypes.ClusterInfo, backend kvstore.BackendOperations, factory store.Factory) synchronizer {
 	identitiesStore := factory.NewSyncStore(cinfo.Name, backend,
 		path.Join(identityCache.IdentitiesPath, "id"),
 		store.WSSWithSyncedKeyOverride(identityCache.IdentitiesPath))
 	go identitiesStore.Run(ctx)
 
-	return &identitySynchronizer{store: identitiesStore, encoder: backend.Encode, syncCallback: syncCallback}
+	return &identitySynchronizer{store: identitiesStore, encoder: backend.Encode}
 }
 
 func parseLabelArrayFromMap(base map[string]string) labels.LabelArray {
@@ -194,7 +162,7 @@ func (is *identitySynchronizer) delete(ctx context.Context, key resource.Key) er
 
 func (is *identitySynchronizer) synced(ctx context.Context) error {
 	log.Info("Initial list of identities successfully received from Kubernetes")
-	return is.store.Synced(ctx, is.syncCallback)
+	return is.store.Synced(ctx)
 }
 
 type nodeStub struct {
@@ -207,16 +175,15 @@ func (n *nodeStub) GetKeyName() string {
 }
 
 type nodeSynchronizer struct {
-	clusterInfo  cmtypes.ClusterInfo
-	store        store.SyncStore
-	syncCallback func(context.Context)
+	clusterInfo cmtypes.ClusterInfo
+	store       store.SyncStore
 }
 
-func newNodeSynchronizer(ctx context.Context, cinfo cmtypes.ClusterInfo, backend kvstore.BackendOperations, factory store.Factory, syncCallback func(context.Context)) synchronizer {
+func newNodeSynchronizer(ctx context.Context, cinfo cmtypes.ClusterInfo, backend kvstore.BackendOperations, factory store.Factory) synchronizer {
 	nodesStore := factory.NewSyncStore(cinfo.Name, backend, nodeStore.NodeStorePrefix)
 	go nodesStore.Run(ctx)
 
-	return &nodeSynchronizer{clusterInfo: cinfo, store: nodesStore, syncCallback: syncCallback}
+	return &nodeSynchronizer{clusterInfo: cinfo, store: nodesStore}
 }
 
 func (ns *nodeSynchronizer) upsert(ctx context.Context, _ resource.Key, obj runtime.Object) error {
@@ -254,27 +221,25 @@ func (ns *nodeSynchronizer) delete(ctx context.Context, key resource.Key) error 
 
 func (ns *nodeSynchronizer) synced(ctx context.Context) error {
 	log.Info("Initial list of nodes successfully received from Kubernetes")
-	return ns.store.Synced(ctx, ns.syncCallback)
+	return ns.store.Synced(ctx)
 }
 
 type ipmap map[string]struct{}
 
 type endpointSynchronizer struct {
-	store        store.SyncStore
-	cache        map[string]ipmap
-	syncCallback func(context.Context)
+	store store.SyncStore
+	cache map[string]ipmap
 }
 
-func newEndpointSynchronizer(ctx context.Context, cinfo cmtypes.ClusterInfo, backend kvstore.BackendOperations, factory store.Factory, syncCallback func(context.Context)) synchronizer {
+func newEndpointSynchronizer(ctx context.Context, cinfo cmtypes.ClusterInfo, backend kvstore.BackendOperations, factory store.Factory) synchronizer {
 	endpointsStore := factory.NewSyncStore(cinfo.Name, backend,
 		path.Join(ipcache.IPIdentitiesPath, ipcache.DefaultAddressSpace),
 		store.WSSWithSyncedKeyOverride(ipcache.IPIdentitiesPath))
 	go endpointsStore.Run(ctx)
 
 	return &endpointSynchronizer{
-		store:        endpointsStore,
-		cache:        make(map[string]ipmap),
-		syncCallback: syncCallback,
+		store: endpointsStore,
+		cache: make(map[string]ipmap),
 	}
 }
 
@@ -334,7 +299,7 @@ func (es *endpointSynchronizer) delete(ctx context.Context, key resource.Key) er
 
 func (es *endpointSynchronizer) synced(ctx context.Context) error {
 	log.Info("Initial list of endpoints successfully received from Kubernetes")
-	return es.store.Synced(ctx, es.syncCallback)
+	return es.store.Synced(ctx)
 }
 
 func (es *endpointSynchronizer) deleteEndpoints(ctx context.Context, key resource.Key, ips ipmap) {
@@ -377,7 +342,6 @@ func startServer(
 	backend kvstore.BackendOperations,
 	resources cmk8s.Resources,
 	factory store.Factory,
-	syncState *SyncState,
 ) {
 	log.WithFields(logrus.Fields{
 		"cluster-name": cinfo.Name,
@@ -399,9 +363,9 @@ func startServer(
 	}
 
 	ctx := context.Background()
-	go synchronize(ctx, resources.CiliumIdentities, newIdentitySynchronizer(ctx, cinfo, backend, factory, syncState.WaitForResource()))
-	go synchronize(ctx, resources.CiliumNodes, newNodeSynchronizer(ctx, cinfo, backend, factory, syncState.WaitForResource()))
-	go synchronize(ctx, resources.CiliumSlimEndpoints, newEndpointSynchronizer(ctx, cinfo, backend, factory, syncState.WaitForResource()))
+	go synchronize(ctx, resources.CiliumIdentities, newIdentitySynchronizer(ctx, cinfo, backend, factory))
+	go synchronize(ctx, resources.CiliumNodes, newNodeSynchronizer(ctx, cinfo, backend, factory))
+	go synchronize(ctx, resources.CiliumSlimEndpoints, newEndpointSynchronizer(ctx, cinfo, backend, factory))
 	operatorWatchers.StartSynchronizingServices(ctx, &sync.WaitGroup{}, operatorWatchers.ServiceSyncParameters{
 		ClusterInfo:  cinfo,
 		Clientset:    clientset,
@@ -410,9 +374,7 @@ func startServer(
 		Backend:      backend,
 		SharedOnly:   !allServices,
 		StoreFactory: factory,
-		SyncCallback: syncState.WaitForResource(),
 	})
-	syncState.Stop()
 
 	log.Info("Initialization complete")
 }

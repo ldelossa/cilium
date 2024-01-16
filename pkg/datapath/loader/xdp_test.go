@@ -56,18 +56,20 @@ func TestMaybeUnloadObsoleteXDPPrograms(t *testing.T) {
 
 		prog := mustXDPProgram(t)
 		basePath := testutils.TempBPFFS(t)
-		veth0LinkPath := bpffsDeviceLinksDir(basePath, veth0)
-		require.NoError(t, bpf.MkdirBPF(veth0LinkPath))
-		veth1LinkPath := bpffsDeviceLinksDir(basePath, veth1)
-		require.NoError(t, bpf.MkdirBPF(veth1LinkPath))
+
 		// need to use symbolFromHostNetdevXDP as progName here as maybeUnloadObsoleteXDPPrograms explicitly uses that name.
-		err = attachXDPProgram(veth0, prog, symbolFromHostNetdevXDP, veth0LinkPath, link.XDPDriverMode)
+		err = attachXDPProgram(veth0, prog, symbolFromHostNetdevXDP, basePath, link.XDPGenericMode)
 		require.NoError(t, err)
 
-		err = attachXDPProgram(veth1, prog, symbolFromHostNetdevXDP, veth1LinkPath, link.XDPDriverMode)
+		err = attachXDPProgram(veth1, prog, symbolFromHostNetdevXDP, basePath, link.XDPGenericMode)
 		require.NoError(t, err)
 
-		maybeUnloadObsoleteXDPPrograms([]string{"veth0"}, option.XDPModeLinkDriver, basePath)
+		maybeUnloadObsoleteXDPPrograms([]string{"veth0"}, option.XDPModeLinkGeneric, basePath)
+
+		v0, err := h.LinkByName("veth0")
+		require.NoError(t, err)
+		require.NotNil(t, v0.Attrs().Xdp)
+		require.True(t, v0.Attrs().Xdp.Attached)
 
 		require.Eventually(t, func() bool {
 			v1, err := h.LinkByName("veth1")
@@ -77,11 +79,6 @@ func TestMaybeUnloadObsoleteXDPPrograms(t *testing.T) {
 			}
 			return true
 		}, 150*time.Millisecond, 15*time.Millisecond)
-
-		v0, err := h.LinkByName("veth0")
-		require.NoError(t, err)
-		require.NotNil(t, v0.Attrs().Xdp)
-		require.True(t, v0.Attrs().Xdp.Attached)
 
 		err = netlink.LinkDel(veth0)
 		require.NoError(t, err)

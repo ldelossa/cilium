@@ -87,10 +87,7 @@ func CiliumNodeResource(lc hive.Lifecycle, cs client.Clientset, opts ...func(*me
 		utils.ListerWatcherFromTyped[*cilium_api_v2.CiliumNodeList](cs.CiliumV2().CiliumNodes()),
 		opts...,
 	)
-	return resource.New[*cilium_api_v2.CiliumNode](lc, lw,
-		resource.WithMetric("CiliumNode"),
-		resource.WithStoppableInformer(),
-	), nil
+	return resource.New[*cilium_api_v2.CiliumNode](lc, lw, resource.WithMetric("CiliumNode")), nil
 }
 
 func PodResource(lc hive.Lifecycle, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*slim_corev1.Pod], error) {
@@ -311,7 +308,6 @@ func CiliumSlimEndpointResource(lc hive.Lifecycle, cs client.Clientset, _ *node.
 		}, TransformToCiliumEndpoint),
 		resource.WithMetric("CiliumEndpoint"),
 		resource.WithIndexers(indexers),
-		resource.WithStoppableInformer(),
 	), nil
 }
 
@@ -353,7 +349,6 @@ func CiliumEndpointSliceResource(lc hive.Lifecycle, cs client.Clientset, _ *node
 	return resource.New[*cilium_api_v2alpha1.CiliumEndpointSlice](lc, lw,
 		resource.WithMetric("CiliumEndpointSlice"),
 		resource.WithIndexers(indexers),
-		resource.WithStoppableInformer(),
 	), nil
 }
 

@@ -30,20 +30,20 @@ func (o *onDemandXdsStarter) AddListener(name string, kind policy.L7ParserType, 
 	o.XDSServer.AddListener(name, kind, port, isIngress, mayUseOriginalSourceAddr, wg)
 }
 
-func (o *onDemandXdsStarter) UpsertEnvoyResources(ctx context.Context, resources Resources) error {
+func (o *onDemandXdsStarter) UpsertEnvoyResources(ctx context.Context, resources Resources, portAllocator PortAllocator) error {
 	if err := o.startEmbeddedEnvoy(nil); err != nil {
 		log.WithError(err).Error("Envoy: Failed to start embedded Envoy proxy on demand")
 	}
 
-	return o.XDSServer.UpsertEnvoyResources(ctx, resources)
+	return o.XDSServer.UpsertEnvoyResources(ctx, resources, portAllocator)
 }
 
-func (o *onDemandXdsStarter) UpdateEnvoyResources(ctx context.Context, old, new Resources) error {
+func (o *onDemandXdsStarter) UpdateEnvoyResources(ctx context.Context, old, new Resources, portAllocator PortAllocator) error {
 	if err := o.startEmbeddedEnvoy(nil); err != nil {
 		log.WithError(err).Error("Envoy: Failed to start embedded Envoy proxy on demand")
 	}
 
-	return o.XDSServer.UpdateEnvoyResources(ctx, old, new)
+	return o.XDSServer.UpdateEnvoyResources(ctx, old, new, portAllocator)
 }
 
 func (o *onDemandXdsStarter) startEmbeddedEnvoy(wg *completion.WaitGroup) error {

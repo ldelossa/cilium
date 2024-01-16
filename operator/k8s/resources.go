@@ -35,7 +35,7 @@ var (
 			k8s.CiliumPodIPPoolResource,
 			CiliumEndpointResource,
 			CiliumEndpointSliceResource,
-			CiliumNodeResource,
+			k8s.CiliumNodeResource,
 			k8s.PodResource,
 		),
 	)

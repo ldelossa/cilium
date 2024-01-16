@@ -85,7 +85,7 @@ func NewLoader() *Loader {
 // the LocalNodeConfiguration.
 func (l *Loader) init(dp datapath.ConfigWriter, nodeCfg *datapath.LocalNodeConfiguration) {
 	l.once.Do(func() {
-		l.templateCache = newObjectCache(dp, nodeCfg, option.Config.StateDir)
+		l.templateCache = NewObjectCache(dp, nodeCfg)
 		ignorePrefixes := ignoredELFPrefixes
 		if !option.Config.EnableIPv4 {
 			ignorePrefixes = append(ignorePrefixes, "LXC_IPV4")
@@ -404,7 +404,6 @@ func (l *Loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 	}
 
 	l.hostDpInitializedOnce.Do(func() {
-		log.Debug("Initialized host datapath")
 		close(l.hostDpInitialized)
 	})
 
@@ -533,13 +532,12 @@ func (l *Loader) CompileAndLoad(ctx context.Context, ep datapath.Endpoint, stats
 // goroutine completes compilation of the template, all other CompileOrLoad
 // invocations will be released.
 func (l *Loader) CompileOrLoad(ctx context.Context, ep datapath.Endpoint, stats *metrics.SpanStat) error {
-	templateFile, _, err := l.templateCache.fetchOrCompile(ctx, ep, stats)
+	templatePath, _, err := l.templateCache.fetchOrCompile(ctx, ep, stats)
 	if err != nil {
 		return err
 	}
-	defer templateFile.Close()
 
-	template, err := elf.NewELF(templateFile, ep.Logger(Subsystem))
+	template, err := elf.Open(templatePath)
 	if err != nil {
 		return err
 	}
@@ -561,9 +559,9 @@ func (l *Loader) CompileOrLoad(ctx context.Context, ep datapath.Endpoint, stats 
 			Err:  err,
 		}
 	}
-	if err := os.Symlink(templateFile.Name(), symPath); err != nil {
+	if err := os.Symlink(templatePath, symPath); err != nil {
 		return &os.PathError{
-			Op:   fmt.Sprintf("Failed to create symlink to %s", templateFile.Name()),
+			Op:   fmt.Sprintf("Failed to create symlink to %s", templatePath),
 			Path: symPath,
 			Err:  err,
 		}

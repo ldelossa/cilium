@@ -155,9 +155,9 @@ func (s *ClusterMeshServicesTestSuite) expectEvent(c *C, action k8s.CacheAction,
 
 func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesGlobal(c *C) {
 	k, v := s.prepareServiceUpdate("1", "10.0.185.196", "http", "80")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 	k, v = s.prepareServiceUpdate("2", "20.0.185.196", "http2", "90")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 
 	swgSvcs := lock.NewStoppableWaitGroup()
 	k8sSvc := &slim_corev1.Service{
@@ -232,9 +232,9 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesGlobal(c *C) {
 
 func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesUpdate(c *C) {
 	k, v := s.prepareServiceUpdate("1", "10.0.185.196", "http", "80")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 	k, v = s.prepareServiceUpdate("2", "20.0.185.196", "http2", "90")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 
 	k8sSvc := &slim_corev1.Service{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -263,7 +263,7 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesUpdate(c *C) {
 	})
 
 	k, v = s.prepareServiceUpdate("1", "80.0.185.196", "http", "8080")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 	s.expectEvent(c, k8s.UpdateService, svcID, func(event k8s.ServiceEvent) bool {
 		return event.Endpoints.Backends[cmtypes.MustParseAddrCluster("80.0.185.196")] != nil &&
 			event.Endpoints.Backends[cmtypes.MustParseAddrCluster("80.0.185.196")].Ports["http"].DeepEqual(
@@ -274,7 +274,7 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesUpdate(c *C) {
 	})
 
 	k, v = s.prepareServiceUpdate("2", "90.0.185.196", "http", "8080")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 	s.expectEvent(c, k8s.UpdateService, svcID, func(event k8s.ServiceEvent) bool {
 		return event.Endpoints.Backends[cmtypes.MustParseAddrCluster("80.0.185.196")] != nil &&
 			event.Endpoints.Backends[cmtypes.MustParseAddrCluster("80.0.185.196")].Ports["http"].DeepEqual(
@@ -305,9 +305,9 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesUpdate(c *C) {
 
 func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesNonGlobal(c *C) {
 	k, v := s.prepareServiceUpdate("1", "10.0.185.196", "http", "80")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 	k, v = s.prepareServiceUpdate("2", "20.0.185.196", "http2", "90")
-	kvstore.Client().Update(context.TODO(), k, []byte(v), false)
+	kvstore.Client().Set(context.TODO(), k, []byte(v))
 
 	k8sSvc := &slim_corev1.Service{
 		ObjectMeta: slim_metav1.ObjectMeta{

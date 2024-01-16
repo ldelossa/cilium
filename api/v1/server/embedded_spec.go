@@ -2201,10 +2201,6 @@ func init() {
     "BgpRoute": {
       "description": "Single BGP route retrieved from the RIB of underlying router",
       "properties": {
-        "neighbor": {
-          "description": "IP address specifying a BGP neighbor if the source table type is adj-rib-in or adj-rib-out",
-          "type": "string"
-        },
         "paths": {
           "description": "List of routing paths leading towards the prefix",
           "type": "array",
@@ -7955,10 +7951,6 @@ func init() {
     "BgpRoute": {
       "description": "Single BGP route retrieved from the RIB of underlying router",
       "properties": {
-        "neighbor": {
-          "description": "IP address specifying a BGP neighbor if the source table type is adj-rib-in or adj-rib-out",
-          "type": "string"
-        },
         "paths": {
           "description": "List of routing paths leading towards the prefix",
           "type": "array",

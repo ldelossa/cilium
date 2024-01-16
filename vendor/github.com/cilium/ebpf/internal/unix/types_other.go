@@ -27,7 +27,6 @@ const (
 	EACCES
 	EILSEQ
 	EOPNOTSUPP
-	ESTALE
 )
 
 // Constants are distinct to avoid breaking switch statements.

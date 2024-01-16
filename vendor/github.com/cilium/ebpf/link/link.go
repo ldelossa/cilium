@@ -98,8 +98,6 @@ func wrapRawLink(raw *RawLink) (_ Link, err error) {
 		return &kprobeMultiLink{*raw}, nil
 	case PerfEventType:
 		return nil, fmt.Errorf("recovering perf event fd: %w", ErrNotSupported)
-	case TCXType:
-		return &tcxLink{*raw}, nil
 	default:
 		return raw, nil
 	}
@@ -134,7 +132,6 @@ type TracingInfo sys.TracingLinkInfo
 type CgroupInfo sys.CgroupLinkInfo
 type NetNsInfo sys.NetNsLinkInfo
 type XDPInfo sys.XDPLinkInfo
-type TCXInfo sys.TcxLinkInfo
 
 // Tracing returns tracing type-specific link info.
 //
@@ -160,19 +157,11 @@ func (r Info) NetNs() *NetNsInfo {
 	return e
 }
 
-// XDP returns XDP type-specific link info.
+// ExtraNetNs returns XDP type-specific link info.
 //
 // Returns nil if the type-specific link info isn't available.
 func (r Info) XDP() *XDPInfo {
 	e, _ := r.extra.(*XDPInfo)
-	return e
-}
-
-// TCX returns TCX type-specific link info.
-//
-// Returns nil if the type-specific link info isn't available.
-func (r Info) TCX() *TCXInfo {
-	e, _ := r.extra.(*TCXInfo)
 	return e
 }
 
@@ -326,8 +315,6 @@ func (l *RawLink) Info() (*Info, error) {
 	case RawTracepointType, IterType,
 		PerfEventType, KprobeMultiType:
 		// Extra metadata not supported.
-	case TCXType:
-		extra = &TCXInfo{}
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
 	}

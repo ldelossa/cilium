@@ -80,7 +80,8 @@ type GC struct {
 	// processing each one individually.
 	rateLimiter *rate.Limiter
 
-	allocator *allocator.Allocator
+	allocationCfg identityAllocationConfig
+	allocator     *allocator.Allocator
 
 	// counters for GC failed/successful runs
 	failedRuns     int
@@ -113,6 +114,9 @@ func registerGC(p params) {
 			p.Cfg.RateInterval,
 			p.Cfg.RateLimit,
 		),
+		allocationCfg: identityAllocationConfig{
+			k8sNamespace: p.SharedCfg.K8sNamespace,
+		},
 		metrics: p.Metrics,
 	}
 	p.Lifecycle.Append(hive.Hook{
@@ -139,4 +143,13 @@ func registerGC(p params) {
 			return nil
 		},
 	})
+}
+
+// identityAllocationConfig is a helper struct that satisfies the Configuration interface.
+type identityAllocationConfig struct {
+	k8sNamespace string
+}
+
+func (cfg identityAllocationConfig) CiliumNamespaceName() string {
+	return cfg.k8sNamespace
 }

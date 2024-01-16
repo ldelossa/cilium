@@ -74,7 +74,9 @@ type ctRecord6 struct {
 	Value ctmap.CtEntry
 }
 
-func dumpAndRead[T any](maps []T, dump func([]T, ...interface{}), c *C, args ...interface{}) string {
+type dumpCallback func(maps []interface{}, args ...interface{})
+
+func dumpAndRead(maps []interface{}, dump dumpCallback, c *C, args ...interface{}) string {
 	// dumpCt() prints to standard output. Let's redirect it to a pipe, and
 	// read the dump from there.
 	stdout := os.Stdout
@@ -104,7 +106,8 @@ func dumpAndRead[T any](maps []T, dump func([]T, ...interface{}), c *C, args ...
 }
 
 func (s *BPFCtListSuite) TestDumpCt4(c *C) {
-	ctMaps := []ctmap.CtMap{
+
+	ctMaps := [2]ctmap.CtMap{
 		mockmaps.NewCtMockMap(
 			[]ctmap.CtMapRecord{
 				{
@@ -127,7 +130,11 @@ func (s *BPFCtListSuite) TestDumpCt4(c *C) {
 		),
 	}
 
-	rawDump := dumpAndRead(ctMaps, dumpCt, c, "")
+	maps := make([]interface{}, len(ctMaps))
+	for i, m := range ctMaps {
+		maps[i] = m
+	}
+	rawDump := dumpAndRead(maps, dumpCt, c, "")
 
 	var ctDump []ctRecord4
 	err := json.Unmarshal([]byte(rawDump), &ctDump)
@@ -143,7 +150,8 @@ func (s *BPFCtListSuite) TestDumpCt4(c *C) {
 }
 
 func (s *BPFCtListSuite) TestDumpCt6(c *C) {
-	ctMaps := []ctmap.CtMap{
+
+	ctMaps := [2]ctmap.CtMap{
 		mockmaps.NewCtMockMap(
 			[]ctmap.CtMapRecord{
 				{
@@ -166,7 +174,11 @@ func (s *BPFCtListSuite) TestDumpCt6(c *C) {
 		),
 	}
 
-	rawDump := dumpAndRead(ctMaps, dumpCt, c, "")
+	maps := make([]interface{}, len(ctMaps))
+	for i, m := range ctMaps {
+		maps[i] = m
+	}
+	rawDump := dumpAndRead(maps, dumpCt, c, "")
 
 	var ctDump []ctRecord6
 	err := json.Unmarshal([]byte(rawDump), &ctDump)
