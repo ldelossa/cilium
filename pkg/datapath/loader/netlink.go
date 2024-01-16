@@ -191,11 +191,6 @@ func replaceDatapath(ctx context.Context, ifName, objPath string, progs []progDe
 	}
 	defer coll.Close()
 
-	// Avoid attaching a prog to a stale interface.
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
 	for _, prog := range progs {
 		scopedLog := l.WithField("progName", prog.progName).WithField("direction", prog.direction)
 		if xdpMode != "" {
@@ -205,7 +200,7 @@ func replaceDatapath(ctx context.Context, ifName, objPath string, progs []progDe
 			}
 
 			scopedLog.Debug("Attaching XDP program to interface")
-			err = attachXDPProgram(link, coll.Programs[prog.progName], prog.progName, linkDir, xdpModeToFlag(xdpMode))
+			err = attachXDPProgram(link, coll.Programs[prog.progName], prog.progName, linkDir, xdpConfigModeToFlag(xdpMode))
 		} else {
 			scopedLog.Debug("Attaching TC program to interface")
 			err = attachTCProgram(link, coll.Programs[prog.progName], prog.progName, directionToParent(prog.direction))
