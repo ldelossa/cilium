@@ -616,6 +616,7 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
+/.github/workflows/enterprise-clustermesh-*yaml @isovalent/clustermesh
 /.github/workflows/enterprise-container-scan-twistcli.yaml @isovalent/security
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
