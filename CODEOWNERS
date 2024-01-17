@@ -619,7 +619,7 @@ Vagrantfile @cilium/ci-structure
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
-/renovate.json5 @isovalent/void
+/renovate.json5 @isovalent/infrastructure
 /.openvex.json @isovalent/security
 /enterprise @isovalent/void
 *enterprise* @isovalent/void
