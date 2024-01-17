@@ -34,8 +34,9 @@ type EnterpriseHooks struct {
 type EnterpriseOptions struct {
 	HubbleUINamespace string
 
-	HubbleTimescapeSelector  string
-	HubbleTimescapeNamespace string
+	HubbleTimescapeReleaseName string
+	HubbleTimescapeSelector    string
+	HubbleTimescapeNamespace   string
 }
 
 // AddConnectivityTests registers connectivity tests that are specific to
