@@ -662,9 +662,14 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/mixedrouting/ @isovalent/clustermesh
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
+/install/kubernetes/cilium/*enterprise* @isovalent/sig-k8s @isovalent/helm
+/install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
+/install/kubernetes/cilium/templates/_extensions.tpl @isovalent/sig-k8s @isovalent/helm @isovalent/core-structure
 /install/kubernetes/cilium/templates/cilium-agent/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/cilium-operator/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/cilium-preflight/*enterprise* @isovalent/sig-k8s @isovalent/helm
+/install/kubernetes/cilium/templates/_rbac_helpers.tpl @isovalent/sig-k8s @isovalent/helm @isovalent/hubble
+/install/kubernetes/cilium/templates/hubble-relay/rbac @isovalent/sig-k8s @isovalent/helm @isovalent/hubble
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /pkg/bgpv1/**/*enterprise* @isovalent/traffic-engineering
 /pkg/clustermesh/enterprise_* @isovalent/clustermesh
