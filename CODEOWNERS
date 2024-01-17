@@ -601,6 +601,8 @@ Vagrantfile @cilium/ci-structure
 #   deployment (for example, being GitOps-friendly).
 # - @isovalent/hubble
 #   Responsible for maintaining enterprise Hubble products and features
+# - @isovalent/infrastructure
+#   Responsible for maintaining files related to cloud infrastructures.
 # - @isovalent/multi-network
 #   Responsible for maintaining the Cilium-native multi-network feature
 # - @isovalent/security
