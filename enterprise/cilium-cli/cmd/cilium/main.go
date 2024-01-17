@@ -35,7 +35,7 @@ func main() {
 		HubbleUINamespace:        "hubble-ui",
 	}
 	command := cli.NewCiliumCommand(&hooks.EnterpriseHooks{
-		Opts: eeOpts,
+		Opts: &eeOpts,
 	})
 	command.Short = "CLI to collect troubleshooting information for Isovalent Enterprise for Cilium"
 	command.Long = ""

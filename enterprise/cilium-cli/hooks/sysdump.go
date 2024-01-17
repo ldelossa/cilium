@@ -32,7 +32,7 @@ const (
 	enterpriseCLICommand          = "hubble-enterprise"
 )
 
-func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error {
+func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) error {
 	collector.AddTasks([]sysdump.Task{
 		{
 			CreatesSubtasks: true,

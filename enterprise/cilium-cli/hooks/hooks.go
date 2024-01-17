@@ -27,7 +27,7 @@ type EnterpriseHooks struct {
 	cli.NopHooks
 
 	ec   EnterpriseConnectivity
-	Opts EnterpriseOptions
+	Opts *EnterpriseOptions
 }
 
 // EnterpriseOptions are cilium enterprise specific options for tasks
