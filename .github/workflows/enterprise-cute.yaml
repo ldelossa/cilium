@@ -308,7 +308,7 @@ jobs:
         # Skip for `cute` or `stable` type because Helm chart already exists
         if: steps.vars.outputs.deploy_type != 'cute' && steps.vars.outputs.deploy_type != 'stable'
         timeout-minutes: 30
-        uses: ./.github/actions/cute-helm-chart
+        uses: ./.github/actions/enterprise-cute-helm-chart
         with:
           branch: ${{ steps.cute_props.outputs.deploy_branch }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
@@ -322,7 +322,7 @@ jobs:
         # Skip for `stable` type and `upgrade_stable_version` because Helm chart already exists
         if: steps.vars.outputs.upgrade_type != '' && steps.vars.outputs.upgrade_type != 'stable' && steps.cute_props.outputs.upgrade_stable_version == ''
         timeout-minutes: 30
-        uses: ./.github/actions/cute-helm-chart
+        uses: ./.github/actions/enterprise-cute-helm-chart
         with:
           branch: ${{ steps.cute_props.outputs.upgrade_branch }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
@@ -409,14 +409,14 @@ jobs:
         # Step will be skipped for the CuTE version that the customer already uses
         if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
         timeout-minutes: 420
-        uses: ./.github/actions/cute-test-ipsec
+        uses: ./.github/actions/enterprise-cute-test-ipsec
         with:
           cute-dir: cute/${{ steps.vars.outputs.cute_dir }}
 
       - name: Run CuTE upgrade
         if: steps.vars.outputs.upgrade_type != ''
         timeout-minutes: 40
-        uses: ./.github/actions/cute-upgrade
+        uses: ./.github/actions/enterprise-cute-upgrade
         with:
           deploy-type: ${{ steps.vars.outputs.deploy_type }}
           upgrade-stable-version: ${{ steps.cute_props.outputs.upgrade_stable_version }}
@@ -428,7 +428,7 @@ jobs:
       - name: IPsec tests after upgrade
         if: steps.vars.outputs.upgrade_type != '' && steps.encryption.outputs.type == 'ipsec'
         timeout-minutes: 420
-        uses: ./.github/actions/cute-test-ipsec
+        uses: ./.github/actions/enterprise-cute-test-ipsec
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 

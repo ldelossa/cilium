@@ -49,7 +49,7 @@ runs:
         echo "🔑🔑🔑 All the pods use 2 active keys now."
 
     - name: Verify state
-      uses: ./.github/actions/cute-verify-state
+      uses: ./.github/actions/enterprise-cute-verify-state
       with:
         cute-dir: ./${{ inputs.cute-dir }}
         run-tests: false
@@ -78,7 +78,7 @@ runs:
         echo "♻️♻️♻️ IPsec key has been rotated."
 
     - name: Verify state
-      uses: ./.github/actions/cute-verify-state
+      uses: ./.github/actions/enterprise-cute-verify-state
       with:
         cute-dir: ./${{ inputs.cute-dir }}
 
@@ -92,7 +92,7 @@ runs:
         cilium status --wait 15m0s
 
     - name: Verify state
-      uses: ./.github/actions/cute-verify-state
+      uses: ./.github/actions/enterprise-cute-verify-state
       with:
         cute-dir: ./${{ inputs.cute-dir }}
 

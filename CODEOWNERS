@@ -605,6 +605,8 @@ Vagrantfile @cilium/ci-structure
 #   Responsible for maintaining files related to cloud infrastructures.
 # - @isovalent/multi-network
 #   Responsible for maintaining the Cilium-native multi-network feature
+# - @isovalent/infrastructure
+#   Responsible for maintaining CI/CD pipelines
 # - @isovalent/security
 #   Responsible for security related features and issues.
 # - @isovalent/sig-k8s:
@@ -655,3 +657,5 @@ Vagrantfile @cilium/ci-structure
 /pkg/k8s/enterprise_overlapping_podcidr* @isovalent/clustermesh
 /pkg/k8s/enterprise_phantom* @isovalent/clustermesh
 /pkg/k8s/enterprise_service_merger* @isovalent/clustermesh
+/.github/actions/enterprise-cute-* @isovalent/infrastructure
+/.github/workflows/enterprise-cute*.yaml @isovalent/infrastructure
