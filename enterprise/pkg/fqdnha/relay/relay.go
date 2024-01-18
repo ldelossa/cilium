@@ -17,13 +17,14 @@ import (
 
 	pb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
 
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
-	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/spanstat"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -130,12 +131,20 @@ func (s *FQDNProxyAgentServer) NotifyOnDNSMessage(ctx context.Context, notificat
 }
 
 func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty) (*pb.RestoredRulesMap, error) {
-	allRules, err := s.dataSource.GetAllRules()
+	double, ok := proxy.DefaultDNSProxy.(*doubleproxy.DoubleProxy)
+	if !ok {
+		return nil, nil
+	}
+	local, ok := double.LocalProxy.(*dnsproxy.DNSProxy)
+	if !ok {
+		return nil, fmt.Errorf("local proxy is not local")
+	}
+	allRules, err := local.GetAllRules()
+	if err != nil {
+		return nil, err
+	}
 
 	wholeMsg := &pb.RestoredRulesMap{Rules: make(map[uint64]*pb.RestoredRules, len(allRules))}
-	if err != nil {
-		return wholeMsg, err
-	}
 	for endpointID, rules := range allRules {
 		msg := &pb.RestoredRules{Rules: make(map[uint32]*pb.IPRules, len(rules))}
 
@@ -202,7 +211,6 @@ type DNSProxyDataSource interface {
 	LookupIPsBySecID(identity.NumericIdentity) []string
 	NotifyOnDNSMsg(time.Time, *endpoint.Endpoint, string, identity.NumericIdentity, string, *dns.Msg, string, bool, *dnsproxy.ProxyRequestContext) error
 	LookupEP(string) (*endpoint.Endpoint, error)
-	GetAllRules() (map[uint64]restore.DNSRules, error)
 }
 
 type IPGetter interface {

@@ -13,18 +13,14 @@
 package cmd
 
 import (
-	"fmt"
 	"net/netip"
 
 	"github.com/cilium/dns"
 
-	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/relay"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
-	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/spanstat"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -52,16 +48,4 @@ func (d *Daemon) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epI
 	}
 	stat.DataSource = "external-proxy"
 	return d.notifyOnDNSMsg(lookupTime, ep, epIPPort, serverID, serverAddr, msg, protocol, allowed, stat)
-}
-
-func (d *Daemon) GetAllRules() (map[uint64]restore.DNSRules, error) {
-	var double, ok = proxy.DefaultDNSProxy.(*doubleproxy.DoubleProxy)
-	if ok {
-		local, ok := double.LocalProxy.(*dnsproxy.DNSProxy)
-		if !ok {
-			return nil, fmt.Errorf("local proxy is not local")
-		}
-		return local.GetAllRules()
-	}
-	return nil, nil
 }
