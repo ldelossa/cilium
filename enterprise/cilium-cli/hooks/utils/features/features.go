@@ -14,14 +14,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
 	"github.com/cilium/cilium-cli/sysdump"
 	"github.com/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/versioncheck"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
 )
 
 const (
@@ -56,10 +56,10 @@ func extractExternalDNSProxyFeature(ctx context.Context, ct *check.ConnectivityT
 	// Check if pods are deployed.
 	for range ct.Clients() {
 		// cilium-dnsproxy pods are labelled with `k8s-app=ciliumdns-proxy`, let's filter on it.
-		ciliumDNSProxyLabelSelector := fmt.Sprintf("k8s-app=%s", tests.ExternalCiliumDNSProxyName)
+		ciliumDNSProxyLabelSelector := fmt.Sprintf("k8s-app=%s", enterpriseDefaults.ExternalCiliumDNSProxyName)
 		pods, err := ct.K8sClient().ListPods(ctx, ct.Params().CiliumNamespace, metav1.ListOptions{LabelSelector: ciliumDNSProxyLabelSelector})
 		if err != nil {
-			return fmt.Errorf("unable to list %s pods: %w", tests.ExternalCiliumDNSProxyName, err)
+			return fmt.Errorf("unable to list %s pods: %w", enterpriseDefaults.ExternalCiliumDNSProxyName, err)
 		}
 
 		if len(pods.Items) == 0 {

@@ -18,6 +18,8 @@ import (
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/utils/features"
 
+	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -76,9 +78,6 @@ func retrievePodOnNode(pods map[string]check.Pod, node string) (check.Pod, error
 	return check.Pod{}, fmt.Errorf("no pod found on node %s", node)
 }
 
-// ExternalCiliumDNSProxyName is the prefix for the external Cilium DNS proxy pods (and the daemonset).
-const ExternalCiliumDNSProxyName = "cilium-dnsproxy"
-
 // regexpContainerArgPrometheusPort is the container argument holding the prometheus port.
 var regexpContainerArgPrometheusPort = regexp.MustCompile("^--prometheus-port=([0-9]+)$")
 
@@ -90,7 +89,7 @@ func ExternalCiliumDNSProxySource(dnsProxyPods map[string]check.Pod) check.Metri
 	}
 
 	source := check.MetricsSource{
-		Name: ExternalCiliumDNSProxyName,
+		Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
 	}
 
 	// Retrieve the port value for Prometheus.
@@ -116,7 +115,7 @@ func ExternalCiliumDNSProxySource(dnsProxyPods map[string]check.Pod) check.Metri
 
 func retrievePort(containers []v1.Container) string {
 	for _, c := range containers {
-		if c.Name == ExternalCiliumDNSProxyName {
+		if c.Name == enterpriseDefaults.ExternalCiliumDNSProxyName {
 			// extract the port from the arguments
 			if port := extractPort(c.Args); port != "" {
 				return port
@@ -144,10 +143,10 @@ func RetrieveExternalCiliumDNSProxyPods(ctx context.Context, ct *check.Connectiv
 	externalCiliumDNSProxyPods := make(map[string]check.Pod)
 	for _, client := range ct.Clients() {
 		// cilium-dnsproxy pods are labelled with `k8s-app=cilium-dnsproxy`, let's filter on it.
-		ciliumDNSProxyLabelSelector := fmt.Sprintf("k8s-app=%s", ExternalCiliumDNSProxyName)
+		ciliumDNSProxyLabelSelector := fmt.Sprintf("k8s-app=%s", enterpriseDefaults.ExternalCiliumDNSProxyName)
 		pods, err := ct.K8sClient().ListPods(ctx, ct.Params().CiliumNamespace, metav1.ListOptions{LabelSelector: ciliumDNSProxyLabelSelector})
 		if err != nil {
-			return nil, fmt.Errorf("unable to list %s pods: %w", ExternalCiliumDNSProxyName, err)
+			return nil, fmt.Errorf("unable to list %s pods: %w", enterpriseDefaults.ExternalCiliumDNSProxyName, err)
 		}
 
 		// Retrieve all the pods and return them.

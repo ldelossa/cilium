@@ -15,6 +15,8 @@ import (
 
 	"github.com/cilium/cilium-cli/connectivity/check"
 
+	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
+
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -25,7 +27,7 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Name: ExternalCiliumDNSProxyName,
+						Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
 						Args: []string{"--expose-metrics", "--prometheus-port=99675"},
 					},
 				},
@@ -38,7 +40,7 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Name: ExternalCiliumDNSProxyName,
+						Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
 						Args: []string{"--expose-metrics"},
 					},
 				},
@@ -55,7 +57,7 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 				"cilium-dnsproxy-lm2xk": ciliumDNSProxyPod,
 			},
 			want: check.MetricsSource{
-				Name: ExternalCiliumDNSProxyName,
+				Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
 				Pods: []check.Pod{ciliumDNSProxyPod},
 				Port: "99675",
 			},
@@ -66,7 +68,7 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 				"cilium-dnsproxy-t5j79": ciliumDNSProxyPod,
 			},
 			want: check.MetricsSource{
-				Name: ExternalCiliumDNSProxyName,
+				Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
 				Pods: []check.Pod{podWithPrometheusMissing, ciliumDNSProxyPod},
 				Port: "99675",
 			},
@@ -76,7 +78,7 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 			want:         check.MetricsSource{},
 		},
 		"no prometheus container port": {
-			dnsProxyPods: map[string]check.Pod{ExternalCiliumDNSProxyName: podWithPrometheusMissing},
+			dnsProxyPods: map[string]check.Pod{enterpriseDefaults.ExternalCiliumDNSProxyName: podWithPrometheusMissing},
 			want:         check.MetricsSource{},
 		},
 	}
