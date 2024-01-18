@@ -1122,6 +1122,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.MaxInternalTimerDelay)
 	option.BindEnv(vp, option.MaxInternalTimerDelay)
 
+	flags.Bool("external-dns-proxy", false, "Enable Cilium agent to use an external DNS proxy")
+	option.BindEnv(vp, "external-dns-proxy")
+
 	if err := vp.BindPFlags(flags); err != nil {
 		log.Fatalf("BindPFlags failed: %s", err)
 	}
@@ -1741,6 +1744,16 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	}
 	bootstrapStats.k8sInit.End(true)
 	d.initRestore(restoredEndpoints, params.EndpointRegenerator)
+	if option.Config.ExternalDNSProxy {
+		go func() {
+			if d.endpointRestoreComplete != nil {
+				<-d.endpointRestoreComplete
+			}
+			if err := d.bootstrapFqdnRelay(&bootstrapStats.fqdnRelay); err != nil {
+				log.WithError(err).Error("Cannot start FQDN relay gRPC server")
+			}
+		}()
+	}
 
 	if params.WGAgent != nil {
 		go func() {

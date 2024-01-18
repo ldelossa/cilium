@@ -20,6 +20,8 @@ import (
 
 	"github.com/cilium/cilium/api/v1/models"
 	. "github.com/cilium/cilium/api/v1/server/restapi/policy"
+	"github.com/cilium/cilium/enterprise/pkg/fqdn/doubleproxy"
+	"github.com/cilium/cilium/enterprise/pkg/fqdn/remoteproxy"
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
@@ -165,6 +167,19 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 	if err != nil {
 		return err
 	}
+	var remoteProxy *remoteproxy.RemoteFQDNProxy
+
+	if option.Config.ExternalDNSProxy {
+		port = 10001
+		remoteProxy = remoteproxy.NewRemoteFQDNProxy()
+		err = d.l7Proxy.SetProxyPort(proxytypes.DNSProxyName, proxytypes.ProxyTypeDNS, port, false)
+		if err != nil {
+			log.WithError(err).Error("Can't set proxy port")
+		}
+		remoteProxy.RunGRPCConnectionManager()
+		log.Info("fqdn-proxy plugin loaded")
+	}
+
 	if option.Config.ToFQDNsProxyPort != 0 {
 		port = uint16(option.Config.ToFQDNsProxyPort)
 	} else if port == 0 {
@@ -197,6 +212,9 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 				proxy.DefaultDNSProxy.RestoreRules(possibleEP)
 			}
 		}
+	}
+	if option.Config.ExternalDNSProxy {
+		proxy.DefaultDNSProxy = doubleproxy.DoubleProxy{RemoteProxy: remoteProxy, LocalProxy: proxy.DefaultDNSProxy}
 	}
 	return err // filled by StartDNSProxy
 }

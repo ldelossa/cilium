@@ -190,6 +190,7 @@ cilium-agent [flags]
       --export-format-version string                                 Default to v1 format. Set to '' to use the legacy format (default "v1")
       --export-node-name string                                      Override the node_name field in exported flows
       --export-rate-limit int                                        Rate limit (per minute) for flow exports. Set to -1 to disable (default -1)
+      --external-dns-proxy                                           Enable Cilium agent to use an external DNS proxy
       --external-envoy-proxy                                         whether the Envoy is deployed externally in form of a DaemonSet or not
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
       --fixed-identity-mapping map                                   Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns
