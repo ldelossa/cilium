@@ -28,14 +28,6 @@ func (d *Daemon) LookupEPByIP(endpointIP netip.Addr) (endpoint *endpoint.Endpoin
 	return d.lookupEPByIP(endpointIP)
 }
 
-func (d *Daemon) LookupIPsBySecID(nid identity.NumericIdentity) []string {
-	return d.lookupIPsBySecID(nid)
-}
-
-func (d *Daemon) LookupEP(id string) (*endpoint.Endpoint, error) {
-	return d.endpointManager.Lookup(id)
-}
-
 func (d *Daemon) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 	if stat == nil {
 		stat = &dnsproxy.ProxyRequestContext{}

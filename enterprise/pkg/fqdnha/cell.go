@@ -29,7 +29,7 @@ var Cell = cell.Module(
 	cell.Provide(remoteproxy.NewRemoteFQDNProxy),
 
 	// Convert concrete objects into more restricted interfaces used by fqdn-ha-proxy.
-	cell.ProvidePrivate(func(ipcache *ipcache.IPCache) relay.IPGetter { return ipcache }),
+	cell.ProvidePrivate(func(ipcache *ipcache.IPCache) relay.IPCacheGetter { return ipcache }),
 
 	cell.Config(config.Config{}),
 

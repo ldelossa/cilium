@@ -21,6 +21,7 @@ import (
 	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
 	"github.com/cilium/cilium/pkg/endpoint"
+	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/hive"
@@ -44,8 +45,9 @@ type FQDNProxyAgentServer struct {
 	daemonPromise   promise.Promise[*cmd.Daemon]
 	restorerPromise promise.Promise[endpointstate.Restorer]
 
-	dataSource DNSProxyDataSource
-	ipGetter   IPGetter
+	dataSource      DNSProxyDataSource
+	ipCacheGetter   IPCacheGetter
+	endpointManager endpointmanager.EndpointManager
 }
 
 type params struct {
@@ -53,7 +55,8 @@ type params struct {
 
 	DaemonPromise   promise.Promise[*cmd.Daemon]
 	RestorerPromise promise.Promise[endpointstate.Restorer]
-	IPGetter        IPGetter
+	IPCacheGetter   IPCacheGetter
+	EndpointManager endpointmanager.EndpointManager
 	Cfg             fqdnhaconfig.Config
 }
 
@@ -97,8 +100,7 @@ func (s *FQDNProxyAgentServer) LookupSecurityIdentityByIP(ctx context.Context, I
 	if !ok {
 		return &pb.Identity{}, fmt.Errorf("unable to convert byte slice %v to netip.Addr", IP.IP)
 	}
-	id, exists := s.ipGetter.LookupSecIDByIP(ip)
-
+	id, exists := s.ipCacheGetter.LookupSecIDByIP(ip)
 	return &pb.Identity{
 		ID:     uint32(id.ID),
 		Source: string(id.Source),
@@ -107,7 +109,7 @@ func (s *FQDNProxyAgentServer) LookupSecurityIdentityByIP(ctx context.Context, I
 }
 
 func (s *FQDNProxyAgentServer) LookupIPsBySecurityIdentity(ctx context.Context, id *pb.Identity) (*pb.IPs, error) {
-	ips := s.dataSource.LookupIPsBySecID(identity.NumericIdentity(id.ID))
+	ips := s.ipCacheGetter.LookupByIdentity(identity.NumericIdentity(id.ID))
 
 	//TODO: should this not go to string and back to bytes for transfer?
 	ipsForTransfer := make([][]byte, len(ips))
@@ -124,7 +126,7 @@ func (s *FQDNProxyAgentServer) LookupIPsBySecurityIdentity(ctx context.Context, 
 func (s *FQDNProxyAgentServer) NotifyOnDNSMessage(ctx context.Context, notification *pb.DNSNotification) (*pb.Empty, error) {
 	//TODO: this should probably be factored out into stream of DNS notifications instead of a rpc call per DNS msg
 
-	endpoint, err := s.dataSource.LookupEP(strconv.Itoa(int(notification.Endpoint.ID)))
+	endpoint, err := s.endpointManager.Lookup(strconv.Itoa(int(notification.Endpoint.ID)))
 	if err != nil {
 		log.WithField("Endpoint ID", notification.Endpoint.ID).Errorf("Failed to retrieve endpoint")
 	}
@@ -204,7 +206,8 @@ func NewFQDNProxyAgentServer(
 	s := &FQDNProxyAgentServer{
 		daemonPromise:   p.DaemonPromise,
 		restorerPromise: p.RestorerPromise,
-		ipGetter:        p.IPGetter,
+		ipCacheGetter:   p.IPCacheGetter,
+		endpointManager: p.EndpointManager,
 	}
 	lc.Append(s)
 	return s
@@ -251,11 +254,10 @@ func (s *FQDNProxyAgentServer) Stop(ctx hive.HookContext) error {
 
 type DNSProxyDataSource interface {
 	LookupEPByIP(netip.Addr) (*endpoint.Endpoint, error)
-	LookupIPsBySecID(identity.NumericIdentity) []string
 	NotifyOnDNSMsg(time.Time, *endpoint.Endpoint, string, identity.NumericIdentity, string, *dns.Msg, string, bool, *dnsproxy.ProxyRequestContext) error
-	LookupEP(string) (*endpoint.Endpoint, error)
 }
 
-type IPGetter interface {
+type IPCacheGetter interface {
+	LookupByIdentity(identity.NumericIdentity) []string
 	LookupSecIDByIP(netip.Addr) (ipcache.Identity, bool)
 }
