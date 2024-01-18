@@ -214,7 +214,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 		}
 	}
 	if option.Config.EnableExternalDNSProxy {
-		proxy.DefaultDNSProxy = doubleproxy.DoubleProxy{RemoteProxy: remoteProxy, LocalProxy: proxy.DefaultDNSProxy}
+		proxy.DefaultDNSProxy = &doubleproxy.DoubleProxy{RemoteProxy: remoteProxy, LocalProxy: proxy.DefaultDNSProxy}
 	}
 	return err // filled by StartDNSProxy
 }

@@ -55,7 +55,7 @@ func (d *Daemon) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epI
 }
 
 func (d *Daemon) GetAllRules() (map[uint64]restore.DNSRules, error) {
-	var double, ok = proxy.DefaultDNSProxy.(doubleproxy.DoubleProxy)
+	var double, ok = proxy.DefaultDNSProxy.(*doubleproxy.DoubleProxy)
 	if ok {
 		local, ok := double.LocalProxy.(*dnsproxy.DNSProxy)
 		if !ok {

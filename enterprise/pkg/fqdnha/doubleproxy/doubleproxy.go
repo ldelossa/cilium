@@ -28,24 +28,24 @@ type DoubleProxy struct {
 	LocalProxy  proxy.DNSProxier
 }
 
-func (j DoubleProxy) GetRules(u uint16) (restore.DNSRules, error) {
-	return j.LocalProxy.GetRules(u)
+func (dp *DoubleProxy) GetRules(u uint16) (restore.DNSRules, error) {
+	return dp.LocalProxy.GetRules(u)
 }
 
-func (j DoubleProxy) RemoveRestoredRules(u uint16) {
-	if j.RemoteProxy != nil {
-		j.RemoteProxy.RemoveRestoredRules(u)
+func (dp *DoubleProxy) RemoveRestoredRules(u uint16) {
+	if dp.RemoteProxy != nil {
+		dp.RemoteProxy.RemoveRestoredRules(u)
 	}
-	j.LocalProxy.RemoveRestoredRules(u)
+	dp.LocalProxy.RemoveRestoredRules(u)
 }
 
-func (j DoubleProxy) UpdateAllowed(endpointID uint64, destPort uint16, newRules policy.L7DataMap) error {
-	err := j.LocalProxy.UpdateAllowed(endpointID, destPort, newRules)
+func (dp *DoubleProxy) UpdateAllowed(endpointID uint64, destPort uint16, newRules policy.L7DataMap) error {
+	err := dp.LocalProxy.UpdateAllowed(endpointID, destPort, newRules)
 	if err != nil {
 		return err
 	}
-	if j.RemoteProxy != nil {
-		err = j.RemoteProxy.UpdateAllowed(endpointID, destPort, newRules)
+	if dp.RemoteProxy != nil {
+		err = dp.RemoteProxy.UpdateAllowed(endpointID, destPort, newRules)
 		if err != nil {
 			return err
 		}
@@ -53,25 +53,25 @@ func (j DoubleProxy) UpdateAllowed(endpointID uint64, destPort uint16, newRules 
 	return nil
 }
 
-func (j DoubleProxy) GetBindPort() uint16 {
-	return j.LocalProxy.GetBindPort()
+func (dp *DoubleProxy) GetBindPort() uint16 {
+	return dp.LocalProxy.GetBindPort()
 }
 
-func (j DoubleProxy) SetRejectReply(s string) {
-	j.LocalProxy.SetRejectReply(s)
-	if j.RemoteProxy != nil {
-		j.RemoteProxy.SetRejectReply(s)
+func (dp *DoubleProxy) SetRejectReply(s string) {
+	dp.LocalProxy.SetRejectReply(s)
+	if dp.RemoteProxy != nil {
+		dp.RemoteProxy.SetRejectReply(s)
 	}
 }
 
-func (j DoubleProxy) RestoreRules(op *endpoint.Endpoint) {
-	if j.RemoteProxy != nil {
-		j.RemoteProxy.RestoreRules(op)
+func (dp *DoubleProxy) RestoreRules(op *endpoint.Endpoint) {
+	if dp.RemoteProxy != nil {
+		dp.RemoteProxy.RestoreRules(op)
 	}
-	j.LocalProxy.RestoreRules(op)
+	dp.LocalProxy.RestoreRules(op)
 }
 
-func (j DoubleProxy) Cleanup() {
-	j.LocalProxy.Cleanup()
-	j.RemoteProxy.Cleanup()
+func (dp *DoubleProxy) Cleanup() {
+	dp.LocalProxy.Cleanup()
+	dp.RemoteProxy.Cleanup()
 }
