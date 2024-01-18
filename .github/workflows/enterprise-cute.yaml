@@ -374,7 +374,7 @@ jobs:
       - name: Set cluster config
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          eval `make kubeconfig`
+          eval $(make kubeconfig | grep KUBECONFIG)
           [[ ! "$KUBECONFIG" =~ ^/.* ]] && KUBECONFIG="$(pwd)/$KUBECONFIG"
           cat $KUBECONFIG # useful for troubleshooting, especially for the RKE clusters.
           echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
