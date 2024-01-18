@@ -72,8 +72,9 @@ jobs:
 
       - name: Install Cilium
         run: |
-          helm install -n kube-system cilium ${{ env.helm_chart_repo }} --version ${{ steps.vars.outputs.version }} \
-          --values .github/values/cilium-enterprise-values.yaml
+          helm install -n kube-system cilium ${{ env.helm_chart_repo }} \
+            --version ${{ steps.vars.outputs.version }} \
+            --set-string extraConfig.external-dns-proxy=true
           kubectl rollout status -n kube-system ds/cilium --watch
 
       - name: Install FQDN proxy
