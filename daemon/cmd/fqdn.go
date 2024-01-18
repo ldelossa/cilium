@@ -169,7 +169,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 	}
 	var remoteProxy *remoteproxy.RemoteFQDNProxy
 
-	if option.Config.ExternalDNSProxy {
+	if option.Config.EnableExternalDNSProxy {
 		port = 10001
 		remoteProxy = remoteproxy.NewRemoteFQDNProxy()
 		err = d.l7Proxy.SetProxyPort(proxytypes.DNSProxyName, proxytypes.ProxyTypeDNS, port, false)
@@ -213,7 +213,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 			}
 		}
 	}
-	if option.Config.ExternalDNSProxy {
+	if option.Config.EnableExternalDNSProxy {
 		proxy.DefaultDNSProxy = doubleproxy.DoubleProxy{RemoteProxy: remoteProxy, LocalProxy: proxy.DefaultDNSProxy}
 	}
 	return err // filled by StartDNSProxy

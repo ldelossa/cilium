@@ -64,7 +64,7 @@ func newProxy(params proxyParams, cfg ProxyConfig) *Proxy {
 
 	dnsProxyPort := cfg.DNSProxyPort
 	// TODO: fix when port is not hardcoded
-	if option.Config.ExternalDNSProxy {
+	if option.Config.EnableExternalDNSProxy {
 		dnsProxyPort = 10001
 	}
 	return createProxy(cfg.MinPort, cfg.MaxPort, dnsProxyPort, params.Datapath, params.EnvoyProxyIntegration, params.DNSProxyIntegration)

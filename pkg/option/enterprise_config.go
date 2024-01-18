@@ -16,13 +16,20 @@ import "github.com/spf13/viper"
 const (
 	// EnableIPv4EgressGateway enables the IPv4 egress gateway
 	EnableIPv4EgressGatewayHA = "enable-ipv4-egress-gateway-ha"
+
+	// EnableExternalDNSProxy enables the external DNS proxy (HA DNS proxy)
+	EnableExternalDNSProxy = "external-dns-proxy"
 )
 
 type EnterpriseDaemonConfig struct {
 	// Enable the HA egress gateway
 	EnableIPv4EgressGatewayHA bool
+
+	// Enable the external DNS proxy (HA DNS proxy)
+	EnableExternalDNSProxy bool
 }
 
 func (ec *EnterpriseDaemonConfig) Populate(vp *viper.Viper) {
 	ec.EnableIPv4EgressGatewayHA = vp.GetBool(EnableIPv4EgressGatewayHA)
+	ec.EnableExternalDNSProxy = vp.GetBool(EnableExternalDNSProxy)
 }

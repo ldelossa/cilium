@@ -2434,8 +2434,6 @@ type DaemonConfig struct {
 
 	// ServiceNoBackendResponse determines how we handle traffic to a service with no backends.
 	ServiceNoBackendResponse string
-
-	ExternalDNSProxy bool
 }
 
 var (
@@ -3558,8 +3556,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	// To support K8s NetworkPolicy
 	c.EnableK8sNetworkPolicy = vp.GetBool(EnableK8sNetworkPolicy)
 	c.PolicyCIDRMatchMode = vp.GetStringSlice(PolicyCIDRMatchMode)
-
-	c.ExternalDNSProxy = vp.GetBool("external-dns-proxy")
 }
 
 func (c *DaemonConfig) populateDevices(vp *viper.Viper) {
