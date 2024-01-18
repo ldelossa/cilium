@@ -656,7 +656,9 @@ Vagrantfile @cilium/ci-structure
 /pkg/bgpv1/manager/reconciler/enterprise* @isovalent/traffic-engineering
 /pkg/clustermesh/enterprise_* @isovalent/clustermesh
 /pkg/k8s/apis/isovalent.com/client/crds/v1alpha1/isovalentpodnetworks.yaml @isovalent/multi-network
+/pkg/k8s/apis/isovalent.com/client/crds/v1/isovalentegressgatewaypolicies.yaml @isovalent/egress-gateway
 /pkg/k8s/apis/isovalent.com/v1alpha1/podnetwork_types.go @isovalent/multi-network
+/pkg/k8s/apis/isovalent.com/v1/iegp_types.go @isovalent/egress-gateway
 /pkg/k8s/enterprise_overlapping_podcidr* @isovalent/clustermesh
 /pkg/k8s/enterprise_phantom* @isovalent/clustermesh
 /pkg/k8s/enterprise_service_merger* @isovalent/clustermesh
