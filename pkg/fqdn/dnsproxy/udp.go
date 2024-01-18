@@ -99,12 +99,6 @@ func listenConfig(mark int, ipFamily ipfamily.IPFamily) *net.ListenConfig {
 					opErr = err
 					return
 				}
-				if option.Config.EnableExternalDNSProxy {
-					if err := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
-						opErr = fmt.Errorf("setsockopt(SO_REUSEPORT) failed: %w", err)
-						return
-					}
-				}
 				if mark != 0 {
 					if err := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_MARK, mark); err != nil {
 						opErr = fmt.Errorf("setsockopt(SO_MARK) failed: %w", err)
