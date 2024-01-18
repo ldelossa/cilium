@@ -17,17 +17,11 @@ import (
 
 	"github.com/cilium/dns"
 
-	"github.com/cilium/cilium/enterprise/pkg/fqdnha/relay"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/spanstat"
 	"github.com/cilium/cilium/pkg/time"
 )
-
-func (d *Daemon) bootstrapFqdnRelay(stat *spanstat.SpanStat) error {
-	return relay.RunServer(d, d.ipcache, stat)
-}
 
 // LookupEPByIP returns the endpoint that this IP belongs to
 func (d *Daemon) LookupEPByIP(endpointIP netip.Addr) (endpoint *endpoint.Endpoint, err error) {

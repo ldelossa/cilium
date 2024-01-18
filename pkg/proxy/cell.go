@@ -62,12 +62,7 @@ func newProxy(params proxyParams, cfg ProxyConfig) *Proxy {
 
 	configureProxyLogger(params.EndpointInfoRegistry, params.MonitorAgent, option.Config.AgentLabels)
 
-	dnsProxyPort := cfg.DNSProxyPort
-	// TODO: fix when port is not hardcoded
-	if option.Config.EnableExternalDNSProxy {
-		dnsProxyPort = 10001
-	}
-	return createProxy(cfg.MinPort, cfg.MaxPort, dnsProxyPort, params.Datapath, params.EnvoyProxyIntegration, params.DNSProxyIntegration)
+	return createProxy(cfg.MinPort, cfg.MaxPort, cfg.DNSProxyPort, params.Datapath, params.EnvoyProxyIntegration, params.DNSProxyIntegration)
 }
 
 type envoyProxyIntegrationParams struct {

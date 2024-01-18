@@ -82,7 +82,7 @@ func TestUpdateAllowedOrdering(t *testing.T) {
 	step := 0
 	testErrs := make(chan error)
 
-	proxy := NewRemoteFQDNProxy()
+	proxy := newRemoteFQDNProxy()
 	proxy.client = &mockFQDNProxyClient{
 		updateAllowedHandler: func(msg *dnsproxy.FQDNRules) error {
 			if msg.EndpointID != updates[step].endpointID {
@@ -149,7 +149,7 @@ func TestUpdateAllowedOrderingWithRetries(t *testing.T) {
 	step := 0
 	testErrs := make(chan error)
 
-	proxy := NewRemoteFQDNProxy()
+	proxy := newRemoteFQDNProxy()
 	proxy.client = &mockFQDNProxyClient{
 		updateAllowedHandler: func(msg *dnsproxy.FQDNRules) error {
 			// increase step here to take into account intentional failures too

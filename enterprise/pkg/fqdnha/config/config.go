@@ -8,21 +8,15 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package option
+package config
 
-import "github.com/spf13/viper"
+import "github.com/spf13/pflag"
 
-// Enterprise specific command line arguments.
-const (
-	// EnableIPv4EgressGateway enables the IPv4 egress gateway
-	EnableIPv4EgressGatewayHA = "enable-ipv4-egress-gateway-ha"
-)
-
-type EnterpriseDaemonConfig struct {
-	// Enable the HA egress gateway
-	EnableIPv4EgressGatewayHA bool
+// Config is the enterprise FQDN proxy configuration.
+type Config struct {
+	EnableExternalDNSProxy bool `mapstructure:"external-dns-proxy"`
 }
 
-func (ec *EnterpriseDaemonConfig) Populate(vp *viper.Viper) {
-	ec.EnableIPv4EgressGatewayHA = vp.GetBool(EnableIPv4EgressGatewayHA)
+func (def Config) Flags(flags *pflag.FlagSet) {
+	flags.Bool("external-dns-proxy", def.EnableExternalDNSProxy, "Enable Cilium agent to use an external DNS proxy")
 }

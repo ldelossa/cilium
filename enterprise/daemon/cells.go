@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/mixedrouting"
 	"github.com/cilium/cilium/enterprise/pkg/multicast"
@@ -61,7 +62,10 @@ var (
 		mixedrouting.Cell,
 
 		multinetwork.Cell,
+
 		multicast.Cell,
+
+		fqdnha.Cell,
 	)
 
 	Datapath = cell.Module(

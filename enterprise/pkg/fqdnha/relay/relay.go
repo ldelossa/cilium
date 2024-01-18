@@ -17,15 +17,20 @@ import (
 
 	pb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
 
+	"github.com/cilium/cilium/daemon/cmd"
+	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
 	"github.com/cilium/cilium/pkg/endpoint"
+	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
+	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
-	"github.com/cilium/cilium/pkg/spanstat"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -34,8 +39,22 @@ var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdnha/relay")
 type FQDNProxyAgentServer struct {
 	pb.UnimplementedFQDNProxyAgentServer
 
+	grpcServer *grpc.Server
+
+	daemonPromise   promise.Promise[*cmd.Daemon]
+	restorerPromise promise.Promise[endpointstate.Restorer]
+
 	dataSource DNSProxyDataSource
 	ipGetter   IPGetter
+}
+
+type params struct {
+	cell.In
+
+	DaemonPromise   promise.Promise[*cmd.Daemon]
+	RestorerPromise promise.Promise[endpointstate.Restorer]
+	IPGetter        IPGetter
+	Cfg             fqdnhaconfig.Config
 }
 
 func (s *FQDNProxyAgentServer) ProvideMappings(stream pb.FQDNProxyAgent_ProvideMappingsServer) error {
@@ -175,35 +194,59 @@ func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty)
 	return wholeMsg, nil
 }
 
-func newServer(lookupSrc DNSProxyDataSource, ipGetter IPGetter) *FQDNProxyAgentServer {
-	return &FQDNProxyAgentServer{
-		dataSource: lookupSrc,
-		ipGetter:   ipGetter,
+func NewFQDNProxyAgentServer(
+	lc hive.Lifecycle,
+	p params,
+) *FQDNProxyAgentServer {
+	if !p.Cfg.EnableExternalDNSProxy {
+		return nil
 	}
+	s := &FQDNProxyAgentServer{
+		daemonPromise:   p.DaemonPromise,
+		restorerPromise: p.RestorerPromise,
+		ipGetter:        p.IPGetter,
+	}
+	lc.Append(s)
+	return s
 }
 
-func RunServer(lookupSrc DNSProxyDataSource, ipGetter IPGetter, stat *spanstat.SpanStat) error {
-	if stat != nil {
-		stat.Start()
+func (s *FQDNProxyAgentServer) Start(ctx hive.HookContext) error {
+	daemon, err := s.daemonPromise.Await(ctx)
+	if err != nil {
+		return err
 	}
+	s.dataSource = daemon
+
+	restorer, err := s.restorerPromise.Await(ctx)
+	if err != nil {
+		return err
+	}
+	restorer.WaitForEndpointRestore(ctx)
 
 	socket := "/var/run/cilium/proxy-agent.sock"
 	os.Remove(socket)
 	lis, err := net.Listen("unix", socket)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
+		return err
 	}
 	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterFQDNProxyAgentServer(grpcServer, newServer(lookupSrc, ipGetter))
-
-	if stat != nil {
-		stat.End(true)
-	}
+	s.grpcServer = grpc.NewServer(opts...)
+	pb.RegisterFQDNProxyAgentServer(s.grpcServer, s)
 
 	log.Info("Starting FQDN relay gRPC server")
+	go func() {
+		if err := s.grpcServer.Serve(lis); err != nil {
+			log.WithError(err).Error("Cannot start FQDN relay gRPC server")
+		}
+	}()
+	return nil
+}
 
-	return grpcServer.Serve(lis)
+func (s *FQDNProxyAgentServer) Stop(ctx hive.HookContext) error {
+	log.Info("Stopping FQDN relay gRPC server")
+	s.grpcServer.Stop()
+	return nil
 }
 
 type DNSProxyDataSource interface {

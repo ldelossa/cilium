@@ -5,26 +5,33 @@ package remoteproxy
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
+	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
-	"github.com/cilium/cilium/pkg/fqdn/proxy"
+	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
+	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/inctimer"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/policy"
+	"github.com/cilium/cilium/pkg/proxy"
+	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
 	"github.com/cilium/cilium/pkg/time"
 
 	fqdnpb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
 )
 
-var _ proxy.DNSProxier = &RemoteFQDNProxy{}
+var _ fqdnproxy.DNSProxier = &RemoteFQDNProxy{}
 
 var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdnha/remoteproxy")
 
@@ -47,6 +54,8 @@ type RemoteFQDNProxy struct {
 	clientLock lock.Mutex
 
 	controllers *controller.Manager
+	done        chan struct{}
+
 	// To keep the insertion O(1) and preserve updates ordering,
 	// we use both a slice and a map. The slice is responsible for
 	// storing the update keys preserving the order in which they
@@ -70,25 +79,64 @@ func msgKey(msg *fqdnpb.FQDNRules) fqdnRuleKey {
 	return fqdnRuleKey{msg.EndpointID, msg.DestPort}
 }
 
-func NewRemoteFQDNProxy() *RemoteFQDNProxy {
+func newRemoteFQDNProxy() *RemoteFQDNProxy {
 	proxy := &RemoteFQDNProxy{
 		controllers: controller.NewManager(),
+		done:        make(chan struct{}),
 	}
 	proxy.resetCache()
 	return proxy
 }
 
-// TODO: move this function to a controller
-func (r *RemoteFQDNProxy) RunGRPCConnectionManager() {
+type params struct {
+	cell.In
+
+	L7Proxy *proxy.Proxy
+	Cfg     fqdnhaconfig.Config
+}
+
+func NewRemoteFQDNProxy(
+	lc hive.Lifecycle,
+	p params,
+) (*RemoteFQDNProxy, error) {
+	if !p.Cfg.EnableExternalDNSProxy {
+		return nil, nil
+	}
+	remoteProxy := newRemoteFQDNProxy()
+	err := p.L7Proxy.SetProxyPort(proxytypes.DNSProxyName, proxytypes.ProxyTypeDNS, 10001, false)
+	if err != nil {
+		return nil, fmt.Errorf("can't set proxy port: %w", err)
+	}
+	lc.Append(remoteProxy)
+	return remoteProxy, nil
+}
+
+func (r *RemoteFQDNProxy) Start(ctx hive.HookContext) error {
+	// TODO: move this to a controller?
 	go func() {
 		r.resetClient()
 
+		timer, done := inctimer.New()
+		defer done()
 		for {
 			r.connection.WaitForStateChange(context.Background(), connectivity.Ready)
 			r.resetClient()
-			time.Sleep(30 * time.Second)
+			select {
+			case <-r.done:
+				return
+			case <-timer.After(30 * time.Second):
+				continue
+			}
 		}
 	}()
+	log.Info("FQDN HA proxy started")
+	return nil
+}
+
+func (r *RemoteFQDNProxy) Stop(ctx hive.HookContext) error {
+	close(r.done)
+	log.Info("FQDN HA proxy stopped")
+	return nil
 }
 
 func (r *RemoteFQDNProxy) GetRules(endpointID uint16) (restore.DNSRules, error) {

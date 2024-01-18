@@ -13,19 +13,69 @@
 package doubleproxy
 
 import (
+	"github.com/cilium/cilium/daemon/cmd"
+	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha/remoteproxy"
 	"github.com/cilium/cilium/pkg/endpoint"
-	"github.com/cilium/cilium/pkg/fqdn/proxy"
+	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
+	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/policy"
+	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/proxy"
 )
 
-var _ proxy.DNSProxier = &DoubleProxy{}
+var _ fqdnproxy.DNSProxier = &DoubleProxy{}
 
 // DoubleProxy is a shim for relaying proxy function calls to a local and remote proxies.
 // LocalProxy is always set, RemoteProxy may be nil
 type DoubleProxy struct {
-	RemoteProxy proxy.DNSProxier
-	LocalProxy  proxy.DNSProxier
+	RemoteProxy fqdnproxy.DNSProxier
+	LocalProxy  fqdnproxy.DNSProxier
+
+	daemonPromise promise.Promise[*cmd.Daemon]
+}
+
+type params struct {
+	cell.In
+
+	DaemonPromise promise.Promise[*cmd.Daemon]
+	RemoteProxy   *remoteproxy.RemoteFQDNProxy
+	Cfg           fqdnhaconfig.Config
+}
+
+func NewDoubleProxy(
+	lc hive.Lifecycle,
+	p params,
+) *DoubleProxy {
+	if !p.Cfg.EnableExternalDNSProxy {
+		return nil
+	}
+	dp := &DoubleProxy{
+		RemoteProxy:   p.RemoteProxy,
+		daemonPromise: p.DaemonPromise,
+	}
+	lc.Append(dp)
+	return dp
+}
+
+func (dp *DoubleProxy) Start(ctx hive.HookContext) error {
+	// Wait for the daemon to be populated, at which point we can assume proxy.DefaultDNSProxy to be resolved.
+	_, err := dp.daemonPromise.Await(ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: get rid of the DefaultDNSProxy singleton in upstream altogether to avoid this ugly hack.
+	dp.LocalProxy = proxy.DefaultDNSProxy
+	proxy.DefaultDNSProxy = dp
+
+	return nil
+}
+
+func (dp *DoubleProxy) Stop(ctx hive.HookContext) error {
+	return nil
 }
 
 func (dp *DoubleProxy) GetRules(u uint16) (restore.DNSRules, error) {
