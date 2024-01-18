@@ -28,7 +28,7 @@ import (
 	"github.com/cilium/cilium/pkg/time"
 )
 
-var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdn/relay")
+var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdnha/relay")
 
 type FQDNProxyAgentServer struct {
 	pb.UnimplementedFQDNProxyAgentServer

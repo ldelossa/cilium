@@ -18,8 +18,8 @@ import (
 
 	"github.com/cilium/dns"
 
-	"github.com/cilium/cilium/enterprise/pkg/fqdn/doubleproxy"
-	"github.com/cilium/cilium/enterprise/pkg/fqdn/relay"
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha/relay"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"

@@ -20,8 +20,8 @@ import (
 
 	"github.com/cilium/cilium/api/v1/models"
 	. "github.com/cilium/cilium/api/v1/server/restapi/policy"
-	"github.com/cilium/cilium/enterprise/pkg/fqdn/doubleproxy"
-	"github.com/cilium/cilium/enterprise/pkg/fqdn/remoteproxy"
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
+	"github.com/cilium/cilium/enterprise/pkg/fqdnha/remoteproxy"
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"

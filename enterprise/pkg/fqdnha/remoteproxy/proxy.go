@@ -26,7 +26,7 @@ import (
 
 var _ proxy.DNSProxier = &RemoteFQDNProxy{}
 
-var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdn/remoteproxy")
+var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdnha/remoteproxy")
 
 const (
 	fqdnRulesCacheController string        = "fqdn-rules-cache-controller"
