@@ -639,6 +639,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-dbg/cmd/bpf_multicast* @isovalent/traffic-engineering
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/operator/pkg/multinetwork/ @isovalent/multi-network
+/enterprise/pkg/annotation/ @isovalent/sig-k8s
 /enterprise/pkg/bgpv1/ @isovalent/traffic-engineering
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
