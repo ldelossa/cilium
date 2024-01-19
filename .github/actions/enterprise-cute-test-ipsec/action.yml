@@ -110,24 +110,3 @@ runs:
       run: |
         echo "ℹ️ℹ️ℹ️ Displaying cluster pods ..."
         kubectl get pods --all-namespaces -o wide
-
-    - name: Fetch artifacts
-      if: ${{ !success() }}
-      shell: bash
-      run: |
-        echo "📋📋📋️ Fetching artifacts ..."
-        kubectl -n kube-system get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n kube-system exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
-        kubectl get pods --all-namespaces -o wide
-        cilium status
-        mkdir -p cilium-sysdumps
-        cilium sysdump --output-filename cilium-sysdump-final
-        # To debug https://github.com/cilium/cilium/issues/26062
-        head -n -0 /proc/buddyinfo /proc/pagetypeinfo
-
-    - name: Upload artifacts
-      if: ${{ !success() }}
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
-      with:
-        name: cilium-sysdumps
-        path: cilium-sysdump-*.zip
-        retention-days: 5

@@ -161,7 +161,11 @@ jobs:
           fi
 
           branch_suffix=""
-          [[ "${{ steps.vars.outputs.oss }}" != "true" ]] && branch_suffix="${{ env.BRANCH_SUFFIX }}"
+          helm_repo="${{ env.CILIUM_OSS_HELM_REPO_NAME }}"
+          if [[ "${{ steps.vars.outputs.oss }}" != "true" ]]; then
+            branch_suffix="${{ env.BRANCH_SUFFIX }}"
+            helm_repo="${{ env.CILIUM_HELM_REPO_NAME }}"
+          fi
 
           echo "getting deploy branch and chart version ..."
           deploy_branch=""
@@ -169,7 +173,7 @@ jobs:
           if [[ "${{ steps.vars.outputs.deploy_type }}" == "current" ]]; then
             deploy_branch="${{ inputs.context-ref }}"
           elif [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
-            deploy_chart_version=$(helm search repo cilium/cilium --version $cute_chart_version -o json | jq '.[0] .version')
+            deploy_chart_version=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.deploy_type }}" == "latest" ]]; then
             deploy_branch="v$cute_chart_version$branch_suffix"
           fi
@@ -178,7 +182,7 @@ jobs:
           upgrade_branch=""
           upgrade_stable_version=""
           if [[ "${{ steps.vars.outputs.upgrade_type }}" == "stable" ]]; then
-            upgrade_stable_version=$(helm search repo cilium/cilium --version $cute_chart_version -o json | jq '.[0] .version')
+            upgrade_stable_version=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.upgrade_type }}" == "latest" ]]; then
             upgrade_branch="v$cute_chart_version$branch_suffix"
           elif [[ "${{ steps.vars.outputs.upgrade_type }}" =~ ^(v){0,1}[0-9]+.[0-9]+.*$ ]]; then
@@ -408,6 +412,7 @@ jobs:
       - name: IPsec tests
         # Step will be skipped for the CuTE version that the customer already uses
         if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
+        id: ipsec_tests
         timeout-minutes: 420
         uses: ./.github/actions/enterprise-cute-test-ipsec
         with:
@@ -452,6 +457,26 @@ jobs:
           path: ${{ steps.upload-prep.outputs.dir }}
           retention-days: 15
           if-no-files-found: ignore
+
+      - name: Collect sysdump
+        if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        shell: bash
+        run: |
+          kubectl -n kube-system get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n kube-system exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
+          kubectl get pods --all-namespaces -o wide
+          cilium status
+          mkdir -p cilium-sysdumps
+          cilium sysdump --output-filename cilium-sysdump-final
+          # To debug https://github.com/cilium/cilium/issues/26062
+          head -n -0 /proc/buddyinfo /proc/pagetypeinfo
+
+      - name: Upload sysdump
+        if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: cilium-sysdumps
+          path: cilium-sysdump-*.zip
+          retention-days: 5
 
       # If the creation step was run, always run the cleanup step, even if create or test steps failed
       - name: Clean up CuTE resources
