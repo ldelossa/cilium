@@ -658,7 +658,7 @@ Vagrantfile @cilium/ci-structure
 /install/kubernetes/cilium/templates/cilium-operator/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/cilium-preflight/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
-/pkg/bgpv1/manager/reconciler/enterprise* @isovalent/traffic-engineering
+/pkg/bgpv1/**/*enterprise* @isovalent/traffic-engineering
 /pkg/clustermesh/enterprise_* @isovalent/clustermesh
 /pkg/fqdn/dnsproxy/enterprise_* @isovalent/dns-proxy
 /pkg/k8s/apis/isovalent.com/client/crds/v1alpha1/isovalentpodnetworks.yaml @isovalent/multi-network
