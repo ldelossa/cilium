@@ -30,6 +30,8 @@ env:
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
   kubectl_version: v1.29.0
+  upload_dir: github-upload
+  artifact_retention_days: 15
 
 jobs:
   cute-ci:
@@ -437,46 +439,40 @@ jobs:
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 
+      - name: Collect sysdump
+        if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        shell: bash
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
+        run: |
+          CILIUM_NS=$(terraform output --raw cilium_namespace)
+          kubectl -n $CILIUM_NS get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n $CILIUM_NS exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
+          kubectl get pods --all-namespaces -o wide
+          cilium status
+          mkdir -p ${{ env.upload_dir }}/cilium-sysdumps
+          cilium sysdump --output-filename ${{ env.upload_dir }}/cilium-sysdumps/cilium-sysdump-final
+          # To debug https://github.com/cilium/cilium/issues/26062
+          head -n -0 /proc/buddyinfo /proc/pagetypeinfo || true
+
       # This is to work around the fact that relative paths in actions/upload-artifact@v3 are rooted
       # against the workspace, which causes an "Invalid pattern" if the CuTE repo dir is ".".
-      - name: 'Prepare upload'
-        if: always() && steps.tests.outcome != 'skipped'
+      - name: Prepare upload
+        if: ${{ always() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
         id: upload-prep
         run: |
-          if test -d ./cute/${{ steps.vars.outputs.cute_dir }}/tests/results; then
-            echo dir=$(realpath ./cute/${{ steps.vars.outputs.cute_dir }}/tests/results) >> $GITHUB_OUTPUT
+          if test -d ./cute/${{ steps.vars.outputs.cute_dir }}/${{ env.upload_dir }}; then
+            echo dir=$(realpath ./cute/${{ steps.vars.outputs.cute_dir }}/${{ env.upload_dir }}) >> $GITHUB_OUTPUT
           else
             echo dir=nothingtoupload >> $GITHUB_OUTPUT
           fi
 
-      - name: 'Upload Artifacts'
+      - name: Upload Artifacts
         if: always() && steps.tests.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
           name: output
           path: ${{ steps.upload-prep.outputs.dir }}
-          retention-days: 15
           if-no-files-found: ignore
-
-      - name: Collect sysdump
-        if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
-        shell: bash
-        run: |
-          kubectl -n kube-system get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n kube-system exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
-          kubectl get pods --all-namespaces -o wide
-          cilium status
-          mkdir -p cilium-sysdumps
-          cilium sysdump --output-filename cilium-sysdump-final
-          # To debug https://github.com/cilium/cilium/issues/26062
-          head -n -0 /proc/buddyinfo /proc/pagetypeinfo
-
-      - name: Upload sysdump
-        if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
-        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
-        with:
-          name: cilium-sysdumps
-          path: cilium-sysdump-*.zip
-          retention-days: 5
+          retention-days: ${{ env.artifact_retention_days }}
 
       # If the creation step was run, always run the cleanup step, even if create or test steps failed
       - name: Clean up CuTE resources
