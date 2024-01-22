@@ -618,6 +618,8 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
+**/*enterprise* @isovalent/void
+/.github/**/*enterprise* @isovalent/infrastructure
 /.github/workflows/enterprise-clustermesh-*yaml @isovalent/clustermesh
 /.github/workflows/enterprise-container-scan-twistcli.yaml @isovalent/security
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
@@ -627,8 +629,6 @@ Vagrantfile @cilium/ci-structure
 /Documentation/cmdref/
 /renovate.json5 @isovalent/infrastructure
 /.openvex.json @isovalent/security
-/enterprise @isovalent/void
-*enterprise* @isovalent/void
 *podnetwork* @isovalent/multi-network
 /enterprise/cilium-cli/ @isovalent/cli
 /enterprise/cilium-cli/hooks/connectivity/tests/egressgateway.go @isovalent/egress-gateway
@@ -663,5 +663,3 @@ Vagrantfile @cilium/ci-structure
 /pkg/k8s/enterprise_overlapping_podcidr* @isovalent/clustermesh
 /pkg/k8s/enterprise_phantom* @isovalent/clustermesh
 /pkg/k8s/enterprise_service_merger* @isovalent/clustermesh
-/.github/actions/enterprise-cute-* @isovalent/infrastructure
-/.github/workflows/enterprise-cute*.yaml @isovalent/infrastructure
