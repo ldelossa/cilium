@@ -432,14 +432,26 @@ jobs:
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
 
+      # This is to work around the fact that relative paths in actions/upload-artifact@v3 are rooted
+      # against the workspace, which causes an "Invalid pattern" if the CuTE repo dir is ".".
+      - name: 'Prepare upload'
+        if: always() && steps.tests.outcome != 'skipped'
+        id: upload-prep
+        run: |
+          if test -d ./cute/${{ steps.vars.outputs.cute_dir }}/tests/results; then
+            echo dir=$(realpath ./cute/${{ steps.vars.outputs.cute_dir }}/tests/results) >> $GITHUB_OUTPUT
+          else
+            echo dir=nothingtoupload >> $GITHUB_OUTPUT
+          fi
 
       - name: 'Upload Artifacts'
         if: always() && steps.tests.outcome != 'skipped'
         uses: actions/upload-artifact@v3
         with:
           name: output
-          path: ./cute/${{ steps.vars.outputs.cute_dir }}/tests/results
+          path: ${{ steps.upload-prep.outputs.dir }}
           retention-days: 15
+          if-no-files-found: ignore
 
       # If the creation step was run, always run the cleanup step, even if create or test steps failed
       - name: Clean up CuTE resources
