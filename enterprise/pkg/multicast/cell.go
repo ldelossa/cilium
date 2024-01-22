@@ -29,6 +29,8 @@ var Cell = cell.Module(
 		newMulticastGroupResource,
 		newMulticastNodeResource,
 	),
+
+	cell.Invoke(func(manager *MulticastManager) {}),
 )
 
 func newMulticastGroupResource(lc hive.Lifecycle, c client.Clientset, cfg maps_multicast.Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup] {
