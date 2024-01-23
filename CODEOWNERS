@@ -622,10 +622,12 @@ Vagrantfile @cilium/ci-structure
 /.github/**/*enterprise* @isovalent/infrastructure
 /.github/workflows/enterprise-clustermesh-*yaml @isovalent/clustermesh
 /.github/workflows/enterprise-container-scan-twistcli.yaml @isovalent/security
+/.github/workflows/enterprise-kind.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
+/daemon/cmd/enterprise_fqdn_relay.go @isovalent/dns-proxy
 /Documentation/cmdref/
 /renovate.json5 @isovalent/infrastructure
 /.openvex.json @isovalent/security
@@ -644,6 +646,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/bgpv1/ @isovalent/traffic-engineering
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
+/enterprise/pkg/fqdnha/ @isovalent/dns-proxy
 /enterprise/pkg/maps/ctnat/ @isovalent/clustermesh
 /enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
 /enterprise/pkg/multicast/ @isovalent/traffic-engineering
@@ -656,6 +659,7 @@ Vagrantfile @cilium/ci-structure
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /pkg/bgpv1/manager/reconciler/enterprise* @isovalent/traffic-engineering
 /pkg/clustermesh/enterprise_* @isovalent/clustermesh
+/pkg/fqdn/dnsproxy/enterprise_* @isovalent/dns-proxy
 /pkg/k8s/apis/isovalent.com/client/crds/v1alpha1/isovalentpodnetworks.yaml @isovalent/multi-network
 /pkg/k8s/apis/isovalent.com/client/crds/v1/isovalentegressgatewaypolicies.yaml @isovalent/egress-gateway
 /pkg/k8s/apis/isovalent.com/v1alpha1/podnetwork_types.go @isovalent/multi-network
