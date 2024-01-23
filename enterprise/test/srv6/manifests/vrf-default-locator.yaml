@@ -1,0 +1,15 @@
+---
+apiVersion: isovalent.com/v1alpha1
+kind: IsovalentVRF
+metadata:
+  name: vrf1
+spec:
+  vrfID: 1
+  exportRouteTarget: "65010:1"    # needs to be set to allocate a SID for this VRF
+  rules:
+    - selectors:
+        - endpointSelector:
+            matchLabels:
+              vrf: vrf1
+      destinationCIDRs:
+        - 10.100.1.0/24

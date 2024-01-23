@@ -1,0 +1,10 @@
+---
+apiVersion: isovalent.com/v1alpha1
+kind: IsovalentSRv6EgressPolicy
+metadata:
+  name: policy1
+spec:
+  vrfID: 1
+  destinationCIDRs:
+    - 10.100.1.0/24
+  destinationSID: fd00:aa:bb::100

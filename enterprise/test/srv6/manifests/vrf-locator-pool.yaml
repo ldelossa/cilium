@@ -1,0 +1,30 @@
+---
+apiVersion: isovalent.com/v1alpha1
+kind: IsovalentSRv6LocatorPool
+metadata:
+  name: pool1
+spec:
+  behaviorType: Base
+  prefix: fd00:99::/32
+  structure:
+    locatorBlockLenBits: 32
+    locatorNodeLenBits: 16
+    functionLenBits: 16
+    argumentLenBits: 0
+
+---
+apiVersion: isovalent.com/v1alpha1
+kind: IsovalentVRF
+metadata:
+  name: vrf1
+spec:
+  vrfID: 1
+  exportRouteTarget: "65010:1"    # needs to be set to allocate a SID for this VRF
+  locatorPoolRef: pool1
+  rules:
+    - selectors:
+        - endpointSelector:
+            matchLabels:
+              vrf: vrf1
+      destinationCIDRs:
+        - 10.100.1.0/24

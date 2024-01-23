@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot-vrf1
+  labels:
+    app: netshoot
+    vrf: vrf1
+spec:
+  nodeName: kind-worker
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot:v0.11
+      command: ["iperf3", "-s"]

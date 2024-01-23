@@ -1,0 +1,249 @@
+name: Enterprise SRv6 Datapath (ci-srv6-datapath)
+
+# Any change in triggers needs to be reflected in the concurrency group.
+on:
+  workflow_dispatch:
+    inputs:
+      PR-number:
+        description: "Pull request number."
+        required: true
+      context-ref:
+        description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
+        required: true
+      SHA:
+        description: "SHA under test (head of the PR branch)."
+        required: true
+      extra-args:
+        description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
+        required: false
+        default: '{}'
+  # Run every 6 hours
+  schedule:
+    - cron: '0 5/6 * * *'
+
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # To be able to set commit status
+  statuses: write
+
+concurrency:
+  # Structure:
+  # - Workflow name
+  # - Event type
+  # - A unique identifier depending on event type:
+  #   - schedule: SHA
+  #   - workflow_dispatch: PR number
+  #
+  # This structure ensures a unique concurrency group name is generated for each
+  # type of testing, such that re-runs will cancel the previous run.
+  group: |
+    ${{ github.workflow }}
+    ${{ github.event_name }}
+    ${{
+      (github.event_name == 'schedule' && github.sha) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.PR-number)
+    }}
+  cancel-in-progress: true
+
+env:
+  srv6_datapath_test: enterprise/test/srv6/datapath-test.sh
+
+jobs:
+  commit-status-start:
+    name: Commit Status Start
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set initial commit status
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+
+  enterprise-srv6-datapath-test:
+    name: Enterprise SRv6 Datapath Test
+    runs-on: ubuntu-latest-4cores-16gb
+    timeout-minutes: 60
+    env:
+      job_name: 'Enterprise SRv6 Datapath Test'
+
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        include:
+          - name: '1'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '5.15-20240208.105738'
+            encap-mode: 'srh' # reduced not supported on kernels below 6.0
+            sid-manger-enabled: 'true'
+
+          - name: '2'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '6.1-20240208.105738'
+            encap-mode: 'reduced'
+            sid-manger-enabled: 'false'
+
+          - name: '3'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '6.6-20240208.105738'
+            encap-mode: 'reduced'
+            sid-manger-enabled: 'true'
+
+    steps:
+      - name: Checkout context ref (trusted)
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set Environment Variables
+        uses: ./.github/actions/set-env-variables
+
+      - name: Set up job variables
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHA="${{ inputs.SHA }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+
+          CILIUM_INSTALL_DEFAULTS="--chart-directory=install/kubernetes/cilium \
+            --helm-set=debug.enabled=true \
+            --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
+            --helm-set=image.useDigest=false \
+            --helm-set=image.tag=${SHA} \
+            --helm-set=operator.image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator \
+            --helm-set=operator.image.suffix=-ci \
+            --helm-set=operator.image.tag=${SHA} \
+            --helm-set=operator.image.useDigest=false \
+            --nodes-without-cilium=kind-worker2 \
+            --helm-set=autoDirectNodeRoutes=true \
+            --helm-set=bpf.masquerade=false \
+            --helm-set=devices='{eth+}' \
+            --helm-set=endpointRoutes.enabled=true \
+            --helm-set=kubeProxyReplacement=true \
+            --helm-set=tunnel=disabled \
+            --helm-set=routingMode=native \
+            --helm-set=securityContext.privileged=true \
+            --helm-set=ipam.mode=cluster-pool \
+            --helm-set=ipam.operator.clusterPoolIPv4PodCIDRList="{10.244.0.0/16}" \
+            --helm-set=ipam.operator.clusterPoolIPv4MaskSize=24 \
+            --helm-set=ipam.operator.clusterPoolIPv6PodCIDRList="{fd00:10:244::/48}" \
+            --helm-set=ipam.operator.clusterPoolIPv6MaskSize=64 \
+            --helm-set=k8s.requireIPv4PodCIDR=true \
+            --helm-set=k8s.requireIPv6PodCIDR=true \
+            --helm-set=ipv4NativeRoutingCIDR=10.244.0.0/16 \
+            --helm-set=ipv6NativeRoutingCIDR=fd00:10:244::/48 \
+            --helm-set=ipv6.enabled=true \
+            --helm-set=enterprise.srv6.enabled=true \
+            --helm-set=enterprise.srv6.encapMode=${{ matrix.encap-mode }} \
+            --helm-set=enterprise.srv6.locatorPoolEnabled=${{ matrix.sid-manger-enabled }} \
+          "
+
+          echo sha=${SHA} >> $GITHUB_OUTPUT
+          echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
+
+      # Warning: since this is a privileged workflow, subsequent workflow job
+      # steps must take care not to execute untrusted code.
+      - name: Checkout pull request branch (NOT TRUSTED)
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ steps.vars.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install Cilium CLI
+        uses: cilium/cilium-cli@b0955d62f5d0fd22449c568c6be921f46b66f603 # v0.15.22
+        with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
+          release-version: ${{ env.CILIUM_CLI_VERSION }}
+          ci-version: ${{ env.cilium_cli_ci_version }}
+
+      - name: Provision K8s on LVH VM
+        uses: isovalent/cilium/.github/actions/lvh-kind@main-ce
+        with:
+          test-name: srv6-datapath
+          kernel: ${{ matrix.kernel }}
+          kind-params: '"" 2 "" "" none dual'
+
+      - name: Wait for images to be available
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          for image in cilium-ci operator-generic-ci hubble-relay-ci ; do
+            until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
+          done
+
+      - name: Install Cilium
+        shell: bash
+        run: |
+          # label node without cilium - used in connectivity tests
+          kubectl patch node kind-worker2 --type=json -p='[{"op":"add","path":"/metadata/labels/cilium.io~1no-schedule","value":"true"}]'
+
+          export CILIUM_CLI_MODE=helm
+          cilium install ${{ steps.vars.outputs.cilium_install_defaults }}
+
+          cilium status --wait
+          kubectl get pods --all-namespaces -o wide
+          kubectl -n kube-system exec daemonset/cilium -- cilium-dbg status
+
+      - name: Run SRv6 datapath tests
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
+        with:
+          provision: 'false'
+          cmd: |
+            set -eux
+
+            export SRV6_ENCAP_MODE=${{ matrix.encap-mode }}
+            export SID_MANGER_ENABLED=${{ matrix.sid-manger-enabled }}
+
+            cd /host/ && ./${{ env.srv6_datapath_test }}
+
+      - name: Run connectivity tests
+        shell: bash
+        run: |
+          mkdir -p cilium-junits
+
+          cilium connectivity test --flow-validation=disabled --hubble=false --collect-sysdump-on-failure \
+            --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>" \
+            --junit-file "cilium-junits/${{ env.job_name }} (${{ matrix.name }}).xml" \
+            --junit-property github_job_step="Run tests (${{ matrix.name }})"
+
+      - name: Fetch artifacts
+        if: ${{ !success() }}
+        shell: bash
+        run: |
+          kubectl get pods --all-namespaces -o wide
+          cilium status
+          mkdir -p cilium-sysdumps
+          cilium sysdump --output-filename cilium-sysdump-${{ matrix.name }}-final
+
+      - name: Upload artifacts
+        if: ${{ !success() }}
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: cilium-sysdumps
+          path: cilium-sysdump-*.zip
+          retention-days: 5
+
+      - name: Publish Test Results As GitHub Summary
+        if: ${{ always() }}
+        uses: aanm/junit2md@332ebf0fddd34e91b03a832cfafaa826306558f9 # v0.0.3
+        with:
+          junit-directory: "cilium-junits"
+
+  commit-status-final:
+    if: ${{ always() }}
+    name: Commit Status Final
+    needs: enterprise-srv6-datapath-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set final commit status
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+          status: ${{ needs.enterprise-srv6-datapath-test.result }}

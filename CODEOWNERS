@@ -632,6 +632,7 @@ Vagrantfile @cilium/ci-structure
 /.github/workflows/enterprise-kind.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
+/.github/workflows/enterprise-*srv6*.yaml @isovalent/traffic-engineering
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
@@ -661,6 +662,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/mixedrouting/ @isovalent/clustermesh
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/test/srv6/ @isovalent/traffic-engineering
 /install/kubernetes/cilium/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/_extensions.tpl @isovalent/sig-k8s @isovalent/helm @isovalent/core-structure
