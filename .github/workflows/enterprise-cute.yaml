@@ -252,7 +252,7 @@ jobs:
 
       - name: Set up AWS CLI credentials
         if: steps.cute_props.outputs.provider == 'aws'
-        uses: aws-actions/configure-aws-credentials@2119c3b07593cce0acbcee3240f1787eebcf4697
+        uses: aws-actions/configure-aws-credentials@44112af7fc384b8b0a44e750998777ceac864b86
         with:
           aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
           aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
@@ -261,13 +261,13 @@ jobs:
       - name: Set up gcloud credentials
         if: steps.cute_props.outputs.provider == 'gcp'
         id: auth
-        uses: google-github-actions/auth@f6de81663f7788d05bd15bcce18f0e57f23f0846
+        uses: google-github-actions/auth@5a50e581162a13f4baa8916d01180d2acbc04363
         with:
           credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
 
       - name: Set up gcloud CLI
         if: steps.cute_props.outputs.provider == 'gcp'
-        uses: google-github-actions/setup-gcloud@5a5f7b85fca43e76e53463acaa9d408a03c98d3a
+        uses: google-github-actions/setup-gcloud@98ddc00a17442e89a24bbf282954a3b65ce6d200
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 

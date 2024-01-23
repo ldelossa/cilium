@@ -30,21 +30,21 @@ jobs:
             branch: v1.13-ce
     steps:
       - name: Checkout code to scan
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           ref: ${{ matrix.branch }}
           persist-credentials: false
       - name: Checkout latest VEX data
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
         with:
           sparse-checkout: |
             .openvex.json
           sparse-checkout-cone-mode: false
           path: isovalent-cilium-vex
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4b4e9c3e2d4531116a6f8ba8e71fc6e2cb6e6c8c # v2.5.0
+        uses: docker/setup-buildx-action@885d1462b80bc1c1c7f0b00334ad271f09369c55 # v2.10.0
       - name: Build local container
-        uses: docker/build-push-action@2eb1c1961a95fc15694676618e422e8ba1d63825 # v4.1.1
+        uses: docker/build-push-action@0a97817b6ade9f46837855d676c4cca3a2471fc9 # v4.2.1
         with:
           context: .
           tags: ${{ matrix.image.name }}:${{ matrix.branch }}
@@ -55,20 +55,20 @@ jobs:
             OPERATOR_VARIANT=${{ matrix.image.name }}
       - name: Scan image
         id: scan-image
-        uses: PaloAltoNetworks/prisma-cloud-scan@v1
+        uses: PaloAltoNetworks/prisma-cloud-scan@1f38c94d789ff9b01a4e80070b442294ebd3e362 # v1
         with:
           pcc_console_url: https://us-east1.cloud.twistlock.com/us-1-111576212
           pcc_user: c2cb4b51-b118-44a6-a13b-e1f8647f2692
           pcc_pass: ${{ secrets.TWISTCLI_PASSWORD }} 
           image_name: ${{ matrix.image.name }}:${{ matrix.branch }}
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4
       - name: Install vexctl
         run: go install github.com/openvex/vexctl@latest
       - name: Filter false positives
         run: vexctl filter ${{ steps.scan-image.outputs.sarif_file }} isovalent-cilium-vex/.openvex.json > filtered-results.json
       - name: Upload SARIF scan results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3
         with:
           name: ${{ matrix.image.name }}-${{ matrix.branch }}.sarif.json
           path: filtered-results.json
