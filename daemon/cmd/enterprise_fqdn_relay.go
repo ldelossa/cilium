@@ -13,8 +13,6 @@
 package cmd
 
 import (
-	"net/netip"
-
 	"github.com/cilium/dns"
 
 	"github.com/cilium/cilium/pkg/endpoint"
@@ -22,11 +20,6 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/time"
 )
-
-// LookupEPByIP returns the endpoint that this IP belongs to
-func (d *Daemon) LookupEPByIP(endpointIP netip.Addr) (endpoint *endpoint.Endpoint, err error) {
-	return d.lookupEPByIP(endpointIP)
-}
 
 func (d *Daemon) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 	if stat == nil {

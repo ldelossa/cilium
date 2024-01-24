@@ -82,9 +82,10 @@ func (s *FQDNProxyAgentServer) LookupEndpointByIP(ctx context.Context, IP *pb.FQ
 	if !ok {
 		return &pb.Endpoint{}, fmt.Errorf("unable to convert byte slice %v to netip.Addr", IP.IP)
 	}
-	ep, err := s.dataSource.LookupEPByIP(ip.Unmap())
-	if err != nil {
-		return &pb.Endpoint{}, err
+	ip = ip.Unmap()
+	ep := s.endpointManager.LookupIP(ip)
+	if ep == nil {
+		return &pb.Endpoint{}, fmt.Errorf("cannot find endpoint with IP %s", ip)
 	}
 
 	return &pb.Endpoint{
@@ -253,7 +254,6 @@ func (s *FQDNProxyAgentServer) Stop(ctx hive.HookContext) error {
 }
 
 type DNSProxyDataSource interface {
-	LookupEPByIP(netip.Addr) (*endpoint.Endpoint, error)
 	NotifyOnDNSMsg(time.Time, *endpoint.Endpoint, string, identity.NumericIdentity, string, *dns.Msg, string, bool, *dnsproxy.ProxyRequestContext) error
 }
 
