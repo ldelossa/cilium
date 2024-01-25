@@ -18,6 +18,7 @@ import (
 
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/utils/features"
+	"github.com/cilium/cilium/pkg/versioncheck"
 
 	enterpriseCheck "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/check"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
@@ -143,16 +144,18 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 		}).
 		WithScenarios(enterpriseTests.EgressGatewayMultipleGateways())
 
-	newTest(ct, "egress-gateway-ha-az-affinity").
-		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
-			Name:            "iegp-sample-client",
-			PodSelectorKind: "client",
-			EgressGroup:     enterpriseCheck.AllCiliumNodes,
-			// we are only e2e testing the localOnly mode for now.
-			// Other configurations are already thoroughly tested in unit tests and would require additional nodes
-			AZAffinity: "localOnly",
-		}).
-		WithScenarios(enterpriseTests.EgressGatewayAZAffinity())
+	if versioncheck.MustCompile(">=1.16.0")(ct.CiliumVersion) {
+		newTest(ct, "egress-gateway-ha-az-affinity").
+			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				Name:            "iegp-sample-client",
+				PodSelectorKind: "client",
+				EgressGroup:     enterpriseCheck.AllCiliumNodes,
+				// we are only e2e testing the localOnly mode for now.
+				// Other configurations are already thoroughly tested in unit tests and would require additional nodes
+				AZAffinity: "localOnly",
+			}).
+			WithScenarios(enterpriseTests.EgressGatewayAZAffinity())
+	}
 
 	return nil
 }
