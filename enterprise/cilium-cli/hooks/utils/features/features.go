@@ -97,11 +97,11 @@ func ExtractFromSysdumpCollector(collector *sysdump.Collector) error {
 	cm := collector.CiliumConfigMap
 
 	collector.FeatureSet[SRv6] = features.Status{
-		Enabled: cm.Data[string(SRv6)] == "true",
+		Enabled: cm != nil && cm.Data[string(SRv6)] == "true",
 	}
 
 	collector.FeatureSet[SRv6LocatorPool] = features.Status{
-		Enabled: cm.Data[string(SRv6LocatorPool)] == "true",
+		Enabled: cm != nil && cm.Data[string(SRv6LocatorPool)] == "true",
 	}
 
 	return nil
