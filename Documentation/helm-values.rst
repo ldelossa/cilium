@@ -1108,6 +1108,10 @@
      - Time between triggers of egress gateway state reconciliations
      - string
      - ``"1s"``
+   * - :spelling:ignore:`enterprise.featureGates`
+     - 
+     - list
+     - ``[]``
    * - :spelling:ignore:`enterprise.multiNetwork`
      - Multi-network support (preview feature)
      - object
