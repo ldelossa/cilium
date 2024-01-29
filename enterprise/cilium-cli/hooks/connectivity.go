@@ -86,19 +86,19 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 		}
 	}()
 
-	mustGetTest(ct, "no-policies").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
-	mustGetTest(ct, "allow-all-except-world").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("no-policies").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("allow-all-except-world").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
 
 	// Traffic shall be dropped, because it is subject to the ingress/egress policy.
-	mustGetTest(ct, "all-ingress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
-	mustGetTest(ct, "all-ingress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
-	mustGetTest(ct, "all-egress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
-	mustGetTest(ct, "all-egress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
-	mustGetTest(ct, "cluster-entity-multi-cluster").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("all-ingress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("all-ingress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("all-egress-deny").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("all-egress-deny-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("cluster-entity-multi-cluster").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
 
 	// Traffic shall be allowed, because it matches the cross-cluster policy.
-	mustGetTest(ct, "client-egress").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
-	mustGetTest(ct, "client-egress-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("client-egress").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
+	ct.MustGetTest("client-egress-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(enterpriseTests.PodToPhantomService())
 
 	return
 }
@@ -158,12 +158,4 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 	}
 
 	return nil
-}
-
-func mustGetTest(ct *check.ConnectivityTest, name string) *check.Test {
-	test, err := ct.GetTest(name)
-	if err != nil {
-		panic(err)
-	}
-	return test
 }
