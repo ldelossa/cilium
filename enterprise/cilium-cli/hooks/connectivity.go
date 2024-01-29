@@ -33,21 +33,25 @@ const (
 //go:embed manifests/allow-all-dns-loookups-policy.yaml
 var allowAllDNSLookupsPolicyYAML string
 
-func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods map[string]check.Pod) error {
-	if err := addHubbleVersionTests(ct); err != nil {
+type EnterpriseConnectivity struct {
+	externalCiliumDNSProxyPods map[string]check.Pod
+}
+
+func (ec *EnterpriseConnectivity) addConnectivityTests(ct *check.ConnectivityTest) error {
+	if err := ec.addHubbleVersionTests(ct); err != nil {
 		return err
 	}
 
-	if err := addExternalCiliumDNSProxyTests(ct, externalCiliumDNSProxyPods); err != nil {
+	if err := ec.addExternalCiliumDNSProxyTests(ct); err != nil {
 		return err
 	}
 
-	if err := addPhantomServiceTests(ct); err != nil {
+	if err := ec.addPhantomServiceTests(ct); err != nil {
 		return err
 	}
 
 	if ct.Params().IncludeUnsafeTests {
-		if err := addEgressGatewayHATests(ct); err != nil {
+		if err := ec.addEgressGatewayHATests(ct); err != nil {
 			return err
 		}
 	}
@@ -55,7 +59,7 @@ func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods
 	return nil
 }
 
-func addHubbleVersionTests(ct *check.ConnectivityTest) error {
+func (ec *EnterpriseConnectivity) addHubbleVersionTests(ct *check.ConnectivityTest) error {
 	test, err := ct.GetTest(testNoPolicies)
 	if err != nil {
 		return fmt.Errorf("failed to get test %s: %w", testNoPolicies, err)
@@ -64,17 +68,17 @@ func addHubbleVersionTests(ct *check.ConnectivityTest) error {
 	return nil
 }
 
-func addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest, pods map[string]check.Pod) error {
+func (ec *EnterpriseConnectivity) addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest) error {
 	ct.NewTest("external-cilium-dns-proxy").WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.CiliumDNSProxyDeployed)).
-		WithScenarios(enterpriseTests.ExternalCiliumDNSProxy(pods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
-		return check.ResultOK.ExpectMetricsIncrease(enterpriseTests.ExternalCiliumDNSProxySource(pods), "isovalent_external_dns_proxy_policy_l7_total"),
+		WithScenarios(enterpriseTests.ExternalCiliumDNSProxy(ec.externalCiliumDNSProxyPods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
+		return check.ResultOK.ExpectMetricsIncrease(enterpriseTests.ExternalCiliumDNSProxySource(ec.externalCiliumDNSProxyPods), "isovalent_external_dns_proxy_policy_l7_total"),
 			check.ResultNone
 	})
 	return nil
 }
 
-func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
+func (ec *EnterpriseConnectivity) addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 	// Phantom service support has been introduced in Isovalent Enterprise for Cilium v1.13.2
 	if ct.Params().MultiCluster == "" || ct.CiliumVersion.LT(semver.MustParse("1.13.2")) {
 		return nil
@@ -103,7 +107,7 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 	return
 }
 
-func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
+func (ec *EnterpriseConnectivity) addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 	newTest := func(ct *check.ConnectivityTest, name string) *enterpriseCheck.EnterpriseTest {
 		return enterpriseCheck.NewEnterpriseConnectivityTest(ct).
 			NewEnterpriseTest(name).

@@ -25,8 +25,8 @@ import (
 // sysdump tasks that are specific to Isovalent Enterprise for Cilium.
 type EnterpriseHooks struct {
 	cli.NopHooks
-	externalCiliumDNSProxyPods map[string]check.Pod
 
+	ec   EnterpriseConnectivity
 	Opts EnterpriseOptions
 }
 
@@ -41,7 +41,7 @@ type EnterpriseOptions struct {
 // AddConnectivityTests registers connectivity tests that are specific to
 // Isovalent Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddConnectivityTests(ct *check.ConnectivityTest) error {
-	return addConnectivityTests(ct, eh.externalCiliumDNSProxyPods)
+	return eh.ec.addConnectivityTests(ct)
 }
 
 // AddSysdumpTasks registers sysdump tasks that are specific to Isovalent
@@ -59,7 +59,7 @@ func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.Conne
 		return err
 	}
 
-	eh.externalCiliumDNSProxyPods, err = tests.RetrieveExternalCiliumDNSProxyPods(ctx, ct)
+	eh.ec.externalCiliumDNSProxyPods, err = tests.RetrieveExternalCiliumDNSProxyPods(ctx, ct)
 	if err != nil {
 		return err
 	}
