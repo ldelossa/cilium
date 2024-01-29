@@ -65,5 +65,13 @@ func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.Conne
 		return err
 	}
 
+	// Setup the sniffers used by the mixed routing scenario. No op if either
+	// fallback routing is not configured, or unsafe tests are disabled.
+	mr, setup := tests.MixedRouting()
+	eh.ec.mixedRoutingScenario = mr
+	if err := setup(ctx, ct); err != nil {
+		return err
+	}
+
 	return nil
 }
