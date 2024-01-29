@@ -12,7 +12,6 @@ cilium-operator-azure [flags]
 
 ```
       --auto-create-cilium-pod-ip-pools map                          Automatically create CiliumPodIPPool resources on startup. Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)
-      --auto-create-default-pod-network                              Automatically creates the default IsovalentPodNetwork on startup (default true)
       --azure-resource-group string                                  Resource group to use for Azure IPAM
       --azure-subscription-id string                                 Subscription ID to access Azure API
       --azure-use-primary-address                                    Use Azure IP address from interface's primary IPConfigurations
@@ -34,6 +33,7 @@ cilium-operator-azure [flags]
       --cluster-pool-ipv6-mask-size int                              Mask size for each IPv6 podCIDR per node. Requires 'ipam=cluster-pool' and 'enable-ipv6=true' (default 112)
       --cnp-status-cleanup-burst int                                 Maximum burst of requests to clean up status nodes updates in CNPs (default 20)
       --cnp-status-cleanup-qps float                                 Rate used for limiting the clean up of the status nodes updates in CNP, expressed as qps (default 10)
+      --cnp-status-update-interval duration                          Interval between CNP status updates sent to the k8s-apiserver per-CNP (default 1s)
       --config string                                                Configuration file (default "$HOME/ciliumd.yaml")
       --config-dir string                                            Configuration directory that contains a file for each option
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
@@ -53,7 +53,6 @@ cilium-operator-azure [flags]
       --enable-k8s-api-discovery                                     Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-metrics                                               Enable Prometheus metrics
-      --enable-multi-network                                         Enable support for multiple pod networks
       --enforce-ingress-https                                        Enforces https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. (default true)
       --fqdn-group-min-query-interval duration                       Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gateway-api-secrets-namespace string                         Namespace having tls secrets used by CEC for Gateway API (default "cilium-secrets")

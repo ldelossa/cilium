@@ -896,8 +896,10 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 
 		state->backend_id = backend_id;
 		state->rev_nat_index = svc->rev_nat_index;
+		state->proxy_redirect = false;
+		state->from_l7lb = false;
 
-		ret = ct_create6(map, NULL, tuple, ctx, CT_SERVICE, state, false, false, ext_err);
+		ret = ct_create6(map, NULL, tuple, ctx, CT_SERVICE, state, ext_err);
 		/* Fail closed, if the conntrack entry create fails drop
 		 * service lookup.
 		 */
@@ -1064,9 +1066,8 @@ static __always_inline int __lb4_rev_nat(struct __ctx_buff *ctx, int l3_off, int
 		old_sip = tuple->saddr;
 		tuple->saddr = nat->address;
 	} else {
-		ret = ctx_load_bytes(ctx, l3_off + offsetof(struct iphdr, saddr), &old_sip, 4);
-		if (IS_ERR(ret))
-			return ret;
+		if (ctx_load_bytes(ctx, l3_off + offsetof(struct iphdr, saddr), &old_sip, 4) < 0)
+			return DROP_INVALID;
 	}
 
 #ifndef DISABLE_LOOPBACK_LB
@@ -1079,9 +1080,8 @@ static __always_inline int __lb4_rev_nat(struct __ctx_buff *ctx, int l3_off, int
 		 */
 		__be32 old_dip;
 
-		ret = ctx_load_bytes(ctx, l3_off + offsetof(struct iphdr, daddr), &old_dip, 4);
-		if (IS_ERR(ret))
-			return ret;
+		if (ctx_load_bytes(ctx, l3_off + offsetof(struct iphdr, daddr), &old_dip, 4) < 0)
+			return DROP_INVALID;
 
 		cilium_dbg_lb(ctx, DBG_LB4_LOOPBACK_SNAT_REV, old_dip, old_sip);
 
@@ -1572,8 +1572,10 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 
 		state->backend_id = backend_id;
 		state->rev_nat_index = svc->rev_nat_index;
+		state->proxy_redirect = false;
+		state->from_l7lb = false;
 
-		ret = ct_create4(map, NULL, tuple, ctx, CT_SERVICE, state, false, false, ext_err);
+		ret = ct_create4(map, NULL, tuple, ctx, CT_SERVICE, state, ext_err);
 		/* Fail closed, if the conntrack entry create fails drop
 		 * service lookup.
 		 */
