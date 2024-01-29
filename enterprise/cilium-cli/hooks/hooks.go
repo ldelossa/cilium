@@ -53,11 +53,12 @@ func (eh *EnterpriseHooks) AddSysdumpTasks(collector *sysdump.Collector) error {
 	return addSysdumpTasks(collector, eh.Opts)
 }
 
+func (eh *EnterpriseHooks) DetectFeatures(ctx context.Context, ct *check.ConnectivityTest) error {
+	return enterpriseFeatures.Detect(ctx, ct)
+}
+
 func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.ConnectivityTest) error {
-	err := enterpriseFeatures.Detect(ctx, ct)
-	if err != nil {
-		return err
-	}
+	var err error
 
 	eh.ec.externalCiliumDNSProxyPods, err = tests.RetrieveExternalCiliumDNSProxyPods(ctx, ct)
 	if err != nil {
