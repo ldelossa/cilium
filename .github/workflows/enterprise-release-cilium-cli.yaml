@@ -22,7 +22,7 @@ jobs:
           echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
 
       - name: Set up Go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491
+        uses: actions/setup-go@6c1fd22b67f7a7c42ad9a45c0f4197434035e429
         with:
           go-version-file: 'enterprise/cilium-cli/go.mod'
 
