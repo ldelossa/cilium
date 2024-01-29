@@ -494,10 +494,10 @@ func (in *IsovalentVRFEgressRule) DeepEqual(other *IsovalentVRFEgressRule) bool 
 		}
 	}
 
-	if (in.PodSelector == nil) != (other.PodSelector == nil) {
+	if (in.EndpointSelector == nil) != (other.EndpointSelector == nil) {
 		return false
-	} else if in.PodSelector != nil {
-		if !in.PodSelector.DeepEqual(other.PodSelector) {
+	} else if in.EndpointSelector != nil {
+		if !in.EndpointSelector.DeepEqual(other.EndpointSelector) {
 			return false
 		}
 	}

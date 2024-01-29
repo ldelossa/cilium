@@ -334,9 +334,10 @@ type IsovalentVRFEgressRule struct {
 	// selector semantics; if present but empty, it selects all namespaces.
 	NamespaceSelector *slimv1.LabelSelector `json:"namespaceSelector,omitempty"`
 
-	// This is a label selector which selects Pods. This field follows standard label
-	// selector semantics; if present but empty, it selects all pods.
-	PodSelector *slimv1.LabelSelector `json:"podSelector,omitempty"`
+	// This is a label selector which selects endpoints. This field follows
+	// standard label selector semantics; if present but empty, it selects
+	// all endpoints.
+	EndpointSelector *slimv1.LabelSelector `json:"endpointSelector,omitempty"`
 }
 
 type IsovalentVRFRule struct {

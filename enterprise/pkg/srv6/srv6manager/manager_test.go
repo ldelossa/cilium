@@ -309,7 +309,7 @@ func TestSRv6Manager(t *testing.T) {
 				{
 					Selectors: []v1alpha1.IsovalentVRFEgressRule{
 						{
-							PodSelector: &slimMetav1.LabelSelector{
+							EndpointSelector: &slimMetav1.LabelSelector{
 								MatchLabels: map[string]slimMetav1.MatchLabelsValue{
 									"vrf": "vrf0",
 								},
@@ -911,7 +911,7 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 				{
 					Selectors: []v1alpha1.IsovalentVRFEgressRule{
 						{
-							PodSelector: &slimMetav1.LabelSelector{
+							EndpointSelector: &slimMetav1.LabelSelector{
 								MatchLabels: map[string]slimMetav1.MatchLabelsValue{
 									"vrf": "vrf0",
 								},

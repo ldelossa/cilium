@@ -204,11 +204,11 @@ func ParseVRF(csrvrf *v1alpha1.IsovalentVRF) (*VRF, error) {
 
 				endpointSelectorList = append(
 					endpointSelectorList,
-					api.NewESFromK8sLabelSelector("", prefixedNsSelector, selector.PodSelector))
-			} else if selector.PodSelector != nil {
+					api.NewESFromK8sLabelSelector("", prefixedNsSelector, selector.EndpointSelector))
+			} else if selector.EndpointSelector != nil {
 				endpointSelectorList = append(
 					endpointSelectorList,
-					api.NewESFromK8sLabelSelector("", selector.PodSelector))
+					api.NewESFromK8sLabelSelector("", selector.EndpointSelector))
 			} else {
 				return nil, fmt.Errorf("IsovalentVRF cannot have both nil namespace selector and nil pod selector")
 			}

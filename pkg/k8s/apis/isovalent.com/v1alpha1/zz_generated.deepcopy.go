@@ -799,8 +799,8 @@ func (in *IsovalentVRFEgressRule) DeepCopyInto(out *IsovalentVRFEgressRule) {
 		*out = new(v1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.PodSelector != nil {
-		in, out := &in.PodSelector, &out.PodSelector
+	if in.EndpointSelector != nil {
+		in, out := &in.EndpointSelector, &out.EndpointSelector
 		*out = new(v1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}

@@ -74,10 +74,10 @@ spec:
                         pods that can use a given VRF.
                       items:
                         properties:
-                          namespaceSelector:
-                            description: Selects Namespaces using cluster-scoped labels.
+                          endpointSelector:
+                            description: This is a label selector which selects endpoints.
                               This field follows standard label selector semantics;
-                              if present but empty, it selects all namespaces.
+                              if present but empty, it selects all endpoints.
                             properties:
                               matchExpressions:
                                 description: matchExpressions is a list of label selector
@@ -130,10 +130,10 @@ spec:
                                   contains only "value". The requirements are ANDed.
                                 type: object
                             type: object
-                          podSelector:
-                            description: This is a label selector which selects Pods.
+                          namespaceSelector:
+                            description: Selects Namespaces using cluster-scoped labels.
                               This field follows standard label selector semantics;
-                              if present but empty, it selects all pods.
+                              if present but empty, it selects all namespaces.
                             properties:
                               matchExpressions:
                                 description: matchExpressions is a list of label selector
