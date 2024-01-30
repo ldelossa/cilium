@@ -13,7 +13,7 @@ import (
 	k8sResource "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/enterprise/api/v1/models"
 	"github.com/cilium/cilium/pkg/controller"
-	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -100,7 +100,7 @@ type Manager struct {
 
 // Start initializes the manager and starts watching the Kubernetes resources.
 // Invoked by the hive framework.
-func (m *Manager) Start(ctx hive.HookContext) (err error) {
+func (m *Manager) Start(ctx cell.HookContext) (err error) {
 	m.podStore, err = m.podResource.Store(ctx)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (m *Manager) Start(ctx hive.HookContext) (err error) {
 
 // Stop stops the manager, meaning it can no longer serve API requests.
 // Invoked by the hive framework.
-func (m *Manager) Stop(ctx hive.HookContext) error {
+func (m *Manager) Stop(ctx cell.HookContext) error {
 	m.podStore = nil
 	m.networkStore = nil
 	if m.cancelController != nil {

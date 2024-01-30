@@ -23,7 +23,6 @@ import (
 	srv6Types "github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
@@ -151,7 +150,7 @@ type Manager struct {
 type Params struct {
 	cell.In
 
-	Lifecycle                 hive.Lifecycle
+	Lifecycle                 cell.Lifecycle
 	DaemonConfig              *option.DaemonConfig
 	Sig                       *signaler.BGPCPSignaler
 	CacheIdentityAllocator    cache.IdentityAllocator
@@ -191,7 +190,7 @@ func NewSRv6Manager(p Params) *Manager {
 // Notice that this Start hook is not only the place that does an
 // initialization of SRv6Manager. Some initialization logics like k8s event
 // handlers are still relying on the legacy Daemon-based initialization.
-func (manager *Manager) Start(hookCtx hive.HookContext) error {
+func (manager *Manager) Start(hookCtx cell.HookContext) error {
 	// Wait for the IPAM to be initialized
 	daemon, err := manager.daemonPromise.Await(hookCtx)
 	if err != nil {
@@ -324,7 +323,7 @@ func (manager *Manager) Start(hookCtx hive.HookContext) error {
 	return nil
 }
 
-func (manager *Manager) Stop(hookCtx hive.HookContext) error {
+func (manager *Manager) Stop(hookCtx cell.HookContext) error {
 	return nil
 }
 

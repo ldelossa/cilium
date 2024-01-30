@@ -19,7 +19,6 @@ import (
 	"github.com/cilium/cilium/pkg/endpoint"
 	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/promise"
@@ -46,7 +45,7 @@ type params struct {
 }
 
 func NewDoubleProxy(
-	lc hive.Lifecycle,
+	lc cell.Lifecycle,
 	p params,
 ) *DoubleProxy {
 	if !p.Cfg.EnableExternalDNSProxy {
@@ -60,7 +59,7 @@ func NewDoubleProxy(
 	return dp
 }
 
-func (dp *DoubleProxy) Start(ctx hive.HookContext) error {
+func (dp *DoubleProxy) Start(ctx cell.HookContext) error {
 	// Wait for the daemon to be populated, at which point we can assume proxy.DefaultDNSProxy to be resolved.
 	_, err := dp.daemonPromise.Await(ctx)
 	if err != nil {
@@ -74,7 +73,7 @@ func (dp *DoubleProxy) Start(ctx hive.HookContext) error {
 	return nil
 }
 
-func (dp *DoubleProxy) Stop(ctx hive.HookContext) error {
+func (dp *DoubleProxy) Stop(ctx cell.HookContext) error {
 	return nil
 }
 

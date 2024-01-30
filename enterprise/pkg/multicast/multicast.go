@@ -28,7 +28,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	ciliumDefaults "github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -58,7 +57,7 @@ type MulticastManagerParams struct {
 	cell.In
 
 	Logger                 logrus.FieldLogger
-	LC                     hive.Lifecycle
+	LC                     cell.Lifecycle
 	JobRegistry            job.Registry
 	Clientset              k8sClient.Clientset
 	Cfg                    maps_multicast.Config
@@ -73,7 +72,7 @@ type MulticastManagerParams struct {
 
 type MulticastManager struct {
 	Logger         logrus.FieldLogger
-	LC             hive.Lifecycle
+	LC             cell.Lifecycle
 	JobRegistry    job.Registry
 	LocalNodeStore *node.LocalNodeStore
 

@@ -17,7 +17,6 @@ import (
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/inctimer"
 	"github.com/cilium/cilium/pkg/lock"
@@ -96,7 +95,7 @@ type params struct {
 }
 
 func NewRemoteFQDNProxy(
-	lc hive.Lifecycle,
+	lc cell.Lifecycle,
 	p params,
 ) (*RemoteFQDNProxy, error) {
 	if !p.Cfg.EnableExternalDNSProxy {
@@ -111,7 +110,7 @@ func NewRemoteFQDNProxy(
 	return remoteProxy, nil
 }
 
-func (r *RemoteFQDNProxy) Start(ctx hive.HookContext) error {
+func (r *RemoteFQDNProxy) Start(ctx cell.HookContext) error {
 	// TODO: move this to a controller?
 	go func() {
 		r.resetClient()
@@ -133,7 +132,7 @@ func (r *RemoteFQDNProxy) Start(ctx hive.HookContext) error {
 	return nil
 }
 
-func (r *RemoteFQDNProxy) Stop(ctx hive.HookContext) error {
+func (r *RemoteFQDNProxy) Stop(ctx cell.HookContext) error {
 	close(r.done)
 	log.Info("FQDN HA proxy stopped")
 	return nil

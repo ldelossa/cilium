@@ -22,6 +22,7 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	cilium_client_v2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -83,11 +84,11 @@ func newManager(params resolverManagerParams) *manager {
 	return mgr
 }
 
-func (mgr *manager) Start(hive.HookContext) error {
+func (mgr *manager) Start(cell.HookContext) error {
 	return mgr.wp.Submit("dns-resolvers-manager", mgr.run)
 }
 
-func (mgr *manager) Stop(hive.HookContext) error {
+func (mgr *manager) Stop(cell.HookContext) error {
 	if err := mgr.wp.Close(); err != nil {
 		return err
 	}

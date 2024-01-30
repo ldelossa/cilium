@@ -11,7 +11,6 @@
 package multicast
 
 import (
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -33,7 +32,7 @@ var Cell = cell.Module(
 	cell.Invoke(func(manager *MulticastManager) {}),
 )
 
-func newMulticastGroupResource(lc hive.Lifecycle, c client.Clientset, cfg maps_multicast.Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup] {
+func newMulticastGroupResource(lc cell.Lifecycle, c client.Clientset, cfg maps_multicast.Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup] {
 	if !cfg.MulticastEnabled {
 		return nil
 	}
@@ -44,7 +43,7 @@ func newMulticastGroupResource(lc hive.Lifecycle, c client.Clientset, cfg maps_m
 		), resource.WithMetric("IsovalentMulticastGroup"))
 }
 
-func newMulticastNodeResource(lc hive.Lifecycle, c client.Clientset, cfg maps_multicast.Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode] {
+func newMulticastNodeResource(lc cell.Lifecycle, c client.Clientset, cfg maps_multicast.Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode] {
 	if !cfg.MulticastEnabled {
 		return nil
 	}

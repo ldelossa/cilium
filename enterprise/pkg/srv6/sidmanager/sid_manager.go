@@ -21,7 +21,6 @@ import (
 
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/backoff"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -146,7 +145,7 @@ type sidManager struct {
 type sidManagerParams struct {
 	cell.In
 
-	Lc       hive.Lifecycle
+	Lc       cell.Lifecycle
 	Cs       client.Clientset
 	Dc       *option.DaemonConfig
 	Resource LocalIsovalentSRv6SIDManagerResource
@@ -225,7 +224,7 @@ func (m *sidManager) Subscribe(subscriberName string, subscriber SIDManagerSubsc
 	m.allocatorsLock.RUnlock()
 }
 
-func (m *sidManager) Start(hookCtx hive.HookContext) error {
+func (m *sidManager) Start(hookCtx cell.HookContext) error {
 	smLog.Info("Starting SRv6 SID Manager")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,7 +243,7 @@ func (m *sidManager) Start(hookCtx hive.HookContext) error {
 	return nil
 }
 
-func (m *sidManager) Stop(hookCtx hive.HookContext) error {
+func (m *sidManager) Stop(hookCtx cell.HookContext) error {
 	smLog.Info("Stopping SRv6 SID Manager")
 
 	// This should make all goroutines cancel and yield
@@ -693,7 +692,7 @@ func (m *sidManager) scheduleStateSync() {
 // node name.
 type LocalIsovalentSRv6SIDManagerResource resource.Resource[*v1alpha1.IsovalentSRv6SIDManager]
 
-func NewLocalIsovalentSRv6SIDManagerResource(dc *option.DaemonConfig, lc hive.Lifecycle, cs client.Clientset) LocalIsovalentSRv6SIDManagerResource {
+func NewLocalIsovalentSRv6SIDManagerResource(dc *option.DaemonConfig, lc cell.Lifecycle, cs client.Clientset) LocalIsovalentSRv6SIDManagerResource {
 	if !dc.EnableSRv6 || !cs.IsEnabled() {
 		return nil
 	}

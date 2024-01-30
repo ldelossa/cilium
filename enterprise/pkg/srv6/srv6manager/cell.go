@@ -14,7 +14,6 @@ import (
 	"fmt"
 
 	"github.com/cilium/cilium/daemon/cmd"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ipam"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -59,15 +58,15 @@ type daemon interface {
 }
 
 // daemonPromiseProvider converts raw Daemon promise to daemon promise
-func newDaemonPromiseProvider(lc hive.Lifecycle, dp promise.Promise[*cmd.Daemon], dc *option.DaemonConfig) promise.Promise[daemon] {
+func newDaemonPromiseProvider(lc cell.Lifecycle, dp promise.Promise[*cmd.Daemon], dc *option.DaemonConfig) promise.Promise[daemon] {
 	if !dc.EnableSRv6 {
 		return nil
 	}
 
 	r, p := promise.New[daemon]()
 
-	lc.Append(hive.Hook{
-		OnStart: func(hookCtx hive.HookContext) error {
+	lc.Append(cell.Hook{
+		OnStart: func(hookCtx cell.HookContext) error {
 			d, err := dp.Await(hookCtx)
 			if err != nil {
 				return fmt.Errorf("failed to await for Daemon: %w", err)
@@ -80,7 +79,7 @@ func newDaemonPromiseProvider(lc hive.Lifecycle, dp promise.Promise[*cmd.Daemon]
 	return p
 }
 
-func newIsovalentVRFResource(lc hive.Lifecycle, dc *option.DaemonConfig, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentVRF], error) {
+func newIsovalentVRFResource(lc cell.Lifecycle, dc *option.DaemonConfig, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentVRF], error) {
 	if !cs.IsEnabled() || !dc.EnableSRv6 {
 		return nil, nil
 	}
@@ -91,7 +90,7 @@ func newIsovalentVRFResource(lc hive.Lifecycle, dc *option.DaemonConfig, cs clie
 	return resource.New[*iso_v1alpha1.IsovalentVRF](lc, lw, resource.WithMetric("IsovalentVRFResource")), nil
 }
 
-func newIsovalentSRv6EgressPolicyResource(lc hive.Lifecycle, dc *option.DaemonConfig, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentSRv6EgressPolicy], error) {
+func newIsovalentSRv6EgressPolicyResource(lc cell.Lifecycle, dc *option.DaemonConfig, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentSRv6EgressPolicy], error) {
 	if !cs.IsEnabled() || !dc.EnableSRv6 {
 		return nil, nil
 	}

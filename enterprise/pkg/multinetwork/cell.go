@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/pkg/controller"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -55,7 +54,7 @@ func (c config) Flags(flags *pflag.FlagSet) {
 // Note: Ideally, his would live in github.com/cilium/cilium/daemon/k8s
 // But to keep merge conflicts with Cilium OSS to a minimum, and since we are
 // the only user of this resource anyway, we keep this private for now.
-func isovalentPodNetworkResource(lc hive.Lifecycle, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentPodNetwork], error) {
+func isovalentPodNetworkResource(lc cell.Lifecycle, cs client.Clientset, opts ...func(*metav1.ListOptions)) (resource.Resource[*iso_v1alpha1.IsovalentPodNetwork], error) {
 	if !cs.IsEnabled() {
 		return nil, nil
 	}
@@ -69,7 +68,7 @@ func isovalentPodNetworkResource(lc hive.Lifecycle, cs client.Clientset, opts ..
 type managerParams struct {
 	cell.In
 
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 	Config    config
 
 	DaemonConfig       *option.DaemonConfig

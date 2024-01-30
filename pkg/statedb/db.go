@@ -6,6 +6,7 @@ package statedb
 import (
 	"context"
 	"errors"
+	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
@@ -14,7 +15,7 @@ import (
 	iradix "github.com/hashicorp/go-immutable-radix/v2"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -224,7 +225,7 @@ func (db *DB) WriteTxn(table TableMeta, tables ...TableMeta) WriteTxn {
 	}
 }
 
-func (db *DB) Start(hive.HookContext) error {
+func (db *DB) Start(cell.HookContext) error {
 	db.gcTrigger = make(chan struct{}, 1)
 	db.gcExited = make(chan struct{})
 	db.ctx, db.cancel = context.WithCancel(context.Background())
@@ -232,7 +233,7 @@ func (db *DB) Start(hive.HookContext) error {
 	return nil
 }
 
-func (db *DB) Stop(stopCtx hive.HookContext) error {
+func (db *DB) Stop(stopCtx cell.HookContext) error {
 	close(db.gcTrigger)
 	db.cancel()
 	select {
@@ -241,6 +242,20 @@ func (db *DB) Stop(stopCtx hive.HookContext) error {
 	case <-db.gcExited:
 	}
 	return nil
+}
+
+// ServeHTTP is an HTTP handler for dumping StateDB as JSON.
+//
+// Example usage:
+//
+//	var db *statedb.DB
+//
+//	http.Handle("/db", db)
+//	http.ListenAndServe(":8080", nil)
+func (db *DB) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	db.ReadTxn().WriteJSON(w)
 }
 
 // setGCRateLimitInterval can set the graveyard GC interval before DB is started.

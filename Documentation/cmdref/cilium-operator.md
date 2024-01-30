@@ -13,6 +13,7 @@ cilium-operator [flags]
 ```
       --alibaba-cloud-vpc-id string                                  Specific VPC ID for AlibabaCloud ENI. If not set use same VPC as operator
       --auto-create-cilium-pod-ip-pools map                          Automatically create CiliumPodIPPool resources on startup. Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)
+      --auto-create-default-pod-network                              Automatically creates the default IsovalentPodNetwork on startup (default true)
       --aws-enable-prefix-delegation                                 Allows operator to allocate prefixes to ENIs instead of individual IP addresses
       --aws-instance-limit-mapping map                               Add or overwrite mappings of AWS instance limit in the form of {"AWS instance type": "Maximum Network Interfaces","IPv4 Addresses per Interface","IPv6 Addresses per Interface"}. cli example: --aws-instance-limit-mapping=a1.medium=2,4,4 --aws-instance-limit-mapping=a2.somecustomflavor=4,5,6 configmap example: {"a1.medium": "2,4,4", "a2.somecustomflavor": "4,5,6"}
       --aws-release-excess-ips                                       Enable releasing excess free IP addresses from AWS ENI.
@@ -23,6 +24,7 @@ cilium-operator [flags]
       --azure-user-assigned-identity-id string                       ID of the user assigned identity used to auth with the Azure API
       --bgp-announce-lb-ip                                           Announces service IPs of type LoadBalancer via BGP
       --bgp-config-path string                                       Path to file containing the BGP configuration (default "/var/lib/cilium/bgp/config.yaml")
+      --bgp-v2-api-enabled                                           Enables BGPv2 APIs in Cilium
       --ces-max-ciliumendpoints-per-ces int                          Maximum number of CiliumEndpoints allowed in a CES (default 100)
       --ces-slice-mode string                                        Slicing mode define how ceps are grouped into a CES (default "cesSliceModeIdentity")
       --ces-write-qps-burst int                                      CES work queue burst rate (default 20)
@@ -38,7 +40,6 @@ cilium-operator [flags]
       --cluster-pool-ipv6-mask-size int                              Mask size for each IPv6 podCIDR per node. Requires 'ipam=cluster-pool' and 'enable-ipv6=true' (default 112)
       --cnp-status-cleanup-burst int                                 Maximum burst of requests to clean up status nodes updates in CNPs (default 20)
       --cnp-status-cleanup-qps float                                 Rate used for limiting the clean up of the status nodes updates in CNP, expressed as qps (default 10)
-      --cnp-status-update-interval duration                          Interval between CNP status updates sent to the k8s-apiserver per-CNP (default 1s)
       --config string                                                Configuration file (default "$HOME/ciliumd.yaml")
       --config-dir string                                            Configuration directory that contains a file for each option
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
@@ -59,6 +60,8 @@ cilium-operator [flags]
       --enable-k8s-api-discovery                                     Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-metrics                                               Enable Prometheus metrics
+      --enable-multi-network                                         Enable support for multiple pod networks
+      --enable-node-ipam                                             Enable Node IPAM
       --enforce-ingress-https                                        Enforces https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. (default true)
       --eni-gc-interval duration                                     Interval for garbage collection of unattached ENIs. Set to 0 to disable (default 5m0s)
       --eni-gc-tags map                                              Additional tags attached to ENIs created by Cilium. Dangling ENIs with this tag will be garbage collected
@@ -77,7 +80,7 @@ cilium-operator [flags]
       --ingress-default-secret-name string                           Default secret name for Ingress.
       --ingress-default-secret-namespace string                      Default secret namespace for Ingress.
       --ingress-default-xff-num-trusted-hops uint32                  The number of additional ingress proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address.
-      --ingress-lb-annotation-prefixes strings                       Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
+      --ingress-lb-annotation-prefixes strings                       Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [lbipam.cilium.io,service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
       --ingress-secrets-namespace string                             Namespace having tls secrets used by Ingress and CEC. (default "cilium-secrets")
       --ingress-shared-lb-service-name string                        Name of shared LB service name for Ingress. (default "cilium-ingress")
       --instance-tags-filter map                                     EC2 Instance tags in the form of k1=v1,k2=v2 (multiple k/v pairs can also be passed by repeating the CLI flag
