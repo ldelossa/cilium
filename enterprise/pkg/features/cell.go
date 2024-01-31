@@ -18,6 +18,9 @@ import "github.com/cilium/hive/cell"
 var Cell = cell.Module(
 	"features",
 	"Feature Checker",
+	cell.Provide(func() None {
+		return None{}
+	}),
 	cell.Config(defaultConf),
 	cell.Provide(newGateChecker),
 	cell.Provide(newRegistry),

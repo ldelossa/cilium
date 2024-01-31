@@ -176,6 +176,13 @@ func FeatureConfig[T cell.Flagger](cfg T, spec Spec, opts ...featureOpt[T]) cell
 	)
 }
 
+// None can be used in cases with FeatureWithConfigT[T] where you do not want to inject a real Config[T] type.
+// For example, a feature check that checks if the arch is arm64 or not may just use runtime.GOARCH, and does not actually
+// need Hive to inject a Config[T] type.
+//
+// This type is automatically provided by the features.Cell.
+type None struct{}
+
 // FeatureWithConfigT registers a Cilium feature that is mapped to a specific cell.Config[T] flagger type.
 // Upon running the Hive, the feature is checked against feature gate configuration which validates whether
 // this feature can be allowed using current feature gates config.
