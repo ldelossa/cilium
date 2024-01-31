@@ -15,6 +15,7 @@
 #include "lib/drop.h"
 #include "lib/eth.h"
 #include "linux/bpf.h"
+#include "lib/encap.h"
 
 /* the below structures are define outside of an IFDEF guard to satisfy
  * enterprise_bpf_alignchecker.c requirement
@@ -342,7 +343,13 @@ static long __mcast_ep_delivery(__maybe_unused void *sub_map,
 {
 	int ret = 0;
 	__u8 from_overlay = 0;
-	struct bpf_tunnel_key tun_key = {0};
+	int clone_ifindex = 0;
+	int direction = 0;
+#ifdef ENABLE_IPSEC
+	struct remote_endpoint_info *info;
+	__u8 min_encrypt_key = 0;
+#endif
+
 
 	if (!cb_ctx || !sub)
 		return 1;
@@ -353,25 +360,57 @@ static long __mcast_ep_delivery(__maybe_unused void *sub_map,
 	if (!sub->ifindex)
 		return 1;
 
+	clone_ifindex = sub->ifindex;
+
 	from_overlay = (ctx_get_ingress_ifindex(cb_ctx->ctx) == ENCAP_IFINDEX);
 
-	/* set tunnel key for remote delivery
-	 * this helper sets the tunnel metadata on the skb_buff but only
-	 * tunnel drivers will read it, therefore any local delivery will
-	 * simply ignore if its present and deliver without an issue.
-	 *
-	 * if the ingress interface is set to our tunnel interface, do not
-	 * perform delivery, this would cause a loop, since the sender's node
-	 * already delivered to all remote nodes.
-	 *
-	 * checking ctx->ingress_ifindex is reliable since
-	 * __netif_receive_skb_core sets the skb's input interface before
-	 * calling ingress TC programs.
-	 */
 	if (sub->flags & MCAST_SUB_F_REMOTE) {
 		if (from_overlay)
 			return 0;
 
+		/*
+		 * If IPSec is enabled we want to mark the packet for encrypt
+		 * and then redirect to the ingress side of the ctx it arrived
+		 * on.
+		 *
+		 * From there, we'll immediately check for the encrypt bit in
+		 * the packet mark and drop it to stack for encryption.
+		 */
+#ifdef ENABLE_IPSEC
+		/* We already have the remote node's IP where the subscriber
+		 * exists so we don't need to perform a tunnel map lookup.
+		 *
+		 * We can perform an ipcache lookup to get the encrypt key
+		 * and then call into the IPSec related functions.
+		 */
+		info = lookup_ip4_remote_endpoint(sub->saddr, 0);
+		if (!info)
+			return 0;
+
+		min_encrypt_key = get_min_encrypt_key(info->key);
+
+		if (set_ipsec_encrypt(cb_ctx->ctx,
+				      min_encrypt_key, sub->saddr,
+				      SECLABEL_IPV4,
+				      false) == DROP_NO_NODE_ID)
+			return 1;
+
+		clone_ifindex = ctx_get_ingress_ifindex(cb_ctx->ctx);
+		direction = BPF_F_INGRESS;
+#else
+		/* If IPSec is not enabled we want to set tunnel key for remote delivery.
+		 * This helper sets the tunnel metadata on the skb_buff but only
+		 * tunnel drivers will read it, therefore any local delivery will
+		 * simply ignore if its present and deliver without an issue.
+		 *
+		 * if the ingress interface is set to our tunnel interface, do not
+		 * perform delivery, this would cause a loop, since the sender's node
+		 * already delivered to all remote nodes.
+		 *
+		 * checking ctx->ingress_ifindex is reliable since
+		 * __netif_receive_skb_core sets the skb's input interface before
+		 * calling ingress TC programs.
+		 */
 		tun_key.tunnel_id = 2; /* WORLD ID FOR NOW */
 		tun_key.remote_ipv4 = bpf_ntohl(sub->saddr);
 		tun_key.tunnel_ttl = IPDEFTTL;
@@ -385,9 +424,10 @@ static long __mcast_ep_delivery(__maybe_unused void *sub_map,
 			cb_ctx->ret = ret;
 			return 1;
 		}
+#endif /* ENABLE_IPSEC */
 	}
 
-	ret = clone_redirect(cb_ctx->ctx, sub->ifindex, 0);
+	ret = clone_redirect(cb_ctx->ctx, clone_ifindex, direction);
 	if (ret != 0) {
 		cb_ctx->ret = ret;
 		return 1;

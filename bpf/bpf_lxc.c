@@ -1336,6 +1336,15 @@ static __always_inline int __tail_handle_ipv4(struct __ctx_buff *ctx,
 		return DROP_INVALID_SIP;
 
 #ifdef ENABLE_MULTICAST
+	/*
+	 * If the packet has the encryption bits in its mark this means the
+	 * multicast subsystem recirculated the packet for encryption.
+	 *
+	 * Just pass it to stack.
+	 */
+	if ((ctx->mark & MARK_MAGIC_ENCRYPT) == MARK_MAGIC_ENCRYPT)
+		return CTX_ACT_OK;
+
 	if (mcast_ipv4_is_igmp(ip4)) {
 		/* note:
 		 * we will always drop IGMP from this point on as we have no
