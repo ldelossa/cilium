@@ -144,7 +144,7 @@ func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
 		}).
 		WithScenarios(enterpriseTests.EgressGatewayMultipleGateways())
 
-	if versioncheck.MustCompile(">=1.16.0")(ct.CiliumVersion) {
+	if versioncheck.MustCompile(">=1.15.0")(ct.CiliumVersion) {
 		newTest(ct, "egress-gateway-ha-az-affinity").
 			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
 				Name:            "iegp-sample-client",
