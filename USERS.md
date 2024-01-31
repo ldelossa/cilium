@@ -422,6 +422,11 @@ Users (Alphabetically)
       L: https://mux.com
       Q: @dilyevsky
 
+    * N: NETWAYS Web Services
+      D: NETWAYS Web Services offers Cilium to their clients as CNI option for their Managed Kubernetes clusters.
+      U: Networking (CNI), Observability (Hubble)
+      L: https://nws.netways.de/managed-kubernetes/
+
     * N: New York Times (the)
       D: The New York Times is using Cilium on EKS to build multi-region multi-tenant shared clusters
       U: Networking (CNI, EKS IPAM, Maglev, kube-proxy replacement, Direct Routing),  Observability (Network metrics with Hubble, policy troubleshooting) and Security (Network Policy)
@@ -559,6 +564,12 @@ Users (Alphabetically)
       U: CNI, Monitoring, kube-proxy replacement
       L: https://www.dbschenker.com/global
       Q: @amirkkn
+
+    * N: Sealos
+      D: Sealos is using Cilium as a consistent CNI for our Sealos Cloud.
+      U: Networking, Service, kube-proxy replacement, Network Policy, Hubble
+      L: https://sealos.io
+      Q: @fanux, @yangchuansheng
 
     * N: Seznam.cz
       D: Seznam.cz uses Cilium in multiple scenarios in on-prem DCs. At first as L4LB which loadbalances external traffic into k8s+openstack clusters then as CNI in multiple k8s and openstack clusters which are all connected in a clustermesh to enforce NetworkPolicies across pods/VMs.

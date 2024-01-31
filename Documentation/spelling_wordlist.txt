@@ -76,6 +76,7 @@ Meltwater
 Menlo
 MiB
 Monnet
+Multihop
 Mythbusters
 NDP
 Neovim
@@ -88,6 +89,7 @@ PaaS
 Palantir
 Pepelnjak
 Pfaff
+PodCIDR
 Polytechnique
 QCon
 Qlogic
@@ -276,6 +278,7 @@ dpaa
 dropdown
 dryRun
 dwarfris
+eBGP
 eBPF
 eXpress
 ebpf
@@ -356,6 +359,7 @@ hubble
 hubblecertgen
 hugepages
 hv
+iBGP
 icmp
 ie
 ifindex
@@ -594,6 +598,7 @@ reparsing
 repo
 repos
 reproducibility
+requireIPv
 retpoline
 retransmission
 retransmissions
@@ -697,6 +702,7 @@ unaudited
 uncommented
 unencrypted
 unexported
+unicast
 uninline
 unix
 unlabel
@@ -706,6 +712,7 @@ unsettable
 untriaged
 untrusted
 unwinded
+upgradeCompatibility
 uplink
 uprobes
 uptime
@@ -728,6 +735,7 @@ vlan
 vmlinux
 volumeMounts
 vrf
+vrouter
 vtep
 vxlan
 waker

@@ -11,14 +11,14 @@
 package k8s
 
 import (
-	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/utils"
 )
 
-func IsovalentFQDNGroup(lc hive.Lifecycle, cs client.Clientset) (resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup], error) {
+func IsovalentFQDNGroup(lc cell.Lifecycle, cs client.Clientset) (resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup], error) {
 	if !cs.IsEnabled() {
 		return nil, nil
 	}

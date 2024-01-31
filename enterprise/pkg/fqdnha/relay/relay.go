@@ -24,7 +24,6 @@ import (
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -198,7 +197,7 @@ func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty)
 }
 
 func NewFQDNProxyAgentServer(
-	lc hive.Lifecycle,
+	lc cell.Lifecycle,
 	p params,
 ) *FQDNProxyAgentServer {
 	if !p.Cfg.EnableExternalDNSProxy {
@@ -214,7 +213,7 @@ func NewFQDNProxyAgentServer(
 	return s
 }
 
-func (s *FQDNProxyAgentServer) Start(ctx hive.HookContext) error {
+func (s *FQDNProxyAgentServer) Start(ctx cell.HookContext) error {
 	daemon, err := s.daemonPromise.Await(ctx)
 	if err != nil {
 		return err
@@ -247,7 +246,7 @@ func (s *FQDNProxyAgentServer) Start(ctx hive.HookContext) error {
 	return nil
 }
 
-func (s *FQDNProxyAgentServer) Stop(ctx hive.HookContext) error {
+func (s *FQDNProxyAgentServer) Stop(ctx cell.HookContext) error {
 	log.Info("Stopping FQDN relay gRPC server")
 	s.grpcServer.Stop()
 	return nil

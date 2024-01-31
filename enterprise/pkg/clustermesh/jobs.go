@@ -19,7 +19,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 
@@ -29,7 +28,7 @@ import (
 type jobParams struct {
 	cell.In
 
-	Lifecycle   hive.Lifecycle
+	Lifecycle   cell.Lifecycle
 	Logger      logrus.FieldLogger
 	JobRegistry job.Registry
 	Scope       cell.Scope

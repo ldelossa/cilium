@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/link"
 	"github.com/cilium/cilium/pkg/datapath/linux/bandwidth"
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
+	dptypes "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/eventqueue"
@@ -332,9 +333,7 @@ type Endpoint struct {
 	// realizedRedirects maps the ID of each proxy redirect that has been
 	// successfully added into a proxy for this endpoint, to the redirect's
 	// proxy port number.
-	// You must hold Endpoint.mutex AND Endpoint.buildMutex to write to it,
-	// and either (or both) of those locks to read from it.
-	realizedRedirects map[string]uint16
+	realizedRedirects atomic.Pointer[map[string]uint16]
 
 	// ctCleaned indicates whether the conntrack table has already been
 	// cleaned when this endpoint was first created
@@ -388,6 +387,13 @@ type Endpoint struct {
 	// Root scope for all of this endpoints reporters.
 	reporterScope       cell.Scope
 	closeHealthReporter func()
+}
+
+func (e *Endpoint) GetRealizedRedirects() (redirects map[string]uint16) {
+	if p := e.realizedRedirects.Load(); p != nil {
+		redirects = *p
+	}
+	return redirects
 }
 
 func (e *Endpoint) GetReporter(name string) cell.HealthReporter {
@@ -1214,9 +1220,10 @@ func (e *Endpoint) leaveLocked(proxyWaitGroup *completion.WaitGroup, conf Delete
 	// Remove restored rules of cleaned endpoint
 	e.owner.RemoveRestoredDNSRules(e.ID)
 
-	if e.SecurityIdentity != nil && len(e.realizedRedirects) > 0 {
+	realizedRedirects := e.GetRealizedRedirects()
+	if e.SecurityIdentity != nil && len(realizedRedirects) > 0 {
 		// Passing a new map of nil will purge all redirects
-		finalize, _ := e.removeOldRedirects(nil, proxyWaitGroup)
+		finalize, _ := e.removeOldRedirects(nil, realizedRedirects, proxyWaitGroup)
 		if finalize != nil {
 			finalize()
 		}
@@ -1349,6 +1356,21 @@ func (e *Endpoint) SetState(toState State, reason string) bool {
 	defer e.unlock()
 
 	return e.setState(toState, reason)
+}
+
+// SetMac modifies the endpoint's mac.
+func (e *Endpoint) SetMac(mac mac.MAC) {
+	e.unconditionalLock()
+	defer e.unlock()
+	e.mac = mac
+}
+
+// GetDisableLegacyIdentifiers returns the endpoint's disableLegacyIdentifiers.
+func (e *Endpoint) GetDisableLegacyIdentifiers() bool {
+	e.unconditionalRLock()
+	defer e.runlock()
+	return e.disableLegacyIdentifiers
+
 }
 
 func (e *Endpoint) setState(toState State, reason string) bool {
@@ -1530,10 +1552,12 @@ func (e *Endpoint) OnDNSPolicyUpdateLocked(rules restore.DNSRules) {
 	e.DNSRules = rules
 }
 
-// getProxyStatisticsLocked gets the ProxyStatistics for the flows with the
+// getProxyStatistics gets the ProxyStatistics for the flows with the
 // given characteristics, or adds a new one and returns it.
-// Must be called with e.proxyStatisticsMutex held.
-func (e *Endpoint) getProxyStatisticsLocked(key string, l7Protocol string, port uint16, ingress bool) *models.ProxyStatistics {
+func (e *Endpoint) getProxyStatistics(key string, l7Protocol string, port uint16, ingress bool, redirectPort uint16) *models.ProxyStatistics {
+	e.proxyStatisticsMutex.Lock()
+	defer e.proxyStatisticsMutex.Unlock()
+
 	if e.proxyStatistics == nil {
 		e.proxyStatistics = make(map[string]*models.ProxyStatistics)
 	}
@@ -1559,16 +1583,19 @@ func (e *Endpoint) getProxyStatisticsLocked(key string, l7Protocol string, port 
 		e.proxyStatistics[key] = proxyStats
 	}
 
+	proxyStats.AllocatedProxyPort = int64(redirectPort)
+
 	return proxyStats
 }
 
 // UpdateProxyStatistics updates the Endpoint's proxy  statistics to account
 // for a new observed flow with the given characteristics.
-func (e *Endpoint) UpdateProxyStatistics(proxyType, l4Protocol string, port uint16, ingress, request bool, verdict accesslog.FlowVerdict) {
+func (e *Endpoint) UpdateProxyStatistics(proxyType, l4Protocol string, port, proxyPort uint16, ingress, request bool, verdict accesslog.FlowVerdict) {
+	key := policy.ProxyStatsKey(ingress, l4Protocol, port, proxyPort)
+
 	e.proxyStatisticsMutex.Lock()
 	defer e.proxyStatisticsMutex.Unlock()
 
-	key := policy.ProxyID(e.ID, ingress, l4Protocol, port)
 	proxyStats, ok := e.proxyStatistics[key]
 	if !ok {
 		e.getLogger().WithField(logfields.L4PolicyID, key).Debug("Proxy stats not found when updating")
@@ -1652,7 +1679,7 @@ func (e *Endpoint) APICanModifyConfig(n models.ConfigurationMap) error {
 func (e *Endpoint) metadataResolver(ctx context.Context,
 	restoredEndpoint, blocking bool,
 	baseLabels labels.Labels,
-	bwm bandwidth.Manager,
+	bwm dptypes.BandwidthManager,
 	resolveMetadata MetadataResolverCB,
 ) (regenTriggered bool, err error) {
 	if !e.K8sNamespaceAndPodNameIsSet() {
@@ -1756,7 +1783,7 @@ type MetadataResolverCB func(ns, podName string) (pod *slim_corev1.Pod, _ []slim
 //
 // This assumes that after the initial successful resolution, other mechanisms
 // will handle updates (such as pkg/k8s/watchers informers).
-func (e *Endpoint) RunMetadataResolver(restoredEndpoint, blocking bool, baseLabels labels.Labels, bwm bandwidth.Manager, resolveMetadata MetadataResolverCB) (regenTriggered bool) {
+func (e *Endpoint) RunMetadataResolver(restoredEndpoint, blocking bool, baseLabels labels.Labels, bwm dptypes.BandwidthManager, resolveMetadata MetadataResolverCB) (regenTriggered bool) {
 	var regenTriggeredCh chan bool
 	callerBlocked := false
 	if blocking {
@@ -1815,7 +1842,7 @@ func (e *Endpoint) RunMetadataResolver(restoredEndpoint, blocking bool, baseLabe
 //
 // This assumes that after the initial successful resolution, other mechanisms
 // will handle updates (such as pkg/k8s/watchers informers).
-func (e *Endpoint) RunRestoredMetadataResolver(bwm bandwidth.Manager, resolveMetadata MetadataResolverCB) {
+func (e *Endpoint) RunRestoredMetadataResolver(bwm dptypes.BandwidthManager, resolveMetadata MetadataResolverCB) {
 	e.RunMetadataResolver(true, false, nil, bwm, resolveMetadata)
 }
 

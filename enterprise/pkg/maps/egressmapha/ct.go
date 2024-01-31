@@ -17,7 +17,6 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/tuple"
@@ -56,7 +55,7 @@ type ctMap struct {
 func createCtMapFromDaemonConfig(in struct {
 	cell.In
 
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 	*option.DaemonConfig
 }) (out struct {
 	cell.Out
@@ -80,11 +79,11 @@ func createCtMapFromDaemonConfig(in struct {
 // CreatePrivateCtMap creates an unpinned CT map.
 //
 // Useful for testing.
-func CreatePrivateCtMap(lc hive.Lifecycle) CtMap {
+func CreatePrivateCtMap(lc cell.Lifecycle) CtMap {
 	return createCtMap(lc, ebpf.PinNone)
 }
 
-func createCtMap(lc hive.Lifecycle, pinning ebpf.PinType) *ctMap {
+func createCtMap(lc cell.Lifecycle, pinning ebpf.PinType) *ctMap {
 	m := ebpf.NewMap(&ebpf.MapSpec{
 		Name:       CtMapName,
 		Type:       ciliumebpf.LRUHash,
@@ -94,11 +93,11 @@ func createCtMap(lc hive.Lifecycle, pinning ebpf.PinType) *ctMap {
 		Pinning:    pinning,
 	})
 
-	lc.Append(hive.Hook{
-		OnStart: func(hive.HookContext) error {
+	lc.Append(cell.Hook{
+		OnStart: func(cell.HookContext) error {
 			return m.OpenOrCreate()
 		},
-		OnStop: func(hive.HookContext) error {
+		OnStop: func(cell.HookContext) error {
 			return m.Close()
 		},
 	})

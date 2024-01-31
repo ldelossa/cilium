@@ -21,7 +21,6 @@ import (
 	"github.com/cilium/dns"
 	"github.com/sirupsen/logrus"
 
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ip"
 )
@@ -51,7 +50,7 @@ type params struct {
 	Cfg Config
 
 	Logger    logrus.FieldLogger
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 
 	Metrics *Metrics
 }

@@ -16,7 +16,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
@@ -42,7 +41,7 @@ type PerCluster interface {
 type perClusterParams struct {
 	cell.In
 
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 	Logger    logrus.FieldLogger
 
 	Config       cecmcfg.Config
@@ -61,8 +60,8 @@ func newPerCluster(p perClusterParams) (PerCluster, ctmapgc.PerClusterCTMapsRetr
 		),
 	}
 
-	p.Lifecycle.Append(hive.Hook{
-		OnStart: func(hc hive.HookContext) error {
+	p.Lifecycle.Append(cell.Hook{
+		OnStart: func(hc cell.HookContext) error {
 			if p.Config.EnableClusterAwareAddressing {
 				p.Logger.WithFields(logrus.Fields{
 					logfields.IPv4: p.DaemonConfig.IPv4Enabled(),
@@ -86,7 +85,7 @@ func newPerCluster(p perClusterParams) (PerCluster, ctmapgc.PerClusterCTMapsRetr
 
 			return nil
 		},
-		OnStop: func(hc hive.HookContext) error {
+		OnStop: func(hc cell.HookContext) error {
 			if p.Config.EnableClusterAwareAddressing {
 				maps.close()
 			}

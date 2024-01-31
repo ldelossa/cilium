@@ -25,7 +25,6 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	ossreconciler "github.com/cilium/cilium/pkg/bgpv1/manager/reconciler"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -69,7 +68,7 @@ type LBServiceReconciler struct {
 
 type LBServiceReconcilerParams struct {
 	cell.In
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 
 	Cfg                   Config
 	Signaler              *signaler.BGPCPSignaler
@@ -158,7 +157,7 @@ func (r *LBServiceReconciler) Priority() int {
 }
 
 // Start is a hive lifecycle hook called when running the hive.
-func (r *LBServiceReconciler) Start(ctx hive.HookContext) error {
+func (r *LBServiceReconciler) Start(ctx cell.HookContext) error {
 	r.mutex.Lock()
 
 	// subscribe to service health-checker updates
@@ -173,7 +172,7 @@ func (r *LBServiceReconciler) Start(ctx hive.HookContext) error {
 }
 
 // Stop is a hive lifecycle hook called when stopping the hive.
-func (r *LBServiceReconciler) Stop(ctx hive.HookContext) error {
+func (r *LBServiceReconciler) Stop(ctx cell.HookContext) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 

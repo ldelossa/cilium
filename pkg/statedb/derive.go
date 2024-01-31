@@ -6,7 +6,6 @@ package statedb
 import (
 	"context"
 
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 )
@@ -23,7 +22,7 @@ const (
 type DeriveParams[In, Out any] struct {
 	cell.In
 
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 	Jobs      job.Registry
 	Scope     cell.Scope
 	DB        *DB
@@ -79,14 +78,12 @@ func (d derive[In, Out]) loop(ctx context.Context, health cell.HealthReporter) e
 	}
 	wtxn.Commit()
 	defer tracker.Close()
-	revision := Revision(0)
 	for {
 		wtxn := d.DB.WriteTxn(out)
 
 		var watch <-chan struct{}
-		revision, watch, err = tracker.Process(
+		watch, err = tracker.IterateWithError(
 			wtxn,
-			revision,
 			func(obj In, deleted bool, rev Revision) (err error) {
 				outObj, result := d.transform(obj, deleted)
 				switch result {

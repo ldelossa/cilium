@@ -19,7 +19,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/ip"
@@ -173,7 +172,7 @@ type nodeAddressControllerParams struct {
 	HealthScope     cell.Scope
 	Log             logrus.FieldLogger
 	Config          NodeAddressConfig
-	Lifecycle       hive.Lifecycle
+	Lifecycle       cell.Lifecycle
 	Jobs            job.Registry
 	DB              *statedb.DB
 	Devices         statedb.Table[*Device]
@@ -207,8 +206,8 @@ func (n *nodeAddressController) register() {
 	g.Add(job.OneShot("node-address-update", n.run))
 
 	n.Lifecycle.Append(
-		hive.Hook{
-			OnStart: func(ctx hive.HookContext) error {
+		cell.Hook{
+			OnStart: func(ctx cell.HookContext) error {
 				txn := n.DB.WriteTxn(n.NodeAddresses, n.Devices /* for delete tracker */)
 				defer txn.Abort()
 
@@ -239,10 +238,9 @@ func (n *nodeAddressController) run(ctx context.Context, reporter cell.HealthRep
 	defer n.tracker.Close()
 
 	limiter := rate.NewLimiter(nodeAddressControllerMinInterval, 1)
-	revision := statedb.Revision(0)
 	for {
 		txn := n.DB.WriteTxn(n.NodeAddresses)
-		process := func(dev *Device, deleted bool, rev statedb.Revision) error {
+		process := func(dev *Device, deleted bool, rev statedb.Revision) {
 			// Note: prefix match! existing may contain node addresses from devices with names
 			// prefixed by dev. See https://github.com/cilium/cilium/issues/29324.
 			addrIter, _ := n.NodeAddresses.Get(txn, NodeAddressDeviceNameIndex.Query(dev.Name))
@@ -252,10 +250,8 @@ func (n *nodeAddressController) run(ctx context.Context, reporter cell.HealthRep
 				new = n.getAddressesFromDevice(dev)
 			}
 			n.update(txn, existing, new, reporter, dev.Name)
-			return nil
 		}
-		var watch <-chan struct{}
-		revision, watch, _ = n.tracker.Process(txn, revision, process)
+		watch := n.tracker.Iterate(txn, process)
 		txn.Commit()
 
 		select {

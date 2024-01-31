@@ -95,13 +95,13 @@ func TestClient(t *testing.T) {
 		cell.Provide(newClient),
 		cell.Provide(newMetrics),
 
-		cell.Invoke(func(lc hive.Lifecycle) error {
-			lc.Append(hive.Hook{
-				OnStart: func(ctx hive.HookContext) error {
+		cell.Invoke(func(lc cell.Lifecycle) error {
+			lc.Append(cell.Hook{
+				OnStart: func(ctx cell.HookContext) error {
 					go srv.ActivateAndServe()
 					return nil
 				},
-				OnStop: func(ctx hive.HookContext) error {
+				OnStop: func(ctx cell.HookContext) error {
 					return srv.ShutdownContext(ctx)
 				},
 			})

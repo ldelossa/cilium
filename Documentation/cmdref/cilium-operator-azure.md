@@ -19,6 +19,7 @@ cilium-operator-azure [flags]
       --azure-user-assigned-identity-id string                       ID of the user assigned identity used to auth with the Azure API
       --bgp-announce-lb-ip                                           Announces service IPs of type LoadBalancer via BGP
       --bgp-config-path string                                       Path to file containing the BGP configuration (default "/var/lib/cilium/bgp/config.yaml")
+      --bgp-v2-api-enabled                                           Enables BGPv2 APIs in Cilium
       --ces-max-ciliumendpoints-per-ces int                          Maximum number of CiliumEndpoints allowed in a CES (default 100)
       --ces-slice-mode string                                        Slicing mode define how ceps are grouped into a CES (default "cesSliceModeIdentity")
       --ces-write-qps-burst int                                      CES work queue burst rate (default 20)
@@ -54,6 +55,7 @@ cilium-operator-azure [flags]
       --enable-k8s-endpoint-slice                                    Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-metrics                                               Enable Prometheus metrics
       --enable-multi-network                                         Enable support for multiple pod networks
+      --enable-node-ipam                                             Enable Node IPAM
       --enforce-ingress-https                                        Enforces https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. (default true)
       --fqdn-group-min-query-interval duration                       Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gateway-api-secrets-namespace string                         Namespace having tls secrets used by CEC for Gateway API (default "cilium-secrets")
@@ -68,7 +70,7 @@ cilium-operator-azure [flags]
       --ingress-default-secret-name string                           Default secret name for Ingress.
       --ingress-default-secret-namespace string                      Default secret namespace for Ingress.
       --ingress-default-xff-num-trusted-hops uint32                  The number of additional ingress proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address.
-      --ingress-lb-annotation-prefixes strings                       Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
+      --ingress-lb-annotation-prefixes strings                       Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [lbipam.cilium.io,service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
       --ingress-secrets-namespace string                             Namespace having tls secrets used by Ingress and CEC. (default "cilium-secrets")
       --ingress-shared-lb-service-name string                        Name of shared LB service name for Ingress. (default "cilium-ingress")
       --instance-tags-filter map                                     EC2 Instance tags in the form of k1=v1,k2=v2 (multiple k/v pairs can also be passed by repeating the CLI flag

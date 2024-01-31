@@ -28,7 +28,6 @@ import (
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/fqdn/proxy/ipfamily"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ip"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
@@ -277,7 +276,7 @@ type params struct {
 	cell.In
 
 	Logger    logrus.FieldLogger
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 
 	ModulesMgr *modules.Manager
 
@@ -300,7 +299,7 @@ func newIptablesManager(p params) *Manager {
 }
 
 // Start initializes the iptables manager and checks for iptables kernel modules availability.
-func (m *Manager) Start(ctx hive.HookContext) error {
+func (m *Manager) Start(ctx cell.HookContext) error {
 	if os.Getenv("CILIUM_PREPEND_IPTABLES_CHAIN") != "" {
 		m.logger.Warning("CILIUM_PREPEND_IPTABLES_CHAIN env var has been deprecated. Please use 'CILIUM_PREPEND_IPTABLES_CHAINS' " +
 			"env var or '--prepend-iptables-chains' command line flag instead")
@@ -383,7 +382,7 @@ func (m *Manager) Start(ctx hive.HookContext) error {
 	return nil
 }
 
-func (m *Manager) Stop(ctx hive.HookContext) error {
+func (m *Manager) Stop(ctx cell.HookContext) error {
 	return nil
 }
 
@@ -800,29 +799,6 @@ func (m *Manager) addProxyRules(prog iptablesInterface, ip string, proxyPort uin
 	return nil
 }
 
-// install or remove rules for a single proxy port
-func (m *Manager) iptProxyRules(proxyPort uint16, ingress, localOnly bool, name string) error {
-	ipv4 := "0.0.0.0"
-	ipv6 := "::"
-
-	if localOnly {
-		ipv4 = "127.0.0.1"
-		ipv6 = "::1"
-	}
-	if m.sharedCfg.EnableIPv4 {
-		if err := m.addProxyRules(ip4tables, ipv4, proxyPort, ingress, name); err != nil {
-			return err
-		}
-	}
-	if m.sharedCfg.EnableIPv6 {
-		if err := m.addProxyRules(ip6tables, ipv6, proxyPort, ingress, name); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (m *Manager) endpointNoTrackRules(prog iptablesInterface, cmd string, IP string, port *lb.L4Addr) error {
 	var err error
 
@@ -1009,6 +985,12 @@ func (m *Manager) RemoveNoTrackRules(IP string, port uint16, ipv6 bool) error {
 }
 
 func (m *Manager) InstallProxyRules(ctx context.Context, proxyPort uint16, ingress, localOnly bool, name string) error {
+	if m.haveBPFSocketAssign {
+		log.WithField("port", proxyPort).
+			Debug("Skipping proxy rule install due to BPF support")
+		return nil
+	}
+
 	backoff := backoff.Exponential{
 		Min:  20 * time.Second,
 		Max:  3 * time.Minute,
@@ -1039,12 +1021,25 @@ func (m *Manager) doInstallProxyRules(proxyPort uint16, ingress, localOnly bool,
 	m.Lock()
 	defer m.Unlock()
 
-	if m.haveBPFSocketAssign {
-		log.WithField("port", proxyPort).
-			Debug("Skipping proxy rule install due to BPF support")
-		return nil
+	ipv4 := "0.0.0.0"
+	ipv6 := "::"
+
+	if localOnly {
+		ipv4 = "127.0.0.1"
+		ipv6 = "::1"
 	}
-	return m.iptProxyRules(proxyPort, ingress, localOnly, name)
+	if m.sharedCfg.EnableIPv4 {
+		if err := m.addProxyRules(ip4tables, ipv4, proxyPort, ingress, name); err != nil {
+			return err
+		}
+	}
+	if m.sharedCfg.EnableIPv6 {
+		if err := m.addProxyRules(ip6tables, ipv6, proxyPort, ingress, name); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetProxyPort finds a proxy port used for redirect 'name' installed earlier with InstallProxyRules.

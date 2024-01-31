@@ -73,22 +73,22 @@ jobs:
       matrix:
         include:
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '4.19-20231220.153727'
+          - kernel: '4.19-20240110.080621'
             ci-kernel: '419'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '5.4-20231220.153727'
+          - kernel: '5.4-20240110.080621'
             ci-kernel: '54'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '5.10-20231220.153727'
+          - kernel: '5.10-20240110.080621'
             ci-kernel: '510'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '5.15-20231220.153727'
+          - kernel: '5.15-20240110.080621'
             ci-kernel: '510'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '6.1-20231220.153727'
+          - kernel: '6.1-20240110.080621'
             ci-kernel: '61'
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: 'bpf-next-20231220.153727'
+          - kernel: 'bpf-next-20240122.013132'
             ci-kernel: 'netnext'
     timeout-minutes: 60
     steps:
@@ -140,7 +140,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4.3.0
         with:
           name: datapath-verifier_${{ matrix.kernel }}
           path: datapath-verifier

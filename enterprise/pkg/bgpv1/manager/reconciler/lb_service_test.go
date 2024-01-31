@@ -26,7 +26,6 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s"
 	v2api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -430,7 +429,7 @@ func TestLBServiceHealthChecker(t *testing.T) {
 
 			rParams := LBServiceReconcilerParams{
 				In:        cell.In{},
-				Lifecycle: &hive.DefaultLifecycle{},
+				Lifecycle: &cell.DefaultLifecycle{},
 				Cfg:       Config{SvcHealthCheckingEnabled: true},
 				Signaler:  signaler.NewBGPCPSignaler(),
 			}

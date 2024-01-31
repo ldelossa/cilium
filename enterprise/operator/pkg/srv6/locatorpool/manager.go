@@ -15,7 +15,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -43,7 +42,7 @@ type LocatorPoolManagerParams struct {
 	Cfg Config
 
 	Logger      logrus.FieldLogger
-	LC          hive.Lifecycle
+	LC          cell.Lifecycle
 	JobRegistry job.Registry
 	Scope       cell.Scope
 

@@ -24,10 +24,8 @@ import (
 	"github.com/cilium/cilium/pkg/cidr"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
-	"github.com/cilium/cilium/pkg/datapath/linux/bandwidth"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint"
-	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -76,13 +74,10 @@ const (
 
 	metricKNP            = "NetworkPolicy"
 	metricNS             = "Namespace"
-	metricSecret         = "Secret"
 	metricCiliumNode     = "CiliumNode"
 	metricCiliumEndpoint = "CiliumEndpoint"
 	metricCLRP           = "CiliumLocalRedirectPolicy"
 	metricCEGP           = "CiliumEgressGatewayPolicy"
-	metricCCEC           = "CiliumClusterwideEnvoyConfig"
-	metricCEC            = "CiliumEnvoyConfig"
 	metricPod            = "Pod"
 	metricNode           = "Node"
 )
@@ -161,10 +156,6 @@ type svcManager interface {
 	DeleteService(frontend loadbalancer.L3n4Addr) (bool, error)
 	GetDeepCopyServiceByFrontend(frontend loadbalancer.L3n4Addr) (*loadbalancer.SVC, bool)
 	UpsertService(*loadbalancer.SVC) (bool, loadbalancer.ID, error)
-	RegisterL7LBServiceRedirect(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, proxyPort uint16) error
-	DeregisterL7LBServiceRedirect(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error
-	RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSyncer) error
-	DeregisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSyncer) error
 }
 
 type redirectPolicyManager interface {
@@ -221,19 +212,16 @@ type K8sWatcher struct {
 
 	endpointManager endpointManager
 
-	nodeDiscoverManager    nodeDiscoverManager
-	policyManager          policyManager
-	policyRepository       policyRepository
-	svcManager             svcManager
-	redirectPolicyManager  redirectPolicyManager
-	bgpSpeakerManager      bgpSpeakerManager
-	ipcache                ipcacheManager
-	proxyPortAllocator     envoy.PortAllocator
-	envoyXdsServer         envoy.XDSServer
-	envoyL7LBBackendSyncer *envoy.EnvoyServiceBackendSyncer
-	cgroupManager          cgroupManager
+	nodeDiscoverManager   nodeDiscoverManager
+	policyManager         policyManager
+	policyRepository      policyRepository
+	svcManager            svcManager
+	redirectPolicyManager redirectPolicyManager
+	bgpSpeakerManager     bgpSpeakerManager
+	ipcache               ipcacheManager
+	cgroupManager         cgroupManager
 
-	bandwidthManager bandwidth.Manager
+	bandwidthManager datapath.BandwidthManager
 
 	// controllersStarted is a channel that is closed when all watchers that do not depend on
 	// local node configuration have been started
@@ -274,15 +262,12 @@ func NewK8sWatcher(
 	datapath datapath.Datapath,
 	redirectPolicyManager redirectPolicyManager,
 	bgpSpeakerManager bgpSpeakerManager,
-	proxyPortAllocator envoy.PortAllocator,
-	envoyXdsServer envoy.XDSServer,
-	envoyL7LBBackendSyncer *envoy.EnvoyServiceBackendSyncer,
 	cfg WatcherConfiguration,
 	ipcache ipcacheManager,
 	cgroupManager cgroupManager,
 	resources agentK8s.Resources,
 	serviceCache *k8s.ServiceCache,
-	bandwidthManager bandwidth.Manager,
+	bandwidthManager datapath.BandwidthManager,
 ) *K8sWatcher {
 	return &K8sWatcher{
 		clientset:               clientset,
@@ -302,9 +287,6 @@ func NewK8sWatcher(
 		bgpSpeakerManager:       bgpSpeakerManager,
 		cgroupManager:           cgroupManager,
 		bandwidthManager:        bandwidthManager,
-		proxyPortAllocator:      proxyPortAllocator,
-		envoyXdsServer:          envoyXdsServer,
-		envoyL7LBBackendSyncer:  envoyL7LBBackendSyncer,
 		cfg:                     cfg,
 		resources:               resources,
 	}
@@ -422,10 +404,6 @@ const (
 
 	// start causes watcher to be started as soon as possible.
 	start
-
-	// afterNodeInit causes watcher to be started after local node has been initialized
-	// so that e.g., local node addressing info is available.
-	afterNodeInit
 )
 
 type watcherInfo struct {
@@ -443,9 +421,14 @@ var ciliumResourceToGroupMapping = map[string]watcherInfo{
 	synced.CRDResourceName(v2.CEWName):                  {skip, ""}, // Handled in clustermesh-apiserver/
 	synced.CRDResourceName(v2.CEGPName):                 {skip, ""}, // Handled via Resource[T].
 	synced.CRDResourceName(v2alpha1.CESName):            {start, k8sAPIGroupCiliumEndpointSliceV2Alpha1},
-	synced.CRDResourceName(v2.CCECName):                 {afterNodeInit, k8sAPIGroupCiliumClusterwideEnvoyConfigV2},
-	synced.CRDResourceName(v2.CECName):                  {afterNodeInit, k8sAPIGroupCiliumEnvoyConfigV2},
+	synced.CRDResourceName(v2.CCECName):                 {skip, ""}, // Handled via CiliumEnvoyConfig watcher via Resource[T]
+	synced.CRDResourceName(v2.CECName):                  {skip, ""}, // Handled via CiliumEnvoyConfig watcher via Resource[T]
 	synced.CRDResourceName(v2alpha1.BGPPName):           {skip, ""}, // Handled in BGP control plane
+	synced.CRDResourceName(v2alpha1.BGPCCName):          {skip, ""}, // Handled in BGP control plane
+	synced.CRDResourceName(v2alpha1.BGPAName):           {skip, ""}, // Handled in BGP control plane
+	synced.CRDResourceName(v2alpha1.BGPPCName):          {skip, ""}, // Handled in BGP control plane
+	synced.CRDResourceName(v2alpha1.BGPNCName):          {skip, ""}, // Handled in BGP control plane
+	synced.CRDResourceName(v2alpha1.BGPNCOName):         {skip, ""}, // Handled in BGP control plane
 	synced.CRDResourceName(v2alpha1.LBIPPoolName):       {skip, ""}, // Handled in LB IPAM
 	synced.CRDResourceName(v2alpha1.CNCName):            {skip, ""}, // Handled by init directly
 	synced.CRDResourceName(v2alpha1.CCGName):            {start, k8sAPIGroupCiliumCIDRGroupV2Alpha1},
@@ -455,7 +438,7 @@ var ciliumResourceToGroupMapping = map[string]watcherInfo{
 
 // resourceGroups are all of the core Kubernetes and Cilium resource groups
 // which the Cilium agent watches to implement CNI functionality.
-func (k *K8sWatcher) resourceGroups() (beforeNodeInitGroups, afterNodeInitGroups []string) {
+func (k *K8sWatcher) resourceGroups() []string {
 	k8sGroups := []string{
 		// To perform the service translation and have the BPF LB datapath
 		// with the right service -> backend (k8s endpoints) translation.
@@ -480,12 +463,6 @@ func (k *K8sWatcher) resourceGroups() (beforeNodeInitGroups, afterNodeInitGroups
 		k8sGroups = append(k8sGroups, k8sAPIGroupNetworkingV1Core)
 	}
 
-	if k.cfg.K8sIngressControllerEnabled() || k.cfg.K8sGatewayAPIEnabled() {
-		// While Ingress controller is part of operator, we need to watch
-		// TLS secrets in pre-defined namespace for populating Envoy xDS SDS cache.
-		k8sGroups = append(k8sGroups, resources.K8sAPIGroupSecretV1Core)
-	}
-
 	ciliumResources := synced.AgentCRDResourceNames()
 	ciliumGroups := make([]string, 0, len(ciliumResources))
 	for _, r := range ciliumResources {
@@ -498,12 +475,10 @@ func (k *K8sWatcher) resourceGroups() (beforeNodeInitGroups, afterNodeInitGroups
 			continue
 		case start:
 			ciliumGroups = append(ciliumGroups, groupInfo.group)
-		case afterNodeInit:
-			afterNodeInitGroups = append(afterNodeInitGroups, groupInfo.group)
 		}
 	}
 
-	return append(k8sGroups, ciliumGroups...), afterNodeInitGroups
+	return append(k8sGroups, ciliumGroups...)
 }
 
 // InitK8sSubsystem takes a channel for which it will be closed when all
@@ -512,7 +487,7 @@ func (k *K8sWatcher) resourceGroups() (beforeNodeInitGroups, afterNodeInitGroups
 // already been registered.
 func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context, cachesSynced chan struct{}) {
 	log.Info("Enabling k8s event listener")
-	resources, afterNodeInitResources := k.resourceGroups()
+	resources := k.resourceGroups()
 	if err := k.enableK8sWatchers(ctx, resources); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			log.WithError(err).Fatal("Unable to start K8s watchers for Cilium")
@@ -523,17 +498,8 @@ func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context, cachesSynced chan str
 	close(k.controllersStarted)
 
 	go func() {
-		log.Info("Waiting until local node addressing before starting watchers depending on it")
-		k.nodeDiscoverManager.WaitForLocalNodeInit()
-		if err := k.enableK8sWatchers(ctx, afterNodeInitResources); err != nil {
-			if !errors.Is(err, context.Canceled) {
-				log.WithError(err).Fatal("Unable to start K8s watchers for Cilium")
-			}
-			// If the context was canceled it means the daemon is being stopped
-			return
-		}
 		log.Info("Waiting until all pre-existing resources have been received")
-		if err := k.WaitForCacheSyncWithTimeout(option.Config.K8sSyncTimeout, append(resources, afterNodeInitResources...)...); err != nil {
+		if err := k.WaitForCacheSyncWithTimeout(option.Config.K8sSyncTimeout, resources...); err != nil {
 			log.WithError(err).Fatal("Timed out waiting for pre-existing resources to be received; exiting")
 		}
 		close(cachesSynced)
@@ -542,8 +508,6 @@ func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context, cachesSynced chan str
 
 // WatcherConfiguration is the required configuration for enableK8sWatchers
 type WatcherConfiguration interface {
-	utils.IngressConfiguration
-	utils.GatewayAPIConfiguration
 	utils.PolicyConfiguration
 }
 
@@ -575,10 +539,6 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			k.servicesInit()
 		case resources.K8sAPIGroupEndpointSliceOrEndpoint:
 			k.endpointsInit()
-		case resources.K8sAPIGroupSecretV1Core:
-			swgSecret := lock.NewStoppableWaitGroup()
-			// only watch secrets in specific namespaces
-			k.tlsSecretInit(k.clientset.Slim(), option.Config.EnvoySecretNamespaces, swgSecret)
 		// Custom resource definitions
 		case k8sAPIGroupCiliumNetworkPolicyV2, k8sAPIGroupCiliumClusterwideNetworkPolicyV2, k8sAPIGroupCiliumCIDRGroupV2Alpha1:
 			cnpOnce.Do(func() { k.ciliumNetworkPoliciesInit(ctx, k.clientset) })
@@ -588,10 +548,6 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			// no-op; handled in k8sAPIGroupCiliumEndpointV2
 		case k8sAPIGroupCiliumLocalRedirectPolicyV2:
 			k.ciliumLocalRedirectPolicyInit(k.clientset)
-		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2:
-			k.ciliumClusterwideEnvoyConfigInit(ctx, k.clientset)
-		case k8sAPIGroupCiliumEnvoyConfigV2:
-			k.ciliumEnvoyConfigInit(ctx, k.clientset)
 		default:
 			log.WithFields(logrus.Fields{
 				logfields.Resource: r,

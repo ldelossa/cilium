@@ -49,7 +49,7 @@
 #include "lib/trace.h"
 #include "lib/csum.h"
 #include "lib/egress_gateway.h"
-#include "lib/egress_policies.h"
+#include "lib/srv6.h"
 #include "lib/encap.h"
 #include "lib/eps.h"
 #include "lib/nat.h"
@@ -404,6 +404,7 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	};
 	__u32 __maybe_unused tunnel_endpoint = 0;
 	__u8 __maybe_unused encrypt_key = 0;
+	bool __maybe_unused skip_tunnel = false;
 	enum ct_status ct_status;
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
@@ -427,6 +428,7 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 			*dst_sec_identity = info->sec_identity;
 			tunnel_endpoint = info->tunnel_endpoint;
 			encrypt_key = get_min_encrypt_key(info->key);
+			skip_tunnel = info->flag_skip_tunnel;
 		} else {
 			*dst_sec_identity = WORLD_IPV6_ID;
 		}
@@ -516,9 +518,11 @@ ct_recreate6:
 		 * reverse NAT.
 		 */
 		ct_state_new.src_sec_id = SECLABEL_IPV6;
+		ct_state_new.proxy_redirect = proxy_port > 0;
+		ct_state_new.from_l7lb = from_l7lb;
+
 		ret = ct_create6(get_ct_map6(tuple), &CT_MAP_ANY6, tuple, ctx,
-				 CT_EGRESS, &ct_state_new, proxy_port > 0, from_l7lb,
-				 ext_err);
+				 CT_EGRESS, &ct_state_new, ext_err);
 		if (IS_ERR(ret))
 			return ret;
 		trace.monitor = TRACE_PAYLOAD_LEN;
@@ -636,7 +640,7 @@ ct_recreate6:
 
 	/* The packet goes to a peer not managed by this agent instance */
 #ifdef TUNNEL_MODE
-	{
+	if (!skip_tunnel) {
 		struct tunnel_key key = {};
 		union v6addr *daddr = (union v6addr *)&ip6->daddr;
 
@@ -824,6 +828,7 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	};
 	__u32 __maybe_unused tunnel_endpoint = 0, zero = 0;
 	__u8 __maybe_unused encrypt_key = 0;
+	bool __maybe_unused skip_tunnel = false;
 	bool hairpin_flow = false; /* endpoint wants to access itself via service IP */
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	struct ct_buffer4 *ct_buffer;
@@ -856,6 +861,7 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 			*dst_sec_identity = info->sec_identity;
 			tunnel_endpoint = info->tunnel_endpoint;
 			encrypt_key = get_min_encrypt_key(info->key);
+			skip_tunnel = info->flag_skip_tunnel;
 		} else {
 			*dst_sec_identity = WORLD_IPV4_ID;
 		}
@@ -960,9 +966,11 @@ ct_recreate4:
 		/* We could avoid creating related entries for legacy ClusterIP
 		 * handling here, but turns out that verifier cannot handle it.
 		 */
+		ct_state_new.proxy_redirect = proxy_port > 0;
+		ct_state_new.from_l7lb = from_l7lb;
+
 		ret = ct_create4(ct_map, ct_related_map, tuple, ctx,
-				 CT_EGRESS, &ct_state_new, proxy_port > 0, from_l7lb,
-				 ext_err);
+				 CT_EGRESS, &ct_state_new, ext_err);
 		if (IS_ERR(ret))
 			return ret;
 		break;
@@ -1180,7 +1188,7 @@ skip_vtep:
 #endif
 
 #if defined(TUNNEL_MODE) || defined(ENABLE_HIGH_SCALE_IPCACHE)
-	{
+	if (!skip_tunnel) {
 		struct tunnel_key key = {};
 
 		if (cluster_id > UINT8_MAX)
@@ -1586,6 +1594,9 @@ skip_policy_enforcement:
 
 	if (ret == CT_NEW) {
 		ct_state_new.src_sec_id = src_label;
+		ct_state_new.proxy_redirect = *proxy_port > 0;
+		ct_state_new.from_l7lb = false;
+
 		/* ext_err may contain a value from __policy_can_access, and
 		 * ct_create6 overwrites it only if it returns an error itself.
 		 * As the error from __policy_can_access is dropped in that
@@ -1593,7 +1604,7 @@ skip_policy_enforcement:
 		 * its error code.
 		 */
 		ret = ct_create6(get_ct_map6(tuple), &CT_MAP_ANY6, tuple, ctx, CT_INGRESS,
-				 &ct_state_new, *proxy_port > 0, false, ext_err);
+				 &ct_state_new, ext_err);
 		if (IS_ERR(ret))
 			return ret;
 	}
@@ -1944,6 +1955,9 @@ skip_policy_enforcement:
 	if (ret == CT_NEW) {
 		ct_state_new.src_sec_id = src_label;
 		ct_state_new.from_tunnel = from_tunnel;
+		ct_state_new.proxy_redirect = *proxy_port > 0;
+		ct_state_new.from_l7lb = false;
+
 		/* ext_err may contain a value from __policy_can_access, and
 		 * ct_create4 overwrites it only if it returns an error itself.
 		 * As the error from __policy_can_access is dropped in that
@@ -1951,7 +1965,7 @@ skip_policy_enforcement:
 		 * its error code.
 		 */
 		ret = ct_create4(get_ct_map4(tuple), &CT_MAP_ANY4, tuple, ctx, CT_INGRESS,
-				 &ct_state_new, *proxy_port > 0, false, ext_err);
+				 &ct_state_new, ext_err);
 		if (IS_ERR(ret))
 			return ret;
 	}

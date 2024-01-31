@@ -20,7 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -51,7 +50,7 @@ type operatorParams struct {
 	Config config
 
 	Logger      logrus.FieldLogger
-	Lifecycle   hive.Lifecycle
+	Lifecycle   cell.Lifecycle
 	JobRegistry job.Registry
 	Scope       cell.Scope
 

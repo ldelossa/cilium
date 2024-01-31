@@ -13,7 +13,7 @@
      - Type
      - Default
    * - :spelling:ignore:`MTU`
-     - Configure the underlying network MTU to overwrite auto-detected MTU.  This value doesn't change the host network interface MTU i.e. eth0 or ens0. It changes the MTU for cilium_net@cilium_host, cilium_host@cilium_net, cilium_vxlan and lxc_health interfaces.
+     - Configure the underlying network MTU to overwrite auto-detected MTU. This value doesn't change the host network interface MTU i.e. eth0 or ens0. It changes the MTU for cilium_net@cilium_host, cilium_host@cilium_net, cilium_vxlan and lxc_health interfaces.
      - int
      - ``0``
    * - :spelling:ignore:`affinity`
@@ -271,7 +271,7 @@
    * - :spelling:ignore:`bgpControlPlane`
      - This feature set enables virtual BGP routers to be created via CiliumBGPPeeringPolicy CRDs.
      - object
-     - ``{"enabled":false,"secretsNamespace":{"create":false,"name":"kube-system"}}``
+     - ``{"enabled":false,"secretsNamespace":{"create":false,"name":"kube-system"},"v2Enabled":false}``
    * - :spelling:ignore:`bgpControlPlane.enabled`
      - Enables the BGP control plane.
      - bool
@@ -288,6 +288,10 @@
      - The name of the secret namespace to which Cilium agents are given read access
      - string
      - ``"kube-system"``
+   * - :spelling:ignore:`bgpControlPlane.v2Enabled`
+     - Enable the BGPv2 APIs.
+     - bool
+     - ``false``
    * - :spelling:ignore:`bpf.authMapMax`
      - Configure the maximum number of entries in auth map.
      - int
@@ -1199,7 +1203,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:90c280221e269952b0fe70c2e0c7fcafe7b51e713c8a4b60eb318c5d626f0553","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.2-6d609cf1559365fe9e8db5a7774a313f1861e143","useDigest":true}``
+     - ``{"digest":"sha256:debc09c066c11a756234ba3482f301e20ca0f99fd7f4a41fe01e49ca2fa9c50a","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.2-4366a60cb693c38ab1917d924f5b1d26f1e58b1e","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1931,7 +1935,7 @@
    * - :spelling:ignore:`hubble.ui.backend.image`
      - Hubble-ui backend image.
      - object
-     - ``{"digest":"sha256:1f86f3400827a0451e6332262467f894eeb7caf0eb8779bd951e2caa9d027cbe","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.12.1","useDigest":true}``
+     - ``{"digest":"sha256:1cd84251cec46e20f9e839ee0afba9b51c8de59d35681234f701d7f42062f138","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.12.3","useDigest":true}``
    * - :spelling:ignore:`hubble.ui.backend.livenessProbe.enabled`
      - Enable liveness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
      - bool
@@ -1971,7 +1975,7 @@
    * - :spelling:ignore:`hubble.ui.frontend.image`
      - Hubble-ui frontend image.
      - object
-     - ``{"digest":"sha256:9e5f81ee747866480ea1ac4630eb6975ff9227f9782b7c93919c081c33f38267","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui","tag":"v0.12.1","useDigest":true}``
+     - ``{"digest":"sha256:e6b825302fc1e406b1305363fe0bcd1fdf95730b32c2b99a2b36dfa37bdaeec2","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui","tag":"v0.12.3","useDigest":true}``
    * - :spelling:ignore:`hubble.ui.frontend.resources`
      - Resource requests and limits for the 'frontend' container of the 'hubble-ui' deployment.
      - object
@@ -2111,7 +2115,7 @@
    * - :spelling:ignore:`ingressController.ingressLBAnnotationPrefixes`
      - IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service
      - list
-     - ``["service.beta.kubernetes.io","service.kubernetes.io","cloud.google.com"]``
+     - ``["lbipam.cilium.io","service.beta.kubernetes.io","service.kubernetes.io","cloud.google.com"]``
    * - :spelling:ignore:`ingressController.loadbalancerMode`
      - Default ingress load balancer mode Supported values: shared, dedicated For granular control, use the following annotations on the ingress resource ingress.cilium.io/loadbalancer-mode: shared
      - string
@@ -2239,7 +2243,15 @@
    * - :spelling:ignore:`k8s`
      - Configure Kubernetes specific configuration
      - object
-     - ``{}``
+     - ``{"requireIPv4PodCIDR":false,"requireIPv6PodCIDR":false}``
+   * - :spelling:ignore:`k8s.requireIPv4PodCIDR`
+     - requireIPv4PodCIDR enables waiting for Kubernetes to provide the PodCIDR range via the Kubernetes node resource
+     - bool
+     - ``false``
+   * - :spelling:ignore:`k8s.requireIPv6PodCIDR`
+     - requireIPv6PodCIDR enables waiting for Kubernetes to provide the PodCIDR range via the Kubernetes node resource
+     - bool
+     - ``false``
    * - :spelling:ignore:`k8sClientRateLimit`
      - Configure the client side rate limit for the agent and operator  If the amount of requests to the Kubernetes API server exceeds the configured rate limit, the agent and operator will start to throttle requests by delaying them until there is budget or the request times out.
      - object
@@ -3036,6 +3048,10 @@
      - Cilium agent update strategy
      - object
      - ``{"rollingUpdate":{"maxUnavailable":2},"type":"RollingUpdate"}``
+   * - :spelling:ignore:`upgradeCompatibility`
+     - upgradeCompatibility helps users upgrading to ensure that the configMap for Cilium will not change critical values to ensure continued operation This flag is not required for new installations. For example: '1.7', '1.8', '1.9'
+     - string
+     - ``nil``
    * - :spelling:ignore:`vtep.cidr`
      - A space separated list of VTEP device CIDRs, for example "1.1.1.0/24 1.1.2.0/24"
      - string

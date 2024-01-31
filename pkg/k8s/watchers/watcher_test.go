@@ -22,7 +22,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/service"
 	testipcache "github.com/cilium/cilium/pkg/testutils/ipcache"
 )
 
@@ -38,14 +37,6 @@ var _ = Suite(&K8sWatcherSuite{})
 var emptyResources = agentK8s.Resources{}
 
 type fakeWatcherConfiguration struct{}
-
-func (f *fakeWatcherConfiguration) K8sIngressControllerEnabled() bool {
-	return false
-}
-
-func (f *fakeWatcherConfiguration) K8sGatewayAPIEnabled() bool {
-	return false
-}
 
 func (f *fakeWatcherConfiguration) K8sNetworkPolicyEnabled() bool {
 	return true
@@ -121,22 +112,6 @@ func (f *fakeSvcManager) UpsertService(p *loadbalancer.SVC) (bool, loadbalancer.
 	panic("OnUpsertService() was called and is not set!")
 }
 
-func (f *fakeSvcManager) RegisterL7LBServiceRedirect(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, proxyPort uint16) error {
-	return nil
-}
-
-func (f *fakeSvcManager) DeregisterL7LBServiceRedirect(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error {
-	return nil
-}
-
-func (f *fakeSvcManager) RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSyncer) error {
-	return nil
-}
-
-func (f *fakeSvcManager) DeregisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSyncer) error {
-	return nil
-}
-
 func (s *K8sWatcherSuite) TestUpdateToServiceEndpointsGH9525(c *C) {
 	ep1stApply := &slim_corev1.Endpoints{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -198,9 +173,6 @@ func (s *K8sWatcherSuite) TestUpdateToServiceEndpointsGH9525(c *C) {
 		policyRepository,
 		nil,
 		dp,
-		nil,
-		nil,
-		nil,
 		nil,
 		nil,
 		&fakeWatcherConfiguration{},
@@ -527,9 +499,6 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_ClusterIP(c *C) {
 		dp,
 		nil,
 		nil,
-		nil,
-		nil,
-		nil,
 		&fakeWatcherConfiguration{},
 		testipcache.NewMockIPCache(),
 		nil,
@@ -681,9 +650,6 @@ func (s *K8sWatcherSuite) TestChangeSVCPort(c *C) {
 		policyRepository,
 		svcManager,
 		dp,
-		nil,
-		nil,
-		nil,
 		nil,
 		nil,
 		&fakeWatcherConfiguration{},
@@ -1168,9 +1134,6 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_NodePort(c *C) {
 		dp,
 		nil,
 		nil,
-		nil,
-		nil,
-		nil,
 		&fakeWatcherConfiguration{},
 		testipcache.NewMockIPCache(),
 		nil,
@@ -1487,9 +1450,6 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_GH9576_1(c *C) {
 		dp,
 		nil,
 		nil,
-		nil,
-		nil,
-		nil,
 		&fakeWatcherConfiguration{},
 		testipcache.NewMockIPCache(),
 		nil,
@@ -1797,9 +1757,6 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_GH9576_2(c *C) {
 		policyRepository,
 		svcManager,
 		dp,
-		nil,
-		nil,
-		nil,
 		nil,
 		nil,
 		&fakeWatcherConfiguration{},
@@ -2723,9 +2680,6 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_ExternalIPs(c *C) {
 		policyRepository,
 		svcManager,
 		dp,
-		nil,
-		nil,
-		nil,
 		nil,
 		nil,
 		&fakeWatcherConfiguration{},

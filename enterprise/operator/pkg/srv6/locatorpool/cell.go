@@ -11,7 +11,6 @@
 package locatorpool
 
 import (
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -55,7 +54,7 @@ func (cfg Config) Flags(flags *pflag.FlagSet) {
 	flags.Bool(srv6LocatorBoolEnabled, cfg.Enabled, "Enable SRv6 locator pool in Cilium")
 }
 
-func newLocatorPoolResource(lc hive.Lifecycle, c client.Clientset, cfg Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentSRv6LocatorPool] {
+func newLocatorPoolResource(lc cell.Lifecycle, c client.Clientset, cfg Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentSRv6LocatorPool] {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -66,7 +65,7 @@ func newLocatorPoolResource(lc hive.Lifecycle, c client.Clientset, cfg Config) r
 		), resource.WithMetric("IsovalentSRv6LocatorPool"))
 }
 
-func newSIDManagerResource(lc hive.Lifecycle, c client.Clientset, cfg Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentSRv6SIDManager] {
+func newSIDManagerResource(lc cell.Lifecycle, c client.Clientset, cfg Config) resource.Resource[*isovalent_api_v1alpha1.IsovalentSRv6SIDManager] {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -77,7 +76,7 @@ func newSIDManagerResource(lc hive.Lifecycle, c client.Clientset, cfg Config) re
 		), resource.WithMetric("IsovalentSRv6SIDManager"))
 }
 
-func newNodeResource(lc hive.Lifecycle, c client.Clientset, cfg Config) resource.Resource[*slim_core_v1.Node] {
+func newNodeResource(lc cell.Lifecycle, c client.Clientset, cfg Config) resource.Resource[*slim_core_v1.Node] {
 	if !cfg.Enabled {
 		return nil
 	}

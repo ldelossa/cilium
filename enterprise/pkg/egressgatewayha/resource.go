@@ -11,7 +11,6 @@
 package egressgatewayha
 
 import (
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -28,7 +27,7 @@ var PolicyCell = cell.Module(
 
 type Policy = v1.IsovalentEgressGatewayPolicy
 
-func newPolicyResource(lc hive.Lifecycle, c client.Clientset) resource.Resource[*Policy] {
+func newPolicyResource(lc cell.Lifecycle, c client.Clientset) resource.Resource[*Policy] {
 	if !c.IsEnabled() {
 		return nil
 	}

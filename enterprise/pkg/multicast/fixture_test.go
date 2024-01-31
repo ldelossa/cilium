@@ -82,7 +82,7 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 	}
 
 	f.hive = hive.New(
-		cell.Provide(func(lc hive.Lifecycle, c k8sClient.Clientset) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup] {
+		cell.Provide(func(lc cell.Lifecycle, c k8sClient.Clientset) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup] {
 			return resource.New[*isovalent_api_v1alpha1.IsovalentMulticastGroup](
 				lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentMulticastGroupList](
 					c.IsovalentV1alpha1().IsovalentMulticastGroups(),
@@ -90,7 +90,7 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 			)
 		}),
 
-		cell.Provide(func(lc hive.Lifecycle, c k8sClient.Clientset) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode] {
+		cell.Provide(func(lc cell.Lifecycle, c k8sClient.Clientset) resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode] {
 			return resource.New[*isovalent_api_v1alpha1.IsovalentMulticastNode](
 				lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentMulticastNodeList](
 					c.IsovalentV1alpha1().IsovalentMulticastNodes(),
@@ -98,7 +98,7 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 			)
 		}),
 
-		cell.Provide(func(lc hive.Lifecycle, c k8sClient.Clientset) resource.Resource[*k8sTypes.CiliumEndpoint] {
+		cell.Provide(func(lc cell.Lifecycle, c k8sClient.Clientset) resource.Resource[*k8sTypes.CiliumEndpoint] {
 			lw := utils.ListerWatcherFromTyped[*cilium_api_v2.CiliumEndpointList](c.CiliumV2().CiliumEndpoints(slim_corev1.NamespaceAll))
 			return resource.New[*k8sTypes.CiliumEndpoint](lc, lw,
 				resource.WithLazyTransform(func() runtime.Object {

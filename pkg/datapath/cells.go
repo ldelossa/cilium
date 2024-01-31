@@ -21,11 +21,11 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/modules"
 	"github.com/cilium/cilium/pkg/datapath/linux/utime"
+	"github.com/cilium/cilium/pkg/datapath/loader"
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/maps"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
@@ -122,9 +122,12 @@ var Cell = cell.Module(
 
 	// Synchronizes the userspace ipcache with the corresponding BPF map.
 	ipcache.Cell,
+
+	// Provides the loader, which compiles and loads the datapath programs.
+	loader.Cell,
 )
 
-func newWireguardAgent(lc hive.Lifecycle, localNodeStore *node.LocalNodeStore) *wg.Agent {
+func newWireguardAgent(lc cell.Lifecycle, localNodeStore *node.LocalNodeStore) *wg.Agent {
 	var wgAgent *wg.Agent
 	if option.Config.EnableWireguard {
 		if option.Config.EnableIPSec {
@@ -139,8 +142,8 @@ func newWireguardAgent(lc hive.Lifecycle, localNodeStore *node.LocalNodeStore) *
 			log.Fatalf("failed to initialize WireGuard: %s", err)
 		}
 
-		lc.Append(hive.Hook{
-			OnStop: func(hive.HookContext) error {
+		lc.Append(cell.Hook{
+			OnStop: func(cell.HookContext) error {
 				wgAgent.Close()
 				return nil
 			},
@@ -166,10 +169,11 @@ func newDatapath(params datapathParams) types.Datapath {
 		NodeMap:        params.NodeMap,
 		NodeAddressing: params.NodeAddressing,
 		BWManager:      params.BandwidthManager,
+		Loader:         params.Loader,
 	}, datapathConfig)
 
-	params.LC.Append(hive.Hook{
-		OnStart: func(hive.HookContext) error {
+	params.LC.Append(cell.Hook{
+		OnStart: func(cell.HookContext) error {
 			datapath.NodeIDs().RestoreNodeIDs()
 			return nil
 		},
@@ -181,7 +185,7 @@ func newDatapath(params datapathParams) types.Datapath {
 type datapathParams struct {
 	cell.In
 
-	LC      hive.Lifecycle
+	LC      cell.Lifecycle
 	WgAgent *wg.Agent
 
 	// Force map initialisation before loader. You should not use these otherwise.
@@ -197,7 +201,7 @@ type datapathParams struct {
 	// uses of it converted to Table[Device].
 	DeviceManager *linuxdatapath.DeviceManager
 
-	BandwidthManager bandwidth.Manager
+	BandwidthManager types.BandwidthManager
 
 	ModulesManager *modules.Manager
 
@@ -206,4 +210,6 @@ type datapathParams struct {
 	ConfigWriter types.ConfigWriter
 
 	TunnelConfig tunnel.Config
+
+	Loader loader.Loader
 }

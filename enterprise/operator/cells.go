@@ -19,7 +19,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/operator/cmd"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
@@ -33,7 +32,7 @@ var (
 		// enterprise-only cells here
 
 		cell.Decorate(
-			func(lc *cmd.LeaderLifecycle) hive.Lifecycle {
+			func(lc *cmd.LeaderLifecycle) cell.Lifecycle {
 				return lc
 			},
 

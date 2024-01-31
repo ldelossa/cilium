@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
@@ -57,7 +56,7 @@ type OperatorParams struct {
 	Nodes         resource.Resource[*cilium_api_v2.CiliumNode]
 	Healthchecker healthcheck.Healthchecker
 
-	Lifecycle hive.Lifecycle
+	Lifecycle cell.Lifecycle
 }
 
 type OperatorManager struct {
@@ -132,8 +131,8 @@ func newEgressGatewayOperatorManager(p OperatorParams) *OperatorManager {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	p.Lifecycle.Append(hive.Hook{
-		OnStart: func(hc hive.HookContext) error {
+	p.Lifecycle.Append(cell.Hook{
+		OnStart: func(hc cell.HookContext) error {
 			t, err := trigger.NewTrigger(trigger.Parameters{
 				Name:        "egress_gateway_ha_operator_reconciliation",
 				MinInterval: p.Config.EgressGatewayHAReconciliationTriggerInterval,
@@ -158,7 +157,7 @@ func newEgressGatewayOperatorManager(p OperatorParams) *OperatorManager {
 
 			return nil
 		},
-		OnStop: func(hc hive.HookContext) error {
+		OnStop: func(hc cell.HookContext) error {
 			cancel()
 			return nil
 		},

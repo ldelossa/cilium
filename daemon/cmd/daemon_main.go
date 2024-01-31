@@ -36,7 +36,6 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
-	"github.com/cilium/cilium/pkg/datapath/linux/bandwidth"
 	"github.com/cilium/cilium/pkg/datapath/linux/bigtcp"
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
@@ -1621,7 +1620,7 @@ var daemonCell = cell.Module(
 type daemonParams struct {
 	cell.In
 
-	Lifecycle            hive.Lifecycle
+	Lifecycle            cell.Lifecycle
 	Clientset            k8sClient.Clientset
 	Datapath             datapath.Datapath
 	WGAgent              *wireguard.Agent `optional:"true"`
@@ -1650,7 +1649,6 @@ type daemonParams struct {
 	ServiceManager       service.ServiceManager
 	L7Proxy              *proxy.Proxy
 	EnvoyXdsServer       envoy.XDSServer
-	EnvoyBackendSyncer   *envoy.EnvoyServiceBackendSyncer
 	DB                   *statedb.DB
 	APILimiterSet        *rate.APILimiterSet
 	AuthManager          *auth.AuthManager
@@ -1668,7 +1666,7 @@ type daemonParams struct {
 	ClusterInfo         cmtypes.ClusterInfo
 	BigTCPConfig        *bigtcp.Configuration
 	TunnelConfig        tunnel.Config
-	BandwidthManager    bandwidth.Manager
+	BandwidthManager    datapath.BandwidthManager
 	IPsecKeyCustodian   datapath.IPsecKeyCustodian
 	MTU                 mtu.MTU
 }
@@ -1689,8 +1687,8 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 	var daemon *Daemon
 	var wg sync.WaitGroup
 
-	params.Lifecycle.Append(hive.Hook{
-		OnStart: func(hive.HookContext) error {
+	params.Lifecycle.Append(cell.Hook{
+		OnStart: func(cell.HookContext) error {
 			d, restoredEndpoints, err := newDaemon(daemonCtx, cleaner, &params)
 			if err != nil {
 				return fmt.Errorf("daemon creation failed: %w", err)
@@ -1704,7 +1702,7 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 
 			return nil
 		},
-		OnStop: func(hive.HookContext) error {
+		OnStop: func(cell.HookContext) error {
 			cancelDaemonCtx()
 			if daemon.statusCollector != nil {
 				daemon.statusCollector.Close()
@@ -1892,10 +1890,10 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	}
 }
 
-func newRestorerPromise(lc hive.Lifecycle, daemonPromise promise.Promise[*Daemon]) promise.Promise[endpointstate.Restorer] {
+func newRestorerPromise(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon]) promise.Promise[endpointstate.Restorer] {
 	resolver, promise := promise.New[endpointstate.Restorer]()
-	lc.Append(hive.Hook{
-		OnStart: func(ctx hive.HookContext) error {
+	lc.Append(cell.Hook{
+		OnStart: func(ctx cell.HookContext) error {
 			daemon, err := daemonPromise.Await(context.Background())
 			if err != nil {
 				resolver.Reject(err)

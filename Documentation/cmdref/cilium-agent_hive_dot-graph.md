@@ -42,6 +42,8 @@ cilium-agent hive dot-graph [flags]
       --enable-cilium-enterprise-api-server-access strings           List of cilium enterprise API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-health-api-server-access strings               List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs
+      --enable-gateway-api                                           Enables Envoy secret sync for Gateway API related TLS secrets
+      --enable-ingress-controller                                    Enables Envoy secret sync for Ingress controller related TLS secrets
       --enable-inter-cluster-snat                                    Enable inter-cluster SNAT, to support overlapping PodCIDRs
       --enable-ipv4-big-tcp                                          Enable IPv4 BIG TCP option which increases device's maximum GRO/GSO limits for IPv4
       --enable-ipv6-big-tcp                                          Enable IPv6 BIG TCP option which increases device's maximum GRO/GSO limits for IPv6
@@ -53,10 +55,13 @@ cilium-agent hive dot-graph [flags]
       --enable-multi-network                                         Enable support for multiple pod networks
       --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
+      --envoy-secrets-namespace string                               EnvoySecretsNamespace is the namespace having secrets used by CEC
       --external-dns-proxy                                           Enable Cilium agent to use an external DNS proxy
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
       --feature-gates strings                                        Slice of alpha features to enable, passing AllAlpha, AllBeta, AllLimited enables all alpha, beta and limited features (respectively).
+      --gateway-api-secrets-namespace string                         GatewayAPISecretsNamespace is the namespace having tls secrets used by CEC, originating from Gateway API
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
+      --ingress-secrets-namespace string                             IngressSecretsNamespace is the namespace having tls secrets used by CEC, originating from Ingress controller
       --iptables-lock-timeout duration                               Time to pass to each iptables invocation to wait for xtables lock acquisition (default 5s)
       --iptables-random-fully                                        Set iptables flag random-fully on masquerading rules
       --k8s-api-server string                                        Kubernetes API server URL
