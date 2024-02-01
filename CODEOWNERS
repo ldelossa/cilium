@@ -627,6 +627,7 @@ Vagrantfile @cilium/ci-structure
 /.github/**/*enterprise* @isovalent/infrastructure
 /.github/workflows/enterprise-clustermesh-*yaml @isovalent/clustermesh
 /.github/workflows/enterprise-container-scan-twistcli.yaml @isovalent/security
+/.github/workflows/enterprise-*fqdn-ha*.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-kind.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
