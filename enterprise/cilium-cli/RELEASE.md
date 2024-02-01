@@ -10,9 +10,9 @@ Release process and checklist for `cilium-cli` enterprise edition.
 ### Define environment variables
 
 Define the `OSS_VERSION`, `CEE_VERSION` and `CEE_VERSION_TAG` variables. For
-example, if you are releasing v0.15.21-cee.1 based on v0.15.21 OSS:
+example, if you are releasing v0.15.22-cee.1 based on v0.15.22 OSS:
 
-    export OSS_VERSION=v0.15.21
+    export OSS_VERSION=v0.15.22
     export CEE_VERSION=${OSS_VERSION}-cee.1
     export CEE_VERSION_TAG=enterprise/cilium-cli/${CEE_VERSION}
 
@@ -49,7 +49,7 @@ Set the commit you want to tag:
 
     export COMMIT_SHA=<commit-sha-to-release>
 
-Usually this is the most recent commit on `main`, i.e.
+Usually this is the most recent commit on `main-ce`, i.e.
 
     export COMMIT_SHA=$(git rev-parse isovalent/main-ce)
 
