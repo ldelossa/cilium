@@ -42,11 +42,8 @@ _If you need help: ask in #enterprise-release._
         git cherry-pick --signoff ${LAST_OSS_COMMIT_SYNCED}..${OSS_RELEASE_COMMIT_SHA}
 
   - [ ] Resolve all conflicts that come up.
-    - First conflict is typically in the "image digests" commit. For this one, we can mostly ignore the upstream changes; Cilium-CEE has its own different digests.
-      - [ ] `git checkout --ours install/`
-      - [ ] `git add install/`
-      - [ ] `git cherry-pick --continue`
-      - For `>=v1.11-ce` you'll encounter this in `Documentation` also, you can equally discard these.
+    - First conflict is typically in the "Update image digests" commit. Skip this one since it contains OSS image digests.
+      - [ ] `git cherry-pick --skip`
     - Subsequent conflicts may require more indepth manual resolution.
       - Sometimes, we may have already backported the change; can `git cherry-pick --skip`.
       - Sometimes, there may be minor conflicts in files that contain versions.
