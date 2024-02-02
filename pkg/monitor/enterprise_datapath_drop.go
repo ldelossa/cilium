@@ -12,7 +12,10 @@ package monitor
 
 func init() {
 	// @@ source files list begin
-	var enterpriseSourceFileNames = map[int]string{}
+	var enterpriseSourceFileNames = map[int]string{
+		// enterprise source files from bpf/
+		201: "enterprise_nodeport.h",
+	}
 
 	for k, v := range enterpriseSourceFileNames {
 		sourceFileNames[k] = v
