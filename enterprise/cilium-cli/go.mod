@@ -5,8 +5,8 @@ go 1.21.6
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cilium/cilium v1.15.0-rc.1
-	github.com/cilium/cilium-cli v0.15.21
+	github.com/cilium/cilium v1.15.0
+	github.com/cilium/cilium-cli v0.15.22
 	github.com/cloudflare/cfssl v1.6.4
 	github.com/google/go-cmp v0.6.0
 	github.com/stretchr/testify v1.8.4
@@ -39,7 +39,7 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20240118151318-8589b2863cfa // indirect
+	github.com/cilium/charts v0.0.0-20240131194518-c3dab910c790 // indirect
 	github.com/cilium/ebpf v0.12.4-0.20240124115601-f95957d1669c // indirect
 	github.com/cilium/hubble v0.13.0 // indirect
 	github.com/cilium/proxy v0.0.0-20231031145409-f19708f3d018 // indirect
@@ -151,7 +151,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc5 // indirect
 	github.com/opentracing/opentracing-go v1.2.1-0.20220228012449-10b1cf09e00b // indirect
-	github.com/osrg/gobgp/v3 v3.22.0 // indirect
+	github.com/osrg/gobgp/v3 v3.23.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/petermattis/goid v0.0.0-20230904192822-1876fd5063bc // indirect
