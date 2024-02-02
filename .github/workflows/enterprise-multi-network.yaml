@@ -155,7 +155,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@4aa6347c532075df28027772fa1e4ec2f7415341 # v0.15.20
+        uses: cilium/cilium-cli@b0955d62f5d0fd22449c568c6be921f46b66f603 # v0.15.22
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -163,11 +163,11 @@ jobs:
           binary-dir: ./
 
       - name: Provision LVH VMs
-        uses: cilium/little-vm-helper@8410a93e544b7e180a2365e5fdab0724a39bc02a # v0.0.13
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
         with:
           test-name: enterprise-multi-network
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          image-version: '6.0-20230824.161940'
+          image-version: '6.1-20240201.165956'
           host-mount: ./
           cpu: 4
           install-dependencies: 'true'
@@ -183,7 +183,7 @@ jobs:
           done
 
       - name: Run connectivity tests
-        uses: cilium/little-vm-helper@8410a93e544b7e180a2365e5fdab0724a39bc02a # v0.0.13
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
         with:
           provision: 'false'
           cmd: |
@@ -239,7 +239,7 @@ jobs:
 
       - name: Fetch artifacts
         if: ${{ !success() }}
-        uses: cilium/little-vm-helper@8410a93e544b7e180a2365e5fdab0724a39bc02a # v0.0.13
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
         with:
           provision: 'false'
           cmd: |

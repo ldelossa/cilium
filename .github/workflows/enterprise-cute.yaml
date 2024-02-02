@@ -29,7 +29,7 @@ env:
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  kubectl_version: v1.29.0
+  kubectl_version: v1.29.1
   upload_dir: github-upload
   artifact_retention_days: 15
 
@@ -294,7 +294,7 @@ jobs:
 
       - name: Login to Azure
         if: steps.cute_props.outputs.provider == 'azure'
-        uses: azure/login@e15b166166a8746d1a47596803bd8c1b595455cf # v1.6.0
+        uses: azure/login@cb79c773a3cfa27f31f25eb3f677781210c9ce3d # v1.6.1
         with:
           creds: ${{ secrets.AZURE_PR_SP_CREDS }}
 
