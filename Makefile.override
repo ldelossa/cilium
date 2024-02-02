@@ -12,6 +12,9 @@ SUBDIRS_CILIUM_CONTAINER := enterprise/cilium-dbg enterprise/daemon cilium-healt
 SUBDIR_OPERATOR_CONTAINER := enterprise/operator
 SUBDIR_RELAY_CONTAINER := enterprise/hubble-relay
 
+BPF_SOURCE_NAMES_TO_IDS := "bpf/source_names_to_ids.h bpf/enterprise_source_names_to_ids.h"
+GO_SOURCE_NAMES_TO_IDS := "pkg/monitor/datapath_drop.go pkg/monitor/enterprise_datapath_drop.go"
+
 ifdef LIBNETWORK_PLUGIN
 SUBDIRS_CILIUM_CONTAINER += plugins/cilium-docker
 endif

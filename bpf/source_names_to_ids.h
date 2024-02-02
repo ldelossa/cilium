@@ -8,6 +8,8 @@
 		return id;				\
 	} while (0)
 
+#include "enterprise_source_names_to_ids.h"
+
 /*
  * The __source_file_name_to_id function is used inside lib/drop.h to encode
  * source file information with drop info messages. It must be always inlined,
@@ -19,6 +21,11 @@
 static __always_inline int
 __source_file_name_to_id(const char *const header_name)
 {
+	int ret = __enterprise_source_file_name_to_id(header_name);
+
+	if (ret != 0)
+		return ret;
+
 	/* @@ source files list begin */
 
 	/* source files from bpf/ */
