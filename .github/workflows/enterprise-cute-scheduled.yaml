@@ -94,6 +94,7 @@ jobs:
           [[ -n "${{ matrix.cute.dir }}" ]] && dir="${{ matrix.cute.dir }}"
           umbrella="false"
           [[ -n "${{ matrix.cute.umbrella }}" ]] && umbrella="${{ matrix.cute.umbrella }}"
-          args="repo=${{ matrix.cute.repo }}&dir=$dir&region=${{ matrix.cute.region }}&umbrella=$umbrella&deploy=stable"
+          # Notification will be send to the `weaver-in` Slack channel and then routed to a proper destination channel
+          args="repo=${{ matrix.cute.repo }}&dir=$dir&region=${{ matrix.cute.region }}&umbrella=$umbrella&deploy=stable&notify=C02T57KV69Y"
           echo "Triggering workflow for CuTE: $args"
           gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
