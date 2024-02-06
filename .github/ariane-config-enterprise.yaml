@@ -1,0 +1,28 @@
+triggers:
+  /test:
+    workflows:
+    - enterprise-clustermesh-overlapping-podcidr.yaml
+    - enterprise-fqdn-ha.yaml
+    - enterprise-multi-network.yaml
+  /ci-clustermesh:
+    workflows:
+    - enterprise-clustermesh-overlapping-podcidr.yaml
+  # `(.+)` is regex capture group that is used as `extra-args` inputs parameter in the CuTE workflow
+  # For example: `/cute bloomberg` or `/cute form3/MAKS`
+  /cute (.+):
+    workflows:
+    - enterprise-cute.yaml
+  /ci-multi-network:
+    workflows:
+    - enterprise-multi-network.yaml
+  /ci-fqdn-ha:
+    workflows:
+    - enterprise-fqdn-ha.yaml
+
+workflows:
+  enterprise-clustermesh-overlapping-podcidr.yaml:
+    paths-ignore-regex: (test|Documentation)/
+  enterprise-fqdn-ha.yaml:
+    paths-ignore-regex: (test|Documentation)/
+  enterprise-multi-network.yaml:
+    paths-ignore-regex: (test|Documentation)/
