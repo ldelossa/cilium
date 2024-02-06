@@ -19,15 +19,12 @@ jobs:
           {name: clustermesh-apiserver, dockerfile: ./images/clustermesh-apiserver/Dockerfile},
           {name: docker-plugin, dockerfile: ./images/cilium-docker-plugin/Dockerfile},
           {name: hubble-relay, dockerfile: ./images/hubble-relay/Dockerfile},
-          {name: kvstoremesh, dockerfile: ./images/kvstoremesh/Dockerfile},
           {name: operator-generic, dockerfile: ./images/operator/Dockerfile},
         ]
         branch: [v1.12-ce, v1.13-ce, v1.14-ce, v1.15-ce]
-        exclude:
+        include:
           - image: {name: kvstoremesh, dockerfile: ./images/kvstoremesh/Dockerfile}
-            branch: v1.12-ce
-          - image: {name: kvstoremesh, dockerfile: ./images/kvstoremesh/Dockerfile}
-            branch: v1.13-ce
+            branch: v1.14-ce
     steps:
       - name: Checkout code to scan
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
