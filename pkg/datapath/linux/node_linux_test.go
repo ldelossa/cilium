@@ -21,7 +21,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/cidr"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
-	"github.com/cilium/cilium/pkg/datapath/fake"
+	fakeTypes "github.com/cilium/cilium/pkg/datapath/fake/types"
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -31,7 +31,6 @@ import (
 	"github.com/cilium/cilium/pkg/netns"
 	"github.com/cilium/cilium/pkg/node"
 	nodeaddressing "github.com/cilium/cilium/pkg/node/addressing"
-	"github.com/cilium/cilium/pkg/node/types"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/sysctl"
@@ -126,17 +125,17 @@ func (s *linuxPrivilegedBaseTestSuite) SetUpTest(c *check.C, addressing datapath
 }
 
 func (s *linuxPrivilegedIPv6OnlyTestSuite) SetUpTest(c *check.C) {
-	addressing := fake.NewIPv6OnlyNodeAddressing()
+	addressing := fakeTypes.NewIPv6OnlyNodeAddressing()
 	s.linuxPrivilegedBaseTestSuite.SetUpTest(c, addressing, true, false)
 }
 
 func (s *linuxPrivilegedIPv4OnlyTestSuite) SetUpTest(c *check.C) {
-	addressing := fake.NewIPv4OnlyNodeAddressing()
+	addressing := fakeTypes.NewIPv4OnlyNodeAddressing()
 	s.linuxPrivilegedBaseTestSuite.SetUpTest(c, addressing, false, true)
 }
 
 func (s *linuxPrivilegedIPv4AndIPv6TestSuite) SetUpTest(c *check.C) {
-	addressing := fake.NewNodeAddressing()
+	addressing := fakeTypes.NewNodeAddressing()
 	s.linuxPrivilegedBaseTestSuite.SetUpTest(c, addressing, true, true)
 }
 
@@ -333,10 +332,10 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateEncapsulation(c *check.C) {
 }
 
 func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateEncapsulationWithOverride(c *check.C) {
-	s.commonNodeUpdateEncapsulation(c, false, func(*types.Node) bool { return true })
+	s.commonNodeUpdateEncapsulation(c, false, func(*nodeTypes.Node) bool { return true })
 }
 
-func (s *linuxPrivilegedBaseTestSuite) commonNodeUpdateEncapsulation(c *check.C, encap bool, override func(*types.Node) bool) {
+func (s *linuxPrivilegedBaseTestSuite) commonNodeUpdateEncapsulation(c *check.C, encap bool, override func(*nodeTypes.Node) bool) {
 	ip4Alloc1 := cidr.MustParseCIDR("5.5.5.0/24")
 	ip4Alloc2 := cidr.MustParseCIDR("6.6.6.0/24")
 	ip6Alloc1 := cidr.MustParseCIDR("2001:aaaa::/96")

@@ -204,10 +204,6 @@ func (k *K8sWatcher) podsInit(slimClient slimclientset.Interface, asyncControlle
 			close(k.podStoreSet)
 		})
 
-		if option.Config.LegacyTurnOffK8sEventHandover {
-			return
-		}
-
 		// Replace pod controller by only receiving events from our own
 		// node once we are connected to the kvstore.
 		<-kvstore.Connected()
@@ -880,7 +876,7 @@ func (k *K8sWatcher) updatePodHostData(oldPod, newPod *slim_corev1.Pod, oldPodIP
 		return fmt.Errorf("no/invalid HostIP: %s", newPod.Status.HostIP)
 	}
 
-	hostKey := node.GetIPsecKeyIdentity()
+	hostKey := node.GetEndpointEncryptKeyIndex()
 
 	k8sMeta := &ipcache.K8sMetadata{
 		Namespace: newPod.Namespace,

@@ -33,6 +33,13 @@ import (
 	"github.com/cilium/cilium/pkg/proxy"
 )
 
+const (
+	ciliumBPFMetadataListenerFilterName = "cilium.bpf_metadata"
+	ciliumNetworkFilterName             = "cilium.network"
+	ciliumL7FilterName                  = "cilium.l7policy"
+	envoyRouterFilterName               = "envoy.filters.http.router"
+)
+
 type cecResourceParser struct {
 	logger        logrus.FieldLogger
 	portAllocator PortAllocator
@@ -87,12 +94,25 @@ type PortAllocator interface {
 	ReleaseProxyPort(name string) error
 }
 
-// parseResources parses all supported Envoy resource types from CiliumEnvoyConfig CRD to Resources
-// type cecNamespace and cecName parameters, if not empty, will be prepended to the Envoy resource
-// names.
-// Parameter `newResources` is passed as `true` when parsing resources that are being added or are the new version of the resources being updated,
-// and as `false` if the resources are being removed or are the old version of the resources being updated.
-func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, xdsResources []cilium_v2.XDSResource, validate bool, isL7LB bool, useOriginalSourceAddr bool, newResources bool) (envoy.Resources, error) {
+// parseResources parses all supported Envoy resource types from CiliumEnvoyConfig CRD to the internal type `envoy.Resources`.
+//
+// - Qualify names by prepending the namespace and name of the origin CEC to the Envoy resource names.
+// - Validate resources
+// - Inject Cilium specificas into the Listeners (BPF Metadata listener filter, Network filter & L7 filter)
+// - Assign a random proxy port to Listeners that don't have an explicit address specified.
+//
+// Parameters:
+//   - `cecNamespace` and `cecName` will be prepended to the Envoy resource names.
+//   - `xdsResources` are the resources from the CiliumEnvoyConfig or CiliumClusterwideEnvoyConfig.
+//   - `isL7LB` defines whether these resources are used for L7 loadbalancing. If `true`, the Envoy Cilium Network- and L7 filters are always
+//     added to all non-internal Listeners. In addition, the info gets passed to the Envoy CIlium BPF Metadata listener filter on all Listeners.
+//   - `useOriginalSourceAddr` is passed to the Envoy Cilium BPF Metadata listener filter on all Listeners.
+//   - `newResources` is passed as `true` when parsing resources that are being added or are the new version of the resources being updated,
+//     and as `false` if the resources are being removed or are the old version of the resources being updated. Only 'new' resources are validated.
+func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, xdsResources []cilium_v2.XDSResource, isL7LB bool, useOriginalSourceAddr bool, newResources bool) (envoy.Resources, error) {
+	// only validate new  resources - old ones are already applied
+	validate := newResources
+
 	resources := envoy.Resources{}
 	for _, res := range xdsResources {
 		// Skip empty TypeURLs, which are left behind when Unmarshaling resource JSON fails
@@ -127,18 +147,17 @@ func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, 
 				listener.EnableReusePort = &wrapperspb.BoolValue{Value: false}
 			}
 
-			// Figure out if this is an internal listener
-			isInternalListener := listener.GetInternalListener() != nil
-
-			// Only inject Cilium filters if Cilium allocates listener address
-			injectCiliumFilters := listener.GetAddress() == nil && !isInternalListener
+			// Only inject Cilium filters if all of the following conditions are fulfilled
+			// * Cilium allocates listener address or it's a listener for a L7 loadbalancer
+			// * It's not an internal listener
+			injectCiliumFilters := (listener.GetAddress() == nil || isL7LB) && listener.GetInternalListener() == nil
 
 			// Fill in SDS & RDS config source if unset
 			for _, fc := range listener.FilterChains {
 				fillInTransportSocketXDS(cecNamespace, cecName, fc.TransportSocket)
 				foundCiliumNetworkFilter := false
 				for i, filter := range fc.Filters {
-					if filter.Name == "cilium.network" {
+					if filter.Name == ciliumNetworkFilterName {
 						foundCiliumNetworkFilter = true
 					}
 					tc := filter.GetTypedConfig()
@@ -199,16 +218,14 @@ func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, 
 					default:
 						continue
 					}
-					if injectCiliumFilters {
-						if !foundCiliumNetworkFilter {
-							// Inject Cilium network filter just before the HTTP Connection Manager or TCPProxy filter
-							fc.Filters = append(fc.Filters[:i+1], fc.Filters[i:]...)
-							fc.Filters[i] = &envoy_config_listener.Filter{
-								Name: "cilium.network",
-								ConfigType: &envoy_config_listener.Filter_TypedConfig{
-									TypedConfig: toAny(&cilium.NetworkFilter{}),
-								},
-							}
+					if injectCiliumFilters && !foundCiliumNetworkFilter {
+						// Inject Cilium network filter just before the HTTP Connection Manager or TCPProxy filter
+						fc.Filters = append(fc.Filters[:i+1], fc.Filters[i:]...)
+						fc.Filters[i] = &envoy_config_listener.Filter{
+							Name: ciliumNetworkFilterName,
+							ConfigType: &envoy_config_listener.Filter_TypedConfig{
+								TypedConfig: toAny(&cilium.NetworkFilter{}),
+							},
 						}
 					}
 					break // Done with this filter chain
@@ -387,7 +404,7 @@ func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, 
 			// This must be done after listener address/port is already set.
 			found := false
 			for _, lf := range listener.ListenerFilters {
-				if lf.Name == "cilium.bpf_metadata" {
+				if lf.Name == ciliumBPFMetadataListenerFilterName {
 					found = true
 					break
 				}
@@ -396,7 +413,7 @@ func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, 
 				// Get the listener port from the listener's (main) address
 				port := uint16(listener.GetAddress().GetSocketAddress().GetPortValue())
 
-				listener.ListenerFilters = append(listener.ListenerFilters, r.getListenerFilter(useOriginalSourceAddr, isL7LB, port))
+				listener.ListenerFilters = append(listener.ListenerFilters, r.getBPFMetadataListenerFilter(useOriginalSourceAddr, isL7LB, port))
 			}
 		}
 
@@ -411,7 +428,7 @@ func (r *cecResourceParser) parseResources(cecNamespace string, cecName string, 
 }
 
 // 'l7lb' triggers the upstream mark to embed source pod EndpointID instead of source security ID
-func (r *cecResourceParser) getListenerFilter(useOriginalSourceAddr bool, l7lb bool, proxyPort uint16) *envoy_config_listener.ListenerFilter {
+func (r *cecResourceParser) getBPFMetadataListenerFilter(useOriginalSourceAddr bool, l7lb bool, proxyPort uint16) *envoy_config_listener.ListenerFilter {
 	conf := &cilium.BpfMetadata{
 		IsIngress:                false,
 		UseOriginalSourceAddress: useOriginalSourceAddr,
@@ -444,12 +461,12 @@ func (r *cecResourceParser) getListenerFilter(useOriginalSourceAddr bool, l7lb b
 			// Enforce ingress policy for Ingress
 			conf.EnforcePolicyOnL7Lb = true
 		}
-		r.logger.Debugf("cilium.bpf_metadata: ipv4_source_address: %s", conf.GetIpv4SourceAddress())
-		r.logger.Debugf("cilium.bpf_metadata: ipv6_source_address: %s", conf.GetIpv6SourceAddress())
+		r.logger.Debugf("%s: ipv4_source_address: %s", ciliumBPFMetadataListenerFilterName, conf.GetIpv4SourceAddress())
+		r.logger.Debugf("%s: ipv6_source_address: %s", ciliumBPFMetadataListenerFilterName, conf.GetIpv6SourceAddress())
 	}
 
 	return &envoy_config_listener.ListenerFilter{
-		Name: "cilium.bpf_metadata",
+		Name: ciliumBPFMetadataListenerFilterName,
 		ConfigType: &envoy_config_listener.ListenerFilter_TypedConfig{
 			TypedConfig: toAny(conf),
 		},
@@ -522,9 +539,9 @@ func injectCiliumL7Filter(hcmConfig *envoy_config_http.HttpConnectionManager) bo
 
 	for j, httpFilter := range hcmConfig.HttpFilters {
 		switch httpFilter.Name {
-		case "cilium.l7policy":
+		case ciliumL7FilterName:
 			foundCiliumL7Filter = true
-		case "envoy.filters.http.router":
+		case envoyRouterFilterName:
 			if !foundCiliumL7Filter {
 				hcmConfig.HttpFilters = append(hcmConfig.HttpFilters[:j+1], hcmConfig.HttpFilters[j:]...)
 				hcmConfig.HttpFilters[j] = envoy.GetCiliumHttpFilter()

@@ -146,7 +146,7 @@ func TestSharedIngressTranslator_getBackendServices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			i := &defaultTranslator{}
+			i := &cecTranslator{}
 			res := i.getBackendServices(tt.args.m)
 			require.Equal(t, tt.want, res)
 		})
@@ -158,13 +158,9 @@ func TestSharedIngressTranslator_getServices(t *testing.T) {
 		name      string
 		namespace string
 	}
-	type args struct {
-		in0 *model.Model
-	}
 	tests := []struct {
 		name   string
 		fields fields
-		args   args
 		want   []*ciliumv2.ServiceListener
 	}{
 		{
@@ -183,20 +179,15 @@ func TestSharedIngressTranslator_getServices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			i := &defaultTranslator{
-				name:      tt.fields.name,
-				namespace: tt.fields.namespace,
-			}
-			got := i.getServices(tt.args.in0)
+			i := &cecTranslator{}
+			got := i.getServices(tt.fields.namespace, tt.fields.name)
 			require.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestSharedIngressTranslator_getHTTPRouteListenerProxy(t *testing.T) {
-	i := &defaultTranslator{
-		name:             "cilium-ingress",
-		namespace:        "kube-system",
+	i := &cecTranslator{
 		secretsNamespace: "cilium-secrets",
 		useProxyProtocol: true,
 	}
@@ -226,9 +217,7 @@ func TestSharedIngressTranslator_getHTTPRouteListenerProxy(t *testing.T) {
 }
 
 func TestSharedIngressTranslator_getHTTPRouteListener(t *testing.T) {
-	i := &defaultTranslator{
-		name:             "cilium-ingress",
-		namespace:        "kube-system",
+	i := &cecTranslator{
 		secretsNamespace: "cilium-secrets",
 	}
 
@@ -340,7 +329,7 @@ func TestSharedIngressTranslator_getClusters(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		i := &defaultTranslator{}
+		i := &cecTranslator{}
 
 		t.Run(tt.name, func(t *testing.T) {
 			res := i.getClusters(tt.args.m)
@@ -429,10 +418,7 @@ func TestSharedIngressTranslator_getEnvoyHTTPRouteConfiguration(t *testing.T) {
 		},
 	}
 
-	defT := &defaultTranslator{
-		name:      "cilium-ingress",
-		namespace: "kube-system",
-	}
+	defT := &cecTranslator{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -547,7 +533,6 @@ func envoyHTTPSRouteRedirect() *envoy_config_route_v3.Route_Redirect {
 }
 
 func withAuthority(match *envoy_config_route_v3.RouteMatch, regex string) *envoy_config_route_v3.RouteMatch {
-
 	authorityHeader := &envoy_config_route_v3.HeaderMatcher{
 		Name: ":authority",
 		HeaderMatchSpecifier: &envoy_config_route_v3.HeaderMatcher_StringMatch{
@@ -614,9 +599,7 @@ func TestSharedIngressTranslator_getResources(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			i := &defaultTranslator{
-				name: "cilium-ingress",
-			}
+			i := &cecTranslator{}
 			got := i.getResources(tt.args.m)
 			require.Lenf(t, got, tt.expected, "expected %d resources, got %d", tt.expected, len(got))
 

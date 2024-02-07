@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package fake
+package types
 
 import (
 	"context"
@@ -24,10 +24,10 @@ type FakeDatapath struct {
 
 // NewDatapath returns a new fake datapath
 func NewDatapath() *FakeDatapath {
-	return newDatapath(NewNodeAddressing())
+	return NewDatapathWithNodeAddressing(NewNodeAddressing())
 }
 
-func newDatapath(na datapath.NodeAddressing) *FakeDatapath {
+func NewDatapathWithNodeAddressing(na datapath.NodeAddressing) *FakeDatapath {
 	return &FakeDatapath{
 		node:           NewNodeHandler(),
 		nodeAddressing: na,

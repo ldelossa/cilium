@@ -72,23 +72,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '4.19-20240110.080621'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: '4.19-20240201.165956'
             ci-kernel: '419'
-          # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '5.4-20240110.080621'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: '5.4-20240201.165956'
             ci-kernel: '54'
-          # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '5.10-20240110.080621'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: 'rhel8-20240201.165956'
+            ci-kernel: '54'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: '5.10-20240201.165956'
             ci-kernel: '510'
-          # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '5.15-20240110.080621'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: '5.15-20240201.165956'
             ci-kernel: '510'
-          # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: '6.1-20240110.080621'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: '6.1-20240201.165956'
             ci-kernel: '61'
-          # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          - kernel: 'bpf-next-20240122.013132'
+          # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
+          - kernel: 'bpf-next-20240204.012837'
             ci-kernel: 'netnext'
     timeout-minutes: 60
     steps:
@@ -101,7 +104,7 @@ jobs:
           persist-credentials: false
 
       - name: Provision LVH VMs
-        uses: cilium/little-vm-helper@8410a93e544b7e180a2365e5fdab0724a39bc02a # v0.0.13
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
         with:
           test-name: datapath-bpf-complexity
           image: 'complexity-test'
@@ -120,7 +123,7 @@ jobs:
             go${{ env.go-version }} download
 
       - name: Run verifier tests
-        uses: cilium/little-vm-helper@8410a93e544b7e180a2365e5fdab0724a39bc02a # v0.0.13
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
         with:
           provision: 'false'
           cmd: |
@@ -130,7 +133,7 @@ jobs:
 
       - name: Fetch artifacts
         if: ${{ !success() }}
-        uses: cilium/little-vm-helper@8410a93e544b7e180a2365e5fdab0724a39bc02a # v0.0.13
+        uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
         with:
           provision: 'false'
           cmd: |

@@ -150,10 +150,6 @@ data:
   cilium-endpoint-gc-interval: {{ include "validateDuration" .Values.operator.endpointGCInterval | quote }}
   nodes-gc-interval: {{ include "validateDuration" .Values.operator.nodeGCInterval | quote }}
 
-{{- if hasKey .Values.operator "skipCNPStatusStartupClean" }}
-  skip-cnp-status-startup-clean: "{{ .Values.operator.skipCNPStatusStartupClean }}"
-{{- end }}
-
 {{- if eq .Values.disableEndpointCRD true }}
   # Disable the usage of CiliumEndpoint CRD
   disable-endpoint-crd: "true"
@@ -585,13 +581,9 @@ data:
 
     {{- if and .Values.encryption.ipsec.mountPath .Values.encryption.ipsec.keyFile }}
   ipsec-key-file: {{ .Values.encryption.ipsec.mountPath }}/{{ .Values.encryption.ipsec.keyFile }}
-    {{- else }}
-  ipsec-key-file: {{ .Values.encryption.mountPath }}/{{ .Values.encryption.keyFile }}
     {{- end }}
     {{- if .Values.encryption.ipsec.interface }}
   encrypt-interface: {{ .Values.encryption.ipsec.interface }}
-    {{- else if .Values.encryption.interface }}
-  encrypt-interface: {{ .Values.encryption.interface }}
     {{- end }}
     {{- if hasKey .Values.encryption.ipsec "keyWatcher" }}
   enable-ipsec-key-watcher: {{ .Values.encryption.ipsec.keyWatcher | quote }}
@@ -847,6 +839,7 @@ data:
   enable-well-known-identities: "false"
 {{- end }}
   enable-remote-node-identity: {{ .Values.remoteNodeIdentity | quote }}
+  enable-node-selector-labels: {{ .Values.nodeSelectorLabels | quote }}
 
 {{- if hasKey .Values "synchronizeK8sNodes" }}
   synchronize-k8s-nodes: {{ .Values.synchronizeK8sNodes | quote }}

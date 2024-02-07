@@ -80,8 +80,20 @@ type MapState interface {
 
 // mapState is a state of a policy map.
 type mapState struct {
-	allows map[Key]MapStateEntry
-	denies map[Key]MapStateEntry
+	allows mapStateMap
+	denies mapStateMap
+}
+
+// mapStateMap is a convience type representing the actual structure mapping
+// policymap keys to policymap entries.
+type mapStateMap map[Key]MapStateEntry
+
+func (m mapStateMap) insert(k Key, e MapStateEntry) {
+	if m == nil {
+		n := make(mapStateMap)
+		m = n
+	}
+	m[k] = e
 }
 
 type Identities interface {
@@ -293,10 +305,10 @@ func (ms *mapState) Get(k Key) (MapStateEntry, bool) {
 func (ms *mapState) Insert(k Key, v MapStateEntry) {
 	if v.IsDeny {
 		delete(ms.allows, k)
-		ms.denies[k] = v
+		ms.denies.insert(k, v)
 	} else {
 		delete(ms.denies, k)
-		ms.allows[k] = v
+		ms.allows.insert(k, v)
 	}
 }
 
@@ -398,13 +410,7 @@ func (ms *mapState) addDependentOnEntry(owner Key, e MapStateEntry, dependent Ke
 			changes.Old[owner] = e
 		}
 		e.AddDependent(dependent)
-		if e.IsDeny {
-			delete(ms.allows, owner)
-			ms.denies[owner] = e
-		} else {
-			delete(ms.denies, owner)
-			ms.allows[owner] = e
-		}
+		ms.Insert(owner, e)
 	}
 }
 
@@ -416,7 +422,7 @@ func (ms *mapState) RemoveDependent(owner Key, dependent Key, changes ChangeStat
 		changes.insertOldIfNotExists(owner, e)
 		e.RemoveDependent(dependent)
 		delete(ms.denies, owner)
-		ms.allows[owner] = e
+		ms.allows.insert(owner, e)
 		return
 	}
 
@@ -424,7 +430,7 @@ func (ms *mapState) RemoveDependent(owner Key, dependent Key, changes ChangeStat
 		changes.insertOldIfNotExists(owner, e)
 		e.RemoveDependent(dependent)
 		delete(ms.allows, owner)
-		ms.denies[owner] = e
+		ms.denies.insert(owner, e)
 	}
 }
 
