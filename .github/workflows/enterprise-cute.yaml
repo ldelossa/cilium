@@ -58,6 +58,7 @@ jobs:
           umbrella="false"
           deploy="current"
           upgrade=""
+          notify=""
           quay_charts_org="${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"
 
           input="${{ inputs.extra-args }}"
@@ -88,6 +89,9 @@ jobs:
             upgrade=*)
               upgrade="${a##*upgrade=}"
               ;;
+            notify=*)
+              notify="${a##*notify=}"
+              ;;
             *)
               echo -n "unknown param: $a"
               exit 1
@@ -105,6 +109,7 @@ jobs:
           echo deploy_type=$deploy >> $GITHUB_OUTPUT
           echo upgrade_type=$upgrade >> $GITHUB_OUTPUT
           echo oss=$oss >> $GITHUB_OUTPUT
+          echo notify=$notify >> $GITHUB_OUTPUT
           echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
 
       - name: Set helm repositories
@@ -217,6 +222,7 @@ jobs:
           echo "Upgrade type: ${{ steps.vars.outputs.upgrade_type }}"
           echo "Upgrade branch: ${{ steps.cute_props.outputs.upgrade_branch }}"
           echo "Upgrade stable version: ${{ steps.cute_props.outputs.upgrade_stable_version }}"
+          echo "Slack notification channel: ${{ steps.vars.outputs.cute_ref }}"
 
       - name: Install Cilium CLI
         run: |
@@ -438,6 +444,15 @@ jobs:
         uses: ./.github/actions/enterprise-cute-test-ipsec
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
+
+      - name: Send notification
+        if: ${{ always() && steps.vars.outputs.notify != '' }}
+        uses: slackapi/slack-github-action@6c661ce58804a1a20f6dc5fbee7f0381b469e001 # v1.25.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.CUTE_SLACK_BOT_TOKEN }}
+        with:
+          channel-id: '${{ steps.vars.outputs.notify }}'
+          slack-message: "*${{ steps.vars.outputs.cute_repo }} ${{ steps.vars.outputs.cute_dir }}* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ job.status == 'Success' && 'workflow passed!> :tada::tada::tada:' || 'workflow failed!> :rotating_light::rotating_light::rotating_light:' }}"
 
       - name: Collect sysdump
         if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
