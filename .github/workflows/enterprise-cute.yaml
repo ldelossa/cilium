@@ -222,7 +222,7 @@ jobs:
           echo "Upgrade type: ${{ steps.vars.outputs.upgrade_type }}"
           echo "Upgrade branch: ${{ steps.cute_props.outputs.upgrade_branch }}"
           echo "Upgrade stable version: ${{ steps.cute_props.outputs.upgrade_stable_version }}"
-          echo "Slack notification channel: ${{ steps.vars.outputs.cute_ref }}"
+          echo "Slack notification channel: ${{ steps.vars.outputs.notify }}"
 
       - name: Install Cilium CLI
         run: |
