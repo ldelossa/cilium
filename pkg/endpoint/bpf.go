@@ -202,7 +202,7 @@ func (p *proxyPolicy) GetListener() string {
 // Only called after a new desired policy has been computed.
 // Must be called with endpoint.mutex Lock()ed.
 func (e *Endpoint) addNewRedirectsFromDesiredPolicy(ingress bool, desiredRedirects map[string]uint16, proxyWaitGroup *completion.WaitGroup) (error, revert.FinalizeFunc, revert.RevertFunc) {
-	if option.Config.DryMode || e.IsProxyDisabled() {
+	if e.isProperty(PropertyFakeEndpoint) || e.IsProxyDisabled() {
 		return nil, nil, nil
 	}
 
@@ -244,28 +244,21 @@ func (e *Endpoint) addNewRedirectsFromDesiredPolicy(ingress bool, desiredRedirec
 
 				var redirectPort uint16
 
-				// Only create a redirect if the proxy is NOT running in a sidecar container
-				// with an HTTP parser. If running in a sidecar container and the parser
-				// is HTTP, just allow traffic to the port at L4 by setting the proxy port
-				// to 0.
-				if !e.hasSidecarProxy || l4.L7Parser != policy.ParserTypeHTTP {
-
-					pp := e.newProxyPolicy(l4, v, dstPort)
-					proxyPort, err, finalizeFunc, revertFunc := e.proxy.CreateOrUpdateRedirect(e.aliveCtx, &pp, proxyID, e, proxyWaitGroup)
-					if err != nil {
-						// Skip redirects that can not be created or updated.  This
-						// can happen when a listener is missing, for example when
-						// restarting and k8s delivers the CNP before the related
-						// CEC.
-						// Policy is regenerated when listeners are added or removed
-						// to fix this condition when the listener is available.
-						e.getLogger().WithField(logfields.Listener, pp.GetListener()).WithError(err).Debug("Redirect rule with missing listener skipped, will be applied once the listener is available")
-						continue
-					}
-					redirectPort = proxyPort
-					finalizeList.Append(finalizeFunc)
-					revertStack.Push(revertFunc)
+				pp := e.newProxyPolicy(l4, v, dstPort)
+				proxyPort, err, finalizeFunc, revertFunc := e.proxy.CreateOrUpdateRedirect(e.aliveCtx, &pp, proxyID, e, proxyWaitGroup)
+				if err != nil {
+					// Skip redirects that can not be created or updated.  This
+					// can happen when a listener is missing, for example when
+					// restarting and k8s delivers the CNP before the related
+					// CEC.
+					// Policy is regenerated when listeners are added or removed
+					// to fix this condition when the listener is available.
+					e.getLogger().WithField(logfields.Listener, pp.GetListener()).WithError(err).Debug("Redirect rule with missing listener skipped, will be applied once the listener is available")
+					continue
 				}
+				redirectPort = proxyPort
+				finalizeList.Append(finalizeFunc)
+				revertStack.Push(revertFunc)
 				desiredRedirects[proxyID] = redirectPort
 
 				// Update the endpoint API model to report that Cilium manages a
@@ -323,11 +316,6 @@ func (e *Endpoint) addVisibilityRedirects(ingress bool, desiredRedirects map[str
 
 	updatedStats := make([]*models.ProxyStatistics, 0, len(visPolicy))
 	for _, visMeta := range visPolicy {
-		// Create a redirect for every entry in the visibility policy.
-		// Sidecar already sees all HTTP traffic
-		if e.hasSidecarProxy && visMeta.Parser == policy.ParserTypeHTTP {
-			continue
-		}
 		var (
 			redirectPort uint16
 			err          error
@@ -432,7 +420,7 @@ func (e *Endpoint) addNewRedirects(proxyWaitGroup *completion.WaitGroup) (desire
 
 // Must be called with endpoint.mutex Lock()ed.
 func (e *Endpoint) removeOldRedirects(desiredRedirects, realizedRedirects map[string]uint16, proxyWaitGroup *completion.WaitGroup) (revert.FinalizeFunc, revert.RevertFunc) {
-	if option.Config.DryMode {
+	if e.isProperty(PropertyFakeEndpoint) {
 		return nil, nil
 	}
 
@@ -533,7 +521,7 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	// reverted, and execute it in case of regeneration success.
 	defer func() {
 		// Ignore finalizing of proxy state in dry mode.
-		if !option.Config.DryMode {
+		if !e.isProperty(PropertyFakeEndpoint) {
 			e.finalizeProxyState(regenContext, reterr)
 		}
 	}()
@@ -543,12 +531,12 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	}
 
 	// No need to compile BPF in dry mode.
-	if option.Config.DryMode {
+	if e.isProperty(PropertyFakeEndpoint) {
 		return e.nextPolicyRevision, false, nil
 	}
 
 	// Skip BPF if the endpoint has no policy map
-	if !e.HasBPFPolicyMap() {
+	if e.isProperty(PropertySkipBPFPolicy) {
 		// Allow another builder to start while we wait for the proxy
 		if regenContext.DoneFunc != nil {
 			regenContext.DoneFunc()
@@ -717,7 +705,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 	// pre-existing connections using that IP are now invalid.
 	if !e.ctCleaned {
 		go func() {
-			if !option.Config.DryMode {
+			if !e.isProperty(PropertyFakeEndpoint) {
 				ipv4 := option.Config.EnableIPv4
 				ipv6 := option.Config.EnableIPv6
 				exists := ctmap.Exists(nil, ipv4, ipv6)
@@ -750,7 +738,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 	e.OnDNSPolicyUpdateLocked(rules)
 
 	// If dry mode is enabled, no further changes to BPF maps are performed
-	if option.Config.DryMode {
+	if e.isProperty(PropertyFakeEndpoint) && e.isProperty(PropertySkipBPFPolicy) {
 		_ = e.updateAndOverrideEndpointOptions(nil)
 
 		// Dry mode needs Network Policy Updates, but the proxy wait group must
@@ -770,7 +758,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 	}
 
 	// Endpoints without policy maps only need Network Policy Updates
-	if !e.HasBPFPolicyMap() {
+	if e.isProperty(PropertySkipBPFPolicy) {
 		if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
 			log.WithField(logfields.EndpointID, e.ID).Debug("Ingress Endpoint skipping bpf regeneration")
 		}
@@ -888,6 +876,10 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 		datapathRegenCtxt.finalizeList.Append(finalizeFunc)
 		datapathRegenCtxt.revertStack.Push(revertFunc)
 		stats.proxyConfiguration.End(true)
+	}
+
+	if e.isProperty(PropertySkipBPFRegeneration) {
+		return false, nil
 	}
 
 	stats.prepareBuild.Start()
@@ -1412,7 +1404,7 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 
 func (e *Endpoint) startSyncPolicyMapController() {
 	// Skip the controller if the endpoint has no policy map
-	if !e.HasBPFPolicyMap() {
+	if e.isProperty(PropertySkipBPFPolicy) {
 		return
 	}
 
