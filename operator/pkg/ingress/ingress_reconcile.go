@@ -211,9 +211,7 @@ func (r *ingressReconciler) buildSharedResources(ctx context.Context) (*ciliumv2
 		}
 	}
 
-	cec, _, _, err := r.sharedTranslator.Translate(m)
-
-	return cec, err
+	return r.cecTranslator.Translate(r.ciliumNamespace, r.sharedResourcesName, m)
 }
 
 func (r *ingressReconciler) buildDedicatedResources(ctx context.Context, ingress *networkingv1.Ingress) (*ciliumv2.CiliumEnvoyConfig, *corev1.Service, *corev1.Endpoints, error) {
@@ -357,7 +355,7 @@ func (r *ingressReconciler) updateIngressLoadbalancerStatus(ctx context.Context,
 		serviceNamespacedName.Name = fmt.Sprintf("%s-%s", ciliumIngressPrefix, ingress.Name)
 	} else {
 		serviceNamespacedName.Namespace = r.ciliumNamespace
-		serviceNamespacedName.Name = r.sharedLBServiceName
+		serviceNamespacedName.Name = r.sharedResourcesName
 	}
 
 	loadbalancerService := corev1.Service{}

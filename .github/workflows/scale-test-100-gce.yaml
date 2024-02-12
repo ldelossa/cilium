@@ -34,7 +34,6 @@ env:
   # has stricter DNS naming requirements.
   test_name: scale-100
   cluster_base_name: ${{ github.run_id }}-${{ github.run_attempt }}.k8s.local
-  GCP_PERF_RESULTS_BUCKET: gs://cilium-scale-results
 
 jobs:
   install-and-scaletest:
@@ -86,7 +85,7 @@ jobs:
           go-version: ${{ env.go_version }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@4aa6347c532075df28027772fa1e4ec2f7415341 # v0.15.20
+        uses: cilium/cilium-cli@d79f56bc2f2b2dbb2d5e41696c2f3aec0ebd3eb0 # v0.15.21
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}

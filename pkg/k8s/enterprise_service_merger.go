@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
-	"github.com/cilium/cilium/pkg/service/store"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 
 	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
@@ -71,7 +70,7 @@ func (s CEServiceMerger) MergeExternalServiceDelete(service *serviceStore.Cluste
 // versa) if necessary.
 //
 // Must be called while holding s.mutex for writing.
-func (s *CEServiceMerger) mergeServiceUpdateLocked(service *store.ClusterService, swg *lock.StoppableWaitGroup) {
+func (s *CEServiceMerger) mergeServiceUpdateLocked(service *serviceStore.ClusterService, swg *lock.StoppableWaitGroup) {
 	// With phantom services, we'll import the phantom service into ServiceCache.
 	// Phantom services must be identified with Cluster + Name + Namespace.
 	// Otherwise, naming collision is possible if they exist in multiple clusters.

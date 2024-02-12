@@ -75,7 +75,9 @@
       "matchPaths": [
         ".github/workflows/**"
       ],
-      excludeDepNames: [
+      "excludeDepNames": [
+        "cilium/little-vm-helper",
+        "quay.io/lvh-images/complexity-test",
         "quay.io/lvh-images/kind",
         "quay.io/cilium/kindest-node"
       ],
@@ -420,6 +422,7 @@
     },
     {
       "matchDepNames": [
+        "quay.io/lvh-images/complexity-test",
         "quay.io/lvh-images/kind"
       ],
       "versioning": "regex:^((?<compatibility>[a-z-]+)|((?<major>\\d+)\\.(?<minor>\\d+)))\\-(?<patch>\\d+)\\.(?<build>\\d+)(@(?<currentDigest>sha256:[a-f0-9]+))?$"
@@ -428,6 +431,8 @@
       "groupName": "stable lvh-images",
       "groupSlug": "stable-lvh-images",
       "matchPackageNames": [
+        "cilium/little-vm-helper",
+        "quay.io/lvh-images/complexity-test",
         "quay.io/lvh-images/kind"
       ],
       "allowedVersions": "!/bpf-next-.*/",
@@ -442,6 +447,8 @@
       "groupName": "all lvh-images main",
       "groupSlug": "all-lvh-images-main",
       "matchPackageNames": [
+        "cilium/little-vm-helper",
+        "quay.io/lvh-images/complexity-test",
         "quay.io/lvh-images/kind"
       ],
       "matchBaseBranches": [
@@ -466,6 +473,7 @@
       // Do not allow any updates for major.minor, they will be done by maintainers
       "enabled": false,
       "matchPackageNames": [
+        "quay.io/lvh-images/complexity-test",
         "quay.io/lvh-images/kind",
         "kindest/node",
         "quay.io/cilium/kindest-node"

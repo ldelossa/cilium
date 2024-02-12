@@ -19,7 +19,7 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/cilium/cilium/pkg/datapath/fake"
+	fakeTypes "github.com/cilium/cilium/pkg/datapath/fake/types"
 	dpdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/loader"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -40,7 +40,7 @@ var (
 	_ = Suite(&ConfigSuite{})
 
 	dummyNodeCfg = datapath.LocalNodeConfiguration{
-		MtuConfig: &fake.MTU{},
+		MtuConfig: &fakeTypes.MTU{},
 	}
 	dummyDevCfg   = testutils.NewTestEndpoint()
 	dummyEPCfg    = testutils.NewTestEndpoint()
@@ -100,8 +100,8 @@ func writeConfig(c *C, header string, write writeFn) {
 		c.Logf("  Testing %s configuration: %s", header, test.description)
 		h := hive.New(
 			cell.Provide(
-				fake.NewNodeAddressing,
-				func() datapath.BandwidthManager { return &fake.BandwidthManager{} },
+				fakeTypes.NewNodeAddressing,
+				func() datapath.BandwidthManager { return &fakeTypes.BandwidthManager{} },
 				NewHeaderfileWriter,
 			),
 			cell.Invoke(func(writer_ datapath.ConfigWriter) {
@@ -360,7 +360,7 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 
 	// Assert that configurations are propagated when all generated extra defines are valid
 	cfg, err := NewHeaderfileWriter(WriterParams{
-		NodeAddressing:   fake.NewNodeAddressing(),
+		NodeAddressing:   fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines: nil,
 		NodeExtraDefineFns: []dpdef.Fn{
 			func() (dpdef.Map, error) { return dpdef.Map{"FOO": "0x1", "BAR": "0x2"}, nil },
@@ -378,12 +378,12 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 
 	// Assert that an error is returned when one extra define function returns an error
 	cfg, err = NewHeaderfileWriter(WriterParams{
-		NodeAddressing:   fake.NewNodeAddressing(),
+		NodeAddressing:   fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines: nil,
 		NodeExtraDefineFns: []dpdef.Fn{
 			func() (dpdef.Map, error) { return nil, errors.New("failing on purpose") },
 		},
-		BandwidthManager: &fake.BandwidthManager{},
+		BandwidthManager: &fakeTypes.BandwidthManager{},
 	})
 	require.NoError(t, err)
 
@@ -392,13 +392,13 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 
 	// Assert that an error is returned when one extra define would overwrite an already existing entry
 	cfg, err = NewHeaderfileWriter(WriterParams{
-		NodeAddressing:   fake.NewNodeAddressing(),
+		NodeAddressing:   fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines: nil,
 		NodeExtraDefineFns: []dpdef.Fn{
 			func() (dpdef.Map, error) { return dpdef.Map{"FOO": "0x1", "BAR": "0x2"}, nil },
 			func() (dpdef.Map, error) { return dpdef.Map{"FOO": "0x3"}, nil },
 		},
-		BandwidthManager: &fake.BandwidthManager{},
+		BandwidthManager: &fakeTypes.BandwidthManager{},
 	})
 	require.NoError(t, err)
 
@@ -414,19 +414,19 @@ func TestNewHeaderfileWriter(t *testing.T) {
 	var buffer bytes.Buffer
 
 	_, err := NewHeaderfileWriter(WriterParams{
-		NodeAddressing:     fake.NewNodeAddressing(),
+		NodeAddressing:     fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines:   []dpdef.Map{a, a},
 		NodeExtraDefineFns: nil,
-		BandwidthManager:   &fake.BandwidthManager{},
+		BandwidthManager:   &fakeTypes.BandwidthManager{},
 	})
 
 	require.Error(t, err, "duplicate keys should be rejected")
 
 	cfg, err := NewHeaderfileWriter(WriterParams{
-		NodeAddressing:     fake.NewNodeAddressing(),
+		NodeAddressing:     fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines:   []dpdef.Map{a},
 		NodeExtraDefineFns: nil,
-		BandwidthManager:   &fake.BandwidthManager{},
+		BandwidthManager:   &fakeTypes.BandwidthManager{},
 	})
 	require.NoError(t, err)
 	require.NoError(t, cfg.WriteNodeConfig(&buffer, &dummyNodeCfg))

@@ -9,7 +9,6 @@ import (
 
 	envoy_config_cluster_v3 "github.com/cilium/proxy/go/envoy/config/cluster/v3"
 	envoy_config_route_v3 "github.com/cilium/proxy/go/envoy/config/route/v3"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/operator/pkg/model"
@@ -23,17 +22,15 @@ const (
 	insecureHost = "insecure"
 )
 
-var _ Translator = (*defaultTranslator)(nil)
+var _ CECTranslator = (*cecTranslator)(nil)
 
-// defaultTranslator is the translator from model to CiliumEnvoyConfig
+// cecTranslator is the translator from model to CiliumEnvoyConfig
 //
 // This translator is used for shared LB mode.
 //   - only one instance of CiliumEnvoyConfig with two listeners (secure and
 //     in-secure).
 //   - no LB service and endpoint
-type defaultTranslator struct {
-	name             string
-	namespace        string
+type cecTranslator struct {
 	secretsNamespace string
 	enforceHTTPs     bool
 	useProxyProtocol bool
@@ -47,11 +44,9 @@ type defaultTranslator struct {
 	idleTimeoutSeconds int
 }
 
-// NewTranslator returns a new translator
-func NewTranslator(name, namespace, secretsNamespace string, enforceHTTPs bool, useProxyProtocol bool, hostNameSuffixMatch bool, idleTimeoutSeconds int) Translator {
-	return &defaultTranslator{
-		name:                name,
-		namespace:           namespace,
+// NewCECTranslator returns a new translator
+func NewCECTranslator(secretsNamespace string, enforceHTTPs bool, useProxyProtocol bool, hostNameSuffixMatch bool, idleTimeoutSeconds int) CECTranslator {
+	return &cecTranslator{
 		secretsNamespace:    secretsNamespace,
 		enforceHTTPs:        enforceHTTPs,
 		useProxyProtocol:    useProxyProtocol,
@@ -60,12 +55,11 @@ func NewTranslator(name, namespace, secretsNamespace string, enforceHTTPs bool, 
 	}
 }
 
-// Translate translates the model to CiliumEnvoyConfig.
-func (i *defaultTranslator) Translate(model *model.Model) (*ciliumv2.CiliumEnvoyConfig, *corev1.Service, *corev1.Endpoints, error) {
+func (i *cecTranslator) Translate(namespace string, name string, model *model.Model) (*ciliumv2.CiliumEnvoyConfig, error) {
 	cec := &ciliumv2.CiliumEnvoyConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      i.name,
-			Namespace: i.namespace,
+			Namespace: namespace,
+			Name:      name,
 			Labels: map[string]string{
 				k8s.UseOriginalSourceAddressLabel: "false",
 			},
@@ -73,13 +67,13 @@ func (i *defaultTranslator) Translate(model *model.Model) (*ciliumv2.CiliumEnvoy
 	}
 
 	cec.Spec.BackendServices = i.getBackendServices(model)
-	cec.Spec.Services = i.getServices(model)
+	cec.Spec.Services = i.getServices(namespace, name)
 	cec.Spec.Resources = i.getResources(model)
 
-	return cec, nil, nil, nil
+	return cec, nil
 }
 
-func (i *defaultTranslator) getBackendServices(m *model.Model) []*ciliumv2.Service {
+func (i *cecTranslator) getBackendServices(m *model.Model) []*ciliumv2.Service {
 	var res []*ciliumv2.Service
 
 	for ns, v := range getNamespaceNamePortsMap(m) {
@@ -106,16 +100,16 @@ func (i *defaultTranslator) getBackendServices(m *model.Model) []*ciliumv2.Servi
 	return res
 }
 
-func (i *defaultTranslator) getServices(_ *model.Model) []*ciliumv2.ServiceListener {
+func (i *cecTranslator) getServices(namespace string, name string) []*ciliumv2.ServiceListener {
 	return []*ciliumv2.ServiceListener{
 		{
-			Name:      i.name,
-			Namespace: i.namespace,
+			Namespace: namespace,
+			Name:      name,
 		},
 	}
 }
 
-func (i *defaultTranslator) getResources(m *model.Model) []ciliumv2.XDSResource {
+func (i *cecTranslator) getResources(m *model.Model) []ciliumv2.XDSResource {
 	var res []ciliumv2.XDSResource
 
 	res = append(res, i.getHTTPRouteListener(m)...)
@@ -129,7 +123,7 @@ func (i *defaultTranslator) getResources(m *model.Model) []ciliumv2.XDSResource 
 // getHTTPRouteListener returns the listener for the given model with HTTPRoute.
 // TLS and non-TLS filters for HTTP traffic are applied by default.
 // Only one single listener is returned for shared LB mode.
-func (i *defaultTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSResource {
+func (i *cecTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSResource {
 	if len(m.HTTP) == 0 {
 		return nil
 	}
@@ -150,7 +144,7 @@ func (i *defaultTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSR
 
 // getTLSRouteListener returns the listener for the given model with TLSRoute.
 // it will set up filters for SNI matching by default.
-func (i *defaultTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSResource {
+func (i *cecTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSResource {
 	if len(m.TLS) == 0 {
 		return nil
 	}
@@ -177,7 +171,7 @@ func (i *defaultTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSRe
 }
 
 // getRouteConfiguration returns the route configuration for the given model.
-func (i *defaultTranslator) getEnvoyHTTPRouteConfiguration(m *model.Model) []ciliumv2.XDSResource {
+func (i *cecTranslator) getEnvoyHTTPRouteConfiguration(m *model.Model) []ciliumv2.XDSResource {
 	var res []ciliumv2.XDSResource
 
 	portHostName := map[string][]string{}
@@ -269,7 +263,7 @@ func getClusterServiceName(ns, name, port string) string {
 	return fmt.Sprintf("%s/%s:%s", ns, name, port)
 }
 
-func (i *defaultTranslator) getClusters(m *model.Model) []ciliumv2.XDSResource {
+func (i *cecTranslator) getClusters(m *model.Model) []ciliumv2.XDSResource {
 	envoyClusters := map[string]ciliumv2.XDSResource{}
 	var sortedClusterNames []string
 

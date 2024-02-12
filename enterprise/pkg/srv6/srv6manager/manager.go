@@ -25,7 +25,6 @@ import (
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/identity/cache"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipam"
@@ -153,7 +152,7 @@ type Params struct {
 	Lifecycle                 cell.Lifecycle
 	DaemonConfig              *option.DaemonConfig
 	Sig                       *signaler.BGPCPSignaler
-	CacheIdentityAllocator    cache.IdentityAllocator
+	CacheIdentityAllocator    identityCache.IdentityAllocator
 	CacheStatus               k8s.CacheStatus
 	DaemonPromise             promise.Promise[daemon]
 	SIDManagerPromise         promise.Promise[sidmanager.SIDManager]

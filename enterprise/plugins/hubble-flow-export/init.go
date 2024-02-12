@@ -21,7 +21,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/cilium/cilium/api/v1/flow"
 	flowpb "github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/enterprise/plugins"
 	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
@@ -110,11 +109,11 @@ func buildFilterFuncs(f string) (filters.FilterFuncs, error) {
 	return filters.BuildFilterList(context.Background(), filterFuncs, filters.DefaultFilters)
 }
 
-func parseFilterList(filters string) ([]*flow.FlowFilter, error) {
+func parseFilterList(filters string) ([]*flowpb.FlowFilter, error) {
 	dec := json.NewDecoder(strings.NewReader(filters))
-	var results []*flow.FlowFilter
+	var results []*flowpb.FlowFilter
 	for {
-		var result flow.FlowFilter
+		var result flowpb.FlowFilter
 		if err := dec.Decode(&result); err != nil {
 			if err == io.EOF {
 				break

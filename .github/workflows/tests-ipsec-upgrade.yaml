@@ -16,10 +16,10 @@ on:
       extra-args:
         description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
         required: false
-        default: '{}'
+        default: "{}"
   # Run every 6 hours
   schedule:
-    - cron:  '0 5/6 * * *'
+    - cron: "0 5/6 * * *"
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
@@ -68,84 +68,84 @@ jobs:
 
   setup-and-test:
     runs-on: ubuntu-latest-4cores-16gb
-    name: 'Setup & Test'
+    name: "Setup & Test"
     env:
-      job_name: 'Setup & Test'
+      job_name: "Setup & Test"
     strategy:
       fail-fast: false
       max-parallel: 16
       matrix:
-        config: ['5.4', '5.10', '6.1', 'bpf-next']
-        mode: ['minor', 'patch']
+        config: ["5.4", "5.10", "6.1", "bpf-next"]
+        mode: ["minor", "patch"]
         include:
           # Define three config sets
-          - config: '5.4'
+          - config: "5.4"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.4-20240110.080621'
-            kube-proxy: 'iptables'
-            kpr: 'disabled'
-            tunnel: 'disabled'
-            encryption: 'ipsec'
+            kernel: "5.4-20240201.165956"
+            kube-proxy: "iptables"
+            kpr: "disabled"
+            tunnel: "disabled"
+            encryption: "ipsec"
 
-          - config: '5.10'
+          - config: "5.10"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240110.080621'
-            kube-proxy: 'iptables'
-            kpr: 'disabled'
-            tunnel: 'disabled'
-            encryption: 'ipsec'
-            endpoint-routes: 'true'
+            kernel: "5.10-20240201.165956"
+            kube-proxy: "iptables"
+            kpr: "disabled"
+            tunnel: "disabled"
+            encryption: "ipsec"
+            endpoint-routes: "true"
 
-          - config: '6.1'
+          - config: "6.1"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.1-20240110.080621'
-            kube-proxy: 'iptables'
-            kpr: 'disabled'
-            tunnel: 'vxlan'
-            encryption: 'ipsec'
-            endpoint-routes: 'false'
+            kernel: "6.1-20240201.165956"
+            kube-proxy: "iptables"
+            kpr: "disabled"
+            tunnel: "vxlan"
+            encryption: "ipsec"
+            endpoint-routes: "false"
 
-          - config: 'bpf-next'
+          - config: "bpf-next"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20240122.013132'
-            kube-proxy: 'iptables'
-            kpr: 'disabled'
-            tunnel: 'vxlan'
-            encryption: 'ipsec'
-            endpoint-routes: 'true'
+            kernel: "bpf-next-20240204.012837"
+            kube-proxy: "iptables"
+            kpr: "disabled"
+            tunnel: "vxlan"
+            encryption: "ipsec"
+            endpoint-routes: "true"
 
           # Add names to matrix combinations of {config, mode}
-          - config: '5.4'
-            mode: 'minor'
-            name: '1'
+          - config: "5.4"
+            mode: "minor"
+            name: "1"
 
-          - config: '5.10'
-            mode: 'minor'
-            name: '2'
+          - config: "5.10"
+            mode: "minor"
+            name: "2"
 
-          - config: '6.1'
-            mode: 'minor'
-            name: '3'
+          - config: "6.1"
+            mode: "minor"
+            name: "3"
 
-          - config: 'bpf-next'
-            mode: 'minor'
-            name: '4'
+          - config: "bpf-next"
+            mode: "minor"
+            name: "4"
 
-          - config: '5.4'
-            mode: 'patch'
-            name: '5'
+          - config: "5.4"
+            mode: "patch"
+            name: "5"
 
-          - config: '5.10'
-            mode: 'patch'
-            name: '6'
+          - config: "5.10"
+            mode: "patch"
+            name: "6"
 
-          - config: '6.1'
-            mode: 'patch'
-            name: '7'
+          - config: "6.1"
+            mode: "patch"
+            name: "7"
 
-          - config: 'bpf-next'
-            mode: 'patch'
-            name: '8'
+          - config: "bpf-next"
+            mode: "patch"
+            name: "8"
 
     timeout-minutes: 70
     steps:
@@ -190,7 +190,7 @@ jobs:
         uses: ./.github/actions/cilium-config
         with:
           image-tag: ${{ steps.vars.outputs.image_tag }}
-          chart-dir: './cilium-${{ steps.vars.outputs.downgrade_version }}/install/kubernetes/cilium/'
+          chart-dir: "./untrusted/cilium-downgrade/install/kubernetes/cilium"
           tunnel: ${{ matrix.tunnel }}
           endpoint-routes: ${{ matrix.endpoint-routes }}
           ipv6: ${{ matrix.ipv6 }}
@@ -202,7 +202,7 @@ jobs:
           egress-gateway: ${{ matrix.egress-gateway }}
           host-fw: ${{ matrix.host-fw }}
           mutual-auth: false
-          misc: 'bpfClockProbe=false,cni.uninstall=false'
+          misc: "bpfClockProbe=false,cni.uninstall=false"
 
       - name: Derive newest Cilium installation config
         id: cilium-newest-config
@@ -210,7 +210,7 @@ jobs:
         uses: ./.github/actions/cilium-config
         with:
           image-tag: ${{ steps.vars.outputs.sha }}
-          chart-dir: './install/kubernetes/cilium'
+          chart-dir: "./untrusted/cilium-newest/install/kubernetes/cilium"
           tunnel: ${{ matrix.tunnel }}
           endpoint-routes: ${{ matrix.endpoint-routes }}
           ipv6: ${{ matrix.ipv6 }}
@@ -222,28 +222,11 @@ jobs:
           egress-gateway: ${{ matrix.egress-gateway }}
           host-fw: ${{ matrix.host-fw }}
           mutual-auth: false
-          misc: 'bpfClockProbe=false,cni.uninstall=false'
+          misc: "bpfClockProbe=false,cni.uninstall=false"
 
-      # Warning: since this is a privileged workflow, subsequent workflow job
-      # steps must take care not to execute untrusted code.
-      - name: Checkout pull request branch (NOT TRUSTED)
+      - name: Install Cilium CLI
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        with:
-          ref: ${{ steps.vars.outputs.sha }}
-          persist-credentials: false
-
-      - name: Checkout ${{ steps.vars.outputs.downgrade_version }} branch to get the Helm chart
-        if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        with:
-          path: cilium-${{ steps.vars.outputs.downgrade_version }}
-          ref: ${{ steps.vars.outputs.downgrade_version }}
-          persist-credentials: false
-
-      - name: Install Cilium CLI-cli
-        if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: cilium/cilium-cli@32109b32259a487c803648a3c9463cdcafa4c0c3 # v0.15.19
+        uses: cilium/cilium-cli@d79f56bc2f2b2dbb2d5e41696c2f3aec0ebd3eb0 # v0.15.21
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -264,12 +247,33 @@ jobs:
 
       - name: Provision K8s on LVH VM
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: isovalent/cilium/.github/actions/lvh-kind@main-ce
+        uses: ./.github/actions/lvh-kind
         with:
           test-name: e2e-conformance
           kernel: ${{ matrix.kernel }}
           kind-params: "${{ steps.kind-params.outputs.params }}"
           kind-image-vsn: ${k8s_version}
+
+      # Warning: since this is a privileged workflow, subsequent workflow job
+      # steps must take care not to execute untrusted code.
+      - name: Checkout pull request branch (NOT TRUSTED)
+        if: ${{ steps.vars.outputs.downgrade_version != '' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ steps.vars.outputs.sha }}
+          persist-credentials: false
+          path: untrusted/cilium-newest
+          sparse-checkout: |
+            install/kubernetes/cilium
+      - name: Checkout ${{ steps.vars.outputs.downgrade_version }} branch to get the Helm chart
+        if: ${{ steps.vars.outputs.downgrade_version != '' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ steps.vars.outputs.downgrade_version }}
+          persist-credentials: false
+          path: untrusted/cilium-downgrade
+          sparse-checkout: |
+            install/kubernetes/cilium
 
       - name: Wait for images to be available
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
@@ -310,7 +314,7 @@ jobs:
 
       - name: Upgrade Cilium & Test (${{ matrix.name }})
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: isovalent/cilium/.github/actions/conn-disrupt-test@main-ce
+        uses: ./.github/actions/conn-disrupt-test
         with:
           job-name: ipsec-upgrade-${{ matrix.name }}
           operation-cmd: |
@@ -323,7 +327,7 @@ jobs:
 
       - name: Downgrade Cilium to ${{ steps.vars.outputs.downgrade_version }} & Test (${{ matrix.name }})
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: isovalent/cilium/.github/actions/conn-disrupt-test@main-ce
+        uses: ./.github/actions/conn-disrupt-test
         with:
           job-name: ipsec-downgrade-${{ matrix.name }}
           operation-cmd: |

@@ -13,7 +13,7 @@ import (
 	. "github.com/cilium/checkmate"
 
 	"github.com/cilium/cilium/api/v1/models"
-	"github.com/cilium/cilium/pkg/datapath/fake"
+	fakeTypes "github.com/cilium/cilium/pkg/datapath/fake/types"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/eventqueue"
@@ -63,7 +63,7 @@ func (s *EndpointSuite) SetUpSuite(c *C) {
 
 	s.repo = policy.NewPolicyRepository(nil, nil, nil, nil)
 	// GetConfig the default labels prefix filter
-	err := labelsfilter.ParseLabelPrefixCfg(nil, "")
+	err := labelsfilter.ParseLabelPrefixCfg(nil, nil, "")
 	if err != nil {
 		panic("ParseLabelPrefixCfg() failed")
 	}
@@ -662,7 +662,7 @@ func (s *EndpointSuite) TestEndpointEventQueueDeadlockUponStop(c *C) {
 
 	oldDatapath := s.datapath
 
-	s.datapath = fake.NewDatapath()
+	s.datapath = fakeTypes.NewDatapath()
 
 	defer func() {
 		s.datapath = oldDatapath
