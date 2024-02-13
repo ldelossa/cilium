@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/mackerelio/go-osstat/memory"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
@@ -396,9 +396,6 @@ const (
 
 	// Restore restores state, if possible, from previous daemon
 	Restore = "restore"
-
-	// SidecarIstioProxyImage regular expression matching compatible Istio sidecar istio-proxy container image names
-	SidecarIstioProxyImage = "sidecar-istio-proxy-image"
 
 	// SocketPath sets daemon's socket path to listen for connections
 	SocketPath = "socket-path"
@@ -3132,7 +3129,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.RouteMetric = vp.GetInt(RouteMetric)
 	c.RunDir = vp.GetString(StateDir)
 	c.ExternalEnvoyProxy = vp.GetBool(ExternalEnvoyProxy)
-	c.SidecarIstioProxyImage = vp.GetString(SidecarIstioProxyImage)
 	c.SocketPath = vp.GetString(SocketPath)
 	c.TracePayloadlen = vp.GetInt(TracePayloadlen)
 	c.Version = vp.GetString(Version)
@@ -3822,7 +3818,7 @@ func (c *DaemonConfig) calculateBPFMapSizes(vp *viper.Viper) error {
 	// to 98% of the total memory being allocated for BPF maps.
 	dynamicSizeRatio := vp.GetFloat64(MapEntriesGlobalDynamicSizeRatioName)
 	if 0.0 < dynamicSizeRatio && dynamicSizeRatio <= 1.0 {
-		vms, err := mem.VirtualMemory()
+		vms, err := memory.Get()
 		if err != nil || vms == nil {
 			log.WithError(err).Fatal("Failed to get system memory")
 		}

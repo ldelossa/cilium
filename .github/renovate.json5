@@ -10,6 +10,7 @@
   "includePaths": [
     ".github/actions/kvstore/**",
     ".github/actions/ginkgo/**",
+    ".github/actions/lvh-kind/**",
     ".github/actions/set-env-variables/action.yml",
     ".github/workflows/**",
     ".github/kind-config.yaml",
@@ -499,7 +500,8 @@
     {
       "fileMatch": [
         "images/cilium/download-hubble\\.sh",
-        "images/runtime/build-gops.sh"
+        "images/runtime/build-gops.sh",
+        "images/hubble-relay/download-grpc-health-probe.sh"
       ],
       // These regexes manage version and digest strings in shell scripts,
       // similar to the examples shown here:

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"testing"
 
 	"github.com/sirupsen/logrus"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
@@ -66,6 +67,24 @@ const (
 
 	resolveIdentity = "resolve-identity"
 	resolveLabels   = "resolve-labels"
+)
+
+const (
+	// PropertyFakeEndpoint marks the endpoint as being "fake". By "fake" it
+	// means that it doesn't have any datapath bpf programs regenerated.
+	PropertyFakeEndpoint = "property-fake-endpoint"
+
+	// PropertyWithouteBPFDatapath marks the endpoint that doesn't contain a
+	// eBPF datapath program.
+	PropertyWithouteBPFDatapath = "property-without-bpf-endpoint"
+
+	// PropertySkipBPFPolicy will mark the endpoint to skip ebpf
+	// policy regeneration.
+	PropertySkipBPFPolicy = "property-skip-bpf-policy"
+
+	// PropertySkipBPFRegeneration will mark the endpoint to skip ebpf
+	// regeneration.
+	PropertySkipBPFRegeneration = "property-skip-bpf-regeneration"
 )
 
 var (
@@ -212,13 +231,6 @@ type Endpoint struct {
 	// SecurityIdentity is the security identity of this endpoint. This is computed from
 	// the endpoint's labels.
 	SecurityIdentity *identity.Identity `json:"SecLabel"`
-
-	// hasSidecarProxy indicates whether the endpoint has been injected by
-	// Istio with a Cilium-compatible sidecar proxy. If true, the sidecar proxy
-	// will be used to apply L7 policy rules. Otherwise, Cilium's node-wide
-	// proxy will be used.
-	// TODO: Currently this applies only to HTTP L7 rules. Kafka L7 rules are still enforced by Cilium's node-wide Kafka proxy.
-	hasSidecarProxy bool
 
 	// policyMap is the policy related state of the datapath including
 	// reference to all policy related BPF
@@ -384,6 +396,9 @@ type Endpoint struct {
 	// mutable! must hold the endpoint lock to read
 	ciliumEndpointUID k8sTypes.UID
 
+	// properties is used to store some internal properties about this Endpoint.
+	properties map[string]interface{}
+
 	// Root scope for all of this endpoints reporters.
 	reporterScope       cell.Scope
 	closeHealthReporter func()
@@ -474,17 +489,6 @@ func (e *Endpoint) closeBPFProgramChannel() {
 	}
 }
 
-// bpfProgramInstalled returns whether a BPF program has been generated for this
-// endpoint.
-func (e *Endpoint) bpfProgramInstalled() bool {
-	select {
-	case <-e.hasBPFProgram:
-		return true
-	default:
-		return false
-	}
-}
-
 // waitForProxyCompletions blocks until all proxy changes have been completed.
 // Called with buildMutex held.
 func (e *Endpoint) waitForProxyCompletions(proxyWaitGroup *completion.WaitGroup) error {
@@ -509,10 +513,11 @@ func (e *Endpoint) waitForProxyCompletions(proxyWaitGroup *completion.WaitGroup)
 	return nil
 }
 
-// NewEndpointWithState creates a new endpoint useful for testing purposes
-func NewEndpointWithState(owner regeneration.Owner, policyGetter policyRepoGetter, namedPortsGetter namedPortsGetter, proxy EndpointProxy, allocator cache.IdentityAllocator, ID uint16, state State) *Endpoint {
+// NewTestEndpointWithState creates a new endpoint useful for testing purposes
+func NewTestEndpointWithState(_ testing.TB, owner regeneration.Owner, policyGetter policyRepoGetter, namedPortsGetter namedPortsGetter, proxy EndpointProxy, allocator cache.IdentityAllocator, ID uint16, state State) *Endpoint {
 	endpointQueueName := "endpoint-" + strconv.FormatUint(uint64(ID), 10)
 	ep := createEndpoint(owner, policyGetter, namedPortsGetter, proxy, allocator, ID, "")
+	ep.SetPropertyValue(PropertyFakeEndpoint, true)
 	ep.state = state
 	ep.eventQueue = eventqueue.NewEventQueueBuffered(endpointQueueName, option.Config.EndpointQueueSize)
 
@@ -545,6 +550,7 @@ func createEndpoint(owner regeneration.Owner, policyGetter policyRepoGetter, nam
 		allocator:        allocator,
 		logLimiter:       logging.NewLimiter(10*time.Second, 3), // 1 log / 10 secs, burst of 3
 		noTrackPort:      0,
+		properties:       map[string]interface{}{},
 	}
 
 	ep.initDNSHistoryTrigger()
@@ -579,6 +585,12 @@ func CreateIngressEndpoint(owner regeneration.Owner, policyGetter policyRepoGett
 	ep.DatapathConfiguration = NewDatapathConfiguration()
 
 	ep.isIngress = true
+	// An ingress endpoint is defined without a veth interface and no bpf
+	// programs or maps are created for it. Thus, we will set its properties
+	// to not have a bpf policy map nor a bpf datapath.
+	ep.properties[PropertySkipBPFPolicy] = true
+	ep.properties[PropertyWithouteBPFDatapath] = true
+
 	// node.GetIngressIPv4 has been parsed with net.ParseIP() and may be in IPv4 mapped IPv6
 	// address format. Use ippkg.AddrFromIP() to make sure we get a plain IPv4 address.
 	ep.IPv4, _ = ippkg.AddrFromIP(node.GetIngressIPv4())
@@ -688,10 +700,6 @@ func (e *Endpoint) IPv6Address() netip.Addr {
 // GetNodeMAC returns the MAC address of the node from this endpoint's perspective.
 func (e *Endpoint) GetNodeMAC() mac.MAC {
 	return e.nodeMAC
-}
-
-func (e *Endpoint) HasSidecarProxy() bool {
-	return e.hasSidecarProxy
 }
 
 // ConntrackName returns the name suffix for the endpoint-specific bpf
@@ -1209,7 +1217,7 @@ type DeleteConfig struct {
 func (e *Endpoint) leaveLocked(proxyWaitGroup *completion.WaitGroup, conf DeleteConfig) []error {
 	errors := []error{}
 
-	if !option.Config.DryMode {
+	if !e.isProperty(PropertyFakeEndpoint) {
 		e.owner.Datapath().Loader().Unload(e.createEpInfoCache(""))
 	}
 
@@ -1264,7 +1272,7 @@ func (e *Endpoint) leaveLocked(proxyWaitGroup *completion.WaitGroup, conf Delete
 
 	if e.ConntrackLocalLocked() {
 		ctmap.CloseLocalMaps(e.conntrackName())
-	} else if !option.Config.DryMode {
+	} else if !e.isProperty(PropertyFakeEndpoint) {
 		e.scrubIPsInConntrackTableLocked()
 	}
 
@@ -1292,6 +1300,39 @@ func (e *Endpoint) SetPod(pod *slim_corev1.Pod) {
 // GetPod retrieves the pod related to this endpoint
 func (e *Endpoint) GetPod() *slim_corev1.Pod {
 	return e.pod.Load()
+}
+
+// CEPOwnerInterface contains the interface of an endpoint owner.
+type CEPOwnerInterface interface {
+	// IsNil returns true or false if the object is nil.
+	IsNil() bool
+
+	// GetAPIVersion returns the API version of the owner.
+	GetAPIVersion() string
+
+	// GetKind returns the Kind of the owner.
+	GetKind() string
+
+	// GetNamespace returns the namespace where the owner lives.
+	GetNamespace() string
+
+	// GetName returns the owners' name.
+	GetName() string
+
+	// GetLabels returns the labels of the owner.
+	GetLabels() map[string]string
+
+	// GetUID returns the owners' UID.
+	GetUID() k8sTypes.UID
+
+	// GetHostIP returns the owners' host IP.
+	GetHostIP() string
+}
+
+// GetCEPOwner retrieves the cep owner related to this endpoint which will be,
+// by default, the pod associated with this endpoint.
+func (e *Endpoint) GetCEPOwner() CEPOwnerInterface {
+	return e.GetPod()
 }
 
 // SetK8sMetadata sets the k8s container ports specified by kubernetes.
@@ -1327,12 +1368,12 @@ func (e *Endpoint) HaveK8sMetadata() (metadataSet bool) {
 	return p != nil
 }
 
-// K8sNamespaceAndPodNameIsSet returns true if the pod name is set
+// K8sNamespaceAndPodNameIsSet returns true if the namespace and the pod name
+// are both set.
 func (e *Endpoint) K8sNamespaceAndPodNameIsSet() bool {
 	e.unconditionalLock()
-	podName := e.GetK8sNamespaceAndPodName()
-	e.unlock()
-	return podName != "" && podName != "/"
+	defer e.unlock()
+	return e.K8sNamespace != "" && e.K8sPodName != ""
 }
 
 // getState returns the endpoint's state
@@ -2403,7 +2444,7 @@ func (e *Endpoint) Delete(conf DeleteConfig) []error {
 	e.setState(StateDisconnecting, "Deleting endpoint")
 
 	// If dry mode is enabled, no changes to BPF maps are performed
-	if !option.Config.DryMode {
+	if !e.isProperty(PropertyFakeEndpoint) {
 		if errs2 := lxcmap.DeleteElement(e); errs2 != nil {
 			errs = append(errs, errs2...)
 		}
@@ -2501,15 +2542,7 @@ func (e *Endpoint) WaitForFirstRegeneration(ctx context.Context) error {
 			if err := e.rlockAlive(); err != nil {
 				return fmt.Errorf("endpoint was deleted while waiting for initial endpoint generation to complete")
 			}
-			hasSidecarProxy := e.HasSidecarProxy()
 			e.runlock()
-			if hasSidecarProxy && e.bpfProgramInstalled() {
-				// If the endpoint is determined to have a sidecar proxy,
-				// return immediately to let the sidecar container start,
-				// in case it is required to enforce L7 rules.
-				e.getLogger().Info("Endpoint has sidecar proxy, returning from synchronous creation request before regeneration has succeeded")
-				return nil
-			}
 		}
 
 		if ctx.Err() != nil {
@@ -2543,4 +2576,38 @@ func (e *Endpoint) setDefaultPolicyConfig() {
 // GetCreatedAt returns the endpoint creation time.
 func (e *Endpoint) GetCreatedAt() time.Time {
 	return e.createdAt
+}
+
+// GetMetadataValue returns the metadata value for this key.
+func (e *Endpoint) GetMetadataValue(key string) interface{} {
+	e.mutex.RWMutex.RLock()
+	defer e.mutex.RWMutex.RUnlock()
+	return e.properties[key]
+}
+
+// SetPropertyValue sets the metadata value for this key.
+func (e *Endpoint) SetPropertyValue(key string, value interface{}) interface{} {
+	e.mutex.RWMutex.Lock()
+	defer e.mutex.RWMutex.Unlock()
+	old := e.properties[key]
+	e.properties[key] = value
+	return old
+}
+
+// IsProperty checks if the value of the properties map is set, it's a boolean
+// and its value is 'true'.
+func (e *Endpoint) IsProperty(propertyKey string) bool {
+	e.mutex.RWMutex.RLock()
+	defer e.mutex.RWMutex.RUnlock()
+	return e.isProperty(propertyKey)
+}
+
+// isProperty checks if the value of the properties map is set, it's a boolean
+// and its value is 'true'.
+func (e *Endpoint) isProperty(propertyKey string) bool {
+	if v, ok := e.properties[propertyKey]; ok {
+		isSet, ok := v.(bool)
+		return ok && isSet
+	}
+	return false
 }

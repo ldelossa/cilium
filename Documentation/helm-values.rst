@@ -1468,6 +1468,10 @@
      - Additional agent volumes.
      - list
      - ``[]``
+   * - :spelling:ignore:`gatewayAPI.enableProxyProtocol`
+     - Enable proxy protocol for all GatewayAPI listeners. Note that *only* Proxy protocol traffic will be accepted once this is enabled.
+     - bool
+     - ``false``
    * - :spelling:ignore:`gatewayAPI.enabled`
      - Enable support for Gateway API in cilium This will automatically set enable-envoy-config as well.
      - bool
@@ -1923,7 +1927,7 @@
    * - :spelling:ignore:`hubble.ui.backend.image`
      - Hubble-ui backend image.
      - object
-     - ``{"digest":"sha256:1cd84251cec46e20f9e839ee0afba9b51c8de59d35681234f701d7f42062f138","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.12.3","useDigest":true}``
+     - ``{"digest":"sha256:1e7657d997c5a48253bb8dc91ecee75b63018d16ff5e5797e5af367336bc8803","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.13.0","useDigest":true}``
    * - :spelling:ignore:`hubble.ui.backend.livenessProbe.enabled`
      - Enable liveness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
      - bool
@@ -1963,7 +1967,7 @@
    * - :spelling:ignore:`hubble.ui.frontend.image`
      - Hubble-ui frontend image.
      - object
-     - ``{"digest":"sha256:e6b825302fc1e406b1305363fe0bcd1fdf95730b32c2b99a2b36dfa37bdaeec2","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui","tag":"v0.12.3","useDigest":true}``
+     - ``{"digest":"sha256:7d663dc16538dd6e29061abd1047013a645e6e69c115e008bee9ea9fef9a6666","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui","tag":"v0.13.0","useDigest":true}``
    * - :spelling:ignore:`hubble.ui.frontend.resources`
      - Resource requests and limits for the 'frontend' container of the 'hubble-ui' deployment.
      - object
@@ -2844,22 +2848,6 @@
      - Set to ``true`` and helm will not check for monitoring.coreos.com/v1 CRDs before deploying
      - bool
      - ``false``
-   * - :spelling:ignore:`proxy`
-     - Configure Istio proxy options.
-     - object
-     - ``{"prometheus":{"enabled":true,"port":null},"sidecarImageRegex":"cilium/istio_proxy"}``
-   * - :spelling:ignore:`proxy.prometheus.enabled`
-     - Deprecated in favor of envoy.prometheus.enabled
-     - bool
-     - ``true``
-   * - :spelling:ignore:`proxy.prometheus.port`
-     - Deprecated in favor of envoy.prometheus.port
-     - string
-     - ``nil``
-   * - :spelling:ignore:`proxy.sidecarImageRegex`
-     - Regular expression matching compatible Istio sidecar istio-proxy container image names
-     - string
-     - ``"cilium/istio_proxy"``
    * - :spelling:ignore:`rbac.create`
      - Enable creation of Resource-Based Access Control configuration.
      - bool

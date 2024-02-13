@@ -456,6 +456,7 @@ loadBalancerIP
 loadbalancer
 loadbalancers
 loadbalancing
+loadinfo
 localhost
 lockless
 logfile
