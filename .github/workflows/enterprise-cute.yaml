@@ -23,6 +23,14 @@ on:
         required: false
         default: ''
 
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To be able to request the JWT from GitHub's OIDC provider
+  id-token: write
+
 env:
   helm_registry: quay.io
   regions: '{"aws": "us-west-2", "azure": "westus2", "gcp": "us-west2-a"}'
@@ -258,10 +266,9 @@ jobs:
 
       - name: Set up AWS CLI credentials
         if: steps.cute_props.outputs.provider == 'aws'
-        uses: aws-actions/configure-aws-credentials@44112af7fc384b8b0a44e750998777ceac864b86
+        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a # v4.0.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
+          role-to-assume: ${{ secrets.AWS_PR_CUTE_ASSUME_ROLE }}
           aws-region: ${{ steps.cute_props.outputs.region }}
 
       - name: Set up gcloud credentials
