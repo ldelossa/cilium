@@ -410,12 +410,17 @@ jobs:
           make startup_wait || true
           cilium status --wait 15m0s
 
-      - name: Run CuTE tests
-        id: tests
-        timeout-minutes: 90
-        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
-        run: |
-          make test
+      - name: Run CuTE upgrade
+        if: steps.vars.outputs.upgrade_type != ''
+        timeout-minutes: 40
+        uses: ./.github/actions/enterprise-cute-upgrade
+        with:
+          deploy-type: ${{ steps.vars.outputs.deploy_type }}
+          upgrade-stable-version: ${{ steps.cute_props.outputs.upgrade_stable_version }}
+          helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
+          umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
+          cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
+          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
 
       - name: Check encryption type
         id: encryption
@@ -429,32 +434,19 @@ jobs:
           fi
 
       - name: IPsec tests
-        # Step will be skipped for the CuTE version that the customer already uses
-        if: steps.encryption.outputs.type == 'ipsec' && steps.vars.outputs.deploy_type != 'cute'
+        if: steps.encryption.outputs.type == 'ipsec'
         id: ipsec_tests
         timeout-minutes: 420
         uses: ./.github/actions/enterprise-cute-test-ipsec
         with:
-          cute-dir: cute/${{ steps.vars.outputs.cute_dir }}
-
-      - name: Run CuTE upgrade
-        if: steps.vars.outputs.upgrade_type != ''
-        timeout-minutes: 40
-        uses: ./.github/actions/enterprise-cute-upgrade
-        with:
-          deploy-type: ${{ steps.vars.outputs.deploy_type }}
-          upgrade-stable-version: ${{ steps.cute_props.outputs.upgrade_stable_version }}
-          helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
-          umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
-          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
 
-      - name: IPsec tests after upgrade
-        if: steps.vars.outputs.upgrade_type != '' && steps.encryption.outputs.type == 'ipsec'
-        timeout-minutes: 420
-        uses: ./.github/actions/enterprise-cute-test-ipsec
-        with:
-          cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
+      - name: Run CuTE tests
+        id: tests
+        timeout-minutes: 90
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
+        run: |
+          make test
 
       - name: Send notification
         if: ${{ always() && steps.vars.outputs.notify != '' }}
