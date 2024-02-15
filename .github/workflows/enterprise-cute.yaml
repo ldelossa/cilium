@@ -114,8 +114,8 @@ jobs:
           echo umbrella_chart=$umbrella >> $GITHUB_OUTPUT
           echo cute_ref=$ref >> $GITHUB_OUTPUT
           echo cute_region=$region >> $GITHUB_OUTPUT
-          echo deploy_type=$deploy >> $GITHUB_OUTPUT
-          echo upgrade_type=$upgrade >> $GITHUB_OUTPUT
+          echo deploy=$deploy >> $GITHUB_OUTPUT
+          echo upgrade=$upgrade >> $GITHUB_OUTPUT
           echo oss=$oss >> $GITHUB_OUTPUT
           echo notify=$notify >> $GITHUB_OUTPUT
           echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
@@ -185,25 +185,25 @@ jobs:
           echo "getting deploy branch and chart version ..."
           deploy_branch=""
           deploy_chart_version=""
-          if [[ "${{ steps.vars.outputs.deploy_type }}" == "current" ]]; then
+          if [[ "${{ steps.vars.outputs.deploy }}" == "current" ]]; then
             deploy_branch="${{ inputs.context-ref }}"
-          elif [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
+          elif [[ "${{ steps.vars.outputs.deploy }}" == "stable" ]]; then
             deploy_chart_version=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
-          elif [[ "${{ steps.vars.outputs.deploy_type }}" == "latest" ]]; then
+          elif [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
             deploy_branch="v$cute_chart_version$branch_suffix"
           fi
 
           echo "getting upgrade branch and chart version ..."
           upgrade_branch=""
           upgrade_stable_version=""
-          if [[ "${{ steps.vars.outputs.upgrade_type }}" == "stable" ]]; then
+          if [[ "${{ steps.vars.outputs.upgrade }}" == "stable" ]]; then
             upgrade_stable_version=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
-          elif [[ "${{ steps.vars.outputs.upgrade_type }}" == "latest" ]]; then
+          elif [[ "${{ steps.vars.outputs.upgrade }}" == "latest" ]]; then
             upgrade_branch="v$cute_chart_version$branch_suffix"
-          elif [[ "${{ steps.vars.outputs.upgrade_type }}" =~ ^(v){0,1}[0-9]+.[0-9]+.*$ ]]; then
-            upgrade_stable_version="${{ steps.vars.outputs.upgrade_type }}"
-          elif [[ -n "${{ steps.vars.outputs.upgrade_type }}" ]]; then
-            upgrade_branch="${{ steps.vars.outputs.upgrade_type }}"
+          elif [[ "${{ steps.vars.outputs.upgrade }}" =~ ^(v){0,1}[0-9]+.[0-9]+.*$ ]]; then
+            upgrade_stable_version="${{ steps.vars.outputs.upgrade }}"
+          elif [[ -n "${{ steps.vars.outputs.upgrade }}" ]]; then
+            upgrade_branch="${{ steps.vars.outputs.upgrade }}"
           fi
 
           echo provider=$provider >> $GITHUB_OUTPUT
@@ -221,13 +221,13 @@ jobs:
           echo "CuTE OSS: ${{ steps.vars.outputs.oss }}"
           echo "Cloud provider: ${{ steps.cute_props.outputs.provider }}"
           echo "Region: ${{ steps.cute_props.outputs.region }}"
-          echo "Deploy type: ${{ steps.vars.outputs.deploy_type }}"
+          echo "Deploy: ${{ steps.vars.outputs.deploy }}"
           echo "Deploy branch: ${{ steps.cute_props.outputs.deploy_branch }}"
           echo "Deploy chart version: ${{ steps.cute_props.outputs.deploy_chart_version }}"
           echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
           echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
-          echo "Upgrade type: ${{ steps.vars.outputs.upgrade_type }}"
+          echo "Upgrade: ${{ steps.vars.outputs.upgrade }}"
           echo "Upgrade branch: ${{ steps.cute_props.outputs.upgrade_branch }}"
           echo "Upgrade stable version: ${{ steps.cute_props.outputs.upgrade_stable_version }}"
           echo "Slack notification channel: ${{ steps.vars.outputs.notify }}"
@@ -328,8 +328,8 @@ jobs:
 
       - name: Prepare helm chart
         id: cute_helm
-        # Skip for `cute` or `stable` type because Helm chart already exists
-        if: steps.vars.outputs.deploy_type != 'cute' && steps.vars.outputs.deploy_type != 'stable'
+        # Skip for `cute` or `stable` because Helm chart already exists
+        if: steps.vars.outputs.deploy != 'cute' && steps.vars.outputs.deploy != 'stable'
         timeout-minutes: 30
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
@@ -342,8 +342,8 @@ jobs:
 
       - name: Prepare upgrade helm chart
         id: cute_helm_upgrade
-        # Skip for `stable` type and `upgrade_stable_version` because Helm chart already exists
-        if: steps.vars.outputs.upgrade_type != '' && steps.vars.outputs.upgrade_type != 'stable' && steps.cute_props.outputs.upgrade_stable_version == ''
+        # Skip for `stable` and `upgrade_stable_version` because Helm chart already exists
+        if: steps.vars.outputs.upgrade != '' && steps.vars.outputs.upgrade != 'stable' && steps.cute_props.outputs.upgrade_stable_version == ''
         timeout-minutes: 30
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
@@ -363,12 +363,12 @@ jobs:
           owner="ci"
           region="${{ steps.cute_props.outputs.region }}"
           EOF
-          if [[ "${{ steps.vars.outputs.deploy_type }}" == "stable" ]]; then
+          if [[ "${{ steps.vars.outputs.deploy }}" == "stable" ]]; then
             echo "cilium_helm_version=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
             # the below variables are for cluster mesh scenario
             echo "cilium_helm_version_1=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
             echo "cilium_helm_version_2=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
-          elif [[ "${{ steps.vars.outputs.deploy_type }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy_type }}" == "latest" ]]; then
+          elif [[ "${{ steps.vars.outputs.deploy }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
             if [[ ${{ steps.vars.outputs.umbrella_chart }} != 'true' ]]; then
               echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium\"" >> terraform.tfvars
             else
