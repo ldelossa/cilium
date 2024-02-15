@@ -12,6 +12,9 @@ permissions:
   # To trigger workflows via workflow_dispatch
   actions: write
 
+env:
+  cute_slack_channel: C02T57KV69Y # `#cute` slack channel ID
+
 jobs:
   cute-scheduled:
     name: CuTE Scheduled
@@ -21,11 +24,14 @@ jobs:
         cute: [
           {
             repo: sky,
+            dir: .,
+            umbrella: false,
             region: us-west-1,
             deploy: stable
           },
           {
             repo: bloomberg,
+            dir: .,
             umbrella: true,
             region: us-west-2,
             deploy: stable
@@ -33,28 +39,35 @@ jobs:
           {
             repo: form3,
             dir: MAKS,
+            umbrella: false,
             region: westus2,
             deploy: stable
           },
           {
             repo: form3,
             dir: FPS,
+            umbrella: false,
             region: eu-west-2,
             deploy: cute,
             upgrade: stable
           },
           {
             repo: zerohash,
+            dir: .,
+            umbrella: false,
             region: us-east-2,
             deploy: stable
           },
           {
             repo: postfinance,
+            dir: .,
+            umbrella: false,
             region: eu-west-1,
             deploy: stable
           },
           {
             repo: nationwide,
+            dir: .,
             umbrella: true,
             region: eu-central-1,
             deploy: cute,
@@ -63,32 +76,42 @@ jobs:
           {
             repo: swiss-post,
             dir: aws-eks-vpc-cni-chaining,
+            umbrella: false,
             region: ap-south-1,
             deploy: stable
           },
           {
             repo: swiss-post,
             dir: azure-aks-byocni,
+            umbrella: false,
             region: eastus2,
             deploy: stable
           },
           {
             repo: roche,
+            dir: .,
+            umbrella: false,
             region: eu-west-3,
             deploy: stable
           },
           {
             repo: astrazeneca,
+            dir: .,
+            umbrella: false,
             region: ca-central-1,
             deploy: stable
           },
           {
             repo: telenor,
+            dir: .,
+            umbrella: false,
             region: eu-north-1,
             deploy: stable
           },
           {
             repo: adobe,
+            dir: .,
+            umbrella: false,
             region: ap-northeast-1,
             deploy: stable
           },
@@ -105,11 +128,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REF=${GITHUB_REF#refs/heads/}
-          dir="."
-          [[ -n "${{ matrix.cute.dir }}" ]] && dir="${{ matrix.cute.dir }}"
-          umbrella="false"
-          [[ -n "${{ matrix.cute.umbrella }}" ]] && umbrella="${{ matrix.cute.umbrella }}"
           # Notification will be send to the `weaver-in` Slack channel and then routed to a proper destination channel
-          args="repo=${{ matrix.cute.repo }}&dir=$dir&region=${{ matrix.cute.region }}&umbrella=$umbrella&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=C02T57KV69Y"
+          args="repo=${{ matrix.cute.repo }}&dir=${{ matrix.cute.dir }}&region=${{ matrix.cute.region }}&umbrella=${{ matrix.cute.umbrella }}&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=${{ env.cute_slack_channel }}"
           echo "Triggering workflow for CuTE: $args"
           gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
