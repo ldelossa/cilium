@@ -84,6 +84,7 @@ const (
 
 	policy1UID = "d68a62ea-f358-4016-87c2-7ae9724f74f7"
 	policy2UID = "953b7b1a-1fb3-42e6-add5-4763381e124f"
+	policy3UID = "1217a56e-cbe0-472f-8576-040acdbb5f90"
 )
 
 var (
@@ -99,6 +100,11 @@ var (
 	nodeGroup1LabelsAZ1  = map[string]string{"label1": "1", core_v1.LabelTopologyZone: "az-1"}
 	nodeGroup1LabelsAZ2  = map[string]string{"label1": "1", core_v1.LabelTopologyZone: "az-2"}
 	nodeNoGroupLabelsAZ1 = map[string]string{core_v1.LabelTopologyZone: "az-1"}
+
+	advertisePolicyLabels   = map[string]string{"advertise": "bgp"}
+	advertisePolicySelector = &slimv1.LabelSelector{
+		MatchLabels: advertisePolicyLabels,
+	}
 )
 
 type fakeResource[T runtime.Object] chan resource.Event[T]
@@ -239,6 +245,7 @@ type policyParams struct {
 	name                 string
 	uid                  types.UID
 	generation           int64
+	labels               map[string]string
 	endpointLabels       map[string]string
 	destinationCIDR      string
 	excludedCIDRs        []string
@@ -291,6 +298,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		dstCIDRs:                []netip.Prefix{parsedDestinationCIDR},
 		excludedCIDRs:           parsedExcludedCIDRs,
 		azAffinity:              params.azAffinity,
+		labels:                  params.labels,
 		endpointSelectors: []api.EndpointSelector{
 			{
 				LabelSelector: &slimv1.LabelSelector{
@@ -338,6 +346,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 			Name:       params.name,
 			UID:        params.uid,
 			Generation: params.generation,
+			Labels:     params.labels,
 		},
 		Spec: v1.IsovalentEgressGatewayPolicySpec{
 			Selectors: []v1.EgressRule{

@@ -161,6 +161,7 @@ type PolicyConfig struct {
 
 	apiVersion string
 	generation int64
+	labels     map[string]string
 
 	endpointSelectors []api.EndpointSelector
 	dstCIDRs          []netip.Prefix
@@ -940,6 +941,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 	}
 
 	return &PolicyConfig{
+		labels:                  iegp.Labels,
 		endpointSelectors:       endpointSelectorList,
 		dstCIDRs:                dstCidrList,
 		excludedCIDRs:           excludedCIDRs,

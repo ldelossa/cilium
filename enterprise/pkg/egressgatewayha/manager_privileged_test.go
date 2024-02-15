@@ -15,12 +15,15 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
+	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/identity"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/addressing"
@@ -79,6 +82,7 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 		Endpoints:         k.endpoints,
 		Nodes:             k.ciliumNodes,
 		LocalNodeStore:    localNodeStore,
+		BGPSignaler:       signaler.NewBGPCPSignaler(),
 		Sysctl:            k.sysctl,
 	})
 	require.NoError(t, err)
@@ -256,6 +260,13 @@ func (k *EgressGatewayTestSuite) addExcludedCIDR(t *testing.T, policy *policyPar
 
 func (k *EgressGatewayTestSuite) removeExcludedCIDR(t *testing.T, policy *policyParams, excludedCIDR string) {
 	policy.excludedCIDRs = filter(policy.excludedCIDRs, excludedCIDR)
+
+	addPolicy(t, nil, k.policies, policy)
+	k.waitForReconciliationRun(t)
+}
+
+func (k *EgressGatewayTestSuite) updatePolicyLabels(t *testing.T, policy *policyParams, labels map[string]string) {
+	policy.labels = labels
 
 	addPolicy(t, nil, k.policies, policy)
 	k.waitForReconciliationRun(t)
@@ -494,6 +505,39 @@ func tryAssertEgressCtEntries(ctMap egressmapha.CtMap, entries []egressCtEntry) 
 		})
 
 	return err
+}
+
+// assertBGPSignal asserts whether BGP CP reconciliation signal has been sent.
+func (k *EgressGatewayTestSuite) assertBGPSignal(tb testing.TB, egressGatewayManager *Manager) {
+	tb.Helper()
+
+	select {
+	case _, ok := <-egressGatewayManager.bgpSignaler.Sig:
+		if !ok {
+			tb.Fatal("BGP Signal channel closed")
+		}
+	default:
+		tb.Fatal("BGP signal not received")
+	}
+}
+
+// assertAdvertisedEgressIPs asserts whether the list of advertised gateway IPs matches the provided list.
+func (k *EgressGatewayTestSuite) assertAdvertisedEgressIPs(tb testing.TB, egressGatewayManager *Manager, policySelector *slimv1.LabelSelector, expectedPolicyIPs map[types.NamespacedName][]string) {
+	tb.Helper()
+
+	egwPolicyIPs, err := egressGatewayManager.AdvertisedEgressIPs(policySelector)
+	require.NoError(tb, err)
+
+	// comparing maps, as the order of the IPs in the slice is not guaranteed
+	require.Equal(tb, len(expectedPolicyIPs), len(egwPolicyIPs))
+	for policyNSName, ips := range expectedPolicyIPs {
+		egwIPs := egwPolicyIPs[policyNSName]
+		var egwIPsStr []string
+		for _, ip := range egwIPs {
+			egwIPsStr = append(egwIPsStr, ip.String())
+		}
+		require.ElementsMatch(tb, ips, egwIPsStr)
+	}
 }
 
 func TestEgressGatewayIEGPParser(t *testing.T) {
@@ -1072,4 +1116,174 @@ func TestEndpointDataStore(t *testing.T) {
 		{ep3IP, destCIDR, egressIP1, node1IP},
 		{ep3IP, destCIDR, egressIP1, node2IP},
 	})
+}
+
+func TestAdvertisedEgressIPs(t *testing.T) {
+	k := setupEgressGatewayTestSuite(t)
+
+	// Create a new HA policy (policy-1) using testInterface1,
+	// with labels used in advertisePolicySelector - egressIP1 should be advertised
+	policy1 := k.addPolicy(t, &policyParams{
+		name:              "policy-1",
+		uid:               policy1UID,
+		labels:            advertisePolicyLabels,
+		endpointLabels:    ep1Labels,
+		destinationCIDR:   destCIDR,
+		nodeLabels:        nodeGroup1Labels,
+		iface:             testInterface1,
+		activeGatewayIPs:  []string{node1IP, node2IP},
+		healthyGatewayIPs: []string{node1IP, node2IP},
+	})
+
+	k.assertEgressRules(t, []egressRule{})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+	})
+
+	// Add a new endpoint which matches policy-1 - no change
+	k.addEndpoint(t, "ep-1", ep1IP, ep1Labels, node1IP)
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+	})
+
+	// Remove node1 - no advertisement
+	k.removeHealthyGateway(t, policy1, node1IP)
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{})
+
+	// Add back node1 - advertise again
+	k.addActiveGateway(t, policy1, node1IP, "")
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+	})
+
+	// Create a new HA policy (policy-2) using testInterface2,
+	// without labels used in advertisePolicySelector - only egressIP1 should be advertised
+	policy2 := k.addPolicy(t, &policyParams{
+		name:              "policy-2",
+		uid:               policy2UID,
+		endpointLabels:    ep2Labels,
+		destinationCIDR:   destCIDR,
+		nodeLabels:        nodeGroup2Labels,
+		iface:             testInterface2,
+		activeGatewayIPs:  []string{node1IP},
+		healthyGatewayIPs: []string{node1IP},
+	})
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+	})
+
+	// Update labels on policy-2 to be selected by advertisePolicySelector
+	// - both egressIP1 and egressIP2 should be advertised
+	k.updatePolicyLabels(t, policy2, advertisePolicyLabels)
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+		{Name: policy2.name}: {egressIP2},
+	})
+
+	// Add a new endpoint that matches policy-2 - no change
+	k.addEndpoint(t, "ep-2", ep2IP, ep2Labels, node1IP)
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+		{Name: policy2.name}: {egressIP2},
+	})
+
+	// Create a new HA policy (policy-3) using testInterface2,
+	// with labels used in advertisePolicySelector - egressIP1 and egressIP2 should be advertised
+	policy3 := k.addPolicy(t, &policyParams{
+		name:              "policy-3",
+		uid:               policy3UID,
+		labels:            advertisePolicyLabels,
+		endpointLabels:    ep2Labels,
+		destinationCIDR:   destCIDR,
+		nodeLabels:        nodeGroup2Labels,
+		iface:             testInterface2,
+		activeGatewayIPs:  []string{node1IP},
+		healthyGatewayIPs: []string{node1IP},
+	})
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+		{Name: policy2.name}: {egressIP2},
+		{Name: policy3.name}: {egressIP2},
+	})
+
+	// Update labels on policy-2 to NOT be selected by advertisePolicySelector
+	// - both egressIP1 and egressIP2 still should be advertised
+	k.updatePolicyLabels(t, policy2, nil)
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+		{Name: policy3.name}: {egressIP2},
+	})
+
+	// Update labels on policy-3 to NOT be selected by advertisePolicySelector - only egressIP1 should be advertised
+	k.updatePolicyLabels(t, policy3, nil)
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{
+		{Name: policy1.name}: {egressIP1},
+	})
+
+	// Update labels on policy-1 to NOT be selected by advertisePolicySelector - no egress IPs should be advertised
+	k.updatePolicyLabels(t, policy1, nil)
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+	})
+	k.assertBGPSignal(t, k.manager)
+	k.assertAdvertisedEgressIPs(t, k.manager, advertisePolicySelector, map[types.NamespacedName][]string{})
 }

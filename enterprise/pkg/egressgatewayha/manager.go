@@ -23,9 +23,11 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
+	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/tables"
@@ -35,6 +37,8 @@ import (
 	"github.com/cilium/cilium/pkg/ip"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	k8sLabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
+	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
@@ -167,6 +171,9 @@ type Manager struct {
 	localNodeStore *node.LocalNodeStore
 
 	sysctl sysctl.Sysctl
+
+	// bgpSignaler is used to signal reconciliation events to the BGP Control Plane
+	bgpSignaler *signaler.BGPCPSignaler
 }
 
 type Params struct {
@@ -182,6 +189,7 @@ type Params struct {
 	CtMap             egressmapha.CtMap
 	LocalNodeStore    *node.LocalNodeStore
 	Sysctl            sysctl.Sysctl
+	BGPSignaler       *signaler.BGPCPSignaler
 
 	Lifecycle cell.Lifecycle
 }
@@ -248,6 +256,7 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		ctMap:                         p.CtMap,
 		localNodeStore:                p.LocalNodeStore,
 		sysctl:                        p.Sysctl,
+		bgpSignaler:                   p.BGPSignaler,
 	}
 
 	t, err := trigger.NewTrigger(trigger.Parameters{
@@ -842,5 +851,29 @@ func (manager *Manager) reconcileLocked() {
 	// as long as the node is healthy.
 	manager.removeExpiredCtEntries()
 
+	// Signal the BGP Control Plane
+	manager.bgpSignaler.Event(struct{}{})
+
 	manager.reconciliationEventsCount.Add(1)
+}
+
+// AdvertisedEgressIPs returns a map of policy to egress IPs, used by EGW polices selected by the provided policy selector,
+// that should be advertised for this node as currently used egress IPs.
+func (manager *Manager) AdvertisedEgressIPs(policySelector *slimv1.LabelSelector) (map[types.NamespacedName][]netip.Addr, error) {
+	manager.Lock()
+	defer manager.Unlock()
+
+	selector, err := slimv1.LabelSelectorAsSelector(policySelector)
+	if err != nil {
+		return nil, err
+	}
+
+	egressIPs := make(map[types.NamespacedName][]netip.Addr)
+	for _, policyConfig := range manager.policyConfigs {
+		gwc := policyConfig.gatewayConfig
+		if gwc.localNodeConfiguredAsGateway && selector.Matches(k8sLabels.Set(policyConfig.labels)) {
+			egressIPs[policyConfig.id] = append(egressIPs[policyConfig.id], gwc.egressIP)
+		}
+	}
+	return egressIPs, nil
 }
