@@ -638,7 +638,6 @@ Vagrantfile @cilium/ci-structure
 /daemon/cmd/enterprise_fqdn_relay.go @isovalent/dns-proxy
 /Documentation/cmdref/
 /renovate.json5 @isovalent/infrastructure
-/.openvex.json @isovalent/security
 *podnetwork* @isovalent/multi-network
 /enterprise/cilium-cli/ @isovalent/cli
 /enterprise/cilium-cli/hooks/connectivity/tests/egressgateway.go @isovalent/egress-gateway
