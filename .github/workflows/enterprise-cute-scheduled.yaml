@@ -21,61 +21,76 @@ jobs:
         cute: [
           {
             repo: sky,
-            region: us-west-1
+            region: us-west-1,
+            deploy: stable
           },
           {
             repo: bloomberg,
             umbrella: true,
-            region: us-west-2
+            region: us-west-2,
+            deploy: stable
           },
           {
             repo: form3,
             dir: MAKS,
-            region: westus2
+            region: westus2,
+            deploy: stable
           },
           {
             repo: form3,
             dir: FPS,
-            region: eu-west-2
+            region: eu-west-2,
+            deploy: cute,
+            upgrade: stable
           },
           {
             repo: zerohash,
-            region: us-east-2
+            region: us-east-2,
+            deploy: stable
           },
           {
             repo: postfinance,
-            region: eu-west-1
+            region: eu-west-1,
+            deploy: stable
           },
           {
             repo: nationwide,
             umbrella: true,
-            region: eu-central-1
+            region: eu-central-1,
+            deploy: cute,
+            upgrade: stable
           },
           {
             repo: swiss-post,
             dir: aws-eks-vpc-cni-chaining,
-            region: ap-south-1
+            region: ap-south-1,
+            deploy: stable
           },
           {
             repo: swiss-post,
             dir: azure-aks-byocni,
-            region: eastus2
+            region: eastus2,
+            deploy: stable
           },
           {
             repo: roche,
-            region: eu-west-3
+            region: eu-west-3,
+            deploy: stable
           },
           {
             repo: astrazeneca,
-            region: ca-central-1
+            region: ca-central-1,
+            deploy: stable
           },
           {
             repo: telenor,
-            region: eu-north-1
+            region: eu-north-1,
+            deploy: stable
           },
           {
             repo: adobe,
-            region: ap-northeast-1
+            region: ap-northeast-1,
+            deploy: stable
           },
         ]
     runs-on: ubuntu-latest
@@ -95,6 +110,6 @@ jobs:
           umbrella="false"
           [[ -n "${{ matrix.cute.umbrella }}" ]] && umbrella="${{ matrix.cute.umbrella }}"
           # Notification will be send to the `weaver-in` Slack channel and then routed to a proper destination channel
-          args="repo=${{ matrix.cute.repo }}&dir=$dir&region=${{ matrix.cute.region }}&umbrella=$umbrella&deploy=stable&notify=C02T57KV69Y"
+          args="repo=${{ matrix.cute.repo }}&dir=$dir&region=${{ matrix.cute.region }}&umbrella=$umbrella&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=C02T57KV69Y"
           echo "Triggering workflow for CuTE: $args"
           gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
