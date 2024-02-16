@@ -13,6 +13,7 @@ package fqdnha
 import (
 	"github.com/cilium/hive/cell"
 
+	"github.com/cilium/cilium/enterprise/pkg/features"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/relay"
@@ -36,6 +37,13 @@ var Cell = cell.Module(
 	cell.ProvidePrivate(func(ipcache *ipcache.IPCache) relay.IPCacheGetter { return ipcache }),
 
 	cell.Config(defaultConfig),
+
+	features.FeatureWithConfigT[config.Config](features.Spec{
+		ID:          "FQDNHAProxy",
+		Name:        "Enterprise FQDN HA Proxy",
+		Description: "Enables external FQDN HA proxy for Cilium Enterprise",
+		Stage:       features.Limited,
+	}),
 
 	cell.Invoke(func(
 		proxyAgentServer *relay.FQDNProxyAgentServer,
