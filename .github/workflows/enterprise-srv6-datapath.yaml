@@ -79,7 +79,7 @@ jobs:
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: '5.15-20240208.105738'
             encap-mode: 'srh' # reduced not supported on kernels below 6.0
-            sid-manger-enabled: 'true'
+            sid-manger-enabled: 'false'
 
           - name: '2'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -91,7 +91,9 @@ jobs:
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: '6.6-20240208.105738'
             encap-mode: 'reduced'
-            sid-manger-enabled: 'true'
+            sid-manger-enabled: 'false'
+
+            # NOTE: ATM we test only with SID Manager disabled due to https://github.com/isovalent/cilium/issues/2821
 
     steps:
       - name: Checkout context ref (trusted)
