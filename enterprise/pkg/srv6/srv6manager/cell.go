@@ -16,9 +16,11 @@ import (
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/daemon/cmd"
+	"github.com/cilium/cilium/enterprise/pkg/features"
 	"github.com/cilium/cilium/pkg/ipam"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -50,6 +52,15 @@ var Cell = cell.Module(
 			dc.ForceDeviceRequired = true
 		}
 	}),
+
+	features.FeatureWithConfigT[*option.DaemonConfig](features.Spec{
+		ID:          "SRv6",
+		Name:        "SRv6",
+		Description: "Enable SRv6 support",
+		Stage:       features.Beta,
+	}, features.WithIsEnabledFn(func(conf *option.DaemonConfig) (bool, error) {
+		return conf.EnableSRv6, nil
+	})),
 )
 
 // daemon is an interface which minimize the surface of Daemon
