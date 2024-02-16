@@ -99,6 +99,8 @@ func (c *gateChecker) checkFeatureGates(spec Spec) error {
 		return nil
 	}
 	switch spec.Stage {
+	case Stable:
+		return nil
 	case Alpha:
 		if c.allowAllAlpha {
 			return nil
