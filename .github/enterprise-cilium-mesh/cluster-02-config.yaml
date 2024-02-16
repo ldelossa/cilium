@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  annotations:
+    io.cilium/global-service: "true"
+    com.isovalent/cilium-mesh: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+  selector:
+    run: nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forbidden-fruit
+  annotations:
+    io.cilium/global-service: "true"
+    com.isovalent/cilium-mesh: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+  selector:
+    run: forbidden-fruit
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-nginx
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      run: nginx
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: client
+      ports:
+        - port: 80

@@ -27,6 +27,9 @@ triggers:
   /ci-srv6-datapath:
     workflows:
     - enterprise-srv6-datapath.yaml
+  /ci-cilium-mesh:
+    workflows:
+    - enterprise-conformance-cilium-mesh.yaml
 
 workflows:
   enterprise-clustermesh-mixed-routing.yaml:
@@ -39,3 +42,5 @@ workflows:
     paths-ignore-regex: (test|Documentation)/
   enterprise-srv6-datapath.yaml:
     paths-ignore-regex: Documentation/
+  enterprise-conformance-cilium-mesh.yaml:
+    paths-ignore-regex: (test|Documentation)/
