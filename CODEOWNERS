@@ -607,6 +607,11 @@ Vagrantfile @cilium/ci-structure
 #   deployment (for example, being GitOps-friendly).
 # - @isovalent/hubble
 #   Responsible for maintaining enterprise Hubble products and features
+# - @isovalent/hubble-api
+#   Responsible for reviewing Hubble Enterprise API changes. Enterprise
+#   equivalent of @cilium/sig-hubble-api. Review all Hubble Enterprise API
+#   related changes. The team ensures that API changes are backward compatible
+#   or that a new API version is created for backward incompatible changes.
 # - @isovalent/infrastructure
 #   Responsible for maintaining files related to cloud infrastructures.
 # - @isovalent/multi-network
@@ -640,6 +645,7 @@ Vagrantfile @cilium/ci-structure
 /Documentation/cmdref/
 /renovate.json5 @isovalent/infrastructure
 *podnetwork* @isovalent/multi-network
+/enterprise/api/extensions @isovalent/hubble-api
 /enterprise/cilium-cli/ @isovalent/cli
 /enterprise/cilium-cli/hooks/connectivity/tests/egressgateway.go @isovalent/egress-gateway
 /enterprise/cilium-cli/hooks/connectivity/tests/external_dns_proxy*.go @isovalent/dns-proxy
@@ -662,6 +668,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/mixedrouting/ @isovalent/clustermesh
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/plugins/hubble-flow-aggregation/api @isovalent/hubble-api
 /enterprise/test/srv6/ @isovalent/traffic-engineering
 /install/kubernetes/cilium/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
