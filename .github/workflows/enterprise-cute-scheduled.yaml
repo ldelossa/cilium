@@ -13,7 +13,7 @@ permissions:
   actions: write
 
 env:
-  cute_slack_channel: C02T57KV69Y # `#cute` slack channel ID
+  slack_channel: C02T57KV69Y # Notification will be sent to the `#weaver-in` Slack channel and then routed to the `#cute` channel
 
 jobs:
   cute-scheduled:
@@ -26,6 +26,7 @@ jobs:
             repo: sky,
             dir: .,
             umbrella: false,
+            oss: false,
             region: us-west-1,
             deploy: stable
           },
@@ -33,6 +34,7 @@ jobs:
             repo: bloomberg,
             dir: .,
             umbrella: true,
+            oss: false,
             region: us-west-2,
             deploy: stable
           },
@@ -40,6 +42,7 @@ jobs:
             repo: form3,
             dir: MAKS,
             umbrella: false,
+            oss: false,
             region: westus2,
             deploy: stable
           },
@@ -47,6 +50,7 @@ jobs:
             repo: form3,
             dir: FPS,
             umbrella: false,
+            oss: false,
             region: eu-west-2,
             deploy: cute,
             upgrade: stable
@@ -55,6 +59,7 @@ jobs:
             repo: zerohash,
             dir: .,
             umbrella: false,
+            oss: false,
             region: us-east-2,
             deploy: stable
           },
@@ -62,6 +67,7 @@ jobs:
             repo: postfinance,
             dir: .,
             umbrella: false,
+            oss: false,
             region: eu-west-1,
             deploy: stable
           },
@@ -69,6 +75,7 @@ jobs:
             repo: nationwide,
             dir: .,
             umbrella: true,
+            oss: false,
             region: eu-central-1,
             deploy: cute,
             upgrade: stable
@@ -77,6 +84,7 @@ jobs:
             repo: swiss-post,
             dir: aws-eks-vpc-cni-chaining,
             umbrella: false,
+            oss: false,
             region: ap-south-1,
             deploy: stable
           },
@@ -84,6 +92,7 @@ jobs:
             repo: swiss-post,
             dir: azure-aks-byocni,
             umbrella: false,
+            oss: false,
             region: eastus2,
             deploy: stable
           },
@@ -91,6 +100,7 @@ jobs:
             repo: roche,
             dir: .,
             umbrella: false,
+            oss: false,
             region: eu-west-3,
             deploy: stable
           },
@@ -98,6 +108,7 @@ jobs:
             repo: astrazeneca,
             dir: .,
             umbrella: false,
+            oss: false,
             region: ca-central-1,
             deploy: stable
           },
@@ -105,6 +116,7 @@ jobs:
             repo: telenor,
             dir: .,
             umbrella: false,
+            oss: false,
             region: eu-north-1,
             deploy: stable
           },
@@ -112,8 +124,27 @@ jobs:
             repo: adobe,
             dir: .,
             umbrella: false,
+            oss: false,
             region: ap-northeast-1,
             deploy: stable
+          },
+          {
+            repo: northwestern-mutual,
+            dir: .,
+            umbrella: true,
+            oss: false,
+            region: eu-central-1,
+            deploy: cute,
+            upgrade: stable
+          },
+          {
+            repo: motorola-solutions,
+            dir: ipsec,
+            umbrella: false,
+            oss: true,
+            region: us-west-2,
+            deploy: cute,
+            upgrade: stable
           },
         ]
     runs-on: ubuntu-latest
@@ -128,7 +159,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REF=${GITHUB_REF#refs/heads/}
-          # Notification will be send to the `weaver-in` Slack channel and then routed to a proper destination channel
-          args="repo=${{ matrix.cute.repo }}&dir=${{ matrix.cute.dir }}&region=${{ matrix.cute.region }}&umbrella=${{ matrix.cute.umbrella }}&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=${{ env.cute_slack_channel }}"
+          args="repo=${{ matrix.cute.repo }}&dir=${{ matrix.cute.dir }}&region=${{ matrix.cute.region }}&umbrella=${{ matrix.cute.umbrella }}&oss=${{ matrix.cute.oss }}&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=${{ env.slack_channel }}"
           echo "Triggering workflow for CuTE: $args"
           gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
