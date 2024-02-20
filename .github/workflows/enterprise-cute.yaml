@@ -411,11 +411,11 @@ jobs:
           cilium status --wait 15m0s
 
       - name: Run CuTE upgrade
-        if: steps.vars.outputs.upgrade_type != ''
+        if: steps.vars.outputs.upgrade != ''
         timeout-minutes: 40
         uses: ./.github/actions/enterprise-cute-upgrade
         with:
-          deploy-type: ${{ steps.vars.outputs.deploy_type }}
+          deploy: ${{ steps.vars.outputs.deploy }}
           upgrade-stable-version: ${{ steps.cute_props.outputs.upgrade_stable_version }}
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
           umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
