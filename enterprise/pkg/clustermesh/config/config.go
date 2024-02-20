@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	// enableClusterAwareAddressing enables cluster-aware addressing
-	enableClusterAwareAddressing = "enable-cluster-aware-addressing"
+	// EnableClusterAwareAddressing enables cluster-aware addressing
+	EnableClusterAwareAddressing = "enable-cluster-aware-addressing"
 
-	// enableInterClusterSNAT enables inter-cluster SNAT
-	enableInterClusterSNAT = "enable-inter-cluster-snat"
+	// EnableInterClusterSNAT enables inter-cluster SNAT
+	EnableInterClusterSNAT = "enable-inter-cluster-snat"
 )
 
 type Config struct {
@@ -36,21 +36,21 @@ type Config struct {
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
-	flags.Bool(enableClusterAwareAddressing, def.EnableClusterAwareAddressing, "Enable cluster-aware addressing, to support overlapping PodCIDRs")
-	flags.Bool(enableInterClusterSNAT, def.EnableInterClusterSNAT, "Enable inter-cluster SNAT, to support overlapping PodCIDRs")
+	flags.Bool(EnableClusterAwareAddressing, def.EnableClusterAwareAddressing, "Enable cluster-aware addressing, to support overlapping PodCIDRs")
+	flags.Bool(EnableInterClusterSNAT, def.EnableInterClusterSNAT, "Enable inter-cluster SNAT, to support overlapping PodCIDRs")
 }
 
 func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 	if !cfg.EnableClusterAwareAddressing {
 		if cfg.EnableInterClusterSNAT {
-			return fmt.Errorf("%s depends on %s", enableInterClusterSNAT, enableClusterAwareAddressing)
+			return fmt.Errorf("%s depends on %s", EnableInterClusterSNAT, EnableClusterAwareAddressing)
 		}
 
 		return nil
 	}
 
 	if !dcfg.TunnelingEnabled() {
-		return fmt.Errorf("--%s depends on tunnel=%s|%s", enableClusterAwareAddressing, tunnel.VXLAN, tunnel.Geneve)
+		return fmt.Errorf("--%s depends on tunnel=%s|%s", EnableClusterAwareAddressing, tunnel.VXLAN, tunnel.Geneve)
 	}
 
 	// We cannot rely on the EnableNodePort value only because it may be
@@ -58,7 +58,7 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 	if dcfg.KubeProxyReplacement == option.KubeProxyReplacementDisabled ||
 		(dcfg.KubeProxyReplacement == option.KubeProxyReplacementPartial && !dcfg.EnableNodePort) ||
 		(dcfg.KubeProxyReplacement == option.KubeProxyReplacementFalse && !dcfg.EnableNodePort) {
-		return fmt.Errorf("--%s depends on BPF NodePort", enableClusterAwareAddressing)
+		return fmt.Errorf("--%s depends on BPF NodePort", EnableClusterAwareAddressing)
 	}
 
 	incompatibilities := map[string]bool{
@@ -70,7 +70,7 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 
 	for cfgname, enabled := range incompatibilities {
 		if enabled {
-			return fmt.Errorf("Currently, --%s can't be used with --%s", enableClusterAwareAddressing, cfgname)
+			return fmt.Errorf("Currently, --%s can't be used with --%s", EnableClusterAwareAddressing, cfgname)
 		}
 	}
 
