@@ -15,8 +15,12 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/cilium/cilium/daemon/cmd/cni"
+	dpopt "github.com/cilium/cilium/pkg/datapath/option"
 	ipamopt "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/option"
+
+	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
 
 // FallbackType is the type of the possible values for the --fallback-routing-mode flag
@@ -47,7 +51,7 @@ func (def Config) Flags(flags *pflag.FlagSet) {
 			"source and destination node (supported: %s)", FallbackTunnel))
 }
 
-func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
+func (cfg Config) Validate(dcfg *option.DaemonConfig, cmcfg cecmcfg.Config, cnicfg cni.CNIConfigManager) error {
 	switch cfg.FallbackRoutingMode {
 	case FallbackDisabled:
 		return nil
@@ -57,6 +61,24 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 	default:
 		return fmt.Errorf("invalid %s value %q, valid fallback modes are {%s}",
 			fallbackRoutingModeFlag, cfg.FallbackRoutingMode, FallbackTunnel)
+	}
+
+	for cfgname, enabled := range map[string]bool{
+		option.EnableHighScaleIPcache:     dcfg.EnableHighScaleIPcache,
+		option.EnableIPSecName:            dcfg.EnableIPSec,
+		option.EnableIPv4EgressGateway:    dcfg.EnableIPv4EgressGateway,
+		option.EnableIPv4EgressGatewayHA:  dcfg.EnableIPv4EgressGatewayHA,
+		option.EnableNat46X64Gateway:      dcfg.EnableNat46X64Gateway,
+		option.EnableVTEP:                 dcfg.EnableVTEP,
+		option.EnableWireguard:            dcfg.EnableWireguard,
+		option.InstallNoConntrackIptRules: dcfg.InstallNoConntrackIptRules,
+
+		cecmcfg.EnableClusterAwareAddressing: cmcfg.EnableClusterAwareAddressing,
+		cecmcfg.EnableInterClusterSNAT:       cmcfg.EnableInterClusterSNAT,
+	} {
+		if enabled {
+			return fmt.Errorf("currently, --%s is not compatible with --%s", fallbackRoutingModeFlag, cfgname)
+		}
 	}
 
 	switch dcfg.IPAM {
@@ -71,10 +93,15 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 			fallbackRoutingModeFlag, option.NodePortMode, option.NodePortModeSNAT)
 	}
 
-	// Additional known incompatibilities include:
-	// * Egress Gateway: does not work in combination with Cluster Mesh.
-	// * Overlapping PodCIDR: all clusters are required to be configured in tunnel mode.
-	// They are not explicitly validated here, as already forbidden elsewhere.
+	if dcfg.DatapathMode != dpopt.DatapathModeVeth {
+		return fmt.Errorf("currently, %s requires %s=%s",
+			fallbackRoutingModeFlag, option.DatapathMode, dpopt.DatapathModeVeth)
+	}
+
+	if cnicfg.GetChainingMode() != "none" {
+		return fmt.Errorf("currently, %s requires %s=%s",
+			fallbackRoutingModeFlag, option.CNIChainingMode, "none")
+	}
 
 	return nil
 }

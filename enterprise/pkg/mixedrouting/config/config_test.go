@@ -15,8 +15,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	fakecni "github.com/cilium/cilium/daemon/cmd/cni/fake"
+	dpopt "github.com/cilium/cilium/pkg/datapath/option"
 	ipamopt "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/option"
+
+	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -24,6 +28,7 @@ func TestConfigValidate(t *testing.T) {
 		name      string
 		cfg       Config
 		dcfg      *option.DaemonConfig
+		cmcfg     cecmcfg.Config
 		assertion func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool
 	}{
 		{
@@ -62,11 +67,34 @@ func TestConfigValidate(t *testing.T) {
 			dcfg:      &option.DaemonConfig{IPAM: ipamopt.IPAMKubernetes, NodePortMode: option.NodePortModeDSR},
 			assertion: assert.Error,
 		},
+		{
+			name:      "mixed routing mode enabled, fallback tunnel, IPSec encryption enabled",
+			cfg:       Config{FallbackRoutingMode: FallbackTunnel},
+			dcfg:      &option.DaemonConfig{IPAM: ipamopt.IPAMKubernetes, EnableIPSec: true},
+			assertion: assert.Error,
+		},
+		{
+			name:      "mixed routing mode enabled, fallback tunnel, overlapping PodCIDR enabled",
+			cfg:       Config{FallbackRoutingMode: FallbackTunnel},
+			dcfg:      &option.DaemonConfig{IPAM: ipamopt.IPAMKubernetes},
+			cmcfg:     cecmcfg.Config{EnableClusterAwareAddressing: true, EnableInterClusterSNAT: true},
+			assertion: assert.Error,
+		},
+		{
+			name:      "mixed routing mode enabled, fallback tunnel, datapath LB only mode",
+			cfg:       Config{FallbackRoutingMode: FallbackTunnel},
+			dcfg:      &option.DaemonConfig{IPAM: ipamopt.IPAMKubernetes, DatapathMode: dpopt.DatapathModeLBOnly},
+			assertion: assert.Error,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.assertion(t, tt.cfg.Validate(tt.dcfg))
+			if tt.dcfg.DatapathMode == "" {
+				tt.dcfg.DatapathMode = dpopt.DatapathModeVeth
+			}
+
+			tt.assertion(t, tt.cfg.Validate(tt.dcfg, tt.cmcfg, &fakecni.FakeCNIConfigManager{}))
 		})
 	}
 }
