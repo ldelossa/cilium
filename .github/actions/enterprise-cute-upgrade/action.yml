@@ -2,10 +2,13 @@ name: CuTE upgrade
 description: CuTE upgrade
 inputs:
   deploy:
-    description: 'CI deploy target.'
+    description: 'Source for the version of Cilium to deploy to (more: https://www.notion.so/isovalent/Customer-Test-Environment-CuTE-43a53c6e2b984c5fb299d7e728ee862f?pvs=4#03f75075d3104abca337917756db64e6)'
     required: true
-  upgrade-stable-version:
-    description: 'Cilium stable Helm chart version.'
+  upgrade:
+    description: 'Source for the version of Cilium to upgrade to (more: https://www.notion.so/isovalent/Customer-Test-Environment-CuTE-43a53c6e2b984c5fb299d7e728ee862f?pvs=4#edcb54b618ac4c1ea83d0521ef5e04a8)'
+    required: true
+  upgrade-target:
+    description: 'Version of Cilium to upgrade to (inferred from `upgrade` param, e.g. v1.2.3)'
     required: true
   helm-version:
     description: 'Cilium Helm chart version.'
@@ -22,25 +25,25 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: CuTE Terraform variables file for stable upgrade
-      if: inputs.upgrade-stable-version != ''
+    - name: CuTE Terraform variables file for existing Helm version
+      if: inputs.upgrade != 'current' && inputs.upgrade != 'latest'
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
         if [[ "${{ inputs.deploy }}" == "cute" ]]; then
-          echo "cilium_helm_version=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
+          echo "cilium_helm_version=\"${{ inputs.upgrade-target }}\"" >> terraform.tfvars
           # the below variables are for cluster mesh scenario
-          echo "cilium_helm_version_1=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
-          echo "cilium_helm_version_2=\"${{ inputs.upgrade-stable-version }}\"" >> terraform.tfvars
+          echo "cilium_helm_version_1=\"${{ inputs.upgrade-target }}\"" >> terraform.tfvars
+          echo "cilium_helm_version_2=\"${{ inputs.upgrade-target }}\"" >> terraform.tfvars
         else
-          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.upgrade-stable-version }}\"/g" terraform.tfvars
-          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.upgrade-stable-version }}\"/g" terraform.tfvars
-          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.upgrade-stable-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
         fi
         cat terraform.tfvars
 
-    - name: CuTE Terraform variables file for non-stable upgrade
-      if: inputs.upgrade-stable-version == ''
+    - name: CuTE Terraform variables file for non-existing Helm version
+      if: inputs.upgrade == 'current' || inputs.upgrade == 'latest'
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |

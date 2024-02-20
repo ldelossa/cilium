@@ -190,26 +190,24 @@ jobs:
             deploy_target=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
             deploy_target="v$cute_chart_version$branch_suffix"
+          elif [[ "${{ steps.vars.outputs.deploy }}" =~ ^(v){0,1}[0-9]+.[0-9]+.*$ ]]; then
+            deploy_target="${{ steps.vars.outputs.deploy }}"
           fi
 
           echo "getting upgrade branch and chart version ..."
-          upgrade_branch=""
-          upgrade_stable_version=""
-          if [[ "${{ steps.vars.outputs.upgrade }}" == "stable" ]]; then
-            upgrade_stable_version=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
+          upgrade_target="${{ steps.vars.outputs.upgrade }}"
+          if [[ "${{ steps.vars.outputs.upgrade }}" == "current" ]]; then
+            upgrade_target="${{ inputs.context-ref }}"
+          elif [[ "${{ steps.vars.outputs.upgrade }}" == "stable" ]]; then
+            upgrade_target=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.upgrade }}" == "latest" ]]; then
-            upgrade_branch="v$cute_chart_version$branch_suffix"
-          elif [[ "${{ steps.vars.outputs.upgrade }}" =~ ^(v){0,1}[0-9]+.[0-9]+.*$ ]]; then
-            upgrade_stable_version="${{ steps.vars.outputs.upgrade }}"
-          elif [[ -n "${{ steps.vars.outputs.upgrade }}" ]]; then
-            upgrade_branch="${{ steps.vars.outputs.upgrade }}"
+            upgrade_target="v$cute_chart_version$branch_suffix"
           fi
 
           echo provider=$provider >> $GITHUB_OUTPUT
           echo region=$region >> $GITHUB_OUTPUT
           echo deploy_target=$deploy_target >> $GITHUB_OUTPUT
-          echo upgrade_branch=$upgrade_branch >> $GITHUB_OUTPUT
-          echo upgrade_stable_version=$upgrade_stable_version >> $GITHUB_OUTPUT
+          echo upgrade_target=$upgrade_target >> $GITHUB_OUTPUT
 
       - name: Print CuTE properties
         run: |
@@ -225,8 +223,7 @@ jobs:
           echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
           echo "Upgrade: ${{ steps.vars.outputs.upgrade }}"
-          echo "Upgrade branch: ${{ steps.cute_props.outputs.upgrade_branch }}"
-          echo "Upgrade stable version: ${{ steps.cute_props.outputs.upgrade_stable_version }}"
+          echo "Upgrade target: ${{ steps.cute_props.outputs.upgrade_target }}"
           echo "Slack notification channel: ${{ steps.vars.outputs.notify }}"
 
       - name: Install Cilium CLI
@@ -325,8 +322,8 @@ jobs:
 
       - name: Prepare helm chart
         id: cute_helm
-        # Skip for `cute` or `stable` because Helm chart already exists
-        if: steps.vars.outputs.deploy != 'cute' && steps.vars.outputs.deploy != 'stable'
+        # Skip for `cute`, `stable` or `<version>` because Helm chart already exists
+        if: steps.vars.outputs.deploy == 'current' || steps.vars.outputs.deploy == 'latest'
         timeout-minutes: 30
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
@@ -339,12 +336,12 @@ jobs:
 
       - name: Prepare upgrade helm chart
         id: cute_helm_upgrade
-        # Skip for `stable` and `upgrade_stable_version` because Helm chart already exists
-        if: steps.vars.outputs.upgrade != '' && steps.vars.outputs.upgrade != 'stable' && steps.cute_props.outputs.upgrade_stable_version == ''
+        # Skip for `stable` and `<version>` because Helm chart already exists
+        if: steps.vars.outputs.upgrade == 'current' || steps.vars.outputs.upgrade == 'latest'
         timeout-minutes: 30
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
-          branch: ${{ steps.cute_props.outputs.upgrade_branch }}
+          branch: ${{ steps.cute_props.outputs.upgrade_target }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
@@ -413,7 +410,8 @@ jobs:
         uses: ./.github/actions/enterprise-cute-upgrade
         with:
           deploy: ${{ steps.vars.outputs.deploy }}
-          upgrade-stable-version: ${{ steps.cute_props.outputs.upgrade_stable_version }}
+          upgrade: ${{ steps.vars.outputs.upgrade }}
+          upgrade-target: ${{ steps.cute_props.outputs.upgrade_target }}
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
           umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
