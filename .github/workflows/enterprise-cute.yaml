@@ -183,14 +183,13 @@ jobs:
           fi
 
           echo "getting deploy branch and chart version ..."
-          deploy_branch=""
-          deploy_chart_version=""
+          deploy_target=""
           if [[ "${{ steps.vars.outputs.deploy }}" == "current" ]]; then
-            deploy_branch="${{ inputs.context-ref }}"
+            deploy_target="${{ inputs.context-ref }}"
           elif [[ "${{ steps.vars.outputs.deploy }}" == "stable" ]]; then
-            deploy_chart_version=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
+            deploy_target=$(helm search repo $helm_repo/cilium --version $cute_chart_version -o json | jq '.[0] .version')
           elif [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
-            deploy_branch="v$cute_chart_version$branch_suffix"
+            deploy_target="v$cute_chart_version$branch_suffix"
           fi
 
           echo "getting upgrade branch and chart version ..."
@@ -208,8 +207,7 @@ jobs:
 
           echo provider=$provider >> $GITHUB_OUTPUT
           echo region=$region >> $GITHUB_OUTPUT
-          echo deploy_branch=$deploy_branch >> $GITHUB_OUTPUT
-          echo deploy_chart_version=$deploy_chart_version >> $GITHUB_OUTPUT
+          echo deploy_target=$deploy_target >> $GITHUB_OUTPUT
           echo upgrade_branch=$upgrade_branch >> $GITHUB_OUTPUT
           echo upgrade_stable_version=$upgrade_stable_version >> $GITHUB_OUTPUT
 
@@ -222,8 +220,7 @@ jobs:
           echo "Cloud provider: ${{ steps.cute_props.outputs.provider }}"
           echo "Region: ${{ steps.cute_props.outputs.region }}"
           echo "Deploy: ${{ steps.vars.outputs.deploy }}"
-          echo "Deploy branch: ${{ steps.cute_props.outputs.deploy_branch }}"
-          echo "Deploy chart version: ${{ steps.cute_props.outputs.deploy_chart_version }}"
+          echo "Deploy target: ${{ steps.cute_props.outputs.deploy_target }}"
           echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
           echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
@@ -333,7 +330,7 @@ jobs:
         timeout-minutes: 30
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
-          branch: ${{ steps.cute_props.outputs.deploy_branch }}
+          branch: ${{ steps.cute_props.outputs.deploy_target }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
@@ -364,10 +361,10 @@ jobs:
           region="${{ steps.cute_props.outputs.region }}"
           EOF
           if [[ "${{ steps.vars.outputs.deploy }}" == "stable" ]]; then
-            echo "cilium_helm_version=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
+            echo "cilium_helm_version=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
             # the below variables are for cluster mesh scenario
-            echo "cilium_helm_version_1=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
-            echo "cilium_helm_version_2=\"${{ steps.cute_props.outputs.deploy_chart_version }}\"" >> terraform.tfvars
+            echo "cilium_helm_version_1=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
+            echo "cilium_helm_version_2=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
           elif [[ "${{ steps.vars.outputs.deploy }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
             if [[ ${{ steps.vars.outputs.umbrella_chart }} != 'true' ]]; then
               echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium\"" >> terraform.tfvars
