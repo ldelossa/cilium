@@ -618,6 +618,8 @@ Vagrantfile @cilium/ci-structure
 #   Responsible for maintaining the Cilium-native multi-network feature
 # - @isovalent/infrastructure
 #   Responsible for maintaining CI/CD pipelines
+# - @isovalent/release-managers
+#   Responsible for maintaining tools for managing releases.
 # - @isovalent/security
 #   Responsible for security related features and issues.
 # - @isovalent/sig-k8s:
@@ -670,6 +672,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/plugins/hubble-flow-aggregation/api @isovalent/hubble-api
 /enterprise/test/srv6/ @isovalent/traffic-engineering
+/enterprise/tools/release-notes/ @isovalent/release-managers
 /install/kubernetes/cilium/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/_extensions.tpl @isovalent/sig-k8s @isovalent/helm @isovalent/core-structure
