@@ -1,3 +1,6 @@
+allowed-teams:
+  - isovalent
+
 triggers:
   /test:
     workflows:
