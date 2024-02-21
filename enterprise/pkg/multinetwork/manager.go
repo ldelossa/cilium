@@ -13,6 +13,7 @@ import (
 	k8sResource "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/enterprise/api/v1/models"
 	"github.com/cilium/cilium/pkg/controller"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -84,6 +85,7 @@ type daemonConfig interface {
 type Manager struct {
 	config       config
 	daemonConfig daemonConfig
+	sysctl       sysctl.Sysctl
 
 	controllerManager *controller.Manager
 	cancelController  context.CancelFunc
@@ -269,7 +271,7 @@ func (m *Manager) startLocalIPCollector(ctx context.Context) {
 	// Collects local podCIDRs and stores them in nodeIPByNetworkName
 	m.controllerManager.UpdateController(localNodeSyncController, controller.ControllerParams{
 		DoFunc: func(ctx context.Context) error {
-			return localIP.updateNodeIPAddresses()
+			return localIP.updateNodeIPAddresses(m.sysctl)
 		},
 		RunInterval: 15 * time.Second,
 		Group:       controllerGroup,

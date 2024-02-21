@@ -27,7 +27,6 @@ import (
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/auth"
 	"github.com/cilium/cilium/pkg/aws/eni"
-	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
 	"github.com/cilium/cilium/pkg/clustermesh"
@@ -40,6 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/maps"
 	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
@@ -63,6 +63,7 @@ import (
 	"github.com/cilium/cilium/pkg/ipmasq"
 	"github.com/cilium/cilium/pkg/k8s"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
+	k8sSynced "github.com/cilium/cilium/pkg/k8s/synced"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
@@ -94,7 +95,6 @@ import (
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/service"
 	"github.com/cilium/cilium/pkg/statedb"
-	"github.com/cilium/cilium/pkg/sysctl"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/version"
 	wireguard "github.com/cilium/cilium/pkg/wireguard/agent"
@@ -187,6 +187,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.AutoCreateCiliumNodeResource, defaults.AutoCreateCiliumNodeResource, "Automatically create CiliumNode resource for own node on startup")
 	option.BindEnv(vp, option.AutoCreateCiliumNodeResource)
+
+	flags.StringSlice(option.ExcludeNodeLabelPatterns, []string{}, "List of k8s node label regex patterns to be excluded from CiliumNode")
+	option.BindEnv(vp, option.ExcludeNodeLabelPatterns)
 
 	flags.String(option.BPFRoot, "", "Path to BPF filesystem")
 	option.BindEnv(vp, option.BPFRoot)
@@ -715,9 +718,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Int(option.MTUName, 0, "Overwrite auto-detected MTU of underlying network")
 	option.BindEnv(vp, option.MTUName)
 
-	flags.String(option.ProcFs, "/proc", "Root's proc filesystem path")
-	option.BindEnv(vp, option.ProcFs)
-
 	flags.Int(option.RouteMetric, 0, "Overwrite the metric used by cilium when adding routes to its 'cilium_host' device")
 	option.BindEnv(vp, option.RouteMetric)
 
@@ -1180,8 +1180,6 @@ func initEnv(vp *viper.Viper) {
 
 	option.LogRegisteredOptions(vp, log)
 
-	sysctl.SetProcfs(option.Config.ProcFs)
-
 	for _, grp := range option.Config.DebugVerbose {
 		switch grp {
 		case argDebugVerboseFlow:
@@ -1599,9 +1597,12 @@ var daemonCell = cell.Module(
 	"daemon",
 	"Legacy Daemon",
 
-	cell.Provide(newDaemonPromise),
-	cell.Provide(newRestorerPromise),
-	cell.Provide(func() k8s.CacheStatus { return make(k8s.CacheStatus) }),
+	cell.Provide(
+		newDaemonPromise,
+		newRestorerPromise,
+		func() k8s.CacheStatus { return make(k8s.CacheStatus) },
+		newSyncHostIPs,
+	),
 	// Provide a read-only copy of the current daemon settings to be consumed
 	// by the debuginfo API
 	cell.ProvidePrivate(daemonSettings),
@@ -1617,10 +1618,11 @@ type daemonParams struct {
 	Datapath             datapath.Datapath
 	WGAgent              *wireguard.Agent
 	LocalNodeStore       *node.LocalNodeStore
-	BGPController        *bgpv1.Controller
 	Shutdowner           hive.Shutdowner
 	Resources            agentK8s.Resources
 	CacheStatus          k8s.CacheStatus
+	K8sResourceSynced    *k8sSynced.Resources
+	K8sAPIGroups         *k8sSynced.APIGroups
 	NodeManager          nodeManager.NodeManager
 	EndpointManager      endpointmanager.EndpointManager
 	CertManager          certificatemanager.CertificateManager
@@ -1661,6 +1663,8 @@ type daemonParams struct {
 	BandwidthManager    datapath.BandwidthManager
 	IPsecKeyCustodian   datapath.IPsecKeyCustodian
 	MTU                 mtu.MTU
+	Sysctl              sysctl.Sysctl
+	SyncHostIPs         *syncHostIPs
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1688,10 +1692,12 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 			daemon = d
 
 			if !option.Config.DryMode {
-				startDaemon(daemon, restoredEndpoints, cleaner, params)
+				if err := startDaemon(daemon, restoredEndpoints, cleaner, params); err != nil {
+					daemonResolver.Reject(err)
+					return err
+				}
 			}
 			daemonResolver.Resolve(daemon)
-
 			return nil
 		},
 		OnStop: func(cell.HookContext) error {
@@ -1708,19 +1714,19 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 }
 
 // startDaemon starts the old unmodular part of the cilium-agent.
-func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daemonCleanup, params daemonParams) {
+func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daemonCleanup, params daemonParams) error {
 	log.Info("Initializing daemon")
 
 	// This validation needs to be done outside of the agent until
 	// datapath.NodeAddressing is used consistently across the code base.
 	log.Info("Validating configured node address ranges")
 	if err := node.ValidatePostInit(); err != nil {
-		log.Fatalf("postinit failed: %s", err)
+		return fmt.Errorf("postinit failed: %w", err)
 	}
 
 	bootstrapStats.enableConntrack.Start()
 	log.Info("Starting connection tracking garbage collector")
-	params.CTNATMapGC.Enable(restoredEndpoints.restored)
+	params.CTNATMapGC.Enable()
 	bootstrapStats.enableConntrack.End(true)
 
 	bootstrapStats.k8sInit.Start()
@@ -1744,11 +1750,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		d.endpointManager.InitHostEndpointLabels(d.ctx)
 	} else {
 		log.Info("Creating host endpoint")
-		if err := d.endpointManager.AddHostEndpoint(
+		err := d.endpointManager.AddHostEndpoint(
 			d.ctx, d, d, d.ipcache, d.l7Proxy, d.identityAllocator,
-			"Create host endpoint", nodeTypes.GetName(),
-		); err != nil {
-			log.Fatalf("unable to create host endpoint: %s", err)
+			"Create host endpoint", nodeTypes.GetName())
+		if err != nil {
+			return fmt.Errorf("unable to create host endpoint: %w", err)
 		}
 	}
 
@@ -1761,11 +1767,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 				log.Warn("Ingress IPs are not available, skipping creation of the Ingress Endpoint: Policy enforcement on Cilium Ingress will not work as expected.")
 			} else {
 				log.Info("Creating ingress endpoint")
-				if err := d.endpointManager.AddIngressEndpoint(
+				err := d.endpointManager.AddIngressEndpoint(
 					d.ctx, d, d, d.ipcache, d.l7Proxy, d.identityAllocator,
-					"Create ingress endpoint",
-				); err != nil {
-					log.Fatalf("unable to create ingress endpoint: %s", err)
+					"Create ingress endpoint")
+				if err != nil {
+					return fmt.Errorf("unable to create ingress endpoint: %w", err)
 				}
 			}
 		}
@@ -1774,7 +1780,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	if option.Config.EnableIPMasqAgent {
 		ipmasqAgent, err := ipmasq.NewIPMasqAgent(option.Config.IPMasqAgentConfigPath)
 		if err != nil {
-			log.Fatalf("failed to create ipmasq agent: %s", err)
+			return fmt.Errorf("failed to create ipmasq agent: %w", err)
 		}
 		ipmasqAgent.Start()
 	}
@@ -1827,7 +1833,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 	bootstrapStats.healthCheck.Start()
 	if option.Config.EnableHealthChecking {
-		d.initHealth(params.HealthAPISpec, cleaner)
+		d.initHealth(params.HealthAPISpec, cleaner, params.Sysctl)
 	}
 	bootstrapStats.healthCheck.End(true)
 
@@ -1839,10 +1845,6 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 			d.startKubeProxyHealthzHTTPService(option.Config.KubeProxyReplacementHealthzBindAddr)
 		}
 	}
-
-	// Assign the BGP Control to the struct field so non-modularized components can interact with the BGP Controller
-	// like they are used to.
-	d.bgpControlPlaneController = params.BGPController
 
 	err := d.SendNotification(monitorAPI.StartMessage(time.Now()))
 	if err != nil {
@@ -1880,6 +1882,8 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	if err != nil {
 		log.WithError(err).Error("Unable to store Viper's configuration")
 	}
+
+	return nil
 }
 
 func newRestorerPromise(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon]) promise.Promise[endpointstate.Restorer] {

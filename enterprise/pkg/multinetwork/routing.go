@@ -16,6 +16,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/connector"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -185,7 +186,7 @@ func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nod
 // addresses for each network. By calling LocalNodeStore.Update, the IPs will
 // be pushed to both the KVStore and the CiliumNode objects.
 // This is run periodically by the localNodeSyncController controller.
-func (m *localNetworkIPCollector) updateNodeIPAddresses() error {
+func (m *localNetworkIPCollector) updateNodeIPAddresses(sysctl sysctl.Sysctl) error {
 	ifaces, err := netlink.LinkList()
 	if err != nil {
 		return fmt.Errorf("failed to list node interfaces: %w", err)
@@ -236,7 +237,7 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses() error {
 	// needed for cross-network traffic, where we have asynchronous routing
 	// where the reverse path will use a different interface.
 	for dev := range devices {
-		if err = connector.DisableRpFilter(dev); err != nil {
+		if err = connector.DisableRpFilter(sysctl, dev); err != nil {
 			log.WithError(err).Warning("failed to set rp_filter")
 		}
 	}

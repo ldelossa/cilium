@@ -136,7 +136,7 @@ jobs:
           target: import-cache
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@9614fae9e5c5eddabb09f90a270fcb487c9f7149 # v3.3.0
+        uses: sigstore/cosign-installer@e1523de7571e31dbe865fd2e80c5c7c23ae71eb4 # v3.4.0
 
       - name: Install Bom
         shell: bash
@@ -187,7 +187,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:83d69160c3584fcea6f518144d9f9f014ccb9aae@sha256:ae596051e333c7366c86faed9192a468b92680cb51c165a6e9f06c80625d399a
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:272c2080c5c3fc32c2a6ca6b5727daeb12836164@sha256:408484a9f3aaafc41f875254d52af1354822c2d0a694799e90372e0765b27d99
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -321,7 +321,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:83d69160c3584fcea6f518144d9f9f014ccb9aae@sha256:ae596051e333c7366c86faed9192a468b92680cb51c165a6e9f06c80625d399a
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:272c2080c5c3fc32c2a6ca6b5727daeb12836164@sha256:408484a9f3aaafc41f875254d52af1354822c2d0a694799e90372e0765b27d99
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -399,7 +399,7 @@ jobs:
 
       # Upload artifact digests
       - name: Upload artifact digests
-        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4.3.0
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: image-digest ${{ matrix.name }}
           path: image-digest
@@ -443,7 +443,7 @@ jobs:
           mkdir -p image-digest/
 
       - name: Download digests of all images built
-        uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935 # v4.1.1
+        uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # v4.1.2
         with:
           path: image-digest/
 

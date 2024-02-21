@@ -26,7 +26,6 @@ import (
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/auth"
 	"github.com/cilium/cilium/pkg/bgp/speaker"
-	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/cgroups/manager"
 	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/controller"
@@ -99,8 +98,6 @@ const (
 	// ConfigModifyQueueSize is the size of the event queue for serializing
 	// configuration updates to the daemon
 	ConfigModifyQueueSize = 10
-
-	syncHostIPsController = "sync-host-ips"
 )
 
 // Daemon is the cilium daemon that is in charge of perform all necessary plumbing,
@@ -191,9 +188,6 @@ type Daemon struct {
 
 	// event queue for serializing configuration updates to the daemon.
 	configModifyQueue *eventqueue.EventQueue
-
-	// controller for Cilium's BGP control plane.
-	bgpControlPlaneController *bgpv1.Controller
 
 	// CIDRs for which identities were restored during bootstrap
 	restoredCIDRs map[netip.Prefix]identity.NumericIdentity
@@ -363,7 +357,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// detection, might disable BPF NodePort and friends. But this is fine, as
 	// the feature does not influence the decision which BPF maps should be
 	// created.
-	if err := initKubeProxyReplacementOptions(params.TunnelConfig); err != nil {
+	if err := initKubeProxyReplacementOptions(params.Sysctl, params.TunnelConfig); err != nil {
 		log.WithError(err).Error("unable to initialize kube-proxy replacement options")
 		return nil, nil, fmt.Errorf("unable to initialize kube-proxy replacement options: %w", err)
 	}
@@ -496,6 +490,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	d.k8sWatcher = watchers.NewK8sWatcher(
 		params.Clientset,
+		params.K8sResourceSynced,
+		params.K8sAPIGroups,
 		d.endpointManager,
 		d.nodeDiscovery,
 		&d,
@@ -739,7 +735,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.l2announcer.DevicesChanged(devices)
 	}
 
-	if err := finishKubeProxyReplacementInit(); err != nil {
+	if err := finishKubeProxyReplacementInit(params.Sysctl); err != nil {
 		log.WithError(err).Error("failed to finalise LB initialization")
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
 	}
@@ -970,29 +966,23 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		return nil, restoredEndpoints, fmt.Errorf("error encountered while updating DNS datapath rules: %w", err)
 	}
 
-	// Start the controller for periodic sync. The purpose of the
-	// controller is to ensure that endpoints and host IPs entries are
-	// reinserted to the bpf maps if they are ever removed from them.
-	syncErrs := make(chan error, 1)
-	syncHostIPsControllerGroup := controller.NewGroup("sync-host-ips")
-	d.controllers.UpdateController(
-		syncHostIPsController,
-		controller.ControllerParams{
-			Group: syncHostIPsControllerGroup,
-			DoFunc: func(ctx context.Context) error {
-				err := d.syncHostIPs()
-				select {
-				case syncErrs <- err:
-				default:
-				}
-				return err
-			},
-			RunInterval: time.Minute,
-			Context:     d.ctx,
-		})
+	if option.Config.EnableVTEP {
+		// Start controller to setup and periodically verify VTEP
+		// endpoints and routes.
+		syncVTEPControllerGroup := controller.NewGroup("sync-vtep")
+		d.controllers.UpdateController(
+			syncVTEPControllerGroup.Name,
+			controller.ControllerParams{
+				Group:       syncVTEPControllerGroup,
+				DoFunc:      syncVTEP,
+				RunInterval: time.Minute,
+				Context:     d.ctx,
+			})
+	}
 
-	// Wait for the initial sync and check that it succeeded.
-	if err := <-syncErrs; err != nil {
+	// Start the host IP synchronization. Blocks until the initial synchronization
+	// has finished.
+	if err := params.SyncHostIPs.StartAndWaitFirst(ctx); err != nil {
 		return nil, nil, err
 	}
 

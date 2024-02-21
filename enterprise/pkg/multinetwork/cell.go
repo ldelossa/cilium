@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/pkg/controller"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -72,6 +73,7 @@ type managerParams struct {
 	Config    config
 
 	DaemonConfig       *option.DaemonConfig
+	Sysctl             sysctl.Sysctl
 	PodResource        k8s.LocalPodResource
 	NetworkResource    resource.Resource[*iso_v1alpha1.IsovalentPodNetwork]
 	CiliumNodeResource resource.Resource[*cilium_api_v2.CiliumNode]
@@ -86,6 +88,7 @@ func newMultiNetworkManager(params managerParams) *Manager {
 	manager := &Manager{
 		config:       params.Config,
 		daemonConfig: params.DaemonConfig,
+		sysctl:       params.Sysctl,
 
 		controllerManager: controller.NewManager(),
 
