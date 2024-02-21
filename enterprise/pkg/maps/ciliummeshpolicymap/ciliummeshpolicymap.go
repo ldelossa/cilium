@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/pkg/bpf"
+	loader "github.com/cilium/cilium/pkg/datapath/loader/types"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
@@ -42,6 +43,8 @@ type ciliumMeshPolicyParams struct {
 
 	Config Config
 
+	Loader loader.Loader
+
 	Lifecycle cell.Lifecycle
 	Logger    logrus.FieldLogger
 }
@@ -51,7 +54,8 @@ type CiliumMeshPolicyWriter interface {
 }
 
 type ciliumMeshPolicyMap struct {
-	m *ebpf.Map
+	m           *ebpf.Map
+	initialized chan struct{}
 }
 
 func (cmpm *ciliumMeshPolicyMap) writeEndpoint(keys []*lxcmap.EndpointKey, fd int) error {
@@ -75,6 +79,7 @@ func (cmpm *ciliumMeshPolicyMap) writeEndpoint(keys []*lxcmap.EndpointKey, fd in
 // handled in the usual way via Map lock. If sockops is disabled this will be
 // a nop.
 func (cmpm *ciliumMeshPolicyMap) WriteEndpoint(ip netip.Addr, pm *policymap.PolicyMap) error {
+	<-cmpm.initialized
 
 	var keys []*lxcmap.EndpointKey
 
@@ -95,7 +100,7 @@ func newCiliumMeshPolicyParams(p ciliumMeshPolicyParams) (out struct {
 		return
 	}
 
-	out.MapOut = bpf.NewMapOut(CiliumMeshPolicyWriter(createWithName(p.Lifecycle, MapName)))
+	out.MapOut = bpf.NewMapOut(CiliumMeshPolicyWriter(createWithName(p.Lifecycle, p.Loader, MapName)))
 
 	return
 }
@@ -119,7 +124,7 @@ type CiliumMeshPolicyValue struct{ Fd uint32 }
 //
 // The specified name allows non-standard map paths to be used, for instance
 // for testing purposes.
-func createWithName(lc cell.Lifecycle, name string) *ciliumMeshPolicyMap {
+func createWithName(lc cell.Lifecycle, loadr loader.Loader, name string) *ciliumMeshPolicyMap {
 	innerMapSpec := &ebpf.MapSpec{
 		Name:       innerMapName,
 		Type:       ebpf.LPMTrie,
@@ -138,16 +143,27 @@ func createWithName(lc cell.Lifecycle, name string) *ciliumMeshPolicyMap {
 		Pinning:    ebpf.PinByName,
 	})
 
+	initialized := make(chan struct{})
+
 	lc.Append(cell.Hook{
 		OnStart: func(hc cell.HookContext) error {
-			return cmpm.OpenOrCreate()
+			go func() {
+				<-loadr.HostDatapathInitialized()
+				cmpm.OpenOrCreate()
+				close(initialized)
+			}()
+
+			return nil
 		},
 		OnStop: func(hc cell.HookContext) error {
 			return cmpm.Close()
 		},
 	})
 
-	return &ciliumMeshPolicyMap{m: cmpm}
+	return &ciliumMeshPolicyMap{
+		m:           cmpm,
+		initialized: initialized,
+	}
 }
 
 func (v CiliumMeshPolicyValue) String() string { return fmt.Sprintf("fd=%d", v.Fd) }
