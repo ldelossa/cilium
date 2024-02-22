@@ -19,9 +19,9 @@ const (
 	CustomResourceDefinitionVersion = "v1"
 
 	// IsovalentEgressGatewayPolicy (IEGP)
-	IEGPluralName      = "isovalentegressgatewaypolicies"
+	IEGPPluralName     = "isovalentegressgatewaypolicies"
 	IEGPKindDefinition = "IsovalentEgressGatewayPolicy"
-	IEGPName           = IEGPluralName + "." + CustomResourceDefinitionGroup
+	IEGPName           = IEGPPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
