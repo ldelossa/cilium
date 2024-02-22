@@ -67,6 +67,7 @@ jobs:
           deploy="current"
           upgrade=""
           notify=""
+          owner=""
           quay_charts_org="${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"
 
           input="${{ inputs.extra-args }}"
@@ -100,6 +101,9 @@ jobs:
             notify=*)
               notify="${a##*notify=}"
               ;;
+            owner=*)
+              owner="${a##*owner=}"
+              ;;
             *)
               echo -n "unknown param: $a"
               exit 1
@@ -108,6 +112,7 @@ jobs:
           done
 
           [[ "$oss" == "true" ]] && quay_charts_org="${{ env.QUAY_OSS_CHARTS_ORGANIZATION_DEV }}"
+          [[ -n "$owner" ]] && owner="<@$owner>"
 
           echo cute_repo=$repo >> $GITHUB_OUTPUT
           echo cute_dir=$dir >> $GITHUB_OUTPUT
@@ -118,6 +123,7 @@ jobs:
           echo upgrade=$upgrade >> $GITHUB_OUTPUT
           echo oss=$oss >> $GITHUB_OUTPUT
           echo notify=$notify >> $GITHUB_OUTPUT
+          echo owner=$owner >> $GITHUB_OUTPUT
           echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
 
       - name: Set helm repositories
@@ -443,6 +449,24 @@ jobs:
         run: |
           make test
 
+      - name: Prepare notification message
+        if: ${{ always() && steps.vars.outputs.notify != '' }}
+        id: notify_message
+        run: |
+          dir=""
+          if [[ -n "${{ steps.vars.outputs.cute_dir }}" && "${{ steps.vars.outputs.cute_dir }}" != "." ]]; then
+           dir="/${{ steps.vars.outputs.cute_dir }}"
+          fi
+
+          message="*${{ steps.vars.outputs.cute_repo }}$dir* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|"
+          if [[ ${{ job.status }} == 'success' ]]; then
+            message="$message workflow passed!> :tada::tada::tada:"
+          else
+            message="$message workflow failed!> :rotating_light::rotating_light::rotating_light: ${{ steps.vars.outputs.owner }}"
+          fi
+
+          echo message=$message >> $GITHUB_OUTPUT
+
       - name: Send notification
         if: ${{ always() && steps.vars.outputs.notify != '' }}
         uses: slackapi/slack-github-action@6c661ce58804a1a20f6dc5fbee7f0381b469e001 # v1.25.0
@@ -450,7 +474,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.CUTE_SLACK_BOT_TOKEN }}
         with:
           channel-id: '${{ steps.vars.outputs.notify }}'
-          slack-message: "*${{ steps.vars.outputs.cute_repo }} ${{ steps.vars.outputs.cute_dir }}* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ job.status == 'Success' && 'workflow passed!> :tada::tada::tada:' || 'workflow failed!> :rotating_light::rotating_light::rotating_light:' }}"
+          slack-message: '${{ steps.notify_message.outputs.message }}'
 
       - name: Collect sysdump
         if: ${{ !success() && (steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}

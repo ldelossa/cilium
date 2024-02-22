@@ -37,7 +37,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: us-west-1,
-            deploy: stable
+            deploy: stable,
+            owner: U04M8K4CXTQ # Dario
           },
           {
             repo: bloomberg,
@@ -45,7 +46,8 @@ jobs:
             umbrella: true,
             oss: false,
             region: us-west-2,
-            deploy: stable
+            deploy: stable,
+            owner: U02T9JVUR0B # Hart
           },
           {
             repo: form3,
@@ -53,7 +55,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: westus2,
-            deploy: stable
+            deploy: stable,
+            owner: U04M8K4CXTQ # Dario
           },
           {
             repo: form3,
@@ -63,7 +66,8 @@ jobs:
             region: eu-west-2,
             deploy: cute,
             upgrade: stable,
-            ipsec: true
+            ipsec: true,
+            owner: U04M8K4CXTQ # Dario
           },
           {
             repo: zerohash,
@@ -71,7 +75,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: us-east-2,
-            deploy: stable
+            deploy: stable,
+            owner: U05CJ6BFQT0 # Tomasz
           },
           {
             repo: postfinance,
@@ -79,7 +84,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: eu-west-1,
-            deploy: stable
+            deploy: stable,
+            owner: U04M8K4CXTQ # Dario
           },
           {
             repo: nationwide,
@@ -89,7 +95,8 @@ jobs:
             region: eu-central-1,
             deploy: cute,
             upgrade: stable,
-            ipsec: true
+            ipsec: true,
+            owner: U02T9JVUR0B # Hart
           },
           {
             repo: swiss-post,
@@ -97,7 +104,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: ap-south-1,
-            deploy: stable
+            deploy: stable,
+            owner: U04GD9ACYTE # Philip
           },
           {
             repo: swiss-post,
@@ -105,7 +113,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: eastus2,
-            deploy: stable
+            deploy: stable,
+            owner: U04GD9ACYTE # Philip
           },
           {
             repo: roche,
@@ -113,7 +122,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: eu-west-3,
-            deploy: stable
+            deploy: stable,
+            owner: U04GD9ACYTE # Philip
           },
           {
             repo: astrazeneca,
@@ -121,7 +131,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: ca-central-1,
-            deploy: stable
+            deploy: stable,
+            owner: U04GD9ACYTE # Philip
           },
           {
             repo: telenor,
@@ -129,7 +140,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: eu-north-1,
-            deploy: stable
+            deploy: stable,
+            owner: U04EKTKTXC3 # Sandesh
           },
           {
             repo: adobe,
@@ -137,7 +149,8 @@ jobs:
             umbrella: false,
             oss: false,
             region: ap-northeast-1,
-            deploy: stable
+            deploy: stable,
+            owner: U04M8K4CXTQ # Dario
           },
           {
             repo: northwestern-mutual,
@@ -147,7 +160,8 @@ jobs:
             region: eu-central-1,
             deploy: cute,
             upgrade: stable,
-            ipsec: true
+            ipsec: true,
+            owner: U02T9JVUR0B # Hart
           },
           {
             repo: motorola-solutions,
@@ -157,7 +171,8 @@ jobs:
             region: us-west-2,
             deploy: cute,
             upgrade: stable,
-            ipsec: true
+            ipsec: true,
+            owner: U050B1LKQP5 # Matt
           },
         ]
     runs-on: ubuntu-latest
@@ -178,6 +193,6 @@ jobs:
           REF=${GITHUB_REF#refs/heads/}
           slack=${{ env.slack_channel }}
           [[ -n ${{ inputs.slack-channel }} ]] && slack=${{ inputs.slack-channel }}
-          args="repo=${{ matrix.cute.repo }}&dir=${{ matrix.cute.dir }}&region=${{ matrix.cute.region }}&umbrella=${{ matrix.cute.umbrella }}&oss=${{ matrix.cute.oss }}&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=$slack"
+          args="repo=${{ matrix.cute.repo }}&dir=${{ matrix.cute.dir }}&region=${{ matrix.cute.region }}&umbrella=${{ matrix.cute.umbrella }}&oss=${{ matrix.cute.oss }}&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=$slack&owner=${{ matrix.cute.owner }}"
           echo "Triggering workflow for CuTE: $args"
           gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
