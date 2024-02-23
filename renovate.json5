@@ -31,7 +31,10 @@
   "labels": [
     "renovate/stop-updating",
     "kind/enhancement",
-    "release-note/misc"
+    // Pull requests from Renovate do not show up in release notes by default.
+    // Override the release-note label in the packageRules section below for
+    // those dependencies that are relevant to end users.
+    "release-note/ignore",
   ],
   "stopUpdatingLabel": "renovate/stop-updating",
   "packageRules": [
@@ -47,6 +50,11 @@
       "groupName": "Hubble CLI Enterprise",
       "groupSlug": "hubble-cli-ee",
       "ignoreUnstable": false,
+      "labels": [
+        "renovate/stop-updating",
+        "kind/enhancement",
+        "release-note/misc",
+      ],
       "matchDepNames": [
         "isovalent/hubble-releases",
       ],
