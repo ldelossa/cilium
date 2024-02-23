@@ -39,7 +39,7 @@ _If you need help: ask in #enterprise-release._
         git fetch origin ${CEE_BRANCH}:${CEE_BRANCH}
         git checkout -B ${PR} ${CEE_BRANCH}
         git tag -m ${OSS_SYNC_TAG} ${OSS_SYNC_TAG} ${OSS_RELEASE_COMMIT_SHA}
-        git cherry-pick --signoff ${LAST_OSS_COMMIT_SYNCED}..${OSS_RELEASE_COMMIT_SHA}
+        git cherry-pick -x --signoff ${LAST_OSS_COMMIT_SYNCED}..${OSS_RELEASE_COMMIT_SHA}
 
   - [ ] Resolve all conflicts that come up.
     - First conflict is typically in the "Update image digests" commit. Skip this one since it contains OSS image digests.
@@ -61,15 +61,13 @@ _If you need help: ask in #enterprise-release._
         - [ ] `git cherry-pick --continue`
         - [ ] Update the commit message to reflect the correct enterprise version `vX.Y.Z-cee.1`
 - [ ] Open a pull request with this branch against the Isovalent repository
-  - `gh pr create -B vX.Y-ce` (NOTE: Make sure this is against Isovalent tree!)
+  - `gh pr create -B ${CEE_BRANCH} --label "upstream-sync/${VERSION}"` (NOTE: Make sure this is against Isovalent tree!)
   - [ ] Wait for CI images to build+push
   - [ ] Run end-to-end CI tests by posting a comment `/test-backport-X.Y`
 - [ ] Merge the PR. Then push the new OSS sync tag:
 
         git push origin ${OSS_SYNC_TAG}
 
-- [ ] (SKIP THIS ISSUE UNTIL https://github.com/isovalent/cilium-enterprise-dogfooding/issues/1200 IS FIXED) For latest minor version only:
-  - [ ] Deploy the CI image from `vX.Y-ce` branch to alpo-2. If you are not sure how to do it, ask in #dogfooding Slack channel. There are a lot of helpful people in that channel. Note that only one branch can be deployed to alpo-2, so if you are preparing multiple releases, do this step only once.
 - [ ] Tag the release
   - [ ] `git fetch origin`
   - [ ] `git checkout origin/vX.Y-ce`
@@ -105,11 +103,7 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
   - [ ] Create a PR which updates the toplevel VERSION file to your newly released version. Target the PR at the `X.Y` branch. If there is no such branch, and you are releasing the latest minor, target `master`. Update the version compatibility matrix CSV files (`operations-guide/releases/X.Y.Z-versions.csv`) with the proper supported software versions (ex: what version of Hubble-Enterprise works with this version of Cilium)
 - [ ] Prepare artifacts for Azure Marketplace build
   - [ ] Only one release is currently supported on Azure Marketplace. The release series is listed in the `CILIUM_VERSION` file in [Azure Marketplace CNAB]. Ignore these steps if the X.Y versions do not match. Follow the instructions in the [README.md](https://github.com/isovalent/external-azure-marketplace-cnab/blob/main/README.md) to create artifacts for the new release.
-- [ ] [only for the latest minor!] Using the cilium GH release notes, prepare release notes in the [cilium-enterprise-docs] against the main branch.
-  - You'll need to look through the generated release notes in `isovalent/cilium` and expand the backport PRs (which usually contain multiple upstream PRs) into release notes. The upstream PR titles should work well.
-  - The release note PR targets main, but contains release notes for all versions you are releasing. (Otherwise, the release notes for previous minors would be buried under docs.isovalent/vX.Y/ and not visible on toplevel.)
-  - Example PR: https://github.com/isovalent/cilium-enterprise-docs/pull/748 though do note that this PR should have also included release notes for `1.12.{0,1,2}-cee.beta1` since `1.12.3-cee.1` was the first stable CEE release of the `1.12` series.
-  - [ ] Merge the PR
+- [ ] Ask Michi to generate release notes. There is a rumor he's working on automating the process in https://github.com/isovalent/cilium/issues/2872.
 - [ ] Update https://isogo.to/releases
   - [ ] Move the entry for the current release from planned to past.
   - [ ] Add an entry for the next release and its planned date.
