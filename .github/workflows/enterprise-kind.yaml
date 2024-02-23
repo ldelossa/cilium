@@ -49,6 +49,7 @@ jobs:
           node_image: ${{ env.KIND_K8S_IMAGE }}
           kubectl_version: ${{ env.KIND_K8S_VERSION }}
           config: ${{ env.kind_config }}
+          wait: 0 # The control-plane never becomes ready, since no CNI is present
 
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@7306e3cdc6caee738157f08e3e1ba26179f104e5 # v0.15.23
