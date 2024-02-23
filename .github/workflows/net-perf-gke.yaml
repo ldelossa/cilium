@@ -4,12 +4,18 @@ name: Network performance GKE
 on:
   schedule:
     - cron: '39 0 * * 1-5'
+# For testing uncomment following lines:
+#  push:
+#    branches:
+#      - your_branch_name
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
 permissions:
   # To be able to access the repository with actions/checkout
   contents: read
+  # To be able to request the JWT from GitHub's OIDC provider
+  id-token: write
 
 concurrency:
   # Structure:
@@ -53,7 +59,7 @@ jobs:
         include:
           - index: 1
             name: "native"
-            mode: "native"
+            mode: "gke"
             encryption: "none"
             hubble: "false"
 
@@ -65,7 +71,7 @@ jobs:
 
           - index: 3
             name: "native-ipsec"
-            mode: "native"
+            mode: "gke"
             encryption: "ipsec"
             hubble: "false"
 
@@ -77,7 +83,7 @@ jobs:
 
           - index: 5
             name: "native-hubble"
-            mode: "native"
+            mode: "gke"
             encryption: "none"
             hubble: "true"
 
@@ -89,7 +95,7 @@ jobs:
 
           - index: 7
             name: "native-ipsec-hubble"
-            mode: "native"
+            mode: "gke"
             encryption: "ipsec"
             hubble: "true"
 
@@ -157,7 +163,7 @@ jobs:
           echo owner=${OWNER} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@d79f56bc2f2b2dbb2d5e41696c2f3aec0ebd3eb0 # v0.15.21
+        uses: cilium/cilium-cli@7306e3cdc6caee738157f08e3e1ba26179f104e5 # v0.15.23
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -165,12 +171,15 @@ jobs:
 
       - name: Set up gcloud credentials
         id: 'auth'
-        uses: google-github-actions/auth@f6de81663f7788d05bd15bcce18f0e57f23f0846 # v2.0.1
+        uses: google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f # v2.1.1
         with:
-          credentials_json: '${{ secrets.GCP_PERF_SA_KEY }}'
+          workload_identity_provider: ${{ secrets.GCP_PERF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PERF_SA }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@5a5f7b85fca43e76e53463acaa9d408a03c98d3a # v2.0.1
+        uses: google-github-actions/setup-gcloud@98ddc00a17442e89a24bbf282954a3b65ce6d200 # v2.1.0
         with:
           project_id: ${{ secrets.GCP_PERF_PROJECT_ID }}
           version: "405.0.0"
@@ -252,7 +261,7 @@ jobs:
 
       - name: Export results and sysdump to GS bucket
         if: ${{ always() && steps.run-perf.outcome != 'skipped' && steps.run-perf.outcome != 'cancelled' }}
-        uses: cilium/scale-tests-action/export-results@8a522b9d71254b6f6615c296e41a70610c9615ea # main
+        uses: cilium/scale-tests-action/export-results@238d773bd07754bfd693a6b22c94eddf3a12778d # main
         with:
           test_name: ${{ env.test_name }}-${{ matrix.name }}
           results_bucket: ${{ env.GCP_PERF_RESULTS_BUCKET }}

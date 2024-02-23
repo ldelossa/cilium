@@ -78,7 +78,7 @@ func registerReconciler(params ingressParams) error {
 		return nil
 	}
 
-	cecTranslator := translation.NewCECTranslator(params.Config.IngressSecretsNamespace, params.Config.EnforceIngressHTTPS, params.Config.EnableIngressProxyProtocol, false, operatorOption.Config.ProxyIdleTimeoutSeconds)
+	cecTranslator := translation.NewCECTranslator(params.Config.IngressSecretsNamespace, params.Config.EnableIngressProxyProtocol, false, operatorOption.Config.ProxyIdleTimeoutSeconds)
 	dedicatedIngressTranslator := ingressTranslation.NewDedicatedIngressTranslator(cecTranslator)
 
 	reconciler := newIngressReconciler(
@@ -94,6 +94,7 @@ func registerReconciler(params ingressParams) error {
 		params.Config.IngressDefaultLBMode,
 		params.Config.IngressDefaultSecretNamespace,
 		params.Config.IngressDefaultSecretName,
+		params.Config.EnforceIngressHTTPS,
 	)
 
 	if err := reconciler.SetupWithManager(params.CtrlRuntimeManager); err != nil {

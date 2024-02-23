@@ -179,6 +179,7 @@ cilium-agent [flags]
       --envoy-log string                                             Path to a separate Envoy log file, if any
       --envoy-secrets-namespace string                               EnvoySecretsNamespace is the namespace having secrets used by CEC
       --exclude-local-address strings                                Exclude CIDR from being recognized as local address
+      --exclude-node-label-patterns strings                          List of k8s node label regex patterns to be excluded from CiliumNode
       --export-aggregation strings                                   Perform aggregation pre-storage ('connection', 'identity')
       --export-aggregation-ignore-source-port                        Ignore source port during aggregation (default true)
       --export-aggregation-renew-ttl                                 Renew flow TTL when a new flow is observed (default true)
@@ -327,7 +328,7 @@ cilium-agent [flags]
       --pprof-port uint16                                            Port that pprof listens on (default 6060)
       --preallocate-bpf-maps                                         Enable BPF map pre-allocation (default true)
       --prepend-iptables-chains                                      Prepend custom iptables chains instead of appending (default true)
-      --procfs string                                                Root's proc filesystem path (default "/proc")
+      --procfs string                                                Path to the host's proc filesystem mount (default "/proc")
       --prometheus-serve-addr string                                 IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off) (default ":9962")
       --proxy-connect-timeout uint                                   Time after which a TCP connect attempt is considered failed unless completed (in seconds) (default 2)
       --proxy-gid uint                                               Group ID for proxy control plane sockets. (default 1337)
