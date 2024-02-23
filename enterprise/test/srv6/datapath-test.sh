@@ -175,9 +175,7 @@ iperf_output=$(${external_node_exec} ip netns exec "${ns_name}" iperf3 -c "${net
 set +x
 jq_assert_value "${iperf_output}" '.error' "null"
 jq_assert_value "${iperf_output}" '.end.sum_sent.retransmits' "0"
-# TODO: The reverse retransmits assert fails ATM due to GSO packet drop issue
-# (https://github.com/isovalent/cilium/issues/2793), re-enable once it is fixed.
-#jq_assert_value_equals "${iperf_output}" '.end.sum_sent_bidir_reverse.retransmits' "0"
+jq_assert_value "${iperf_output}" '.end.sum_sent_bidir_reverse.retransmits' "0"
 set -x
 
 # iperf - UDP bidirectional
