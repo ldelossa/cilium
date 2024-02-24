@@ -1,0 +1,34 @@
+name: Validate Pull Request Labels
+
+on:
+  pull_request:
+    types: [synchronize, opened, reopened, labeled, unlabeled]
+
+jobs:
+  validate-pull-request-labels:
+    name: Validate Pull Request Labels
+    runs-on: ubuntu-latest
+    env:
+      LABELS: "${{ toJson(github.event.pull_request.labels.*.name) }}"
+    steps:
+      - name: Validate Pull Request Labels
+        run: |
+          # Fail if dont-merge/* label is set.
+          for label in $(echo "$LABELS" | jq -r '.[]');
+          do
+            if [[ "$label" =~ ^dont-merge\/.* ]]; then
+              echo "$label found"
+              exit 1
+            fi
+          done
+
+          # Validate release-note/* label is set.
+          for label in $(echo "$LABELS" | jq -r '.[]');
+          do
+            if [[ "$label" =~ ^release-note\/.* ]]; then
+              echo "$label found"
+              exit 0
+            fi
+          done
+          echo "Set a release-note/* label"
+          exit 1
