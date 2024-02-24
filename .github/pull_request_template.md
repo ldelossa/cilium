@@ -1,16 +1,23 @@
-Please ensure your pull request adheres to the following guidelines:
+Ensure your pull request adheres to the following guidelines:
 
-- [ ] For first time contributors, read [Submitting a pull request](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#submitting-a-pull-request)
-- [ ] All code is covered by unit and/or runtime tests where feasible.
-- [ ] All commits contain a well written commit description including a title,
-      description and a `Fixes: #XXX` line if the commit addresses a particular
-      GitHub issue.
-- [ ] If your commit description contains a `Fixes: <commit-id>` tag, then
-      please add the commit author[s] as reviewer[s] to this issue.
-- [ ] All commits are signed off. See the section [Developer’s Certificate of Origin](https://docs.cilium.io/en/stable/contributing/development/contributing_guide/#dev-coo)
-- [ ] Provide a title or release-note blurb suitable for the release notes.
-- [ ] Are you a user of Cilium? Please add yourself to the [Users doc](https://github.com/cilium/cilium/blob/main/USERS.md)
-- [ ] Thanks for contributing!
+- [ ] Set one of the following labels:
+
+  - `release-note/major`: For pull requests that introduce major features.
+  - `release-note/minor`: For pull requests that introduce minor features.
+  - `release-note/misc`: For miscellaneous pull requests.
+  - `release-note/bug`: For pull requests to fix bugs in enterprise features.
+  - `release-note/ignore`: For pull requests that are not customer-facing, like
+    updating `CODEOWNERS` file. Pull requests with this label will not show up
+    in release notes.
+  - `release-note/enterprise-backport`: For backport pull requests from main-ce branch.
+  - `release-note/oss-sync`: For pull requests to sync from an OSS branch.
+  - `release-note/oss-backport`: For pull requests to backport OSS commits that
+     are not being backported to the corresponding OSS stable branch.
+
+- [ ] Provide a release-note blurb, or the pull request title will be used as a
+      release note entry. Either way, the release note entry must be appropriate
+      as an entry in customer-facing release notes unless `release-note/ignore`
+      label is set.
 
 <!-- Description of change -->
 
