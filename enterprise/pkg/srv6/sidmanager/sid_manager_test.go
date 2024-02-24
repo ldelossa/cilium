@@ -192,7 +192,7 @@ func TestSIDManager(t *testing.T) {
 			require.NoError(t, err)
 			require.Eventually(t, func() bool {
 				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
-					if *allocator.Locator() == *locator3 {
+					if allocator.Locator() == locator3 {
 						return false, nil
 					}
 					return false, fmt.Errorf("still seeing an old locator")
@@ -230,7 +230,7 @@ func TestSIDManager(t *testing.T) {
 			require.NoError(t, err)
 			require.Eventually(t, func() bool {
 				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
-					if *allocator.Locator() == *locator4 {
+					if allocator.Locator() == locator4 {
 						return false, nil
 					}
 					return false, fmt.Errorf("still seeing an old locator")
@@ -268,7 +268,7 @@ func TestSIDManager(t *testing.T) {
 			require.NoError(t, err)
 			require.Eventually(t, func() bool {
 				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
-					if *allocator.Locator() == *locator4 && allocator.BehaviorType() == types.BehaviorTypeUSID {
+					if allocator.Locator() == locator4 && allocator.BehaviorType() == types.BehaviorTypeUSID {
 						return false, nil
 					}
 					return false, fmt.Errorf("still seeing an old locator")

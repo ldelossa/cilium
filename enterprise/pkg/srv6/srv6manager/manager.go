@@ -1074,7 +1074,7 @@ func (m *Manager) allocateSID(pool, metadata string) (*sidmanager.SIDInfo, error
 // difference between two allocation method we support right now. When the pool
 // is an empty string, it releases SID with legacy IPAM-based allocator and
 // otherwise, it releases SID with SIDManager.
-func (m *Manager) releaseSID(pool string, sid *srv6Types.SID) error {
+func (m *Manager) releaseSID(pool string, sid srv6Types.SID) error {
 	if pool == "" {
 		if err := m.sidAlloc.Release(net.IP(sid.Addr.AsSlice()), ""); err != nil {
 			return err
@@ -1093,11 +1093,11 @@ func (m *Manager) releaseSID(pool string, sid *srv6Types.SID) error {
 	}
 }
 
-func (m *Manager) updateSIDMap(sid *srv6Types.SID, vrfID uint32) error {
+func (m *Manager) updateSIDMap(sid srv6Types.SID, vrfID uint32) error {
 	return srv6map.SRv6SIDMap.Update(srv6map.NewSIDKey(sid.As16()), vrfID)
 }
 
-func (m *Manager) deleteSIDMap(sid *srv6Types.SID) error {
+func (m *Manager) deleteSIDMap(sid srv6Types.SID) error {
 	return srv6map.SRv6SIDMap.Delete(srv6map.NewSIDKey(sid.As16()))
 }
 

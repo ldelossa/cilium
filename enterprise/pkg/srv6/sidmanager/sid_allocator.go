@@ -24,7 +24,7 @@ import (
 
 type SIDAllocator interface {
 	// Locator returns a Locator associated with this allocator
-	Locator() *types.Locator
+	Locator() types.Locator
 
 	// BehaviorType returns a type of the behavior for the locator
 	BehaviorType() types.BehaviorType
@@ -46,7 +46,7 @@ type SIDAllocator interface {
 type SIDInfo struct {
 	Owner        string
 	MetaData     string
-	SID          *types.SID
+	SID          types.SID
 	BehaviorType types.BehaviorType
 	Behavior     types.Behavior
 }
@@ -55,7 +55,7 @@ func (a *SIDInfo) SIDAndBehaviorEqual(b *SIDInfo) bool {
 	if (a == nil) || (b == nil) {
 		return false
 	}
-	if *a.SID != *b.SID {
+	if a.SID != b.SID {
 		return false
 	}
 	if a.BehaviorType != b.BehaviorType {
@@ -79,8 +79,7 @@ func (in *SIDInfo) DeepCopy() *SIDInfo {
 func (in *SIDInfo) DeepCopyInto(out *SIDInfo) {
 	out.Owner = in.Owner
 	out.MetaData = in.MetaData
-	out.SID = new(types.SID)
-	*out.SID = *in.SID
+	out.SID = in.SID
 	out.BehaviorType = in.BehaviorType
 	out.Behavior = in.Behavior
 }
@@ -104,7 +103,7 @@ type StructuredSIDAllocator struct {
 	allocatedSIDsLock lock.Mutex
 }
 
-func NewStructuredSIDAllocator(locator *types.Locator, behaviorType types.BehaviorType) (SIDAllocator, error) {
+func NewStructuredSIDAllocator(locator types.Locator, behaviorType types.BehaviorType) (SIDAllocator, error) {
 	structure := locator.Structure()
 
 	if structure.ArgumentLenBits() != 0 {
@@ -133,15 +132,15 @@ func NewStructuredSIDAllocator(locator *types.Locator, behaviorType types.Behavi
 	allocator.Allocate(0)
 
 	return &StructuredSIDAllocator{
-		locator:       *locator,
+		locator:       locator,
 		behaviorType:  behaviorType,
 		allocator:     allocator,
 		allocatedSIDs: make(map[int]*SIDInfo),
 	}, nil
 }
 
-func (a *StructuredSIDAllocator) Locator() *types.Locator {
-	return &a.locator
+func (a *StructuredSIDAllocator) Locator() types.Locator {
+	return a.locator
 }
 
 func (a *StructuredSIDAllocator) BehaviorType() types.BehaviorType {
@@ -151,7 +150,7 @@ func (a *StructuredSIDAllocator) BehaviorType() types.BehaviorType {
 // Create full SID by encoding function part into the locator.
 // For example, when the locator fd00:1:2:3::/64 and function
 // part is 0x1234, create fd00:1:2:3:1234::.
-func (a *StructuredSIDAllocator) encodeSID(f int) (*types.SID, error) {
+func (a *StructuredSIDAllocator) encodeSID(f int) (types.SID, error) {
 	structure := a.locator.Structure()
 	funcSlice := make([]byte, structure.FunctionLenBytes())
 
@@ -169,13 +168,13 @@ func (a *StructuredSIDAllocator) encodeSID(f int) (*types.SID, error) {
 		binary.BigEndian.PutUint16(funcSlice, uint16(f))
 	default:
 		// This shouldn't happen as we validate SID structure on construction
-		return nil, fmt.Errorf("unsupported function length %d", structure.FunctionLenBits())
+		return types.SID{}, fmt.Errorf("unsupported function length %d", structure.FunctionLenBits())
 	}
 
 	// We don't have argument part support so far
-	sid, err := types.NewSIDFromLFA(&a.locator, funcSlice, []byte{})
+	sid, err := types.NewSIDFromLFA(a.locator, funcSlice, []byte{})
 	if err != nil {
-		return nil, fmt.Errorf("SID construction failed: %w", err)
+		return types.SID{}, fmt.Errorf("SID construction failed: %w", err)
 	}
 
 	return sid, nil
@@ -185,7 +184,7 @@ func (a *StructuredSIDAllocator) encodeSID(f int) (*types.SID, error) {
 // and returns function part. For example, when the SID is fd00:1:2:3:1234:: and
 // loc and func length are 64 and 16, this function returns fd00:1:2:3::/64 and
 // 0x1234 (in native endian).
-func (a *StructuredSIDAllocator) decodeSID(sid *types.SID) (int, error) {
+func (a *StructuredSIDAllocator) decodeSID(sid types.SID) (int, error) {
 	structure := a.locator.Structure()
 	funcSlice := sid.Function()
 

@@ -368,7 +368,7 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 			needsSync = true
 		} else {
 			// No change to the spec, skip update
-			if *oldAllocator.Locator() == *l && oldAllocator.BehaviorType() == behaviorType {
+			if oldAllocator.Locator() == l && oldAllocator.BehaviorType() == behaviorType {
 				continue
 			}
 			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
@@ -478,7 +478,7 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 				// stopping. We can ignore this here. So that
 				// it will be deleted from the status in the
 				// next sync.
-				if s.AsLocator() != *allocator.Locator() || types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
+				if s.AsLocator() != allocator.Locator() || types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
 					staleSIDs++
 					continue
 				}
@@ -633,10 +633,10 @@ func (m *sidManager) reconcileStatus(ctx context.Context) error {
 }
 
 // locatorFromResource converts locator on the k8s resource to internal Locator structure
-func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (*types.Locator, error) {
+func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (types.Locator, error) {
 	prefix, err := netip.ParsePrefix(r.Prefix)
 	if err != nil {
-		return nil, err
+		return types.Locator{}, err
 	}
 
 	structure, err := types.NewSIDStructure(
@@ -646,12 +646,12 @@ func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (*typ
 		r.Structure.ArgumentLenBits,
 	)
 	if err != nil {
-		return nil, err
+		return types.Locator{}, err
 	}
 
 	locator, err := types.NewLocator(prefix, structure)
 	if err != nil {
-		return nil, err
+		return types.Locator{}, err
 	}
 
 	return locator, nil

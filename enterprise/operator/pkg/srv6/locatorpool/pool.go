@@ -46,7 +46,7 @@ const (
 type poolConfig struct {
 	name         string
 	prefix       netip.Prefix
-	structure    *types.SIDStructure
+	structure    types.SIDStructure
 	behaviorType string
 }
 
@@ -132,12 +132,7 @@ func (p *pool) GetPrefix() netip.Prefix {
 
 // validNodeLocator validates that node locator was indeed created from this locator pool.
 func (p *pool) validNodeLocator(nodeLoc *LocatorInfo) bool {
-	// validate both sid structures are same
-	if p.config.structure == nil || nodeLoc.Structure() == nil {
-		return false
-	}
-
-	if *p.config.structure != *nodeLoc.Structure() {
+	if p.config.structure != nodeLoc.Structure() {
 		return false
 	}
 
@@ -197,7 +192,7 @@ func (p *pool) AllocateNext() (*LocatorInfo, error) {
 	}
 
 	return &LocatorInfo{
-		Locator:      *loc,
+		Locator:      loc,
 		BehaviorType: types.BehaviorTypeFromString(p.config.behaviorType),
 	}, nil
 }

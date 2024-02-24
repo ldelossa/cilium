@@ -165,7 +165,7 @@ func fromAPILocator(loc *isovalent_api_v1alpha1.IsovalentSRv6Locator) (*LocatorI
 	}
 
 	return &LocatorInfo{
-		Locator:      *locInfo,
+		Locator:      locInfo,
 		BehaviorType: types.BehaviorTypeFromString(loc.BehaviorType),
 	}, nil
 }

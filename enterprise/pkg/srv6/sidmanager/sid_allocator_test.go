@@ -33,7 +33,7 @@ func TestStructuredSIDAllocator(t *testing.T) {
 		info, err := allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key1", types.BehaviorEndDT4)
 		require.NoError(t, err)
 		require.Equal(t, info.SID.Addr, netip.MustParseAddr("fd00:0:0:0:1::"))
-		require.Equal(t, *info.SID.Structure(), *types.MustNewSIDStructure(48, 16, 16, 0))
+		require.Equal(t, info.SID.Structure(), types.MustNewSIDStructure(48, 16, 16, 0))
 
 		// Cannot allocate duplicated SID
 		_, err = allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key2", types.BehaviorEndDT4)

@@ -46,13 +46,13 @@ import (
 )
 
 type fakeSIDAllocator struct {
-	sid           *srv6Types.SID
+	sid           srv6Types.SID
 	behaviorType  srv6Types.BehaviorType
 	allocatedSIDs []*sidmanager.SIDInfo
 }
 
-func (fsa *fakeSIDAllocator) Locator() *srv6Types.Locator {
-	return nil
+func (fsa *fakeSIDAllocator) Locator() srv6Types.Locator {
+	return srv6Types.Locator{}
 }
 
 func (fsa *fakeSIDAllocator) BehaviorType() srv6Types.BehaviorType {
@@ -1071,7 +1071,7 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			info := vrfs[0].SIDInfo
 			require.Equal(t, ownerName, info.Owner)
 			require.Equal(t, vrf0.Name, info.MetaData)
-			require.Equal(t, *sid1, *info.SID)
+			require.Equal(t, sid1, info.SID)
 			require.Equal(t, srv6Types.BehaviorTypeBase, info.BehaviorType)
 			require.Equal(t, srv6Types.BehaviorEndDT4, info.Behavior)
 
@@ -1099,7 +1099,7 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			info := vrfs[0].SIDInfo
 			require.Equal(t, ownerName, info.Owner)
 			require.Equal(t, vrf0.Name, info.MetaData)
-			require.Equal(t, *sid2, *info.SID)
+			require.Equal(t, sid2, info.SID)
 			require.Equal(t, srv6Types.BehaviorTypeUSID, info.BehaviorType)
 			require.Equal(t, srv6Types.BehaviorUDT4, info.Behavior)
 
@@ -1414,7 +1414,7 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 					expected := test.expectedAllocation
 					require.Equal(t, expected.Owner, info.Owner)
 					require.Equal(t, expected.MetaData, info.MetaData)
-					require.Equal(t, *expected.SID, *info.SID)
+					require.Equal(t, expected.SID, info.SID)
 					require.Equal(t, expected.BehaviorType, info.BehaviorType)
 					require.Equal(t, expected.Behavior, info.Behavior)
 				} else {
