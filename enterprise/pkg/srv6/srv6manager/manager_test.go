@@ -107,6 +107,11 @@ func (fsm *fakeSIDManager) Subscribe(subscriberName string, subscriber sidmanage
 	done()
 }
 
+func (fsm *fakeSIDManager) Observe(ctx context.Context, next func(sidmanager.Event), complete func(error)) {
+	// Not implemented
+	return
+}
+
 type fakeIPAMAllocator struct {
 	sid net.IP
 }
