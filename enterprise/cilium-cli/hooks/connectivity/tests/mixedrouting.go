@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium-cli/utils/sniff"
 	"github.com/cilium/cilium/pkg/node/addressing"
+	wgtypes "github.com/cilium/cilium/pkg/wireguard/types"
 
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
@@ -75,14 +76,11 @@ func (mr *mixedRouting) setup(ctx context.Context, ct *check.ConnectivityTest) e
 		hp := hp
 		nodeID := check.NodeIdentity{Cluster: hp.K8sClient.ClusterName(), Name: hp.NodeName()}
 
-		cmd := []string{"/bin/sh", "-c", "ip route list | awk '/^default/ { print $5 }'"}
-		ct.Debugf("Retrieving default interface on %s (%s): %s", hp.Name, hp.NodeName(), strings.Join(cmd, " "))
-		out, err := hp.K8sClient.ExecInPod(ctx, hp.Pod.Namespace, hp.Pod.Name, "", cmd)
+		iface, err := mr.getIface(ctx, ct, &hp)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve default interface on %s (%s): %w", hp.String(), hp.NodeName(), err)
+			return err
 		}
 
-		iface := strings.TrimRight(out.String(), "\n\r")
 		for _, sm := range []sniff.Mode{sniff.ModeAssert, sniff.ModeSanity} {
 			if filter := mr.buildNativeFilter(ct, nodeID, sm); filter != "" {
 				sniffer, err := sniff.Sniff(ctx, "mixed-routing-native-"+string(sm), &hp, iface, filter, sm, ct)
@@ -117,6 +115,22 @@ func (mr *mixedRouting) Run(ctx context.Context, t *check.Test) {
 			t.NewGenericAction(mr, "tunnel-routing-"+string(sm)+"-"+id.Name).Run(func(a *check.Action) { sniff.Validate(ctx, a) })
 		}
 	}
+}
+
+func (mr *mixedRouting) getIface(ctx context.Context, ct *check.ConnectivityTest, hp *check.Pod) (string, error) {
+	encryption := ct.Features[features.EncryptionPod]
+	if encryption.Enabled && encryption.Mode == "wireguard" {
+		return wgtypes.IfaceName, nil
+	}
+
+	cmd := []string{"/bin/sh", "-c", "ip route list | awk '/^default/ { print $5 }'"}
+	ct.Debugf("Retrieving default interface on %s (%s): %s", hp.Name, hp.NodeName(), strings.Join(cmd, " "))
+	out, err := hp.K8sClient.ExecInPod(ctx, hp.Pod.Namespace, hp.Pod.Name, "", cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve default interface on %s (%s): %w", hp.String(), hp.NodeName(), err)
+	}
+
+	return strings.TrimRight(out.String(), "\n\r"), nil
 }
 
 func (mr *mixedRouting) buildTunnelFilter(ct *check.ConnectivityTest, self check.NodeIdentity, mode sniff.Mode) string {
