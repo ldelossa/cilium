@@ -15,6 +15,7 @@
 #include "lib/drop.h"
 #include "lib/eth.h"
 #include "linux/bpf.h"
+#include "lib/encap.h"
 
 /* the below structures are define outside of an IFDEF guard to satisfy
  * enterprise_bpf_alignchecker.c requirement
@@ -324,7 +325,7 @@ static __always_inline void mcast_encode_ipv4_mac(union macaddr *mac,
 
 /* callback data used for __mcast_ep_delivery */
 struct _mcast_ep_delivery_ctx {
-	void *ctx;
+	struct __ctx_buff *ctx;
 	__s32 ret;
 };
 
@@ -340,9 +341,12 @@ static long __mcast_ep_delivery(__maybe_unused void *sub_map,
 				const struct mcast_subscriber_v4 *sub,
 				struct _mcast_ep_delivery_ctx *cb_ctx)
 {
-	int ret = 0;
-	__u8 from_overlay = 0;
+	__maybe_unused struct remote_endpoint_info *info;
+	__maybe_unused __u8 min_encrypt_key = 0;
 	struct bpf_tunnel_key tun_key = {0};
+	__u8 from_overlay = 0;
+	__u32 tunnel_id = 2;
+	int ret = 0;
 
 	if (!cb_ctx || !sub)
 		return 1;
@@ -372,7 +376,13 @@ static long __mcast_ep_delivery(__maybe_unused void *sub_map,
 		if (from_overlay)
 			return 0;
 
-		tun_key.tunnel_id = 2; /* WORLD ID FOR NOW */
+#ifdef ENABLE_IPSEC
+		/* if IPSec is enabled we'll mark the packet for encryption via the
+		 * tunnel ID.
+		 */
+		tunnel_id = MARK_MAGIC_ENCRYPT;
+#endif
+		tun_key.tunnel_id = tunnel_id;
 		tun_key.remote_ipv4 = bpf_ntohl(sub->saddr);
 		tun_key.tunnel_ttl = IPDEFTTL;
 

@@ -5,6 +5,10 @@
 #define __LIB_TUNNEL_H_
 
 #include <linux/ipv6.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
+#include <linux/if_ether.h>
 
 /* The high-order bit of the Geneve option type indicates that
  * this is a critical option.
@@ -81,6 +85,61 @@ static __always_inline __u32
 tunnel_vni_to_sec_identity(__be32 vni)
 {
 	return bpf_ntohl(vni) >> 8;
+}
+
+/*
+ * Returns true if the skb associated with data pointers is a vxlan encapsulated
+ * packet.
+ *
+ * The determination is made by comparing the UDP destination port with
+ * the tunnel_port provided to the function.
+ */
+static __always_inline bool
+tunnel_skb_is_vxlan_v4(void *data, void *data_end, struct iphdr *ipv4,
+		       __u16 tunnel_port)
+{
+	struct udphdr *udp = NULL;
+	__u32 l3_size = 0;
+
+	if (ipv4->protocol != IPPROTO_UDP)
+		return false;
+
+	l3_size = ipv4->ihl * 4;
+
+	if (data + sizeof(struct ethhdr) + l3_size + sizeof(struct udphdr)
+	    + sizeof(struct vxlanhdr) > data_end)
+		return false;
+
+	udp = (struct udphdr *)(data + sizeof(struct ethhdr) + l3_size);
+
+	if (udp->dest == bpf_htons(tunnel_port))
+		return true;
+
+	return false;
+}
+
+/*
+ * Returns the VNI in the native host's endian format of a xvlan encap'd packet.
+ *
+ * The caller must ensure the skb associated with these data buffers are infact
+ * a vxlan encapsulated packet before invoking this function.
+ *
+ * This can be done by calling 'tunnel_skb_is_vxlan_v4'
+ *
+ */
+static __always_inline __u32
+tunnel_vxlan_get_vni(void *data, void *data_end, struct iphdr *ipv4) {
+	int l3_size = ipv4->ihl * 4;
+	struct vxlanhdr *hdr;
+
+	if (data + sizeof(struct ethhdr) + l3_size + sizeof(struct udphdr)
+	    + sizeof(struct vxlanhdr) > data_end)
+		return 0;
+
+	hdr = (struct vxlanhdr *)(data + sizeof(struct ethhdr) + l3_size +
+	       sizeof(struct udphdr));
+
+	return bpf_ntohl(hdr->vx_vni) >> 8;
 }
 
 #endif /* __LIB_TUNNEL_H_ */

@@ -1284,16 +1284,53 @@ int cil_from_host(struct __ctx_buff *ctx)
 	return handle_netdev(ctx, true);
 }
 
+#if defined(ENABLE_IPSEC) && defined(ENABLE_IPV4) && defined(TUNNEL_MODE)
+/*
+ * If the traffic is indeed overlay traffic and it should be encrypted
+ * CTX_ACT_REDIRECT is returned, unless an error occurred, and the caller can
+ * return this code to TC.
+ *
+ * CTX_ACT_OK is returned if the traffic should continue normal processing.
+ *
+ * IS_ERR can be used to determine if this function ran into an error.
+ */
+static __always_inline int do_encrypt_overlay(struct __ctx_buff *ctx,
+					      __u16 proto)
+{
+	int ret = CTX_ACT_OK;
+	struct iphdr __maybe_unused *ipv4;
+	void __maybe_unused *data, *data_end = NULL;
+
+	/* only support vxlan for now */
+	if (TUNNEL_PROTOCOL != TUNNEL_PROTOCOL_VXLAN)
+		return ret;
+
+	if (proto != bpf_htons(ETH_P_IP))
+		return ret;
+
+	if (!revalidate_data(ctx, &data, &data_end, &ipv4))
+		return DROP_INVALID;
+
+	if (!tunnel_skb_is_vxlan_v4(data, data_end, ipv4, TUNNEL_PORT))
+		return ret;
+
+	if (tunnel_vxlan_get_vni(data, data_end, ipv4) ==
+				 MARK_MAGIC_ENCRYPT) {
+		ret = encrypt_overlay_and_redirect(ctx, ipv4);
+	}
+	return ret;
+};
+#endif /* ENABLE_IPSEC && ENABLE_IPV4 && TUNNEL_MODE */
+
 /*
  * to-netdev is attached as a tc egress filter to one or more physical devices
- * managed by Cilium (e.g., eth0). This program is only attached when:
- * - the host firewall is enabled, or
- * - BPF NodePort is enabled, or
- * - WireGuard encryption is enabled
+ * managed by Cilium (e.g., eth0).
  */
 __section_entry
 int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 {
+	void __maybe_unused *data, *data_end = NULL;
+	struct iphdr __maybe_unused *ipv4;
 	struct trace_ctx trace = {
 		.reason = TRACE_REASON_UNKNOWN,
 		.monitor = 0,
@@ -1301,9 +1338,7 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 	__u32 __maybe_unused vlan_id;
 	int ret = CTX_ACT_OK;
 	__s8 ext_err = 0;
-#ifdef ENABLE_HOST_FIREWALL
 	__u16 proto = 0;
-#endif
 
 	/* Filter allowed vlan id's and pass them back to kernel.
 	 */
@@ -1333,14 +1368,14 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 	}
 #endif
 
+	if (!validate_ethertype(ctx, &proto)) {
+		return send_drop_notify_error(ctx, 0, DROP_UNSUPPORTED_L2,
+					      CTX_ACT_DROP, METRIC_EGRESS);
+	}
+
 #ifdef ENABLE_HOST_FIREWALL
 	if (ctx_snat_done(ctx))
 		goto skip_host_firewall;
-
-	if (!validate_ethertype(ctx, &proto)) {
-		ret = DROP_UNSUPPORTED_L2;
-		goto out;
-	}
 
 	policy_clear_mark(ctx);
 
@@ -1365,7 +1400,7 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 		ret = DROP_UNKNOWN_L3;
 		break;
 	}
-out:
+
 	if (IS_ERR(ret))
 		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
@@ -1383,6 +1418,18 @@ skip_host_firewall:
 	}
 #endif
 
+#if defined(ENABLE_IPSEC) && defined(ENABLE_IPV4) && defined(TUNNEL_MODE)
+	/* Determine if this is overlay traffic that should be recirculated
+	 * to the stack for XFRM encryption.
+	 */
+	ret = do_encrypt_overlay(ctx, proto);
+	if (ret == CTX_ACT_REDIRECT)
+		return ret;
+	else if (IS_ERR(ret))
+		return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP,
+					      METRIC_EGRESS);
+#endif /* ENABLE_IPSEC && ENABLE_IPV4 && TUNNEL_MODE */
+
 #ifdef ENABLE_WIREGUARD
 	/* Redirect the packet to the WireGuard tunnel device for encryption
 	 * if needed.
@@ -1394,7 +1441,7 @@ skip_host_firewall:
 	 * the packet back to the "to-netdev" section for the SNAT instead of
 	 * returning TC_ACT_REDIRECT.
 	 */
-	ret = wg_maybe_redirect_to_encrypt(ctx);
+	ret = wg_maybe_redirect_to_encrypt(ctx, proto);
 	if (ret == CTX_ACT_REDIRECT)
 		return ret;
 	else if (IS_ERR(ret))

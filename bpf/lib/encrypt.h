@@ -183,6 +183,69 @@ do_decrypt(struct __ctx_buff *ctx, __u16 proto)
 	return ctx_redirect(ctx, CILIUM_IFINDEX, 0);
 #endif /* ENABLE_ROUTING */
 }
+
+#if defined(ENABLE_IPV4) && defined(TUNNEL_MODE)
+/* Sets the encryption mark on an overlay (VXLAN) packet and redirects the
+ * packet to the ingress side of it's associated ifindex.
+ *
+ * The recirculated overlay packet will then be subjected to XFRM hooks in the
+ * output routing path, since the original src/dst of the overlay packet routes
+ * off-host.
+ *
+ * This function is useful when you want to encrypt overlay traffic and use the
+ * underlay to deliver encrypted overlay traffic to the remote node.
+ * For this to work the IPSec control plane must install XFRM policies and
+ * states which set the tunnel source and destination to the underlay address of
+ * the destination node.
+ *
+ * If the redirect to the ingress side of ctx->ingress is successful
+ * CTX_ACT_REDIRECT is returned, otherwise an error code is returned.
+ *
+ * Be aware that the redirected-to interface needs to have the following
+ * sysctl enabled for this to work correctly (per-device is fine)
+ *   - net.ipv4.conf.default.rp_filter = 0
+ *   - net.ipv4.conf.default.accept_local = 1
+ */
+static __always_inline int
+encrypt_overlay_and_redirect(struct __ctx_buff *ctx, struct iphdr *ip4)
+{
+	struct remote_endpoint_info *info = NULL;
+	__u8 encrypt_key = 0;
+	__u8 dst_mac = 0;
+	int ret = 0;
+
+	info = lookup_ip4_remote_endpoint(ip4->daddr, 0);
+	if (!info)
+		return DROP_INVALID;
+
+	encrypt_key = get_min_encrypt_key(info->key);
+
+	/* info->tunnel_endpoint will be 0.0.0.0/0 since this is vxlan and the
+	 * daddr of the packet is the tunnel endpoint already, so pass in the
+	 * daddr of the packet to this function
+	 */
+	ret = set_ipsec_encrypt(ctx, encrypt_key, ip4->daddr,
+				info->sec_identity, false);
+
+	if (ret != CTX_ACT_OK)
+		return ret;
+
+	/*
+	 * source mac is our current egress interface, lets copy it to dmac
+	 * so redirecting to ingress side of the same interface doesn't fail.
+	 */
+	eth_load_saddr(ctx, &dst_mac, 0);
+	eth_store_daddr(ctx, &dst_mac, 0);
+
+	/* redirect to ingress side of ifindex so the packet has xfrm applied */
+	ret = ctx_redirect(ctx, ctx->ifindex, BPF_F_INGRESS);
+	if (ret != CTX_ACT_REDIRECT)
+		return DROP_INVALID;
+
+	return ret;
+}
+#endif
+
 #else
 static __always_inline int
 do_decrypt(struct __ctx_buff __maybe_unused *ctx, __u16 __maybe_unused proto)
