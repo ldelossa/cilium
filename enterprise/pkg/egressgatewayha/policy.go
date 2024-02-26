@@ -12,7 +12,10 @@ package egressgatewayha
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"net/netip"
 	"slices"
 	"sort"
@@ -35,6 +38,7 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/rand"
 )
 
 // groupConfig is the internal representation of an egress group, describing
@@ -226,7 +230,7 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGate
 	}
 }
 
-func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig) v1.IsovalentEgressGatewayPolicyGroupStatus {
+func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig) (*v1.IsovalentEgressGatewayPolicyGroupStatus, error) {
 	activeGatewayIPs := []string{}
 	healthyGatewayIPs := []string{}
 
@@ -278,49 +282,43 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 		}
 	}
 
-	// if AZ affinity is enabled, do a first pass to build the per-AZ list of active gateway IPs:
-	// initially the list of active gateways for a given AZ will be identical to the list of healthy gateways,
-	// then based on the selected AZ affinity mode and maxGatewayNodes settings, other nodes from different AZs can
-	// be added or already present nodes can be removed
+	// if AZ affinity is enabled,
+	// Choose maxGateway items from the list of per AZ healthy GWs  with random probability.
+	// If the selected active GW list is not enough, choose from the non-local active GW list later
+	// according to the azAffinity config.
 	if config.azAffinity.enabled() {
 		for az, healthyGatewayIPs := range healthyGatewayIPsByAZ {
-			activeGatewayIPsByAZ[az] = slices.Clone(healthyGatewayIPs)
+			activeGWs, err := selectActiveGWs(az, gc.maxGatewayNodes, healthyGatewayIPs)
+			if err != nil {
+				return nil, err
+			}
+			activeGatewayIPsByAZ[az] = activeGWs
 		}
 	}
 
 	// nonLocalActiveGatewayIPs is a helper that returns, given a particular AZ, a slice of non local gateways for
 	// that AZ.
 	//
-	// The slice is sorted by nodes' AZs, in lexicographical ordering, and starts from AZ next to the one passed to the function.
-	// In this way each AZ will have its own ordering of non local gateways, allowing different AZs to fallback to
-	// different set of non local gateways
-	nonLocalActiveGatewayIPs := func(az string) []string {
+	// This function selects active non-local GWs from a list of healthy non-local GWs with random probability
+	// using a target zone name as a seed to make the result deterministic.
+	nonLocalActiveGatewayIPs := func(targetAz string, maxGW int) ([]string, error) {
 		// sort the AZs lexicographically
 		sortedAZs := maps.Keys(healthyGatewayIPsByAZ)
 		sort.Strings(sortedAZs)
 
-		// shift the list so that it starts after the given AZ.
-		//
-		// For example [a, b, c, d] with local AZ "c" would result in [d, a, b]
-		if i, ok := slices.BinarySearch(sortedAZs, az); ok {
-			// first shift the list so that it starts with the given AZ.
-			//
-			// [a, b, c, d] -> [c, d, a, b]
-			sortedAZs = append(sortedAZs[i:], sortedAZs[:i]...)
-
-			// then delete the given AZ (first one in the list)
-			//
-			// [c, d, a, b] -> [d, a, b]
-			sortedAZs = sortedAZs[1:]
-		}
-
-		// then build a list of non local gateway IPs following the ordering of the sorted list of AZs
-		gwIPs := []string{}
+		var healthyNonLocalGWs []string
 		for _, az := range sortedAZs {
-			gwIPs = append(gwIPs, healthyGatewayIPsByAZ[az]...)
+			if az != targetAz {
+				healthyNonLocalGWs = append(healthyNonLocalGWs, healthyGatewayIPsByAZ[az]...)
+			}
 		}
 
-		return gwIPs
+		activeGWs, err := selectActiveGWs(targetAz, maxGW, healthyNonLocalGWs)
+		if err != nil {
+			return nil, err
+		}
+
+		return activeGWs, nil
 	}
 
 	// next do a second pass to populate the per-AZ list of active gateways
@@ -332,15 +330,24 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 		for az := range activeGatewayIPsByAZ {
 			// only if there are no local gateways, pick the ones from the other AZs
 			if len(activeGatewayIPsByAZ[az]) == 0 {
-				activeGatewayIPsByAZ[az] = nonLocalActiveGatewayIPs(az)
+				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes)
+				if err != nil {
+					return nil, err
+				}
+				activeGatewayIPsByAZ[az] = nonLocalActiveGWs
 			}
 		}
 
 	case azAffinityLocalPriority:
 		for az := range activeGatewayIPsByAZ {
-			// always append non local gateways to the local ones
-			activeGatewayIPsByAZ[az] = append(activeGatewayIPsByAZ[az],
-				nonLocalActiveGatewayIPs(az)...)
+			if gc.maxGatewayNodes != 0 && len(activeGatewayIPsByAZ[az]) < gc.maxGatewayNodes {
+				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes-len(activeGatewayIPsByAZ[az]))
+				if err != nil {
+					return nil, err
+				}
+
+				activeGatewayIPsByAZ[az] = append(activeGatewayIPsByAZ[az], nonLocalActiveGWs...)
+			}
 		}
 	}
 
@@ -349,21 +356,36 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 		if len(activeGatewayIPs) > gc.maxGatewayNodes {
 			activeGatewayIPs = activeGatewayIPs[:gc.maxGatewayNodes]
 		}
-
-		if config.azAffinity.enabled() {
-			for az := range activeGatewayIPsByAZ {
-				if len(activeGatewayIPsByAZ[az]) > gc.maxGatewayNodes {
-					activeGatewayIPsByAZ[az] = activeGatewayIPsByAZ[az][:gc.maxGatewayNodes]
-				}
-			}
-		}
 	}
 
-	return v1.IsovalentEgressGatewayPolicyGroupStatus{
+	return &v1.IsovalentEgressGatewayPolicyGroupStatus{
 		ActiveGatewayIPs:     activeGatewayIPs,
 		ActiveGatewayIPsByAZ: activeGatewayIPsByAZ,
 		HealthyGatewayIPs:    healthyGatewayIPs,
+	}, nil
+}
+
+// selectActiveGWs selects the maxGW number of the active GWs from the healthy GWs
+// with random probability using a seed.
+func selectActiveGWs(seed string, maxGW int, healthyGWs []string) ([]string, error) {
+	var activeGWs []string
+
+	// Choose active GWs from the healthy GWs list with a pseudo-random permutation
+	// using a zone name as a seed
+	h := sha256.New()
+	if _, err := io.WriteString(h, seed); err != nil {
+		return nil, err
 	}
+	s := binary.BigEndian.Uint64(h.Sum(nil))
+	r := rand.NewSafeRand(int64(s))
+	for _, p := range r.Perm(len(healthyGWs)) {
+		activeGWs = append(activeGWs, healthyGWs[p])
+		if maxGW != 0 && len(activeGWs) == maxGW {
+			break
+		}
+	}
+
+	return activeGWs, nil
 }
 
 // updateGroupStatuses updates the list of active and healthy gateway IPs in the
@@ -371,8 +393,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager) error {
 	groupStatuses := []v1.IsovalentEgressGatewayPolicyGroupStatus{}
 	for _, gc := range config.groupConfigs {
-		groupStatuses = append(groupStatuses,
-			gc.computeGroupStatus(operatorManager, config))
+		iegp, err := gc.computeGroupStatus(operatorManager, config)
+		if err != nil {
+			return err
+		}
+		groupStatuses = append(groupStatuses, *iegp)
 	}
 
 	// After building the list of active and healthy gateway IPs, update the
