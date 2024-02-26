@@ -188,6 +188,18 @@ func (ec *EnterpriseConnectivity) addMixedRoutingTests(ct *check.ConnectivityTes
 	// Requirements changes should be additionally applied to the ones guarding
 	// the execution of the associated setup function, so that they always match.
 	if ct.Params().IncludeUnsafeTests {
+		// Generate extra traffic from one pod in each cluster to each Cilium
+		// HealthIP, to prevent the sanity checks from reporting false positives
+		// due to the lack of other traffic flowing in the cluster. The already
+		// existing health check test is not sufficient when WireGuard is enabled,
+		// because node to pod traffic is not encrypted by default.
+		ct.NewTest("mixed-routing-extra-traffic").
+			WithFeatureRequirements(
+				features.RequireEnabled(features.HealthChecking),
+				features.RequireEnabled(enterpriseFeatures.FallbackRoutingMode),
+			).
+			WithScenarios(enterpriseTests.MixedRoutingExtraTraffic())
+
 		ct.NewTest("mixed-routing").
 			WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.FallbackRoutingMode)).
 			WithSysdumpPolicy(check.SysdumpPolicyNever).

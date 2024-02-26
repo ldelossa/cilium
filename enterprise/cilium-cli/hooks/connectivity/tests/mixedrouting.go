@@ -21,6 +21,7 @@ import (
 	"github.com/cilium/cilium/pkg/node/addressing"
 	wgtypes "github.com/cilium/cilium/pkg/wireguard/types"
 
+	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
@@ -191,4 +192,40 @@ func (mr *mixedRouting) shouldUseTunnel(self, other check.NodeIdentity) bool {
 	sameCluster := self.Cluster == other.Cluster
 	return (sameCluster && mr.clusterUseTunnel[self.Cluster]) ||
 		(!sameCluster && mr.crossClusterUseTunnel)
+}
+
+type mixedRoutingExtraTraffic struct{}
+
+func MixedRoutingExtraTraffic() check.Scenario {
+	return &mixedRoutingExtraTraffic{}
+}
+
+func (mrt *mixedRoutingExtraTraffic) Name() string {
+	return "mixed-routing-extra-traffic"
+}
+
+func (mrt *mixedRoutingExtraTraffic) Run(ctx context.Context, t *check.Test) {
+	var (
+		ct     = t.Context()
+		client = ct.RandomClientPod()
+		echo   = deploy.MustGetEchoPodOtherNode(ct)
+	)
+
+	for other, cn := range ct.CiliumNodes() {
+		t.ForEachIPFamily(func(ipFam features.IPFamily) {
+			addr := cn.Spec.HealthAddressing.IPv4
+			if ipFam == features.IPFamilyV6 {
+				addr = cn.Spec.HealthAddressing.IPv6
+			}
+
+			if addr == "" {
+				return
+			}
+
+			dst := check.HTTPEndpoint(other.Name, fmt.Sprintf("http://%s:4240/hello", addr))
+			fn := func(a *check.Action) { a.ExecInPod(ctx, ct.CurlCommand(dst, ipFam)) }
+			t.NewAction(mrt, other.Name, client, dst, ipFam).Run(fn)
+			t.NewAction(mrt, other.Name, &echo, dst, ipFam).Run(fn)
+		})
+	}
 }
