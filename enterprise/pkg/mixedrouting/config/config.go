@@ -64,13 +64,14 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig, cmcfg cecmcfg.Config, cnic
 	}
 
 	for cfgname, enabled := range map[string]bool{
+		option.EnableEncryptionStrictMode: dcfg.EnableEncryptionStrictMode,
 		option.EnableHighScaleIPcache:     dcfg.EnableHighScaleIPcache,
 		option.EnableIPSecName:            dcfg.EnableIPSec,
 		option.EnableIPv4EgressGateway:    dcfg.EnableIPv4EgressGateway,
 		option.EnableIPv4EgressGatewayHA:  dcfg.EnableIPv4EgressGatewayHA,
 		option.EnableNat46X64Gateway:      dcfg.EnableNat46X64Gateway,
 		option.EnableVTEP:                 dcfg.EnableVTEP,
-		option.EnableWireguard:            dcfg.EnableWireguard,
+		option.EncryptNode:                dcfg.EncryptNode,
 		option.InstallNoConntrackIptRules: dcfg.InstallNoConntrackIptRules,
 
 		cecmcfg.EnableClusterAwareAddressing: cmcfg.EnableClusterAwareAddressing,
