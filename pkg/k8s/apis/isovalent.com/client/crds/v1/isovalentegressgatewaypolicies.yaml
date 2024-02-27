@@ -59,10 +59,6 @@ spec:
                 - localOnlyFirst
                 - localPriority
                 type: string
-              bgpEnabled:
-                description: BGPEnabled controls whether the policy's egress IPs should
-                  be announced via BGP.
-                type: boolean
               destinationCIDRs:
                 description: DestinationCIDRs is a list of destination CIDRs for destination
                   IP addresses. If a destination IP matches any one CIDR, it will

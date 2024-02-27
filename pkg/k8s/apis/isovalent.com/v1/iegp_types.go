@@ -70,12 +70,6 @@ type IsovalentEgressGatewayPolicySpec struct {
 	// gateway for the given policy.
 	EgressGroups []EgressGroup `json:"egressGroups"`
 
-	// BGPEnabled controls whether the policy's egress IPs should be
-	// announced via BGP.
-	//
-	// +kubebuilder:validation:Optional
-	BGPEnabled bool `json:"bgpEnabled"`
-
 	// AZAffinity controls the AZ affinity of the gateway nodes to the source pods and allows to select or prefer local (i.e. gateways in the same AZ of a given pod) gateways.
 	//
 	// 4 modes are supported:

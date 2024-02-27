@@ -12,7 +12,7 @@ const (
 	//
 	// Maintainers: Run ./Documentation/check-crd-compat-table.sh for each release
 	// Developers: Bump patch for each change in the CRD schema.
-	CustomResourceDefinitionSchemaVersion = "1.29.2"
+	CustomResourceDefinitionSchemaVersion = "1.29.3"
 
 	// CustomResourceDefinitionSchemaVersionKey is key to label which holds the CRD schema version
 	CustomResourceDefinitionSchemaVersionKey = "com.isovalent.k8s.crd.schema.version"
