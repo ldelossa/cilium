@@ -650,6 +650,13 @@ ct_recreate6:
 		key.ip6.p4 = 0;
 		key.family = ENDPOINT_KEY_IPV6;
 
+#if !defined(ENABLE_NODEPORT) && defined(ENABLE_HOST_FIREWALL)
+		/* See comment in handle_ipv4_from_lxc(). */
+		if ((ct_status == CT_REPLY || ct_status == CT_RELATED) &&
+		    identity_is_remote_node(*dst_sec_identity))
+			goto encrypt_to_stack;
+#endif /* !ENABLE_NODEPORT && ENABLE_HOST_FIREWALL */
+
 		/* Three cases exist here either (a) the encap and redirect could
 		 * not find the tunnel so fallthrough to nat46 and stack, (b)
 		 * the packet needs IPSec encap so push ctx to stack for encap, or
@@ -1008,11 +1015,10 @@ ct_recreate4:
 #endif /* ENABLE_NODEPORT */
 
 		/* RevNAT for replies on a loopback connection: */
-		if (ct_state->rev_nat_index) {
+		if (ct_state->rev_nat_index && ct_state->loopback) {
 			ret = lb4_rev_nat(ctx, ETH_HLEN, l4_off,
 					  ct_state->rev_nat_index,
-					  ct_state->loopback,
-					  tuple, 0, has_l4_header);
+					  true, tuple, has_l4_header);
 			if (IS_ERR(ret))
 				return ret;
 		}
@@ -1191,6 +1197,21 @@ skip_vtep:
 		key.ip4 = ip4->daddr & IPV4_MASK;
 		key.family = ENDPOINT_KEY_IPV4;
 		key.cluster_id = (__u8)cluster_id;
+
+#if !defined(ENABLE_NODEPORT) && defined(ENABLE_HOST_FIREWALL)
+		/*
+		 * For the host firewall, traffic from a pod to a remote node is sent
+		 * through the tunnel. In the case of node to remote pod traffic via
+		 * externalTrafficPolicy=Local services, packets may be DNATed when
+		 * they enter the remote node (without being SNATed at the same time).
+		 * If kube-proxy is used, the response needs to go through the stack
+		 * to apply the correct reverse DNAT, and then be routed accordingly.
+		 * See #14674 for details.
+		 */
+		if ((ct_status == CT_REPLY || ct_status == CT_RELATED) &&
+		    identity_is_remote_node(*dst_sec_identity))
+			goto encrypt_to_stack;
+#endif /* !ENABLE_NODEPORT && ENABLE_HOST_FIREWALL */
 
 #ifdef ENABLE_CLUSTER_AWARE_ADDRESSING
 		/*
@@ -1529,7 +1550,7 @@ ipv6_policy(struct __ctx_buff *ctx, struct ipv6hdr *ip6, int ifindex, __u32 src_
 			int ret2;
 
 			ret2 = lb6_rev_nat(ctx, l4_off,
-					   ct_state->rev_nat_index, tuple, 0);
+					   ct_state->rev_nat_index, tuple);
 			if (IS_ERR(ret2))
 				return ret2;
 		}
@@ -1864,8 +1885,7 @@ ipv4_policy(struct __ctx_buff *ctx, struct iphdr *ip4, int ifindex, __u32 src_la
 
 			ret2 = lb4_rev_nat(ctx, ETH_HLEN, l4_off,
 					   ct_state->rev_nat_index, false,
-					   tuple, REV_NAT_F_TUPLE_SADDR,
-					   has_l4_header);
+					   tuple, has_l4_header);
 			if (IS_ERR(ret2))
 				return ret2;
 		}

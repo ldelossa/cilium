@@ -235,6 +235,12 @@ Users (Alphabetically)
       L: https://metal.equinix.com/
       Q: @matoszz
 
+    * N: Equinix
+      D: Equinix NL Managed Services is using Cilium with their Managed Kubernetes offering
+      U: CNI, network policies, visibility
+      L: https://www.equinix.nl/products/support-services/managed-services/netherlands
+      Q: @jonkerj
+
     * N: Exoscale
       D: Exoscale is offering Cilium as a CNI option on its managed Kubernetes service named SKS (Scalable Kubernetes Service)
       U: CNI, Networking
@@ -469,6 +475,13 @@ Users (Alphabetically)
       U: Security, eBPF, Tetragon
       L: https://www.parseable.io/blog/ebpf-log-analytics
       Q: @nitisht
+
+    * N: Pionative
+      D: Pionative supplies all its clients across cloud providers with
+      Kubernetes running Cilium to deliver the best performance out there.
+      U: CNI, Networking, Security, eBPF
+      L: https://www.pionative.com
+      Q: @Pionerd
 
     * N: Plaid Inc
       D: Plaid is using Cilium as their CNI plugin in self-hosted Kubernetes on AWS.
@@ -710,6 +723,11 @@ Users (Alphabetically)
       D: ungleich is using Cilium as part of IPv6-only Kubernetes deployments.
       U: CNI, IPv6 only networking, BGP, eBPF
       Q: @Nico Schottelius, @nico:ungleich.ch (Matrix)
+
+    * N: Veepee
+      D: Veepee is using Cilium on their on-premise Kubernetes clusters, hosting majority of their applications.
+      U. CNI, BGP, eBPF, Hubble, DirectRouting (via kube-router)
+      Q: @nerzhul
 
     * N: Wildlife Studios
       D: Wildlife Studios is using Cilium in AWS for all their game production clusters (self hosted k8s)

@@ -93,6 +93,7 @@ import (
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/rate"
+	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
 	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/time"
@@ -984,6 +985,15 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.StringSlice(option.HubbleRedactHttpHeadersDeny, []string{}, "HTTP headers to redact from flows")
 	option.BindEnv(vp, option.HubbleRedactHttpHeadersDeny)
 
+	flags.Bool(option.HubbleDropEvents, defaults.HubbleDropEventsEnabled, "Emit packet drop Events related to pods")
+	option.BindEnv(vp, option.HubbleDropEvents)
+
+	flags.Duration(option.HubbleDropEventsInterval, defaults.HubbleDropEventsInterval, "Minimum time between emitting same events")
+	option.BindEnv(vp, option.HubbleDropEventsInterval)
+
+	flags.String(option.HubbleDropEventsReasons, defaults.HubbleDropEventsReasons, "Drop reasons to emit events for")
+	option.BindEnv(vp, option.HubbleDropEventsReasons)
+
 	flags.Bool(option.EnableIPv4FragmentsTrackingName, defaults.EnableIPv4FragmentsTracking, "Enable IPv4 fragments tracking for L4-based lookups")
 	option.BindEnv(vp, option.EnableIPv4FragmentsTrackingName)
 
@@ -1265,7 +1275,23 @@ func initEnv(vp *viper.Viper) {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.WithError(err).Fatal("unable to set memory resource limits")
 	}
-	linuxdatapath.CheckMinRequirements()
+
+	globalsDir := option.Config.GetGlobalsDir()
+	if err := os.MkdirAll(globalsDir, defaults.StateDirRights); err != nil {
+		log.WithError(err).WithField(logfields.Path, globalsDir).Fatal("Could not create runtime directory")
+	}
+	if err := os.Chdir(option.Config.LibDir); err != nil {
+		log.WithError(err).WithField(logfields.Path, option.Config.LibDir).Fatal("Could not change to runtime directory")
+	}
+	if _, err := os.Stat(option.Config.BpfDir); os.IsNotExist(err) {
+		log.WithError(err).Fatalf("BPF template directory: NOT OK. Please run 'make install-bpf'")
+	}
+
+	linuxdatapath.CheckRequirements()
+
+	if err := probes.CreateHeaderFiles(filepath.Join(option.Config.BpfDir, "include/bpf"), probes.ExecuteHeaderProbes()); err != nil {
+		log.WithError(err).Fatal("failed to create header files with feature macros")
+	}
 
 	if err := pidfile.Write(defaults.PidFilePath); err != nil {
 		log.WithField(logfields.Path, defaults.PidFilePath).WithError(err).Fatal("Failed to create Pidfile")
@@ -1665,6 +1691,7 @@ type daemonParams struct {
 	MTU                 mtu.MTU
 	Sysctl              sysctl.Sysctl
 	SyncHostIPs         *syncHostIPs
+	LRPManager          *redirectpolicy.Manager
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {

@@ -41,6 +41,8 @@
 #include "lib/eps.h"
 #endif /* ENABLE_VTEP */
 
+#define overlay_ingress_policy_hook(ctx, ip4, identity, ext_err) CTX_ACT_OK
+
 #ifdef ENABLE_IPV6
 static __always_inline int handle_ipv6(struct __ctx_buff *ctx,
 				       __u32 *identity,
@@ -443,6 +445,10 @@ not_esp:
 		return ipv4_local_delivery(ctx, ETH_HLEN, *identity, MARK_MAGIC_IDENTITY,
 					   ip4, ep, METRIC_INGRESS, false, false, true,
 					   0);
+
+	ret = overlay_ingress_policy_hook(ctx, ip4, *identity, ext_err);
+	if (ret != CTX_ACT_OK)
+		return ret;
 
 	/* A packet entering the node from the tunnel and not going to a local
 	 * endpoint has to be going to the local host.
