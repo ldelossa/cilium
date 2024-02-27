@@ -33,6 +33,7 @@ import (
 var _ fqdnproxy.DNSProxier = &RemoteFQDNProxy{}
 
 var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdnha/remoteproxy")
+var fqdnRulesControllerGroup = controller.NewGroup("fqdn-rules")
 
 const (
 	fqdnRulesCacheController string        = "fqdn-rules-cache-controller"
@@ -180,6 +181,7 @@ func (r *RemoteFQDNProxy) UpdateAllowed(endpointID uint64, destPort uint16, newR
 	r.controllers.UpdateController(
 		fqdnRulesCacheController,
 		controller.ControllerParams{
+			Group: fqdnRulesControllerGroup,
 			DoFunc: func(ctx context.Context) error {
 				return r.forwardFQDNRulesUpdates(ctx)
 			},
