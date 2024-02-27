@@ -192,7 +192,7 @@ jobs:
             cd /host/
 
             # create kind cluster with secondary network named "secondary-network"
-            ./contrib/scripts/kind.sh --secondary-network "1" "2"
+            IPFAMILY=ipv4 ./contrib/scripts/kind.sh --secondary-network "1" "2"
 
             export CILIUM_CLI_MODE=helm
             ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
