@@ -50,9 +50,6 @@ concurrency:
     }}
   cancel-in-progress: true
 
-env:
-  check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
 jobs:
   setup-vars:
     name: Setup Vars
@@ -85,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
-        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
+        uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
         with:
           sha: ${{ inputs.SHA || github.sha }}
 
@@ -372,8 +369,6 @@ jobs:
                export KUBEPROXY=0
                export K8S_NODES=3
                export NO_CILIUM_ON_NODES=kind-worker2
-            elif [[ "${{ matrix.kernel }}" == 4.19-* ]]; then
-               export KERNEL=419
             elif [[ "${{ matrix.kernel }}" == 5.4-* ]]; then
                export KERNEL=54
             fi
@@ -500,7 +495,7 @@ jobs:
           fi
 
       - name: Set final commit status
-        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
+        uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
         with:
           sha: ${{ inputs.SHA || github.sha }}
           status: ${{ steps.commit-status.outputs.status }}
