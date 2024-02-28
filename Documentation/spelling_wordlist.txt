@@ -488,6 +488,7 @@ mainboard
 makefile
 mana
 masq
+matchLabels
 matchPattern
 maxUnavailable
 mc
@@ -553,6 +554,7 @@ openSUSE
 openapi
 openssl
 originatingTLS
+os
 otx
 pahole
 parsable

@@ -77,7 +77,7 @@ jobs:
 
           - name: "1"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'rhel8-20240221.094422'
+            kernel: 'rhel8-20240221.111541'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -115,7 +115,7 @@ jobs:
 
           - name: "4"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: "bpf-next-20240204.012837"
+            kernel: "bpf-next-20240226.012633"
             kube-proxy: "iptables"
             kpr: "false"
             tunnel: "geneve"
@@ -193,6 +193,7 @@ jobs:
           test-name: e2e-conformance
           kernel: ${{ matrix.kernel }}
           kind-params: "${{ steps.kind-params.outputs.params }}"
+          kind-image: ${{ env.KIND_K8S_IMAGE }}
 
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.

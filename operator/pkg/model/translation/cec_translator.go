@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/operator/pkg/model"
 	"github.com/cilium/cilium/pkg/k8s"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/slices"
 )
 
@@ -34,6 +35,11 @@ type cecTranslator struct {
 	secretsNamespace string
 	useProxyProtocol bool
 
+	hostNetworkEnabled           bool
+	hostNetworkNodeLabelSelector *slim_metav1.LabelSelector
+	ipv4Enabled                  bool
+	ipv6Enabled                  bool
+
 	// hostNameSuffixMatch is a flag to control whether the host name suffix match.
 	// Hostnames that are prefixed with a wildcard label (`*.`) are interpreted
 	// as a suffix match. That means that a match for `*.example.com` would match
@@ -44,12 +50,19 @@ type cecTranslator struct {
 }
 
 // NewCECTranslator returns a new translator
-func NewCECTranslator(secretsNamespace string, useProxyProtocol bool, hostNameSuffixMatch bool, idleTimeoutSeconds int) CECTranslator {
+func NewCECTranslator(secretsNamespace string, useProxyProtocol bool, hostNameSuffixMatch bool, idleTimeoutSeconds int,
+	hostNetworkEnabled bool, hostNetworkNodeLabelSelector *slim_metav1.LabelSelector, ipv4Enabled bool, ipv6Enabled bool,
+) CECTranslator {
 	return &cecTranslator{
 		secretsNamespace:    secretsNamespace,
 		useProxyProtocol:    useProxyProtocol,
 		hostNameSuffixMatch: hostNameSuffixMatch,
 		idleTimeoutSeconds:  idleTimeoutSeconds,
+
+		hostNetworkEnabled:           hostNetworkEnabled,
+		hostNetworkNodeLabelSelector: hostNetworkNodeLabelSelector,
+		ipv4Enabled:                  ipv4Enabled,
+		ipv6Enabled:                  ipv6Enabled,
 	}
 }
 
@@ -67,6 +80,10 @@ func (i *cecTranslator) Translate(namespace string, name string, model *model.Mo
 	cec.Spec.BackendServices = i.getBackendServices(model)
 	cec.Spec.Services = i.getServices(namespace, name)
 	cec.Spec.Resources = i.getResources(model)
+
+	if i.hostNetworkEnabled {
+		cec.Spec.NodeSelector = i.hostNetworkNodeLabelSelector
+	}
 
 	return cec, nil
 }
@@ -136,6 +153,11 @@ func (i *cecTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSResou
 	if i.useProxyProtocol {
 		mutatorFuncs = append(mutatorFuncs, WithProxyProtocol())
 	}
+
+	if i.hostNetworkEnabled {
+		mutatorFuncs = append(mutatorFuncs, WithHostNetworkPort(m.HTTP, i.ipv4Enabled, i.ipv6Enabled))
+	}
+
 	l, _ := NewHTTPListenerWithDefaults("listener", i.secretsNamespace, tlsMap, mutatorFuncs...)
 	return []ciliumv2.XDSResource{l}
 }
@@ -164,6 +186,11 @@ func (i *cecTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSResour
 	if i.useProxyProtocol {
 		mutatorFuncs = append(mutatorFuncs, WithProxyProtocol())
 	}
+
+	if i.hostNetworkEnabled {
+		mutatorFuncs = append(mutatorFuncs, WithHostNetworkPort(m.TLS, i.ipv4Enabled, i.ipv6Enabled))
+	}
+
 	l, _ := NewSNIListenerWithDefaults("listener", backendsMap, mutatorFuncs...)
 	return []ciliumv2.XDSResource{l}
 }

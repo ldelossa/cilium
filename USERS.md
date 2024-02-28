@@ -427,7 +427,13 @@ Users (Alphabetically)
       U: Pod networking (CNI, IPAM, Host-reachable Services), Hubble, Cluster-mesh. TBD: Network Policy, Transparent Encryption (WG), Host Firewall.
       L: https://mux.com
       Q: @dilyevsky
-
+      
+    * N: NetBird
+      D: NetBird uses Cilium to compile BPF to Go for cross-platform DNS management and NAT traversal
+      U: bpf2go to compile a C source file into eBPF bytecode and then to Go
+      L: https://netbird.io/knowledge-hub/using-xdp-ebpf-to-share-default-dns-port-between-resolvers
+      Q: @braginini
+      
     * N: NETWAYS Web Services
       D: NETWAYS Web Services offers Cilium to their clients as CNI option for their Managed Kubernetes clusters.
       U: Networking (CNI), Observability (Hubble)

@@ -7,12 +7,16 @@ import (
 	"testing"
 
 	envoy_config_route_v3 "github.com/cilium/proxy/go/envoy/config/route/v3"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/testing/protocmp"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/cilium/cilium/operator/pkg/model"
 	"github.com/cilium/cilium/operator/pkg/model/translation"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
 
 func Test_translator_Translate(t *testing.T) {
@@ -29,7 +33,7 @@ func Test_translator_Translate(t *testing.T) {
 			name: "Basic HTTP Listener",
 			args: args{
 				m: &model.Model{
-					HTTP: basicHTTPListeners,
+					HTTP: basicHTTPListeners(80),
 				},
 			},
 			want: basicHTTPListenersCiliumEnvoyConfig,
@@ -209,7 +213,7 @@ func Test_translator_Translate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &gatewayAPITranslator{
-				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, 60),
+				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, 60, false, nil, false, false),
 			}
 			cec, _, _, err := trans.Translate(tt.args.m)
 			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
@@ -310,13 +314,95 @@ func Test_translator_TranslateResource(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &gatewayAPITranslator{
-				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, 60),
+				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, 60, false, nil, false, false),
 			}
 			cec, _, _, err := trans.Translate(tt.args.m)
 			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
 			for _, fn := range tt.validateFuncs {
 				require.True(t, fn(cec), "Validation failed")
 			}
+		})
+	}
+}
+
+func Test_translator_Translate_HostNetwork(t *testing.T) {
+	type args struct {
+		m *model.Model
+	}
+	tests := []struct {
+		name              string
+		args              args
+		nodeLabelSelector *slim_metav1.LabelSelector
+		ipv4Enabled       bool
+		ipv6Enabled       bool
+		want              *ciliumv2.CiliumEnvoyConfig
+		wantErr           bool
+	}{
+		{
+			name:        "Basic HTTP Listener",
+			ipv4Enabled: true,
+			args: args{
+				m: &model.Model{
+					HTTP: basicHTTPListeners(80),
+				},
+			},
+			want: basicHostPortHTTPListenersCiliumEnvoyConfig("0.0.0.0", 80, nil),
+		},
+		{
+			name:        "Basic HTTP Listener with different port",
+			ipv4Enabled: true,
+			args: args{
+				m: &model.Model{
+					HTTP: basicHTTPListeners(55555),
+				},
+			},
+			want: basicHostPortHTTPListenersCiliumEnvoyConfig("0.0.0.0", 55555, nil),
+		},
+		{
+			name:        "Basic HTTP Listener with different port and IPv6",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			args: args{
+				m: &model.Model{
+					HTTP: basicHTTPListeners(55555),
+				},
+			},
+			want: basicHostPortHTTPListenersCiliumEnvoyConfig("::", 55555, nil),
+		},
+		{
+			name:        "Basic HTTP Listener with LabelSelector",
+			ipv4Enabled: true,
+			nodeLabelSelector: &slim_metav1.LabelSelector{
+				MatchLabels: map[string]slim_metav1.MatchLabelsValue{
+					"a": "b",
+				},
+			},
+			args: args{
+				m: &model.Model{
+					HTTP: basicHTTPListeners(55555),
+				},
+			},
+			want: basicHostPortHTTPListenersCiliumEnvoyConfig("0.0.0.0", 55555, &slim_metav1.LabelSelector{MatchLabels: map[string]slim_metav1.MatchLabelsValue{"a": "b"}}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			trans := &gatewayAPITranslator{
+				cecTranslator:      translation.NewCECTranslator("cilium-secrets", false, true, 60, true, tt.nodeLabelSelector, tt.ipv4Enabled, tt.ipv6Enabled),
+				hostNetworkEnabled: true,
+			}
+			cec, svc, ep, err := trans.Translate(tt.args.m)
+			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
+
+			diffOutput := cmp.Diff(tt.want, cec, protocmp.Transform())
+			if len(diffOutput) != 0 {
+				t.Errorf("CiliumEnvoyConfigs did not match:\n%s\n", diffOutput)
+			}
+
+			require.NotNil(t, svc)
+			assert.Equal(t, corev1.ServiceTypeClusterIP, svc.Spec.Type)
+
+			require.NotNil(t, ep)
 		})
 	}
 }
