@@ -192,7 +192,7 @@ jobs:
           fi
           REF=${GITHUB_REF#refs/heads/}
           slack=${{ env.slack_channel }}
-          [[ -n ${{ inputs.slack-channel }} ]] && slack=${{ inputs.slack-channel }}
+          [[ -n "${{ inputs.slack-channel }}" ]] && slack=${{ inputs.slack-channel }}
           args="repo=${{ matrix.cute.repo }}&dir=${{ matrix.cute.dir }}&region=${{ matrix.cute.region }}&umbrella=${{ matrix.cute.umbrella }}&oss=${{ matrix.cute.oss }}&deploy=${{ matrix.cute.deploy }}&upgrade=${{ matrix.cute.upgrade }}&notify=$slack&owner=${{ matrix.cute.owner }}"
           echo "Triggering workflow for CuTE: $args"
           gh workflow run enterprise-cute.yaml --ref ${REF} -f extra-args="$args"
