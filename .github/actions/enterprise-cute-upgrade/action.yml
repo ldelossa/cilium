@@ -47,12 +47,13 @@ runs:
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
+        HELM_CHART="oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium"
         HELM_CHART_VERSION=${{ inputs.helm-version }}
         if [[ -n "${{ inputs.umbrella-chart-path }}" ]]; then
           HELM_CHART=${{ inputs.umbrella-chart-path }}
         fi
-          if [[ "${{ inputs.deploy }}" == "cute" ]]; then
-          echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium\"" >> terraform.tfvars
+        if [[ "${{ inputs.deploy }}" == "cute" ]]; then
+          echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
           echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
           # the below variables are for cluster mesh scenario
           echo "cilium_helm_version_1=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
