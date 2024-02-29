@@ -4,6 +4,9 @@ inputs:
   branch:
     description: 'Cilium branch.'
     required: true
+  oss:
+    description: 'True for OSS based CuTE, otherwise always false.'
+    required: true
   umbrella:
     description: 'Indicates if CuTE uses Cilium umbrella helm chart.'
     required: true
@@ -13,16 +16,16 @@ inputs:
   quay-password:
     description: 'Quay repo password.'
     required: true
-  quay-org:
-    description: 'Quay repo organization.'
-    required: true
   isovalent-bot:
     description: 'Isovalent bot token.'
     required: true
 outputs:
+  quay-org:
+    description: 'Quay repo organization'
+    value: ${{ steps.helm-setup.outputs.org }}
   version:
     description: 'Helm chart version'
-    value: ${{ steps.helm.outputs.version }}
+    value: ${{ steps.helm-setup.outputs.version }}
   umbrella-chart-path:
     description: 'Path to the umbrella helm chart'
     value: ${{ steps.helm_umbrella.outputs.chart-path }}
@@ -38,19 +41,28 @@ runs:
         fetch-depth: 0
         path: cilium_helm_chart_dir
 
-    - name: Set helm chart version
-      id: helm
+    - name: Set helm chart org and version
+      id: helm-setup
       working-directory: ./cilium_helm_chart_dir
       shell: bash
       run: |
+        org=${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}
+        # OSS Helm repo organization will be used only for OSS stable branches
+        # For any non-stable branch Helm chart should be pushed to CE organization
+        if [[ "${{ inputs.oss }}" == "true" ]] && [[ ${{ inputs.branch }} =~ ^v[0-9].[0-9]+$ ]]; then
+          org=${{ env.QUAY_OSS_CHARTS_ORGANIZATION_DEV }}
+        fi
         version=$(bash contrib/scripts/print-chart-version.sh)
+
+        echo org=$org >> $GITHUB_OUTPUT
         echo version=$version >> $GITHUB_OUTPUT
 
     - name: Wait for Helm dev chart to be available
+      id: quay
       shell: bash
       run: |
         helm registry login quay.io -u ${{ inputs.quay-user }} -p ${{ inputs.quay-password }}
-        until helm pull oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium --version ${{ steps.helm.outputs.version }} &> /dev/null;
+        until helm pull oci://${{ env.helm_registry }}/${{ steps.helm-setup.outputs.org }}/cilium --version ${{ steps.helm-setup.outputs.version }} &> /dev/null;
           do sleep 15s;
         done
 
@@ -69,8 +81,8 @@ runs:
       working-directory: ./umbrella_chart
       shell: bash
       run: |
-        yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.helm.outputs.version }}"' ./cilium-enterprise/Chart.yaml
-        yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ inputs.quay-org }}"' ./cilium-enterprise/Chart.yaml
+        yq e -i '(.dependencies[] | select(.name == "cilium")).version = "${{ steps.helm-setup.outputs.version }}"' ./cilium-enterprise/Chart.yaml
+        yq e -i '(.dependencies[] | select(.name == "cilium")).repository = "oci://${{ env.helm_registry }}/${{ steps.helm-setup.outputs.org }}"' ./cilium-enterprise/Chart.yaml
 
     - name: Build umbrella helm chart
       if: inputs.umbrella == 'true'

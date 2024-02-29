@@ -68,7 +68,6 @@ jobs:
           upgrade=""
           notify=""
           owner=""
-          quay_charts_org="${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}"
 
           input="${{ inputs.extra-args }}"
           IFS='&' args=($input)
@@ -111,7 +110,6 @@ jobs:
             esac
           done
 
-          [[ "$oss" == "true" ]] && quay_charts_org="${{ env.QUAY_OSS_CHARTS_ORGANIZATION_DEV }}"
           [[ -n "$owner" ]] && owner="<@$owner>"
 
           echo cute_repo=$repo >> $GITHUB_OUTPUT
@@ -124,7 +122,6 @@ jobs:
           echo oss=$oss >> $GITHUB_OUTPUT
           echo notify=$notify >> $GITHUB_OUTPUT
           echo owner=$owner >> $GITHUB_OUTPUT
-          echo quay_charts_org=$quay_charts_org >> $GITHUB_OUTPUT
 
       - name: Set helm repositories
         run: |
@@ -226,7 +223,6 @@ jobs:
           echo "Deploy: ${{ steps.vars.outputs.deploy }}"
           echo "Deploy target: ${{ steps.cute_props.outputs.deploy_target }}"
           echo "Helm umbrella chart: ${{ steps.vars.outputs.umbrella_chart }}"
-          echo "Helm chart org: ${{ steps.vars.outputs.quay_charts_org }}"
           echo "Helm override file: ${{ inputs.helm-override-file }}"
           echo "Upgrade: ${{ steps.vars.outputs.upgrade }}"
           echo "Upgrade target: ${{ steps.cute_props.outputs.upgrade_target }}"
@@ -334,10 +330,10 @@ jobs:
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
           branch: ${{ steps.cute_props.outputs.deploy_target }}
+          oss: ${{ steps.vars.outputs.oss }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
-          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
           isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
 
       - name: Prepare upgrade helm chart
@@ -348,10 +344,10 @@ jobs:
         uses: ./.github/actions/enterprise-cute-helm-chart
         with:
           branch: ${{ steps.cute_props.outputs.upgrade_target }}
+          oss: ${{ steps.vars.outputs.oss }}
           umbrella: ${{ steps.vars.outputs.umbrella_chart }}
           quay-user: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
           quay-password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
-          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
           isovalent-bot: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
 
       - name: CuTE Terraform variables file
@@ -367,7 +363,7 @@ jobs:
           # Helm chart and version needs to be set for the `current` and `latest` deploy types.
           if [[ "${{ steps.vars.outputs.deploy }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
             if [[ ${{ steps.vars.outputs.umbrella_chart }} != 'true' ]]; then
-              echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium\"" >> terraform.tfvars
+              echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ steps.cute_helm.outputs.quay-org }}/cilium\"" >> terraform.tfvars
             else
               echo "cilium_helm_chart=\"${{ steps.cute_helm.outputs.umbrella-chart-path }}\"" >> terraform.tfvars
             fi
@@ -428,7 +424,7 @@ jobs:
           helm-version: ${{ steps.cute_helm_upgrade.outputs.version }}
           umbrella-chart-path: ${{ steps.cute_helm_upgrade.outputs.umbrella-chart-path }}
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
-          quay-org: ${{ steps.vars.outputs.quay_charts_org }}
+          quay-org: ${{ steps.cute_helm_upgrade.outputs.quay-org }}
 
       - name: Check encryption type
         id: encryption
