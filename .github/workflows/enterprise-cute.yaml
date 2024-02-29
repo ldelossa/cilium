@@ -363,12 +363,9 @@ jobs:
           owner="ci"
           region="${{ steps.cute_props.outputs.region }}"
           EOF
-          if [[ "${{ steps.vars.outputs.deploy }}" == "stable" ]]; then
-            echo "cilium_helm_version=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
-            # the below variables are for cluster mesh scenario
-            echo "cilium_helm_version_1=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
-            echo "cilium_helm_version_2=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
-          elif [[ "${{ steps.vars.outputs.deploy }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
+
+          # Helm chart and version needs to be set for the `current` and `latest` deploy types.
+          if [[ "${{ steps.vars.outputs.deploy }}" == "current" ]] || [[ "${{ steps.vars.outputs.deploy }}" == "latest" ]]; then
             if [[ ${{ steps.vars.outputs.umbrella_chart }} != 'true' ]]; then
               echo "cilium_helm_chart=\"oci://${{ env.helm_registry }}/${{ steps.vars.outputs.quay_charts_org }}/cilium\"" >> terraform.tfvars
             else
@@ -378,13 +375,22 @@ jobs:
             # the below variables are for cluster mesh scenario
             echo "cilium_helm_version_1=\"${{ steps.cute_helm.outputs.version }}\"" >> terraform.tfvars
             echo "cilium_helm_version_2=\"${{ steps.cute_helm.outputs.version }}\"" >> terraform.tfvars
+          # Only helm version needs to be set for the `stable` and `<version>` deploy types (chart remains the same).
+          # Nothing needs to be changed to the `cute` deploy type.
+          elif [[ "${{ steps.vars.outputs.deploy }}" != "cute" ]]; then
+            echo "cilium_helm_version=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
+            # the below variables are for cluster mesh scenario
+            echo "cilium_helm_version_1=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
+            echo "cilium_helm_version_2=\"${{ steps.cute_props.outputs.deploy_target }}\"" >> terraform.tfvars
           fi
+
           if [[ "${{ inputs.helm-override-file }}" != "" ]]; then
             echo "cilium_helm_values_override_file_path=\"${{ inputs.helm-override-file }}\"" >> terraform.tfvars
           fi
           if [[ "$ARM_SUBSCRIPTION_ID" != "" ]]; then
             echo "subscription_id=\"$ARM_SUBSCRIPTION_ID\"" >> terraform.tfvars
           fi
+
           cat terraform.tfvars
 
       - name: Create CuTE resources

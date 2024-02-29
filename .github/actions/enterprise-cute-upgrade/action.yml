@@ -25,44 +25,70 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: CuTE Terraform variables file for existing Helm version
+    - name: Helm chart
+      id: helm
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        HELM_CHART="oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium"
+        [[ -n "${{ inputs.umbrella-chart-path }}" ]] && HELM_CHART=${{ inputs.umbrella-chart-path }}
+        echo chart=$HELM_CHART >> $GITHUB_OUTPUT
+
+    - name: Terraform variables [current or latest]
+      if: inputs.upgrade == 'current' || inputs.upgrade == 'latest'
+      working-directory: ./${{ inputs.cute-dir }}
+      shell: bash
+      run: |
+        # In case of `cute` deploy type both Helm chart and version need to be added
+        if [[ "${{ inputs.deploy }}" == "cute" ]]; then
+          echo "cilium_helm_chart=\"${{ steps.helm.outputs.chart }}\"" >> terraform.tfvars
+          echo "cilium_helm_version=\"${{ inputs.helm-version }}\"" >> terraform.tfvars
+          # the below variables are for cluster mesh scenario
+          echo "cilium_helm_version_1=\"${{ inputs.helm-version }}\"" >> terraform.tfvars
+          echo "cilium_helm_version_2=\"${{ inputs.helm-version }}\"" >> terraform.tfvars
+        # In case of `current` or `latest` deploy types both Helm chart and version need to be modified
+        elif [[ "${{ inputs.deploy }}" == "current" ]] || [[ "${{ inputs.deploy }}" == "latest" ]]; then
+          sed -i.bak '/^cilium_helm_chart/d' terraform.tfvars
+          echo "cilium_helm_chart=\"${{ steps.helm.outputs.chart }}\"" >> terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.helm-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.helm-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.helm-version }}\"/g" terraform.tfvars
+        # In case of `stable` or `<version>` deploy types Helm chart needs to be added and version needs to be modified
+        else
+          echo "cilium_helm_chart=\"${{ steps.helm.outputs.chart }}\"" >> terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.helm-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.helm-version }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.helm-version }}\"/g" terraform.tfvars
+        fi
+
+    - name: Terraform variables [stable or <version>]
       if: inputs.upgrade != 'current' && inputs.upgrade != 'latest'
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
+        # In case of `cute` deploy type Helm version need to be added
         if [[ "${{ inputs.deploy }}" == "cute" ]]; then
           echo "cilium_helm_version=\"${{ inputs.upgrade-target }}\"" >> terraform.tfvars
           # the below variables are for cluster mesh scenario
           echo "cilium_helm_version_1=\"${{ inputs.upgrade-target }}\"" >> terraform.tfvars
           echo "cilium_helm_version_2=\"${{ inputs.upgrade-target }}\"" >> terraform.tfvars
+        # In case of `current` or `latest` deploy types Helm chart needs to be removes and version need to be modified
+        elif [[ "${{ inputs.deploy }}" == "current" ]] || [[ "${{ inputs.deploy }}" == "latest" ]]; then
+          sed -i.bak '/^cilium_helm_chart/d' terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
+          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
+        # In case of `stable` or `<version>` deploy types Helm version needs to be modified
         else
           sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
           sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
           sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"${{ inputs.upgrade-target }}\"/g" terraform.tfvars
         fi
-        cat terraform.tfvars
 
-    - name: CuTE Terraform variables file for non-existing Helm version
-      if: inputs.upgrade == 'current' || inputs.upgrade == 'latest'
+    - name: Display Terraform variables file
       working-directory: ./${{ inputs.cute-dir }}
       shell: bash
       run: |
-        HELM_CHART="oci://${{ env.helm_registry }}/${{ inputs.quay-org }}/cilium"
-        HELM_CHART_VERSION=${{ inputs.helm-version }}
-        if [[ -n "${{ inputs.umbrella-chart-path }}" ]]; then
-          HELM_CHART=${{ inputs.umbrella-chart-path }}
-        fi
-        if [[ "${{ inputs.deploy }}" == "cute" ]]; then
-          echo "cilium_helm_chart=\"$HELM_CHART\"" >> terraform.tfvars
-          echo "cilium_helm_version=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
-          # the below variables are for cluster mesh scenario
-          echo "cilium_helm_version_1=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
-          echo "cilium_helm_version_2=\"$HELM_CHART_VERSION\"" >> terraform.tfvars
-        else
-          sed -i.bak "s/^cilium_helm_version=.*/cilium_helm_version=\"$HELM_CHART_VERSION\"/g" terraform.tfvars
-          sed -i.bak "s/^cilium_helm_version_1=.*/cilium_helm_version_1=\"$HELM_CHART_VERSION\"/g" terraform.tfvars
-          sed -i.bak "s/^cilium_helm_version_2=.*/cilium_helm_version_2=\"$HELM_CHART_VERSION\"/g" terraform.tfvars
-        fi
         cat terraform.tfvars
 
     - name: CuTE upgrade
