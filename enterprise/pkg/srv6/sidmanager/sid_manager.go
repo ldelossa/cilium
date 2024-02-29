@@ -18,6 +18,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/backoff"
@@ -33,6 +34,7 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/stream"
 	"github.com/cilium/cilium/pkg/time"
 
 	"golang.org/x/exp/maps"
@@ -61,57 +63,51 @@ var (
 
 // SIDManager is an interface to interact with SID Manager subsystem
 type SIDManager interface {
-	// ManageSID executes fn with SIDAllocator corresponds to the given
-	// poolName. The fn must return true when it modified the allocation
-	// state (e.g. called Allocate, AllocateNext, or Release), so that the
-	// modification made for the allocator will eventually synchronized to
-	// the k8s resource state.
-	ManageSID(poolName string, fn func(allocator SIDAllocator) (bool, error)) error
-
-	// Subscribe registers callbacks to the add/update/delete of locator
-	// pool with given poolName. When it registers for the first time, it
-	// iterates over all available pools and calls OnAddLocator callback.
-	// The modifications made for the allocator within the callbacks are
-	// eventually synchronized to the k8s resource state. The done function
-	// is called after all initial callbacks are called, but before any
-	// further On*Locator callbacks. Note that you can't call ManageSID
-	Subscribe(subscriberName string, subscriber SIDManagerSubscriber, done func())
+	// Implements Observable interface. This allows the external modules to
+	// subscribe to the events of the create/update/delete of the locator
+	// allocations. For each Upsert event, the observer gets a new
+	// SIDAllocator associated with the pool. The observer should keep the
+	// reference to the allocator and update it when the new Upsert event
+	// is received. When the Delete event is received, the observer should
+	// release the SIDAllocator and associated states.
+	stream.Observable[Event]
 }
 
-type SIDManagerSubscriber interface {
-	// OnAddLocator is called when a new locator pool is added or when the
-	// subscription starts. The callback function can allocate a new SID or
-	// restore states from existing allocations (after the agent restart, a
-	// new allocator may contain the SIDs allocated in the previous run).
-	// This callback shouldn't block for a long time because it is executed
-	// synchronously within the SID Manager's event loop. This function
-	// should't call ManageSID inside it. Otherwise, it causes deadlock.
-	OnAddLocator(poolName string, allocator SIDAllocator)
+type EventKind int
 
-	// OnUpdateLocator is called when the definition of the locator pool is
-	// changed (e.g. locator change or SID structure change). The callback
-	// function must release all SIDs allocated from oldAllocator and
-	// allocate new SIDs from newAllocator if needed. Any state associated
-	// with SIDs allocated from the old allocator must be updated to the
-	// new one associated with the SID allocated from the new allocator.
-	// This callback shouldn't block for a long time because it is executed
-	// synchronously within the SID Manager's event loop. This function
-	// should't call ManageSID inside it. Otherwise, it causes deadlock.
-	OnUpdateLocator(poolName string, oldAllocator SIDAllocator, newAllocator SIDAllocator)
+const (
+	// A locator pool is created or updated. The PoolName is the name of
+	// the created/updated pool and Allocator is the SIDAllocator
+	// associated with the pool. For the initial sync, the Allocator may
+	// have existing allocations from the previous agent run. The observer
+	// is responsible for handling this and restore the previous running
+	// state.
+	Upsert EventKind = iota + 1
+	// A locator pool is deleted. The PoolName is the name of the deleted
+	// pool and Allocator is unset. The observer should release all
+	// allocations associated with the pool.
+	Delete
+	// An initial series of Upsert events done. This is useful to perform
+	// initial sync after the agent restart.
+	Sync
+)
 
-	// OnDeleteLocator is called when a pool is deleted. The callback
-	// function must release all SIDs and associated states from deleted
-	// allocator. This callback shouldn't block for a long time because it
-	// is executed synchronously within the SID Manager's event loop. This
-	// function should't call ManageSID inside it. Otherwise, it causes
-	// deadlock.
-	OnDeleteLocator(poolName string, allocator SIDAllocator)
+type Event struct {
+	// Kind of the event
+	Kind EventKind
+	// The name of the pool
+	PoolName string
+	// The SIDAllocator associated with the pool. This is shared with other
+	// goroutines. The interface methods takes care of locking, but the
+	// caller should set an unique owner string for each allocation to
+	// avoid interference with others.
+	Allocator SIDAllocator
 }
 
 type sidManager struct {
-	// PoolName => SIDAllocator mapping. We currently assume only one
+	// PoolName => sidAllocatorSyncer mapping. We currently assume only one
 	// locator allocated from one pool.
-	allocators map[string]SIDAllocator
+	allocators map[string]*sidAllocatorSyncer
 
 	// Lock to protect allocators
 	allocatorsLock lock.RWMutex
@@ -129,17 +125,16 @@ type sidManager struct {
 	// Resolver for the Promise for waiting an initial sync
 	resolver promise.Resolver[SIDManager]
 
-	// Subscriber name => Subscriber callbacks mapping
-	subscribers map[string]SIDManagerSubscriber
-
-	// Lock to protect subscribers
-	subscribersLock lock.RWMutex
-
 	// WaitGroup to wait for all goroutine's termination
 	wg sync.WaitGroup
 
 	// Function to cancel context shared with all goroutines
 	cancel context.CancelFunc
+
+	// Multicast
+	mcast     stream.Observable[Event]
+	next      func(Event)
+	completed func(error)
 }
 
 type sidManagerParams struct {
@@ -149,6 +144,51 @@ type sidManagerParams struct {
 	Cs       client.Clientset
 	Dc       *option.DaemonConfig
 	Resource LocalIsovalentSRv6SIDManagerResource
+}
+
+type sidAllocatorSyncer struct {
+	SIDAllocator
+	shutdown atomic.Bool
+	syncFn   func()
+}
+
+func (a *sidAllocatorSyncer) sync() {
+	if !a.shutdown.Load() {
+		a.syncFn()
+	}
+}
+
+func (a *sidAllocatorSyncer) Allocate(sid netip.Addr, owner string, metadata string, behavior types.Behavior) (*SIDInfo, error) {
+	sidInfo, err := a.SIDAllocator.Allocate(sid, owner, metadata, behavior)
+	if err != nil {
+		return nil, err
+	}
+	a.sync()
+	return sidInfo, nil
+}
+
+func (a *sidAllocatorSyncer) AllocateNext(owner string, metadata string, behavior types.Behavior) (*SIDInfo, error) {
+	sidInfo, err := a.SIDAllocator.AllocateNext(owner, metadata, behavior)
+	if err != nil {
+		return nil, err
+	}
+	a.sync()
+	return sidInfo, nil
+}
+
+func (a *sidAllocatorSyncer) Release(sid netip.Addr) error {
+	err := a.SIDAllocator.Release(sid)
+	if err != nil {
+		return err
+	}
+	a.sync()
+	return nil
+}
+
+// Shutdown invalidates the notifier. After calling this method, Notify
+// becomes a no-op.
+func (a *sidAllocatorSyncer) Shutdown() {
+	a.shutdown.Store(true)
 }
 
 // NewSIDManagerPromise creates a new SID manager and returns its promise. The
@@ -162,66 +202,39 @@ func NewSIDManagerPromise(params sidManagerParams) promise.Promise[SIDManager] {
 	resolver, promise := promise.New[SIDManager]()
 
 	m := &sidManager{
-		allocators:  make(map[string]SIDAllocator),
+		allocators:  make(map[string]*sidAllocatorSyncer),
 		resource:    params.Resource,
 		clientset:   params.Cs,
 		stateSyncCh: make(chan struct{}, 1),
 		resolver:    resolver,
-		subscribers: make(map[string]SIDManagerSubscriber),
 	}
+	m.mcast, m.next, m.completed = stream.Multicast[Event]()
 
 	params.Lc.Append(m)
 
 	return promise
 }
 
-func (m *sidManager) ManageSID(poolName string, fn func(allocator SIDAllocator) (bool, error)) error {
-	m.allocatorsLock.RLock()
-	defer m.allocatorsLock.RUnlock()
+func (m *sidManager) Observe(ctx context.Context, next func(Event), complete func(error)) {
+	go func() {
+		m.allocatorsLock.RLock()
+		defer m.allocatorsLock.RUnlock()
 
-	allocator, ok := m.allocators[poolName]
-	if !ok {
-		return ErrAllocatorNotFound
-	}
+		// Replay all existing allocators first
+		for poolName, allocator := range m.allocators {
+			next(Event{
+				Kind:      Upsert,
+				PoolName:  poolName,
+				Allocator: allocator,
+			})
+		}
 
-	needsSync, err := fn(allocator)
-	if err != nil {
-		return fmt.Errorf("management operation failed: %w", err)
-	}
+		// Initial sync done
+		next(Event{Kind: Sync})
 
-	if needsSync {
-		m.scheduleStateSync()
-	}
-
-	return nil
-}
-
-func (m *sidManager) Subscribe(subscriberName string, subscriber SIDManagerSubscriber, done func()) {
-	m.subscribersLock.Lock()
-	if _, ok := m.subscribers[subscriberName]; ok {
-		// Already subscribed
-		m.subscribersLock.Unlock()
-		return
-	}
-	m.subscribers[subscriberName] = subscriber
-	m.subscribersLock.Unlock()
-
-	// Do initial sync in-place
-	m.allocatorsLock.RLock()
-
-	for poolName, allocator := range m.allocators {
-		subscriber.OnAddLocator(poolName, allocator)
-	}
-
-	// Let caller to handle initial sync done
-	done()
-
-	if len(m.allocators) != 0 {
-		// Subscriber may change allocation state in above OnAddLocator
-		m.scheduleStateSync()
-	}
-
-	m.allocatorsLock.RUnlock()
+		// Then subscribe to the multicast
+		m.mcast.Observe(ctx, next, complete)
+	}()
 }
 
 func (m *sidManager) Start(hookCtx cell.HookContext) error {
@@ -321,7 +334,7 @@ func (m *sidManager) runSpecReconciler(ctx context.Context) {
 			}
 
 			if needsSync {
-				m.scheduleStateSync()
+				m.Sync()
 			}
 		}
 		ev.Done(nil)
@@ -333,9 +346,6 @@ func (m *sidManager) runSpecReconciler(ctx context.Context) {
 // This function synchronizes internal poolName => allocator mappings to spec on the k8s resource
 func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, error) {
 	var needsSync bool
-
-	m.subscribersLock.RLock()
-	defer m.subscribersLock.RUnlock()
 
 	m.allocatorsLock.Lock()
 	defer m.allocatorsLock.Unlock()
@@ -359,23 +369,31 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 
 		behaviorType := types.BehaviorTypeFromString(locator.BehaviorType)
 
-		if oldAllocator, ok := m.allocators[la.PoolRef]; !ok {
+		if oldAllocatorSyncer, ok := m.allocators[la.PoolRef]; !ok {
 			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
 			if err != nil {
 				return false, fmt.Errorf("failed to create new SID allocator: %w", err)
 			}
-			m.onAddLocator(la.PoolRef, newAllocator)
+			newAllocatorSyncer := &sidAllocatorSyncer{
+				SIDAllocator: newAllocator,
+				syncFn:       m.Sync,
+			}
+			m.onAddLocator(la.PoolRef, newAllocatorSyncer)
 			needsSync = true
 		} else {
 			// No change to the spec, skip update
-			if *oldAllocator.Locator() == *l && oldAllocator.BehaviorType() == behaviorType {
+			if oldAllocatorSyncer.Locator() == l && oldAllocatorSyncer.BehaviorType() == behaviorType {
 				continue
 			}
 			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
 			if err != nil {
 				return false, fmt.Errorf("failed to create new SID allocator: %w", err)
 			}
-			m.onUpdateLocator(la.PoolRef, oldAllocator, newAllocator)
+			newAllocatorSyncer := &sidAllocatorSyncer{
+				SIDAllocator: newAllocator,
+				syncFn:       m.Sync,
+			}
+			m.onUpdateLocator(la.PoolRef, oldAllocatorSyncer, newAllocatorSyncer)
 			needsSync = true
 		}
 	}
@@ -393,34 +411,44 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 
 // Handle locator add. Read lock for m.subscribers and write lock for
 // m.allocators must be held.
-func (m *sidManager) onAddLocator(poolRef string, newAllocator SIDAllocator) {
-	if len(m.subscribers) > 0 {
-		for _, subscriber := range m.subscribers {
-			subscriber.OnAddLocator(poolRef, newAllocator)
-		}
-	}
+func (m *sidManager) onAddLocator(poolRef string, newAllocator *sidAllocatorSyncer) {
+	m.next(Event{
+		Kind:      Upsert,
+		PoolName:  poolRef,
+		Allocator: newAllocator,
+	})
 	m.allocators[poolRef] = newAllocator
 }
 
 // Handle locator update. Read lock for m.subscribers and write lock for
 // m.allocators must be held.
-func (m *sidManager) onUpdateLocator(poolRef string, oldAllocator, newAllocator SIDAllocator) {
-	if len(m.subscribers) > 0 {
-		for _, subscriber := range m.subscribers {
-			subscriber.OnUpdateLocator(poolRef, oldAllocator, newAllocator)
-		}
-	}
+func (m *sidManager) onUpdateLocator(poolRef string, oldAllocator, newAllocator *sidAllocatorSyncer) {
+	// Invalidate old allocator before emitting the event. From this point,
+	// calling Sync on the old SIDAllocator will not trigger the state
+	// sync.
+	oldAllocator.Shutdown()
+
+	// Now we can emit the event to the observers
+	m.next(Event{
+		Kind:      Upsert,
+		PoolName:  poolRef,
+		Allocator: newAllocator,
+	})
 	m.allocators[poolRef] = newAllocator
 }
 
 // Handle locator delete. Read lock for m.subscribers and write lock for
 // m.allocators must be held.
-func (m *sidManager) onDeleteLocator(poolRef string, oldAllocator SIDAllocator) {
-	if len(m.subscribers) > 0 {
-		for _, subscriber := range m.subscribers {
-			subscriber.OnDeleteLocator(poolRef, oldAllocator)
-		}
-	}
+func (m *sidManager) onDeleteLocator(poolRef string, oldAllocator *sidAllocatorSyncer) {
+	// Invalidate old allocator before emitting the event. From this point,
+	// calling Sync on the old allocator will not trigger the state sync.
+	oldAllocator.Shutdown()
+
+	// Now we can emit the event to the observers
+	m.next(Event{
+		Kind:     Delete,
+		PoolName: poolRef,
+	})
 	delete(m.allocators, poolRef)
 }
 
@@ -478,7 +506,7 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 				// stopping. We can ignore this here. So that
 				// it will be deleted from the status in the
 				// next sync.
-				if s.AsLocator() != *allocator.Locator() || types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
+				if s.AsLocator() != allocator.Locator() || types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
 					staleSIDs++
 					continue
 				}
@@ -509,9 +537,6 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 // Delete all allocators. We don't have to schedule sync here since we don't
 // have resource to sync anymore.
 func (m *sidManager) deleteAllAllocators(r *v1alpha1.IsovalentSRv6SIDManager) {
-	m.subscribersLock.RLock()
-	defer m.subscribersLock.RUnlock()
-
 	m.allocatorsLock.Lock()
 	defer m.allocatorsLock.Unlock()
 
@@ -557,7 +582,7 @@ func (m *sidManager) runStatusReconciler(ctx context.Context) error {
 					// This is for debugging
 					smLog.WithError(err).Warn("State synchronization failed. Retrying with backoff.")
 				}
-				m.scheduleStateSync()
+				m.Sync()
 			} else {
 				// Reset backoff on success
 				if retrying {
@@ -633,10 +658,10 @@ func (m *sidManager) reconcileStatus(ctx context.Context) error {
 }
 
 // locatorFromResource converts locator on the k8s resource to internal Locator structure
-func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (*types.Locator, error) {
+func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (types.Locator, error) {
 	prefix, err := netip.ParsePrefix(r.Prefix)
 	if err != nil {
-		return nil, err
+		return types.Locator{}, err
 	}
 
 	structure, err := types.NewSIDStructure(
@@ -646,12 +671,12 @@ func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (*typ
 		r.Structure.ArgumentLenBits,
 	)
 	if err != nil {
-		return nil, err
+		return types.Locator{}, err
 	}
 
 	locator, err := types.NewLocator(prefix, structure)
 	if err != nil {
-		return nil, err
+		return types.Locator{}, err
 	}
 
 	return locator, nil
@@ -677,8 +702,8 @@ func (m *sidManager) sidInfoToResource(si *SIDInfo) *v1alpha1.IsovalentSRv6SIDIn
 	}
 }
 
-// scheduleStateSync schedules allocation state synchronization to k8s resource
-func (m *sidManager) scheduleStateSync() {
+// Sync schedules allocation state synchronization to k8s resource
+func (m *sidManager) Sync() {
 	select {
 	case m.stateSyncCh <- struct{}{}:
 		smLog.Debug("Scheduled state sync")

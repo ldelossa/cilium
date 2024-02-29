@@ -194,14 +194,14 @@ func Test_AllocateRelease(t *testing.T) {
 			},
 			allocatedLocators: []*LocatorInfo{
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:100::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
 					BehaviorType: types.BehaviorTypeBase,
 				},
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
@@ -222,14 +222,14 @@ func Test_AllocateRelease(t *testing.T) {
 			},
 			allocatedLocators: []*LocatorInfo{
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:100::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
 					BehaviorType: types.BehaviorTypeBase,
 				},
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
@@ -238,14 +238,14 @@ func Test_AllocateRelease(t *testing.T) {
 			},
 			releasedLocators: []*LocatorInfo{
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:100::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
 					BehaviorType: types.BehaviorTypeBase,
 				},
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
@@ -265,14 +265,14 @@ func Test_AllocateRelease(t *testing.T) {
 			},
 			releasedLocators: []*LocatorInfo{
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:100::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
 					BehaviorType: types.BehaviorTypeBase,
 				},
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
@@ -292,14 +292,14 @@ func Test_AllocateRelease(t *testing.T) {
 			},
 			allocatedLocators: []*LocatorInfo{
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:100::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
 					BehaviorType: types.BehaviorTypeBase,
 				},
 				{
-					Locator: *types.MustNewLocator(
+					Locator: types.MustNewLocator(
 						netip.MustParsePrefix("fd00:0:1:100::/56"),
 						types.MustNewSIDStructure(40, 16, 16, 0),
 					),
@@ -360,7 +360,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 		{
 			description: "valid node locator",
 			nodeLocator: &LocatorInfo{
-				Locator: *types.MustNewLocator(
+				Locator: types.MustNewLocator(
 					netip.MustParsePrefix("2001:db8:1:1::/64"),
 					types.MustNewSIDStructure(40, 24, 8, 0),
 				),
@@ -377,7 +377,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 		{
 			description: "invalid node locator, prefix mismatch",
 			nodeLocator: &LocatorInfo{
-				Locator: *types.MustNewLocator(
+				Locator: types.MustNewLocator(
 					netip.MustParsePrefix("2002:db8:1:1::/64"),
 					types.MustNewSIDStructure(40, 24, 8, 0),
 				),
@@ -394,7 +394,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 		{
 			description: "invalid node locator, prefix length mismatch",
 			nodeLocator: &LocatorInfo{
-				Locator: *types.MustNewLocator(
+				Locator: types.MustNewLocator(
 					netip.MustParsePrefix("2001:db8:1:1::/72"),
 					types.MustNewSIDStructure(40, 32, 8, 0),
 				),
@@ -411,7 +411,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 		{
 			description: "invalid node locator, sid mismatch",
 			nodeLocator: &LocatorInfo{
-				Locator: *types.MustNewLocator(
+				Locator: types.MustNewLocator(
 					netip.MustParsePrefix("2001:db8:1:1::/64"),
 					types.MustNewSIDStructure(40, 24, 16, 0),
 				),
@@ -428,7 +428,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 		{
 			description: "invalid node locator, behavior mismatch",
 			nodeLocator: &LocatorInfo{
-				Locator: *types.MustNewLocator(
+				Locator: types.MustNewLocator(
 					netip.MustParsePrefix("2001:db8:1:1::/64"),
 					types.MustNewSIDStructure(40, 24, 16, 0),
 				),

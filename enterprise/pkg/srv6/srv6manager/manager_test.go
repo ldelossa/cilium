@@ -13,9 +13,9 @@ package srv6manager
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,8 +23,11 @@ import (
 	srv6Types "github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
+	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/hivetest"
 	"github.com/cilium/cilium/pkg/identity"
+	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipam"
 	"github.com/cilium/cilium/pkg/k8s"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -34,6 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/node"
+	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -46,13 +50,13 @@ import (
 )
 
 type fakeSIDAllocator struct {
-	sid           *srv6Types.SID
+	sid           srv6Types.SID
 	behaviorType  srv6Types.BehaviorType
 	allocatedSIDs []*sidmanager.SIDInfo
 }
 
-func (fsa *fakeSIDAllocator) Locator() *srv6Types.Locator {
-	return nil
+func (fsa *fakeSIDAllocator) Locator() srv6Types.Locator {
+	return srv6Types.Locator{}
 }
 
 func (fsa *fakeSIDAllocator) BehaviorType() srv6Types.BehaviorType {
@@ -87,24 +91,31 @@ func (fsa *fakeSIDAllocator) AllocatedSIDs(owner string) []*sidmanager.SIDInfo {
 	return fsa.allocatedSIDs
 }
 
+type fakeSIDAllocatorSyncer struct {
+	sidmanager.SIDAllocator
+}
+
+func (fsas *fakeSIDAllocatorSyncer) Sync() {
+}
+
 type fakeSIDManager struct {
 	pools map[string]sidmanager.SIDAllocator
 }
 
-func (fsm *fakeSIDManager) ManageSID(poolName string, fn func(allocator sidmanager.SIDAllocator) (bool, error)) error {
-	allocator, ok := fsm.pools[poolName]
-	if !ok {
-		return fmt.Errorf("pool doesn't exist")
-	}
-	_, err := fn(allocator)
-	return err
-}
-
-func (fsm *fakeSIDManager) Subscribe(subscriberName string, subscriber sidmanager.SIDManagerSubscriber, done func()) {
-	for poolName, allocator := range fsm.pools {
-		subscriber.OnAddLocator(poolName, allocator)
-	}
-	done()
+func (fsm *fakeSIDManager) Observe(ctx context.Context, next func(sidmanager.Event), complete func(error)) {
+	go func() {
+		// Just replay the initial state and do nothing after that
+		for poolName, allocator := range fsm.pools {
+			next(sidmanager.Event{
+				Kind:     sidmanager.Upsert,
+				PoolName: poolName,
+				Allocator: &fakeSIDAllocatorSyncer{
+					SIDAllocator: allocator,
+				},
+			})
+		}
+		next(sidmanager.Event{Kind: sidmanager.Sync})
+	}()
 }
 
 type fakeIPAMAllocator struct {
@@ -251,7 +262,7 @@ func (fd *fakeDaemon) GetIPv6Allocator() ipam.Allocator {
 	return fd.a
 }
 
-func allocateIdentity(t *testing.T, identityAllocator *testidentity.MockIdentityAllocator, ep *v2.CiliumEndpoint) {
+func allocateIdentity(t *testing.T, identityAllocator cache.IdentityAllocator, ep *v2.CiliumEndpoint) {
 	labels := labels.NewLabelsFromModel(ep.Status.Identity.Labels)
 	id, _, err := identityAllocator.AllocateIdentity(context.TODO(), labels, false, identity.NumericIdentity(ep.Status.Identity.ID))
 	require.NoError(t, err)
@@ -894,6 +905,10 @@ func TestSRv6Manager(t *testing.T) {
 	}
 }
 
+func eventually(t *testing.T, f func() bool) {
+	require.Eventually(t, f, time.Second*3, time.Millisecond*200)
+}
+
 func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	testutils.PrivilegedTest(t)
 
@@ -926,77 +941,6 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		},
 	}
 
-	sid1 := srv6Types.MustNewSID(
-		netip.MustParseAddr("fd00:0:1:1::"),
-		srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-	)
-	sid2 := srv6Types.MustNewSID(
-		netip.MustParseAddr("fd00:0:1:2::"),
-		srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-	)
-
-	srv6map.CreateMaps()
-	defer srv6map.DeleteMaps()
-
-	lc := hivetest.Lifecycle(t)
-
-	dc := &option.DaemonConfig{
-		EnableSRv6: true,
-	}
-
-	fsm := &fakeSIDManager{
-		// Start from an empty.
-		pools: map[string]sidmanager.SIDAllocator{},
-	}
-
-	smResolver, smPromise := promise.New[sidmanager.SIDManager]()
-
-	// We can resolve SIDManager immediately because the pool is ready
-	smResolver.Resolve(fsm)
-
-	// Dummy channel to notify k8s cache sync
-	cacheStatus := make(chan struct{})
-
-	// Dummy identity allocator
-	identityAllocator := testidentity.NewMockIdentityAllocator(nil)
-
-	// Trigger global LocalNodeStore initialization. k8s.CiliumSlimEndpointResource
-	// relies on it internally.
-	_, err := node.NewLocalNodeStore(node.LocalNodeStoreParams{
-		Lifecycle: lc,
-	})
-	require.NoError(t, err)
-
-	// Fake resources
-	fakeClientSet, cs := client.NewFakeClientset()
-	cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
-	require.NoError(t, err)
-
-	vrfResource, err := newIsovalentVRFResource(lc, dc, cs)
-	require.NoError(t, err)
-
-	policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
-	require.NoError(t, err)
-
-	// Fake Daemon
-	fd := &fakeDaemon{a: &fakeIPAMAllocator{}}
-	daemonResolver, daemonPromise := promise.New[daemon]()
-	daemonResolver.Resolve(fd)
-
-	manager := NewSRv6Manager(Params{
-		Lifecycle:                 lc,
-		DaemonConfig:              dc,
-		Sig:                       signaler.NewBGPCPSignaler(),
-		CacheIdentityAllocator:    identityAllocator,
-		CacheStatus:               cacheStatus,
-		SIDManagerPromise:         smPromise,
-		DaemonPromise:             daemonPromise,
-		CiliumEndpointResource:    cepResource,
-		IsovalentVRFResource:      vrfResource,
-		IsovalentSRv6EgressPolicy: policyResource,
-	})
-
-	// Create initial CiliumEndpoint
 	ep := &v2.CiliumEndpoint{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -1021,87 +965,184 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		},
 	}
 
-	// Emulate an initial sync
+	sidmanager1 := &v1alpha1.IsovalentSRv6SIDManager{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nodeTypes.GetName(),
+		},
+		Spec: v1alpha1.IsovalentSRv6SIDManagerSpec{
+			LocatorAllocations: []*v1alpha1.IsovalentSRv6LocatorAllocation{
+				{
+					PoolRef: "pool1",
+					Locators: []*v1alpha1.IsovalentSRv6Locator{
+						{
+							Prefix: "fd00:1:1::/48",
+							Structure: v1alpha1.IsovalentSRv6SIDStructure{
+								LocatorBlockLenBits: 32,
+								LocatorNodeLenBits:  16,
+								FunctionLenBits:     16,
+								ArgumentLenBits:     0,
+							},
+							BehaviorType: "Base",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	srv6map.CreateMaps()
+	defer srv6map.DeleteMaps()
+
+	var (
+		c                 client.Clientset
+		manager           *Manager
+		identityAllocator cache.IdentityAllocator
+	)
+
+	hive := hive.New(
+		sidmanager.SIDManagerCell,
+		cell.Provide(
+			func() *option.DaemonConfig {
+				return &option.DaemonConfig{
+					EnableSRv6: true,
+				}
+			},
+			func() promise.Promise[daemon] {
+				fd := &fakeDaemon{a: &fakeIPAMAllocator{}}
+				daemonResolver, daemonPromise := promise.New[daemon]()
+				daemonResolver.Resolve(fd)
+				return daemonPromise
+			},
+			func() k8s.CacheStatus {
+				return make(chan struct{})
+			},
+			func() cache.IdentityCache {
+				return cache.IdentityCache{}
+			},
+			func(c cache.IdentityCache) cache.IdentityAllocator {
+				return testidentity.NewMockIdentityAllocator(c)
+			},
+			node.NewLocalNodeStore,
+			client.NewFakeClientset,
+			k8s.CiliumSlimEndpointResource,
+			newIsovalentVRFResource,
+			newIsovalentSRv6EgressPolicyResource,
+			signaler.NewBGPCPSignaler,
+			NewSRv6Manager,
+		),
+		cell.Invoke(func(cs client.Clientset, m *Manager, ia cache.IdentityAllocator) {
+			c = cs
+			manager = m
+			identityAllocator = ia
+		}),
+	)
+
+	err := hive.Start(context.TODO())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err := hive.Stop(context.TODO())
+		require.NoError(t, err)
+	})
+
 	copied := ep.DeepCopy()
 	allocateIdentity(t, identityAllocator, copied)
-	_, err = fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
+	_, err = c.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	v, err := ParseVRF(vrf0)
+	_, err = c.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf0.DeepCopy(), metav1.CreateOptions{})
 	require.NoError(t, err)
-	manager.OnAddSRv6VRF(*v)
 
-	// Sync done. Close synced channel.
-	close(cacheStatus)
+	smClient := c.IsovalentV1alpha1().IsovalentSRv6SIDManagers()
 
-	// Wait until the SIDAllocator is set
-	require.Eventually(t, func() bool {
-		return manager.sidAllocatorIsSet()
-	}, time.Second*3, time.Millisecond*100)
+	var sid1, sid2 netip.Addr
 
-	allocator1 := &fakeSIDAllocator{
-		sid:           sid1,
-		behaviorType:  srv6Types.BehaviorTypeBase,
-		allocatedSIDs: []*sidmanager.SIDInfo{},
-	}
+	t.Run("TestAddLocator", func(t *testing.T) {
+		_, err := smClient.Create(context.TODO(), sidmanager1, metav1.CreateOptions{})
+		require.NoError(t, err)
 
-	allocator2 := &fakeSIDAllocator{
-		sid:           sid2,
-		behaviorType:  srv6Types.BehaviorTypeUSID,
-		allocatedSIDs: []*sidmanager.SIDInfo{},
-	}
-
-	// At this point, VRF wants to have SID from locator pool "pool1", but
-	// since the pool doesn't exist, it won't get any allocation.
-
-	t.Run("Test OnAddLocator", func(t *testing.T) {
-		// Now add a new SIDAllocator (locator)
-		fsm.pools["pool1"] = allocator1
-		manager.OnAddLocator("pool1", allocator1)
+		// Get allocated SID from status field
+		eventually(t, func() bool {
+			sm, err := smClient.Get(context.TODO(), sidmanager1.Name, metav1.GetOptions{})
+			if err != nil {
+				return false
+			}
+			if len(sm.Status.SIDAllocations) != 1 {
+				return false
+			}
+			if len(sm.Status.SIDAllocations[0].SIDs) != 1 {
+				return false
+			}
+			sid1 = netip.MustParseAddr(sm.Status.SIDAllocations[0].SIDs[0].SID.Addr)
+			return strings.HasPrefix(sid1.String(), "fd00:1:1:")
+		})
 
 		// Now the SID allocation from SIDManager and update to the SIDMap should happen eventually
-		require.Eventually(t, func() bool {
+		eventually(t, func() bool {
 			vrfs := manager.GetAllVRFs()
-			require.Len(t, vrfs, 1)
+			if len(vrfs) != 1 {
+				return false
+			}
 
 			if vrfs[0].SIDInfo == nil {
 				return false
 			}
 
 			info := vrfs[0].SIDInfo
-			require.Equal(t, ownerName, info.Owner)
-			require.Equal(t, vrf0.Name, info.MetaData)
-			require.Equal(t, *sid1, *info.SID)
-			require.Equal(t, srv6Types.BehaviorTypeBase, info.BehaviorType)
-			require.Equal(t, srv6Types.BehaviorEndDT4, info.Behavior)
+			if ownerName != info.Owner ||
+				vrf0.Name != info.MetaData ||
+				sid1.String() != info.SID.Addr.String() ||
+				srv6Types.BehaviorTypeBase != info.BehaviorType ||
+				srv6Types.BehaviorEndDT4 != info.Behavior {
+				return false
+			}
 
 			var val srv6map.SIDValue
-			err := srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val)
-			return err == nil
-		}, time.Second*3, time.Millisecond*100)
+			return srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val) == nil
+		})
 	})
 
-	t.Run("Test OnUpdateLocator", func(t *testing.T) {
-		// Update locator's behaviorType and trigger SID reallocation
-		fsm.pools["pool1"] = allocator2
-		manager.OnUpdateLocator("pool1", allocator1, allocator2)
+	t.Run("TestUpdateLocator", func(t *testing.T) {
+		sidmanager := sidmanager1.DeepCopy()
+		sidmanager.Spec.LocatorAllocations[0].Locators[0].Prefix = "fd00:1:2::/48"
+		_, err := c.IsovalentV1alpha1().IsovalentSRv6SIDManagers().Update(context.TODO(), sidmanager, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		// Get allocated SID from status field
+		eventually(t, func() bool {
+			sm, err := smClient.Get(context.TODO(), sidmanager1.Name, metav1.GetOptions{})
+			if err != nil {
+				return false
+			}
+			if len(sm.Status.SIDAllocations) != 1 {
+				return false
+			}
+			if len(sm.Status.SIDAllocations[0].SIDs) != 1 {
+				return false
+			}
+			sid2 = netip.MustParseAddr(sm.Status.SIDAllocations[0].SIDs[0].SID.Addr)
+			return strings.HasPrefix(sid2.String(), "fd00:1:2:")
+		})
 
 		// Now the SID allocation from SIDManager should happen and old SIDMap entry should
 		// be removed and a new SIDMap entry should appear.
-		require.Eventually(t, func() bool {
+		eventually(t, func() bool {
 			vrfs := manager.GetAllVRFs()
-			require.Len(t, vrfs, 1)
+			if len(vrfs) != 1 {
+				return false
+			}
 
 			if vrfs[0].SIDInfo == nil {
 				return false
 			}
 
 			info := vrfs[0].SIDInfo
-			require.Equal(t, ownerName, info.Owner)
-			require.Equal(t, vrf0.Name, info.MetaData)
-			require.Equal(t, *sid2, *info.SID)
-			require.Equal(t, srv6Types.BehaviorTypeUSID, info.BehaviorType)
-			require.Equal(t, srv6Types.BehaviorUDT4, info.Behavior)
+			if ownerName != info.Owner ||
+				vrf0.Name != info.MetaData ||
+				sid2.String() != info.SID.Addr.String() ||
+				srv6Types.BehaviorTypeBase != info.BehaviorType ||
+				srv6Types.BehaviorEndDT4 != info.Behavior {
+				return false
+			}
 
 			var val srv6map.SIDValue
 			err := srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid2.As16()}, &val)
@@ -1115,18 +1156,23 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			}
 
 			return errors.Is(err, ebpf.ErrKeyNotExist)
-		}, time.Second*3, time.Millisecond*100)
+		})
 	})
 
-	t.Run("Test OnDeleteLocator", func(t *testing.T) {
-		// Delete locator
-		delete(fsm.pools, "pool1")
-		manager.OnDeleteLocator("pool1", allocator2)
+	t.Run("TestDeleteLocator", func(t *testing.T) {
+		sidmanager := sidmanager1.DeepCopy()
+		sidmanager.Spec.LocatorAllocations = []*v1alpha1.IsovalentSRv6LocatorAllocation{}
+		_, err := c.IsovalentV1alpha1().IsovalentSRv6SIDManagers().Update(context.TODO(), sidmanager, metav1.UpdateOptions{})
+		require.NoError(t, err)
 
 		// Now the SID deletion from SIDManager should happen and old SIDMap entry should disappear
-		require.Eventually(t, func() bool {
+		eventually(t, func() bool {
 			vrfs := manager.GetAllVRFs()
-			require.Len(t, vrfs, 1)
+			if len(vrfs) != 1 {
+				return false
+			}
+
+			t.Log(vrfs[0].SIDInfo)
 
 			if vrfs[0].SIDInfo != nil {
 				return false
@@ -1139,7 +1185,7 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			}
 
 			return errors.Is(err, ebpf.ErrKeyNotExist)
-		}, time.Second*3, time.Millisecond*100)
+		})
 	})
 }
 
@@ -1414,7 +1460,7 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 					expected := test.expectedAllocation
 					require.Equal(t, expected.Owner, info.Owner)
 					require.Equal(t, expected.MetaData, info.MetaData)
-					require.Equal(t, *expected.SID, *info.SID)
+					require.Equal(t, expected.SID, info.SID)
 					require.Equal(t, expected.BehaviorType, info.BehaviorType)
 					require.Equal(t, expected.Behavior, info.Behavior)
 				} else {

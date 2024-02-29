@@ -1059,7 +1059,7 @@ func Test_Resync(t *testing.T) {
 			expectedLocators: map[string]allocations{
 				"node-1": {
 					"pool-1": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fc00:0:0:10::/64"),
 							types_sid_40_24_16,
 						),
@@ -1067,7 +1067,7 @@ func Test_Resync(t *testing.T) {
 					},
 
 					"pool-2": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fd00:0:0:10::/64"),
 							types_sid_40_24_16,
 						),
@@ -1076,14 +1076,14 @@ func Test_Resync(t *testing.T) {
 				},
 				"node-2": {
 					"pool-1": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fc00:0:0:20::/64"),
 							types_sid_40_24_16,
 						),
 						BehaviorType: types.BehaviorTypeBase,
 					},
 					"pool-2": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fd00:0:0:20::/64"),
 							types_sid_40_24_16,
 						),
@@ -1232,7 +1232,7 @@ func Test_Resync(t *testing.T) {
 			expectedLocators: map[string]allocations{
 				"node-1": {
 					"pool-1": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fc00:0:0:10::/64"),
 							types_sid_40_24_16,
 						),
@@ -1241,7 +1241,7 @@ func Test_Resync(t *testing.T) {
 				},
 				"node-2": {
 					"pool-1": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fc00:0:0:20::/64"),
 							types_sid_40_24_16,
 						),
@@ -1361,7 +1361,7 @@ func Test_Resync(t *testing.T) {
 			expectedLocators: map[string]allocations{
 				"node-1": {
 					"pool-1": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fc00:0:0:10::/64"),
 							types_sid_40_24_16,
 						),
@@ -1369,7 +1369,7 @@ func Test_Resync(t *testing.T) {
 					},
 
 					"pool-2": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fd00:0:0:0::/64"), // bit map is non-deterministic, so we just check the prefix
 							types_sid_40_24_16,
 						),
@@ -1378,7 +1378,7 @@ func Test_Resync(t *testing.T) {
 				},
 				"node-2": {
 					"pool-1": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fc00:0:0:10::/64"),
 							types_sid_40_24_16,
 						),
@@ -1386,7 +1386,7 @@ func Test_Resync(t *testing.T) {
 					},
 
 					"pool-2": &LocatorInfo{
-						Locator: *types.MustNewLocator(
+						Locator: types.MustNewLocator(
 							netip.MustParsePrefix("fd00:0:0:0::/64"), // bit map is non-deterministic, so we just check the prefix
 							types_sid_40_24_16,
 						),

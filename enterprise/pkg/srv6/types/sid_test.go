@@ -66,7 +66,7 @@ func TestNewSIDStructure(t *testing.T) {
 				require.Equal(t, test.errorStr, err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.structure, *ss)
+				require.Equal(t, test.structure, ss)
 			}
 		})
 	}
@@ -86,7 +86,7 @@ func TestNewLocator(t *testing.T) {
 			structure: SIDStructure{32, 16, 16, 0},
 			locator: Locator{
 				Prefix:    netip.MustParsePrefix("fd00::/48"),
-				structure: *MustNewSIDStructure(32, 16, 16, 0),
+				structure: MustNewSIDStructure(32, 16, 16, 0),
 			},
 		},
 		{
@@ -104,12 +104,13 @@ func TestNewLocator(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			l, err := NewLocator(test.prefix, &test.structure)
+			l, err := NewLocator(test.prefix, test.structure)
 			if test.errorStr != "" {
+				require.Error(t, err)
 				require.Equal(t, test.errorStr, err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.locator, *l)
+				require.Equal(t, test.locator, l)
 			}
 		})
 	}
@@ -142,12 +143,12 @@ func TestNewSID(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sid, err := NewSID(test.addr, &test.structure)
+			sid, err := NewSID(test.addr, test.structure)
 			if test.errorStr != "" {
 				require.Equal(t, test.errorStr, err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.sid, *sid)
+				require.Equal(t, test.sid, sid)
 			}
 		})
 	}

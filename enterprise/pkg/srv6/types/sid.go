@@ -24,24 +24,24 @@ type Locator struct {
 }
 
 // NewLocator constructs Locator from IPv6 netip.Prefix and SIDStructure
-func NewLocator(prefix netip.Prefix, structure *SIDStructure) (*Locator, error) {
+func NewLocator(prefix netip.Prefix, structure SIDStructure) (Locator, error) {
 	if !prefix.Addr().Is6() {
-		return nil, fmt.Errorf("locator prefix must be IPv6")
+		return Locator{}, fmt.Errorf("locator prefix must be IPv6")
 	}
 
 	if prefix.Bits() != int(structure.LocatorLenBits()) {
-		return nil, fmt.Errorf("locator prefix length (%d) doesn't match with structure (%d)",
+		return Locator{}, fmt.Errorf("locator prefix length (%d) doesn't match with structure (%d)",
 			prefix.Bits(), structure.LocatorLenBits())
 	}
 
-	return &Locator{
+	return Locator{
 		Prefix:    prefix,
-		structure: *structure,
+		structure: structure,
 	}, nil
 }
 
 // MustNewLocator is NewLocator but panics on error. Should be used only in tests.
-func MustNewLocator(prefix netip.Prefix, structure *SIDStructure) *Locator {
+func MustNewLocator(prefix netip.Prefix, structure SIDStructure) Locator {
 	l, err := NewLocator(prefix, structure)
 	if err != nil {
 		panic(err)
@@ -50,8 +50,8 @@ func MustNewLocator(prefix netip.Prefix, structure *SIDStructure) *Locator {
 }
 
 // Structure returns a pointer to the SID structure
-func (l *Locator) Structure() *SIDStructure {
-	return &l.structure
+func (l *Locator) Structure() SIDStructure {
+	return l.structure
 }
 
 // String returns a human-readable string representation of this Locator
@@ -68,18 +68,18 @@ type SID struct {
 }
 
 // NewSID constructs SID from IPv6 netip.Addr and SIDStructure
-func NewSID(addr netip.Addr, structure *SIDStructure) (*SID, error) {
+func NewSID(addr netip.Addr, structure SIDStructure) (SID, error) {
 	if !addr.Is6() {
-		return nil, fmt.Errorf("SID must be IPv6")
+		return SID{}, fmt.Errorf("SID must be IPv6")
 	}
-	return &SID{
+	return SID{
 		Addr:      addr,
-		structure: *structure,
+		structure: structure,
 	}, nil
 }
 
 // MustNewSID is NewSID but panics on error. Should be used only in tests.
-func MustNewSID(addr netip.Addr, structure *SIDStructure) *SID {
+func MustNewSID(addr netip.Addr, structure SIDStructure) SID {
 	sid, err := NewSID(addr, structure)
 	if err != nil {
 		panic(err)
@@ -88,16 +88,16 @@ func MustNewSID(addr netip.Addr, structure *SIDStructure) *SID {
 }
 
 // NewSIDFromLFA constructs SID from locator, function and argument parts
-func NewSIDFromLFA(l *Locator, f []byte, a []byte) (*SID, error) {
+func NewSIDFromLFA(l Locator, f []byte, a []byte) (SID, error) {
 	funcLenBytes := l.structure.FunctionLenBytes()
 	argLenBytes := l.structure.ArgumentLenBytes()
 
 	if len(f) != int(funcLenBytes) {
-		return nil, fmt.Errorf("function length mismatched with structure")
+		return SID{}, fmt.Errorf("function length mismatched with structure")
 	}
 
 	if len(a) != int(argLenBytes) {
-		return nil, fmt.Errorf("argument length mismatched with structure")
+		return SID{}, fmt.Errorf("argument length mismatched with structure")
 	}
 
 	arr := l.Addr().As16()
@@ -105,14 +105,14 @@ func NewSIDFromLFA(l *Locator, f []byte, a []byte) (*SID, error) {
 	copy(arr[locLenBytes:locLenBytes+funcLenBytes], f)
 	copy(arr[locLenBytes+funcLenBytes:locLenBytes+funcLenBytes+argLenBytes], a)
 
-	return &SID{
+	return SID{
 		Addr:      netip.AddrFrom16(arr),
 		structure: l.structure,
 	}, nil
 }
 
 // MustNewSIDFromLFA is NewSIDFromLFA but panics on error. Should be used only in tests.
-func MustNewSIDFromLFA(l *Locator, f []byte, a []byte) *SID {
+func MustNewSIDFromLFA(l Locator, f []byte, a []byte) SID {
 	sid, err := NewSIDFromLFA(l, f, a)
 	if err != nil {
 		panic(err)
@@ -121,8 +121,8 @@ func MustNewSIDFromLFA(l *Locator, f []byte, a []byte) *SID {
 }
 
 // Structure returns a pointer to the SID structure
-func (s *SID) Structure() *SIDStructure {
-	return &s.structure
+func (s *SID) Structure() SIDStructure {
+	return s.structure
 }
 
 // AsLocator extracts locator part from SID and return it as a Locator object
@@ -267,7 +267,7 @@ type SIDStructure struct {
 // from RFC and Cilium's perspective. The returned SIDStructure is guaranteed
 // to be valid and immutable. Thus, no further validation required for using
 // it.
-func NewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) (*SIDStructure, error) {
+func NewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) (SIDStructure, error) {
 	// Implementation-specific
 	//
 	// In RFC standard, it is valid to have non-byte-aligned SID structure.
@@ -280,15 +280,15 @@ func NewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) (*SIDStructure, error
 	//
 	// Ref: https://www.cisco.com/c/en/us/td/docs/iosxr/ncs5500/segment-routing/73x/b-segment-routing-cg-ncs5500-73x/m-configure-srv6-usid.html
 	if lb%8 != 0 || ln%8 != 0 || f%8 != 0 || a%8 != 0 {
-		return nil, fmt.Errorf("SID structure bits must be byte-aligned")
+		return SIDStructure{}, fmt.Errorf("SID structure bits must be byte-aligned")
 	}
 
 	// RFC8986
 	if lb+ln+f+a > 128 {
-		return nil, fmt.Errorf("total number of bits exceeds 128")
+		return SIDStructure{}, fmt.Errorf("total number of bits exceeds 128")
 	}
 
-	return &SIDStructure{
+	return SIDStructure{
 		locatorBlockLenBits: lb,
 		locatorNodeLenBits:  ln,
 		functionLenBits:     f,
@@ -297,7 +297,7 @@ func NewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) (*SIDStructure, error
 }
 
 // MustNewSIDStructure is NewSIDStructure but panics on error. Should be used only in tests.
-func MustNewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) *SIDStructure {
+func MustNewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) SIDStructure {
 	ss, err := NewSIDStructure(lb, ln, f, a)
 	if err != nil {
 		panic(err)
@@ -306,50 +306,50 @@ func MustNewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) *SIDStructure {
 }
 
 // String return human-readable string representation of this SIDStructure
-func (ss *SIDStructure) String() string {
+func (ss SIDStructure) String() string {
 	return fmt.Sprintf("[%d, %d, %d, %d]",
 		ss.locatorBlockLenBits, ss.locatorNodeLenBits,
 		ss.functionLenBits, ss.argumentLenBits,
 	)
 }
 
-func (ss *SIDStructure) LocatorLenBits() uint8 {
+func (ss SIDStructure) LocatorLenBits() uint8 {
 	return ss.locatorBlockLenBits + ss.locatorNodeLenBits
 }
 
-func (ss *SIDStructure) LocatorLenBytes() uint8 {
+func (ss SIDStructure) LocatorLenBytes() uint8 {
 	return (ss.locatorBlockLenBits + ss.locatorNodeLenBits) / 8
 }
 
-func (ss *SIDStructure) LocatorBlockLenBits() uint8 {
+func (ss SIDStructure) LocatorBlockLenBits() uint8 {
 	return ss.locatorBlockLenBits
 }
 
-func (ss *SIDStructure) LocatorBlockLenBytes() uint8 {
+func (ss SIDStructure) LocatorBlockLenBytes() uint8 {
 	return ss.locatorBlockLenBits / 8
 }
 
-func (ss *SIDStructure) LocatorNodeLenBits() uint8 {
+func (ss SIDStructure) LocatorNodeLenBits() uint8 {
 	return ss.locatorNodeLenBits
 }
 
-func (ss *SIDStructure) LocatorNodeLenBytes() uint8 {
+func (ss SIDStructure) LocatorNodeLenBytes() uint8 {
 	return ss.locatorNodeLenBits / 8
 }
 
-func (ss *SIDStructure) FunctionLenBits() uint8 {
+func (ss SIDStructure) FunctionLenBits() uint8 {
 	return ss.functionLenBits
 }
 
-func (ss *SIDStructure) FunctionLenBytes() uint8 {
+func (ss SIDStructure) FunctionLenBytes() uint8 {
 	return ss.functionLenBits / 8
 }
 
-func (ss *SIDStructure) ArgumentLenBits() uint8 {
+func (ss SIDStructure) ArgumentLenBits() uint8 {
 	return ss.argumentLenBits
 }
 
-func (ss *SIDStructure) ArgumentLenBytes() uint8 {
+func (ss SIDStructure) ArgumentLenBytes() uint8 {
 	return ss.argumentLenBits / 8
 }
 
