@@ -477,7 +477,7 @@ jobs:
           channel-id: '${{ steps.vars.outputs.notify }}'
           slack-message: '${{ steps.notify_message.outputs.message }}'
 
-      - name: Collect sysdump
+      - name: Collect logs and sysdump
         if: ${{ !success() && (steps.cute_upgrade.outcome != 'skipped' || steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
         shell: bash
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
@@ -485,6 +485,15 @@ jobs:
           CILIUM_NS=$(terraform output --raw cilium_namespace)
           kubectl -n $CILIUM_NS get pods -l k8s-app=cilium --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | xargs -I'{}' /bin/sh -c "echo '{}' && kubectl -n $CILIUM_NS exec '{}' -c cilium-agent -- cilium metrics list | grep drop_count"
           kubectl get pods --all-namespaces -o wide
+
+          echo "Collecting cilium logs ..."
+          mkdir -p ${{ env.upload_dir }}/cilium-logs
+          CILIUM_PODS=$(kubectl -n $CILIUM_NS get pods -l k8s-app=cilium -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}')
+          for POD in $(echo $CILIUM_PODS); do
+            kubectl -n $CILIUM_NS describe pods $POD > ${{ env.upload_dir }}/cilium-logs/$POD-describe.log
+            kubectl -n $CILIUM_NS logs $POD > ${{ env.upload_dir }}/cilium-logs/$POD.log
+          done
+
           cilium status
           mkdir -p ${{ env.upload_dir }}/cilium-sysdumps
           cilium sysdump --output-filename ${{ env.upload_dir }}/cilium-sysdumps/cilium-sysdump-final
