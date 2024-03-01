@@ -528,6 +528,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	// Create a new HA policy that selects k8s1 and k8s2 nodes
 	policy1 := k.addPolicy(c, &policyParams{
 		name:              "policy-1",
+		uid:               policy1UID,
 		endpointLabels:    ep1Labels,
 		destinationCIDR:   destCIDR,
 		nodeLabels:        nodeGroup1Labels,
@@ -585,6 +586,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	// Create a new HA policy that matches no nodes
 	policy2 := k.addPolicy(c, &policyParams{
 		name:            "policy-2",
+		uid:             policy2UID,
 		endpointLabels:  ep2Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup2Labels,
@@ -679,6 +681,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroupAZAffinity(c *C)
 	// Create a new HA policy that selects k8s1 and k8s2 nodes
 	policy1 := k.addPolicy(c, &policyParams{
 		name:             "policy-1",
+		uid:              policy1UID,
 		endpointLabels:   ep1Labels,
 		destinationCIDR:  destCIDR,
 		azAffinity:       azAffinityLocalOnly,
@@ -725,6 +728,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	// Create a new HA policy based on a group config
 	policy1 := k.addPolicy(c, &policyParams{
 		name:              "policy-1",
+		uid:               policy1UID,
 		endpointLabels:    ep1Labels,
 		destinationCIDR:   destCIDR,
 		nodeLabels:        nodeGroup1Labels,
@@ -967,6 +971,7 @@ func (k *EgressGatewayTestSuite) TestEndpointDataStore(c *C) {
 	// Create a new policy
 	k.addPolicy(c, &policyParams{
 		name:              "policy-1",
+		uid:               policy1UID,
 		endpointLabels:    ep1Labels,
 		destinationCIDR:   destCIDR,
 		nodeLabels:        nodeGroup1Labels,

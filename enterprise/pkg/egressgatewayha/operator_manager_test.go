@@ -150,6 +150,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Create a new HA policy that selects k8s1 and k8s2 nodes
 	policy1 := k.addPolicy(c, &policyParams{
 		name:            "policy-1",
+		uid:             policy1UID,
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup1Labels,
@@ -157,7 +158,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	})
 
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs:  []string{node1IP, node2IP},
+		activeGatewayIPs:  []string{node2IP, node1IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 
@@ -169,7 +170,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy("k8s1")
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs:  []string{node1IP, node2IP},
+		activeGatewayIPs:  []string{node2IP, node1IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 
@@ -183,14 +184,14 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Add back k8s1
 	k.updateNodeLabels(c, node1, nodeGroup1Labels)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs:  []string{node1IP, node2IP},
+		activeGatewayIPs:  []string{node2IP, node1IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 
 	// Update the policy to allow at most 1 gateway
 	k.updatePolicyMaxGatewayNodes(c, policy1, 1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs:  []string{node1IP},
+		activeGatewayIPs:  []string{node2IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 
@@ -202,14 +203,14 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy("k8s1")
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs:  []string{node1IP},
+		activeGatewayIPs:  []string{node2IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 
 	// Allow all gateways
 	k.updatePolicyMaxGatewayNodes(c, policy1, 0)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs:  []string{node1IP, node2IP},
+		activeGatewayIPs:  []string{node2IP, node1IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 }
@@ -221,6 +222,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayManagerWithoutNodeSele
 	// Create a new policy without nodeSelector
 	k.addPolicy(c, &policyParams{
 		name:            "policy-1",
+		uid:             policy1UID,
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		egressIP:        egressIP1,
@@ -242,6 +244,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Create a new HA policy that selects k8s{1,2,3,4} nodes
 	policy1 := k.addPolicy(c, &policyParams{
 		name:            "policy-1",
+		uid:             policy1UID,
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup1Labels,
@@ -250,7 +253,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	})
 
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -260,7 +263,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node1Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node2IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP, node4IP},
@@ -270,7 +273,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {},
 			"az-2": {node3IP, node4IP},
@@ -280,7 +283,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy(node1Name, node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -291,7 +294,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s1 from node-group-1
 	node1 = k.updateNodeLabels(c, node1, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node2IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP, node4IP},
@@ -302,7 +305,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s2 from node-group-1
 	node2 = k.updateNodeLabels(c, node2, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-2": {node3IP, node4IP},
 		},
@@ -313,7 +316,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	k.updateNodeLabels(c, node1, nodeGroup1LabelsAZ1)
 	k.updateNodeLabels(c, node2, nodeGroup1LabelsAZ1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -324,7 +327,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Update the policy to allow at most 1 gateway
 	k.updatePolicyMaxGatewayNodes(c, policy1, 1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -334,7 +337,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node1IP},
 			"az-2": {node3IP},
@@ -344,7 +347,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node1Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {},
 			"az-2": {node3IP},
@@ -354,7 +357,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy(node1Name, node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -365,7 +368,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s2 from node-group-1
 	node2 = k.updateNodeLabels(c, node2, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node1IP},
 			"az-2": {node3IP},
@@ -376,7 +379,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s1 from node-group-1
 	node1 = k.updateNodeLabels(c, node1, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-2": {node3IP},
 		},
@@ -387,7 +390,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	k.updateNodeLabels(c, node1, nodeGroup1LabelsAZ1)
 	k.updateNodeLabels(c, node2, nodeGroup1LabelsAZ1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -398,7 +401,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Allow all gateways
 	k.updatePolicyMaxGatewayNodes(c, policy1, 0)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -416,6 +419,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Create a new HA policy that selects k8s{1,2,3,4} nodes
 	policy1 := k.addPolicy(c, &policyParams{
 		name:            "policy-1",
+		uid:             policy1UID,
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup1Labels,
@@ -424,7 +428,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	})
 
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -434,7 +438,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node1Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node2IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP, node4IP},
@@ -444,7 +448,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node4IP, node3IP},
 			"az-2": {node3IP, node4IP},
@@ -454,7 +458,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy(node1Name, node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -465,7 +469,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s1 from node-group-1
 	node1 = k.updateNodeLabels(c, node1, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node2IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP, node4IP},
@@ -476,7 +480,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s2 from node-group-1
 	node2 = k.updateNodeLabels(c, node2, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-2": {node3IP, node4IP},
 		},
@@ -487,7 +491,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	k.updateNodeLabels(c, node1, nodeGroup1LabelsAZ1)
 	k.updateNodeLabels(c, node2, nodeGroup1LabelsAZ1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -498,7 +502,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Update the policy to allow at most 1 gateway
 	k.updatePolicyMaxGatewayNodes(c, policy1, 1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -508,7 +512,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node1IP},
 			"az-2": {node3IP},
@@ -518,7 +522,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node1Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node4IP},
 			"az-2": {node3IP},
@@ -529,7 +533,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Make k8s{1,2} healthy again
 	k.makeNodesHealthy(node1Name, node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -540,7 +544,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s2 from node-group-1
 	node2 = k.updateNodeLabels(c, node2, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node1IP},
 			"az-2": {node3IP},
@@ -551,7 +555,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s1 from node-group-1
 	node1 = k.updateNodeLabels(c, node1, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-2": {node3IP},
 		},
@@ -562,7 +566,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	k.updateNodeLabels(c, node1, nodeGroup1LabelsAZ1)
 	k.updateNodeLabels(c, node2, nodeGroup1LabelsAZ1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -573,7 +577,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Allow all gateways
 	k.updatePolicyMaxGatewayNodes(c, policy1, 0)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -591,6 +595,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Create a new HA policy that selects k8s{1,2,3,4} nodes
 	policy1 := k.addPolicy(c, &policyParams{
 		name:            "policy-1",
+		uid:             policy1UID,
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup1Labels,
@@ -600,7 +605,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	})
 
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP, node4IP, node3IP},
 			"az-2": {node3IP, node4IP, node1IP, node2IP},
@@ -610,7 +615,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node1Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node2IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node4IP, node3IP},
 			"az-2": {node3IP, node4IP, node2IP},
@@ -620,7 +625,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node4IP, node3IP},
 			"az-2": {node3IP, node4IP},
@@ -630,7 +635,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy(node1Name, node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP, node4IP, node3IP},
 			"az-2": {node3IP, node4IP, node1IP, node2IP},
@@ -640,7 +645,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	node1 = k.updateNodeLabels(c, node1, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node2IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node4IP, node3IP},
 			"az-2": {node3IP, node4IP, node2IP},
@@ -650,7 +655,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	node2 = k.updateNodeLabels(c, node2, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP, node4IP},
+		activeGatewayIPs: []string{node4IP, node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-2": {node3IP, node4IP},
 		},
@@ -660,7 +665,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	k.updateNodeLabels(c, node1, nodeGroup1LabelsAZ1)
 	k.updateNodeLabels(c, node2, nodeGroup1LabelsAZ1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP, node4IP, node3IP},
 			"az-2": {node3IP, node4IP, node1IP, node2IP},
@@ -671,7 +676,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Update the policy to allow at most 1 gateway
 	k.updatePolicyMaxGatewayNodes(c, policy1, 1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -681,7 +686,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node1IP},
 			"az-2": {node3IP},
@@ -691,7 +696,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesUnhealthy(node1Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node4IP},
 			"az-2": {node3IP},
@@ -701,7 +706,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	k.makeNodesHealthy(node1Name, node2Name)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -712,7 +717,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Remove k8s2 from node-group-1
 	node2 = k.updateNodeLabels(c, node2, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node1IP},
 			"az-2": {node3IP},
@@ -722,7 +727,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 
 	node1 = k.updateNodeLabels(c, node1, noNodeGroup)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node3IP},
+		activeGatewayIPs: []string{node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-2": {node3IP},
 		},
@@ -732,7 +737,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	k.updateNodeLabels(c, node1, nodeGroup1LabelsAZ1)
 	k.updateNodeLabels(c, node2, nodeGroup1LabelsAZ1)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP},
+		activeGatewayIPs: []string{node3IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP},
 			"az-2": {node3IP},
@@ -743,7 +748,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Allow 2 gateways
 	k.updatePolicyMaxGatewayNodes(c, policy1, 2)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP},
+		activeGatewayIPs: []string{node3IP, node1IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP},
 			"az-2": {node3IP, node4IP},
@@ -754,7 +759,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Allow 3 gateways
 	k.updatePolicyMaxGatewayNodes(c, policy1, 3)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP, node4IP},
 			"az-2": {node3IP, node4IP, node1IP},
@@ -765,7 +770,7 @@ func (k *EgressGatewayOperatorTestSuite) TestEgressGatewayOperatorManagerHAGroup
 	// Allow all 4 gateways
 	k.updatePolicyMaxGatewayNodes(c, policy1, 4)
 	k.assertIegpGatewayStatus(c, "policy-1", gatewayStatus{
-		activeGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		activeGatewayIPs: []string{node3IP, node1IP, node2IP, node4IP},
 		activeGatewayIPsByAZ: map[string][]string{
 			"az-1": {node2IP, node1IP, node4IP, node3IP},
 			"az-2": {node3IP, node4IP, node1IP, node2IP},

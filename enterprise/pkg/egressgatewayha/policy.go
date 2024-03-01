@@ -155,7 +155,8 @@ func (m azAffinityMode) enabled() bool {
 // PolicyConfig is the internal representation of IsovalentEgressGatewayPolicy.
 type PolicyConfig struct {
 	// id is the parsed config name and namespace
-	id types.NamespacedName
+	id  types.NamespacedName
+	uid types.UID
 
 	apiVersion string
 	generation int64
@@ -231,7 +232,6 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGate
 }
 
 func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig) (*v1.IsovalentEgressGatewayPolicyGroupStatus, error) {
-	activeGatewayIPs := []string{}
 	healthyGatewayIPs := []string{}
 
 	activeGatewayIPsByAZ := map[string][]string{}
@@ -266,10 +266,9 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 
 		nodeIP := node.GetK8sNodeIP().String()
 
-		// add the node to the list of active and healthy gateway IPs.
-		// These lists are global (i.e. they do not take into account the AZ of the node)
+		// add the node to the list of healthy gateway IPs.
+		// This list is global (i.e. it doesn't take into account the AZ of the node)
 		healthyGatewayIPs = append(healthyGatewayIPs, nodeIP)
-		activeGatewayIPs = append(activeGatewayIPs, nodeIP)
 
 		// if AZ affinity is enabled, add the node IP also to the list of healthy gateway IPs
 		if config.azAffinity.enabled() {
@@ -351,11 +350,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 		}
 	}
 
-	// if set, limit the number of gateways to maxGatewayNodes
-	if gc.maxGatewayNodes != 0 {
-		if len(activeGatewayIPs) > gc.maxGatewayNodes {
-			activeGatewayIPs = activeGatewayIPs[:gc.maxGatewayNodes]
-		}
+	// Selects the active GWs from a list of the healthy GWs with random probability
+	// using a uid as a seed to make the result deterministic.
+	activeGatewayIPs, err := selectActiveGWs(string(config.uid), gc.maxGatewayNodes, healthyGatewayIPs)
+	if err != nil {
+		return nil, err
 	}
 
 	return &v1.IsovalentEgressGatewayPolicyGroupStatus{
@@ -684,6 +683,11 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		return nil, fmt.Errorf("must have a name")
 	}
 
+	uid := iegp.UID
+	if uid == "" {
+		return nil, fmt.Errorf("must have a uid")
+	}
+
 	destinationCIDRs := iegp.Spec.DestinationCIDRs
 	if destinationCIDRs == nil {
 		return nil, fmt.Errorf("destinationCIDRs can't be empty")
@@ -835,6 +839,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		id: types.NamespacedName{
 			Name: name,
 		},
+		uid:        uid,
 		apiVersion: "isovalent.com/v1",
 		generation: iegp.GetGeneration(),
 	}, nil

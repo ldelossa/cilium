@@ -76,6 +76,9 @@ const (
 	// Special values for gatewayIP, see pkg/egressgateway/manager.go
 	gatewayNotFoundValue     = "0.0.0.0"
 	gatewayExcludedCIDRValue = "0.0.0.1"
+
+	policy1UID = "d68a62ea-f358-4016-87c2-7ae9724f74f7"
+	policy2UID = "953b7b1a-1fb3-42e6-add5-4763381e124f"
 )
 
 var (
@@ -205,6 +208,7 @@ func newHealthcheckerMock() *healthcheckerMock {
 
 type policyParams struct {
 	name                 string
+	uid                  types.UID
 	endpointLabels       map[string]string
 	destinationCIDR      string
 	excludedCIDRs        []string
@@ -250,6 +254,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		id: types.NamespacedName{
 			Name: params.name,
 		},
+		uid:           params.uid,
 		dstCIDRs:      []netip.Prefix{parsedDestinationCIDR},
 		excludedCIDRs: parsedExcludedCIDRs,
 		azAffinity:    params.azAffinity,
@@ -298,6 +303,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 	iegp := &Policy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: params.name,
+			UID:  params.uid,
 		},
 		Spec: v1.IsovalentEgressGatewayPolicySpec{
 			Selectors: []v1.EgressRule{
