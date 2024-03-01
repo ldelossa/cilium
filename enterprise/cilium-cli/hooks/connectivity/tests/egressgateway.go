@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
 	"github.com/cilium/cilium-cli/utils/features"
-	jsonUtils "github.com/cilium/cilium-cli/utils/json"
 	"github.com/cilium/cilium-cli/utils/wait"
 
 	"github.com/google/go-cmp/cmp"
@@ -602,7 +601,7 @@ func (s *egressGatewayAZAffinity) Run(ctx context.Context, t *check.Test) {
 		}
 
 		addNodeLabelPatch := fmt.Sprintf(`[{"op":"add","path":"/metadata/labels/%s","value":"%s"}]`,
-			jsonUtils.EscapePatchString(K8sZoneLabel), fmt.Sprintf("zone-%s", nodeName))
+			escapePatchString(K8sZoneLabel), fmt.Sprintf("zone-%s", nodeName))
 		if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(addNodeLabelPatch)); err != nil {
 			t.Fatalf("cannot add label to node %s: %s", node.Name, err)
 		}
@@ -620,7 +619,7 @@ func (s *egressGatewayAZAffinity) Run(ctx context.Context, t *check.Test) {
 				continue
 			}
 
-			removeNodeLabelPatch := fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, jsonUtils.EscapePatchString(K8sZoneLabel))
+			removeNodeLabelPatch := fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, escapePatchString(K8sZoneLabel))
 			if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(removeNodeLabelPatch)); err != nil {
 				return fmt.Errorf("cannot remove %s label from node %s: %w", EgressGroupLabelKey, node.Name, err)
 			}
@@ -680,4 +679,14 @@ func (s *egressGatewayAZAffinity) Run(ctx context.Context, t *check.Test) {
 		}
 		i++
 	}
+}
+
+func escapePatchString(str string) string {
+	// From https://www.rfc-editor.org/rfc/rfc6901#section-3:
+	// Because the characters '~' (%x7E) and '/' (%x2F) have special meanings in JSON Pointer,
+	// '~' needs to be encoded as '~0' and '/' needs to be encoded as '~1' when these characters
+	// appear in a reference token.
+	str = strings.ReplaceAll(str, "~", "~0")
+	str = strings.ReplaceAll(str, "/", "~1")
+	return str
 }
