@@ -110,8 +110,6 @@ jobs:
           --helm-set=socketLB.enabled=true \
           --helm-set=socketLB.hostNamespaceOnly=true \
           --helm-set=endpointHealthChecking.enabled=false \
-          --helm-set=endpointStatus.enabled=true \
-          --helm-set=endpointStatus.status=policy \
         "
 
         CILIUM_INSTALL_TUNNEL="--helm-set=tunnel=vxlan"
@@ -334,8 +332,31 @@ jobs:
         kubectl --context ${{ env.contextName2 }} apply -f network-policy-ingress.yaml
         kubectl --context ${{ env.contextName1 }} wait pods -l app=netshoot --for condition=Ready --timeout=300s
         kubectl --context ${{ env.contextName2 }} wait pods -l app=httpbin --for condition=Ready --timeout=300s
-        kubectl --context ${{ env.contextName1 }} wait --for=jsonpath='{.status.policy.egress.enforcing}'=true cep netshoot --timeout=300s
-        kubectl --context ${{ env.contextName2 }} wait --for=jsonpath='{.status.policy.ingress.enforcing}'=true cep httpbin --timeout=300s
+
+        wait_for_policy_status() {
+          local pod=$1 context=$2 expected=$3
+          local epid node agent got
+
+          epid=$(kubectl --context $context get cep $pod -o jsonpath='{.status.id}')
+          node=$(kubectl --context $context get pod $pod -o jsonpath='{.spec.nodeName}')
+          agent=$(kubectl --context $context get pod -n kube-system -o jsonpath='{.items[].metadata.name}' \
+              -l app.kubernetes.io/name=cilium-agent --field-selector spec.nodeName=$node)
+
+          for i in {1..60}; do
+              got=$(kubectl --context $context exec -n kube-system $agent -c cilium-agent -- \
+                  cilium endpoint get $epid -o jsonpath='{$[0].status.policy.realized.policy-enabled}')
+
+              echo "Policy status for cep is $got, expected $expected ($i attempt)"
+              if [ "$got" == "$expected" ]; then return 0; fi
+              sleep 1
+          done
+
+          echo "Timeout waiting for policy status to match the expected value"
+          return 1
+        }
+
+        wait_for_policy_status netshoot ${{ env.contextName1 }} egress
+        wait_for_policy_status httpbin ${{ env.contextName2 }} ingress
 
     - name: Ensure inter-cluster communication over global service with L3/L4 policy is working correctly
       run: |
