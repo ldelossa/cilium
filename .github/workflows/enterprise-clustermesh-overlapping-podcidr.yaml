@@ -95,7 +95,7 @@ jobs:
           SHA="${{ github.sha }}"
         fi
 
-        # bpf.masquerade is disabled due to #23283
+        # bpf.masquerade is explicitly disabled due to https://github.com/cilium/cilium/issues/23283#issuecomment-1597282247
         CILIUM_INSTALL_DEFAULTS="--chart-directory=install/kubernetes/cilium \
           --helm-set=debug.enabled=true \
           --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
