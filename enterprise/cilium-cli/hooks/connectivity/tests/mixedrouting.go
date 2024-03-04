@@ -165,10 +165,18 @@ func (mr *mixedRouting) buildTunnelFilter(ct *check.ConnectivityTest, self check
 }
 
 func (mr *mixedRouting) buildNativeFilter(ct *check.ConnectivityTest, self check.NodeIdentity, mode sniff.Mode) string {
-	var cidrs []string
+	var cidrs, ingresses []string
 
 	for other, cn := range ct.CiliumNodes() {
 		if self == other {
+			register := func(address string) {
+				if address != "" {
+					ingresses = append(ingresses, "dst host "+address)
+				}
+			}
+
+			register(cn.Spec.IngressAddressing.IPV4)
+			register(cn.Spec.IngressAddressing.IPV6)
 			continue
 		}
 
@@ -185,7 +193,22 @@ func (mr *mixedRouting) buildNativeFilter(ct *check.ConnectivityTest, self check
 		}
 	}
 
-	return strings.Join(cidrs, " or ")
+	switch {
+	case len(cidrs) == 0:
+		return ""
+	case len(ingresses) == 0:
+		return strings.Join(cidrs, " or ")
+	default:
+		// Skip packets having one of the local ingress IP addresses as destination.
+		// Indeed, they can lead to flakes if the destination port does not match
+		// that of an open envoy socket, as the packet gets then incorrectly forwarded
+		// according to the default route. However, this can happen if the network
+		// policies configured by the subsequent connectivity tests block the reception
+		// of the FIN packet for a certain time window, and the socket gets removed
+		// in the meanwhile. In any case, we don't reduce the overall coverage, because
+		// we would still detect every legitimate failure on the source node side.
+		return fmt.Sprintf("(%s) and not (%s)", strings.Join(cidrs, " or "), strings.Join(ingresses, " or "))
+	}
 }
 
 func (mr *mixedRouting) shouldUseTunnel(self, other check.NodeIdentity) bool {
