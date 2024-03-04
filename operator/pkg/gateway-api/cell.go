@@ -37,6 +37,9 @@ var Cell = cell.Module(
 		EnableGatewayAPISecretsSync:   true,
 		EnableGatewayAPIProxyProtocol: false,
 		GatewayAPISecretsNamespace:    "cilium-secrets",
+
+		GatewayAPIHostnetworkEnabled:           false,
+		GatewayAPIHostnetworkNodelabelselector: "",
 	}),
 	cell.Invoke(initGatewayAPIController),
 	cell.Provide(registerSecretSync),
@@ -58,6 +61,9 @@ type gatewayApiConfig struct {
 	EnableGatewayAPISecretsSync   bool
 	EnableGatewayAPIProxyProtocol bool
 	GatewayAPISecretsNamespace    string
+
+	GatewayAPIHostnetworkEnabled           bool
+	GatewayAPIHostnetworkNodelabelselector string
 }
 
 func (r gatewayApiConfig) Flags(flags *pflag.FlagSet) {
@@ -67,6 +73,8 @@ func (r gatewayApiConfig) Flags(flags *pflag.FlagSet) {
 	flags.Bool("enable-gateway-api-secrets-sync", r.EnableGatewayAPISecretsSync, "Enables fan-in TLS secrets sync from multiple namespaces to singular namespace (specified by gateway-api-secrets-namespace flag)")
 	flags.Bool("enable-gateway-api-proxy-protocol", r.EnableGatewayAPIProxyProtocol, "Enable proxy protocol for all GatewayAPI listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.")
 	flags.String("gateway-api-secrets-namespace", r.GatewayAPISecretsNamespace, "Namespace having tls secrets used by CEC for Gateway API")
+	flags.Bool("gateway-api-hostnetwork-enabled", r.GatewayAPIHostnetworkEnabled, "Exposes Gateway listeners on the host network.")
+	flags.String("gateway-api-hostnetwork-nodelabelselector", r.GatewayAPIHostnetworkNodelabelselector, "Label selector that matches the nodes where the gateway listeners should be exposed. It's a list of comma-separated key-value label pairs. e.g. 'kubernetes.io/os=linux,kubernetes.io/hostname=kind-worker'")
 }
 
 type gatewayAPIParams struct {
@@ -77,7 +85,9 @@ type gatewayAPIParams struct {
 	CtrlRuntimeManager ctrlRuntime.Manager
 	Scheme             *runtime.Scheme
 
-	Config gatewayApiConfig
+	AgentConfig      *option.DaemonConfig
+	OperatorConfig   *operatorOption.OperatorConfig
+	GatewayApiConfig gatewayApiConfig
 }
 
 func initGatewayAPIController(params gatewayAPIParams) error {
@@ -85,7 +95,7 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 		return nil
 	}
 
-	if params.Config.KubeProxyReplacement != option.KubeProxyReplacementTrue && !params.Config.EnableNodePort {
+	if params.GatewayApiConfig.KubeProxyReplacement != option.KubeProxyReplacementTrue && !params.GatewayApiConfig.EnableNodePort {
 		params.Logger.Warn("Gateway API support requires either kube-proxy-replacement or enable-node-port enabled")
 		return nil
 	}
@@ -104,8 +114,18 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 		return err
 	}
 
-	cecTranslator := translation.NewCECTranslator(params.Config.GatewayAPISecretsNamespace, params.Config.EnableGatewayAPIProxyProtocol, true, operatorOption.Config.ProxyIdleTimeoutSeconds)
-	gatewayAPITranslator := gatewayApiTranslation.NewTranslator(cecTranslator)
+	cecTranslator := translation.NewCECTranslator(
+		params.GatewayApiConfig.GatewayAPISecretsNamespace,
+		params.GatewayApiConfig.EnableGatewayAPIProxyProtocol,
+		true, // hostNameSuffixMatch
+		params.OperatorConfig.ProxyIdleTimeoutSeconds,
+		params.GatewayApiConfig.GatewayAPIHostnetworkEnabled,
+		translation.ParseNodeLabelSelector(params.GatewayApiConfig.GatewayAPIHostnetworkNodelabelselector),
+		params.AgentConfig.EnableIPv4,
+		params.AgentConfig.EnableIPv6,
+	)
+
+	gatewayAPITranslator := gatewayApiTranslation.NewTranslator(cecTranslator, params.GatewayApiConfig.GatewayAPIHostnetworkEnabled)
 
 	if err := registerReconcilers(
 		params.CtrlRuntimeManager,
@@ -124,7 +144,7 @@ func registerSecretSync(params gatewayAPIParams) secretsync.SecretSyncRegistrati
 		return secretsync.SecretSyncRegistrationOut{}
 	}
 
-	if !operatorOption.Config.EnableGatewayAPI || !params.Config.EnableGatewayAPISecretsSync {
+	if !operatorOption.Config.EnableGatewayAPI || !params.GatewayApiConfig.EnableGatewayAPISecretsSync {
 		return secretsync.SecretSyncRegistrationOut{}
 	}
 
@@ -133,7 +153,7 @@ func registerSecretSync(params gatewayAPIParams) secretsync.SecretSyncRegistrati
 			RefObject:            &gatewayv1.Gateway{},
 			RefObjectEnqueueFunc: EnqueueTLSSecrets(params.CtrlRuntimeManager.GetClient(), params.Logger),
 			RefObjectCheckFunc:   IsReferencedByCiliumGateway,
-			SecretsNamespace:     params.Config.GatewayAPISecretsNamespace,
+			SecretsNamespace:     params.GatewayApiConfig.GatewayAPISecretsNamespace,
 		},
 	}
 }

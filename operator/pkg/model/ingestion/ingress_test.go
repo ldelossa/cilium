@@ -1775,9 +1775,9 @@ func TestIngress(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var listeners []model.HTTPListener
 			if tc.defaultSecret {
-				listeners = Ingress(tc.ingress, defaultSecretNamespace, defaultSecretName, tc.enforceHTTPS)
+				listeners = Ingress(tc.ingress, defaultSecretNamespace, defaultSecretName, tc.enforceHTTPS, 80, 443)
 			} else {
-				listeners = Ingress(tc.ingress, "", "", tc.enforceHTTPS)
+				listeners = Ingress(tc.ingress, "", "", tc.enforceHTTPS, 80, 443)
 			}
 
 			assert.Equal(t, tc.want, listeners, "Listeners did not match")
@@ -2113,9 +2113,8 @@ var sslPassthruDefaultBackend = networkingv1.Ingress{
 }
 
 type passthruTestcase struct {
-	ingress       networkingv1.Ingress
-	defaultSecret bool
-	want          []model.TLSListener
+	ingress networkingv1.Ingress
+	want    []model.TLSListener
 }
 
 func TestIngressPassthrough(t *testing.T) {
@@ -2152,12 +2151,7 @@ func TestIngressPassthrough(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			var listeners []model.TLSListener
-			if tc.defaultSecret {
-				listeners = IngressPassthrough(tc.ingress, defaultSecretNamespace, defaultSecretName)
-			} else {
-				listeners = IngressPassthrough(tc.ingress, "", "")
-			}
+			listeners := IngressPassthrough(tc.ingress, 443)
 
 			assert.Equal(t, tc.want, listeners, "Listeners did not match")
 		})

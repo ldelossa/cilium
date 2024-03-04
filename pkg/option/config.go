@@ -1051,25 +1051,6 @@ const (
 	// K8sHeartbeatTimeout configures the timeout for apiserver heartbeat
 	K8sHeartbeatTimeout = "k8s-heartbeat-timeout"
 
-	// EndpointStatus enables population of information in the
-	// CiliumEndpoint.Status resource
-	EndpointStatus = "endpoint-status"
-
-	// EndpointStatusPolicy enables CiliumEndpoint.Status.Policy
-	EndpointStatusPolicy = "policy"
-
-	// EndpointStatusHealth enables CiliumEndpoint.Status.Health
-	EndpointStatusHealth = "health"
-
-	// EndpointStatusControllers enables CiliumEndpoint.Status.Controllers
-	EndpointStatusControllers = "controllers"
-
-	// EndpointStatusLog enables CiliumEndpoint.Status.Log
-	EndpointStatusLog = "log"
-
-	// EndpointStatusState enables CiliumEndpoint.Status.State
-	EndpointStatusState = "state"
-
 	// EnableIPv4FragmentsTrackingName is the name of the option to enable
 	// IPv4 fragments tracking for L4-based lookups. Needs LRU map support.
 	EnableIPv4FragmentsTrackingName = "enable-ipv4-fragment-tracking"
@@ -2272,10 +2253,6 @@ type DaemonConfig struct {
 	// HubbleDropEventsReasons controls which drop reasons to emit events for
 	HubbleDropEventsReasons []string
 
-	// EndpointStatus enables population of information in the
-	// CiliumEndpoint.Status resource
-	EndpointStatus map[string]struct{}
-
 	// EnableIPv4FragmentsTracking enables IPv4 fragments tracking for
 	// L4-based lookups. Needs LRU map support.
 	EnableIPv4FragmentsTracking bool
@@ -2474,7 +2451,6 @@ var (
 		EnableIPv6NDP:                   defaults.EnableIPv6NDP,
 		EnableSCTP:                      defaults.EnableSCTP,
 		EnableL7Proxy:                   defaults.EnableL7Proxy,
-		EndpointStatus:                  make(map[string]struct{}),
 		DNSMaxIPsPerRestoredRule:        defaults.DNSMaxIPsPerRestoredRule,
 		ToFQDNsMaxIPsPerHost:            defaults.ToFQDNsMaxIPsPerHost,
 		KVstorePeriodicSync:             defaults.KVstorePeriodicSync,
@@ -2702,13 +2678,6 @@ func (c *DaemonConfig) UnreachableRoutesEnabled() bool {
 	return c.EnableUnreachableRoutes
 }
 
-// EndpointStatusIsEnabled returns true if a particular EndpointStatus* feature
-// is enabled
-func (c *DaemonConfig) EndpointStatusIsEnabled(option string) bool {
-	_, ok := c.EndpointStatus[option]
-	return ok
-}
-
 // CiliumNamespaceName returns the name of the namespace in which Cilium is
 // deployed in
 func (c *DaemonConfig) CiliumNamespaceName() string {
@@ -2900,13 +2869,6 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 		return fmt.Errorf("KVstoreLeaseTTL does not lie in required range(%ds, %ds)",
 			int64(defaults.LockLeaseTTL.Seconds()),
 			int64(defaults.KVstoreLeaseMaxTTL.Seconds()))
-	}
-
-	allowedEndpointStatusValues := EndpointStatusValuesMap()
-	for enabledEndpointStatus := range c.EndpointStatus {
-		if _, ok := allowedEndpointStatusValues[enabledEndpointStatus]; !ok {
-			return fmt.Errorf("unknown endpoint-status option '%s'", enabledEndpointStatus)
-		}
 	}
 
 	if c.EnableVTEP {
@@ -3412,10 +3374,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 		log.Fatalf("unable to parse label selector %s: %s", NodeEncryptionOptOutLabels, err)
 	} else {
 		c.NodeEncryptionOptOutLabels = sel
-	}
-
-	for _, option := range vp.GetStringSlice(EndpointStatus) {
-		c.EndpointStatus[option] = struct{}{}
 	}
 
 	if err := c.parseExcludedLocalAddresses(vp.GetStringSlice(ExcludeLocalAddress)); err != nil {
@@ -4260,26 +4218,6 @@ func getDefaultMonitorQueueSize(numCPU int) int {
 		monitorQueueSize = defaults.MonitorQueueSizePerCPUMaximum
 	}
 	return monitorQueueSize
-}
-
-// EndpointStatusValues returns all available EndpointStatus option values
-func EndpointStatusValues() []string {
-	return []string{
-		EndpointStatusControllers,
-		EndpointStatusHealth,
-		EndpointStatusLog,
-		EndpointStatusPolicy,
-		EndpointStatusState,
-	}
-}
-
-// EndpointStatusValuesMap returns all EndpointStatus option values as a map
-func EndpointStatusValuesMap() (values map[string]struct{}) {
-	values = map[string]struct{}{}
-	for _, v := range EndpointStatusValues() {
-		values[v] = struct{}{}
-	}
-	return
 }
 
 // MightAutoDetectDevices returns true if the device auto-detection might take

@@ -161,6 +161,7 @@ jobs:
           test-name: srv6-datapath
           kernel: ${{ matrix.kernel }}
           kind-params: '"" 2 "" "" none dual'
+          kind-image: ${{ env.KIND_K8S_IMAGE }}
 
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.

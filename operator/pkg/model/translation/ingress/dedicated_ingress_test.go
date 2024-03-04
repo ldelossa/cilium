@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/testing/protocmp"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +16,7 @@ import (
 	"github.com/cilium/cilium/operator/pkg/model"
 	"github.com/cilium/cilium/operator/pkg/model/translation"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
 
 func Test_getService(t *testing.T) {
@@ -27,7 +29,8 @@ func Test_getService(t *testing.T) {
 	}
 
 	t.Run("Default LB service", func(t *testing.T) {
-		res := getService(resource, nil)
+		it := &dedicatedIngressTranslator{}
+		res := it.getService(resource, nil)
 		require.Equal(t, &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cilium-ingress-dummy-ingress",
@@ -62,7 +65,8 @@ func Test_getService(t *testing.T) {
 	})
 
 	t.Run("Invalid LB service annotation, defaults to LoadBalancer", func(t *testing.T) {
-		res := getService(resource, &model.Service{
+		it := &dedicatedIngressTranslator{}
+		res := it.getService(resource, &model.Service{
 			Type: "InvalidServiceType",
 		})
 		require.Equal(t, &corev1.Service{
@@ -101,7 +105,8 @@ func Test_getService(t *testing.T) {
 	t.Run("Node Port service", func(t *testing.T) {
 		var insecureNodePort uint32 = 3000
 		var secureNodePort uint32 = 3001
-		res := getService(resource, &model.Service{
+		it := &dedicatedIngressTranslator{}
+		res := it.getService(resource, &model.Service{
 			Type:             "NodePort",
 			InsecureNodePort: &insecureNodePort,
 			SecureNodePort:   &secureNodePort,
@@ -177,14 +182,19 @@ func Test_getEndpointForIngress(t *testing.T) {
 
 func Test_translator_Translate(t *testing.T) {
 	type args struct {
-		m                *model.Model
-		useProxyProtocol bool
+		m                            *model.Model
+		useProxyProtocol             bool
+		hostNetworkEnabled           bool
+		hostNetworkNodeLabelSelector *slim_metav1.LabelSelector
+		ipv4Enabled                  bool
+		ipv6Enabled                  bool
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    *ciliumv2.CiliumEnvoyConfig
-		wantErr bool
+		name          string
+		args          args
+		want          *ciliumv2.CiliumEnvoyConfig
+		wantLBSvcType corev1.ServiceType
+		wantErr       bool
 	}{
 		{
 			name: "Conformance/DefaultBackend",
@@ -193,7 +203,8 @@ func Test_translator_Translate(t *testing.T) {
 					HTTP: defaultBackendListeners,
 				},
 			},
-			want: defaultBackendListenersCiliumEnvoyConfig,
+			want:          defaultBackendListenersCiliumEnvoyConfig,
+			wantLBSvcType: corev1.ServiceTypeLoadBalancer,
 		},
 		{
 			name: "Conformance/HostRules",
@@ -202,7 +213,8 @@ func Test_translator_Translate(t *testing.T) {
 					HTTP: hostRulesListenersEnforceHTTPS,
 				},
 			},
-			want: hostRulesListenersEnforceHTTPSCiliumEnvoyConfig,
+			want:          hostRulesListenersEnforceHTTPSCiliumEnvoyConfig,
+			wantLBSvcType: corev1.ServiceTypeLoadBalancer,
 		},
 		{
 			name: "Conformance/HostRules,no Force HTTPS",
@@ -211,7 +223,8 @@ func Test_translator_Translate(t *testing.T) {
 					HTTP: hostRulesListeners,
 				},
 			},
-			want: hostRulesListenersCiliumEnvoyConfig,
+			want:          hostRulesListenersCiliumEnvoyConfig,
+			wantLBSvcType: corev1.ServiceTypeLoadBalancer,
 		},
 		{
 			name: "Conformance/PathRules",
@@ -220,7 +233,8 @@ func Test_translator_Translate(t *testing.T) {
 					HTTP: pathRulesListeners,
 				},
 			},
-			want: pathRulesListenersCiliumEnvoyConfig,
+			want:          pathRulesListenersCiliumEnvoyConfig,
+			wantLBSvcType: corev1.ServiceTypeLoadBalancer,
 		},
 		{
 			name: "Conformance/ProxyProtocol",
@@ -230,22 +244,43 @@ func Test_translator_Translate(t *testing.T) {
 				},
 				useProxyProtocol: true,
 			},
-			want: proxyProtoListenersCiliumEnvoyConfig,
+			want:          proxyProtoListenersCiliumEnvoyConfig,
+			wantLBSvcType: corev1.ServiceTypeLoadBalancer,
+		},
+		{
+			name: "Conformance/HostNetwork",
+			args: args{
+				m: &model.Model{
+					HTTP: hostNetworkListeners(55555),
+				},
+				hostNetworkEnabled:           true,
+				hostNetworkNodeLabelSelector: &slim_metav1.LabelSelector{MatchLabels: map[string]slim_metav1.MatchLabelsValue{"a": "b"}},
+				ipv4Enabled:                  true,
+			},
+			want:          hostNetworkListenersCiliumEnvoyConfig("0.0.0.0", 55555, &slim_metav1.LabelSelector{MatchLabels: map[string]slim_metav1.MatchLabelsValue{"a": "b"}}),
+			wantLBSvcType: corev1.ServiceTypeClusterIP,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &dedicatedIngressTranslator{
-				cecTranslator: translation.NewCECTranslator("cilium-secrets", tt.args.useProxyProtocol, false, 60),
+				cecTranslator:      translation.NewCECTranslator("cilium-secrets", tt.args.useProxyProtocol, false, 60, tt.args.hostNetworkEnabled, tt.args.hostNetworkNodeLabelSelector, tt.args.ipv4Enabled, tt.args.ipv6Enabled),
+				hostNetworkEnabled: tt.args.hostNetworkEnabled,
 			}
 
-			cec, _, _, err := trans.Translate(tt.args.m)
+			cec, svc, ep, err := trans.Translate(tt.args.m)
 			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
+
 			diffOutput := cmp.Diff(tt.want, cec, protocmp.Transform())
 			if len(diffOutput) != 0 {
 				t.Errorf("CiliumEnvoyConfigs did not match:\n%s\n", diffOutput)
 			}
+
+			require.NotNil(t, svc)
+			assert.Equal(t, tt.wantLBSvcType, svc.Spec.Type)
+
+			require.NotNil(t, ep)
 		})
 	}
 }
