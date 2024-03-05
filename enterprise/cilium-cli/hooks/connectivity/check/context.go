@@ -41,7 +41,8 @@ func NewEnterpriseConnectivityTest(ct *check.ConnectivityTest) *EnterpriseConnec
 }
 
 func (ect *EnterpriseConnectivityTest) NewEnterpriseTest(name string) *EnterpriseTest {
-	ct := ect.ConnectivityTest.NewTest(name)
+	ct := check.NewTest(name, ect.ConnectivityTest.Params().Verbose, ect.ConnectivityTest.Params().Debug)
+	ect.ConnectivityTest.AddTest(ct)
 	et := EnterpriseTest{
 		Test:  ct,
 		ctx:   ect,

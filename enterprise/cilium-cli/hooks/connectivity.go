@@ -77,7 +77,8 @@ func (ec *EnterpriseConnectivity) addHubbleVersionTests(ct *check.ConnectivityTe
 }
 
 func (ec *EnterpriseConnectivity) addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest) error {
-	ct.NewTest("external-cilium-dns-proxy").WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
+	test := check.NewTest("external-cilium-dns-proxy", ct.Params().Verbose, ct.Params().Debug)
+	ct.AddTest(test).WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
 		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.CiliumDNSProxyDeployed)).
 		WithScenarios(enterpriseTests.ExternalCiliumDNSProxy(ec.externalCiliumDNSProxyPods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
 		return check.ResultOK.ExpectMetricsIncrease(enterpriseTests.ExternalCiliumDNSProxySource(ec.externalCiliumDNSProxyPods), "isovalent_external_dns_proxy_policy_l7_total"),
@@ -193,14 +194,14 @@ func (ec *EnterpriseConnectivity) addMixedRoutingTests(ct *check.ConnectivityTes
 		// due to the lack of other traffic flowing in the cluster. The already
 		// existing health check test is not sufficient when WireGuard is enabled,
 		// because node to pod traffic is not encrypted by default.
-		ct.NewTest("mixed-routing-extra-traffic").
+		ct.AddTest(check.NewTest("mixed-routing-extra-traffic", ct.Params().Verbose, ct.Params().Debug)).
 			WithFeatureRequirements(
 				features.RequireEnabled(features.HealthChecking),
 				features.RequireEnabled(enterpriseFeatures.FallbackRoutingMode),
 			).
 			WithScenarios(enterpriseTests.MixedRoutingExtraTraffic())
 
-		ct.NewTest("mixed-routing").
+		ct.AddTest(check.NewTest("mixed-routing", ct.Params().Verbose, ct.Params().Debug)).
 			WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.FallbackRoutingMode)).
 			WithSysdumpPolicy(check.SysdumpPolicyNever).
 			WithScenarios(ec.mixedRoutingScenario)
