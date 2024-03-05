@@ -173,7 +173,7 @@ int nodeport_dsr_backend_setup(struct __ctx_buff *ctx)
 	ipcache_v4_add_entry(BACKEND_IP, 0, 112233, 0, 0);
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_NETDEV);
+	tail_call_static(ctx, entry_call_map, FROM_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -256,8 +256,8 @@ int nodeport_dsr_backend_check(struct __ctx_buff *ctx)
 	ct_entry = map_lookup_elem(get_ct_map4(&tuple), &tuple);
 	if (!ct_entry)
 		test_fatal("no CT entry for DSR found");
-	if (!ct_entry->dsr)
-		test_fatal("CT entry doesn't have the .dsr flag set");
+	if (!ct_entry->dsr_internal)
+		test_fatal("CT entry doesn't have the .dsr_internal flag set");
 
 	struct ipv4_nat_entry *nat_entry;
 
@@ -366,7 +366,7 @@ SETUP("tc", "tc_nodeport_dsr_backend_reply")
 int nodeport_dsr_backend_reply_setup(struct __ctx_buff *ctx)
 {
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -436,7 +436,7 @@ SETUP("tc", "tc_nodeport_dsr_backend_redirect")
 int nodeport_dsr_backend_redirect_setup(struct __ctx_buff *ctx)
 {
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_NETDEV);
+	tail_call_static(ctx, entry_call_map, FROM_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -519,8 +519,8 @@ int nodeport_dsr_backend_redirect_check(struct __ctx_buff *ctx)
 	ct_entry = map_lookup_elem(get_ct_map4(&tuple), &tuple);
 	if (!ct_entry)
 		test_fatal("no CT entry for DSR found");
-	if (!ct_entry->dsr)
-		test_fatal("CT entry doesn't have the .dsr flag set");
+	if (!ct_entry->dsr_internal)
+		test_fatal("CT entry doesn't have the .dsr_internal flag set");
 
 	struct ipv4_nat_entry *nat_entry;
 
@@ -569,7 +569,7 @@ SETUP("tc", "tc_nodeport_dsr_backend_redirect_reply")
 int nodeport_dsr_backend_redirect_reply_setup(struct __ctx_buff *ctx)
 {
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }

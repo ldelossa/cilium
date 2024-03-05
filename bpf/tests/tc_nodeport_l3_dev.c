@@ -12,7 +12,6 @@
 #define ENABLE_HOST_ROUTING
 #define ENABLE_IPV4
 #define ENABLE_IPV6
-#define SKIP_ICMPV6_NS_HANDLING
 
 #define TEST_IP_LOCAL		v4_pod_one
 #define TEST_IP_REMOTE		v4_pod_two
@@ -123,7 +122,7 @@ int ipv4_l3_to_l2_fast_redirect_setup(struct __ctx_buff *ctx)
 
 	skb_adjust_room(ctx, -__ETH_HLEN, BPF_ADJ_ROOM_MAC, flags);
 
-	tail_call_static(ctx, &entry_call_map, 0);
+	tail_call_static(ctx, entry_call_map, 0);
 	return TEST_ERROR;
 }
 
@@ -251,7 +250,7 @@ int ipv6_l3_to_l2_fast_redirect_setup(struct __ctx_buff *ctx)
 
 	skb_adjust_room(ctx, -__ETH_HLEN, BPF_ADJ_ROOM_MAC, flags);
 
-	tail_call_static(ctx, &entry_call_map, 0);
+	tail_call_static(ctx, entry_call_map, 0);
 	return TEST_ERROR;
 }
 

@@ -306,7 +306,10 @@ Annotations:
 1.16 Upgrade Notes
 ------------------
 
-* To be determined during v1.16 development.
+* Cilium Envoy DaemonSet is now enabled by default, and existing in-container installs
+  will be changed to DaemonSet mode unless specifically opted out of. This can be done by
+  disabling it manually by setting ``envoy.enabled=false`` accordingly.
+
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -395,6 +398,8 @@ Changed Metrics
   met (e.g: NodePort service implementation in BPF is disabled or socket load-balancing
   is disabled), it will fail to initialize and will log an error instead of silently
   fall back to iptables based masquerading.
+* The ICMP ``type`` field in Network Policy now can be either an ICMP message type integer
+  (for example, ``0`` for Echo Reply), or a corresponding CamelCase message type string (``EchoReply``).
 
 .. _upgrade_cilium_cli_helm_mode:
 

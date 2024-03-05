@@ -157,6 +157,9 @@ const (
 	// GopsPort is the TCP port for the gops server.
 	GopsPort = "gops-port"
 
+	// ProxyAdminPort specifies the port to serve Cilium Envoy Admin API on.
+	ProxyAdminPort = "proxy-admin-port"
+
 	// ProxyPrometheusPort specifies the port to serve Cilium host proxy metrics on.
 	ProxyPrometheusPort = "proxy-prometheus-port"
 
@@ -375,9 +378,6 @@ const (
 
 	// EnableEnvoyConfig enables processing of CiliumClusterwideEnvoyConfig and CiliumEnvoyConfig CRDs
 	EnableEnvoyConfig = "enable-envoy-config"
-
-	// EnvoyConfigTimeout determines how long to wait Envoy to N/ACK resources
-	EnvoyConfigTimeout = "envoy-config-timeout"
 
 	// IPMasqAgentConfigPath is the configuration file path
 	IPMasqAgentConfigPath = "ip-masq-agent-config-path"
@@ -1602,6 +1602,9 @@ type DaemonConfig struct {
 	// agent for proxy configuration and access logging.
 	ProxyGID int
 
+	// ProxyAdminPort specifies the port to serve Envoy admin on.
+	ProxyAdminPort int
+
 	// ProxyPrometheusPort specifies the port to serve Envoy metrics on.
 	ProxyPrometheusPort int
 
@@ -1768,7 +1771,6 @@ type DaemonConfig struct {
 	EnableEnvoyConfig       bool
 	EnableIngressController bool
 	EnableGatewayAPI        bool
-	EnvoyConfigTimeout      time.Duration
 	InstallIptRules         bool
 	MonitorAggregation      string
 	PreAllocateMaps         bool
@@ -3101,7 +3103,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableEnvoyConfig = vp.GetBool(EnableEnvoyConfig)
 	c.EnableIngressController = vp.GetBool(EnableIngressController)
 	c.EnableGatewayAPI = vp.GetBool(EnableGatewayAPI)
-	c.EnvoyConfigTimeout = vp.GetDuration(EnvoyConfigTimeout)
 	c.IPMasqAgentConfigPath = vp.GetString(IPMasqAgentConfigPath)
 	c.InstallIptRules = vp.GetBool(InstallIptRules)
 	c.IPSecKeyFile = vp.GetString(IPSecKeyFileName)
@@ -3114,6 +3115,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.ProcFs = vp.GetString(ProcFs)
 	c.ProxyConnectTimeout = vp.GetInt(ProxyConnectTimeout)
 	c.ProxyGID = vp.GetInt(ProxyGID)
+	c.ProxyAdminPort = vp.GetInt(ProxyAdminPort)
 	c.ProxyPrometheusPort = vp.GetInt(ProxyPrometheusPort)
 	c.ProxyMaxRequestsPerConnection = vp.GetInt(ProxyMaxRequestsPerConnection)
 	c.ProxyMaxConnectionDuration = time.Duration(vp.GetInt64(ProxyMaxConnectionDuration))

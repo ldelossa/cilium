@@ -537,10 +537,10 @@ func (k *CtKey6Global) GetTupleKey() tuple.TupleKey {
 
 // CtEntry represents an entry in the connection tracking table.
 type CtEntry struct {
-	RxPackets uint64 `align:"rx_packets"`
-	RxBytes   uint64 `align:"$union0"`
-	TxPackets uint64 `align:"tx_packets"`
-	TxBytes   uint64 `align:"tx_bytes"`
+	Reserved0 uint64 `align:"reserved0"`
+	BackendID uint64 `align:"backend_id"`
+	Packets   uint64 `align:"packets"`
+	Bytes     uint64 `align:"bytes"`
 	Lifetime  uint32 `align:"lifetime"`
 	Flags     uint16 `align:"rx_closing"`
 	// RevNAT is in network byte order
@@ -563,15 +563,15 @@ const (
 	SeenNonSyn
 	NodePort
 	ProxyRedirect
-	DSR
+	DSRInternal
 	FromL7LB
 	Reserved1
 	FromTunnel
 	MaxFlags
 )
 
-func (c *CtEntry) isDsrEntry() bool {
-	return c.Flags&DSR != 0
+func (c *CtEntry) isDsrInternalEntry() bool {
+	return c.Flags&DSRInternal != 0
 }
 
 func (c *CtEntry) flagsString() string {
@@ -599,8 +599,8 @@ func (c *CtEntry) flagsString() string {
 	if (c.Flags & ProxyRedirect) != 0 {
 		sb.WriteString("ProxyRedirect ")
 	}
-	if (c.Flags & DSR) != 0 {
-		sb.WriteString("DSR ")
+	if (c.Flags & DSRInternal) != 0 {
+		sb.WriteString("DSRInternal ")
 	}
 	if (c.Flags & FromL7LB) != 0 {
 		sb.WriteString("FromL7LB ")
@@ -627,15 +627,13 @@ func (c *CtEntry) StringWithTimeDiff(toRemSecs func(uint32) string) string {
 		timeDiff = ""
 	}
 
-	return fmt.Sprintf("expires=%d%s RxPackets=%d RxBytes=%d RxFlagsSeen=%#02x LastRxReport=%d TxPackets=%d TxBytes=%d TxFlagsSeen=%#02x LastTxReport=%d %s RevNAT=%d SourceSecurityID=%d IfIndex=%d \n",
+	return fmt.Sprintf("expires=%d%s Packets=%d Bytes=%d RxFlagsSeen=%#02x LastRxReport=%d TxFlagsSeen=%#02x LastTxReport=%d %s RevNAT=%d SourceSecurityID=%d IfIndex=%d \n",
 		c.Lifetime,
 		timeDiff,
-		c.RxPackets,
-		c.RxBytes,
+		c.Packets,
+		c.Bytes,
 		c.RxFlagsSeen,
 		c.LastRxReport,
-		c.TxPackets,
-		c.TxBytes,
 		c.TxFlagsSeen,
 		c.LastTxReport,
 		c.flagsString(),

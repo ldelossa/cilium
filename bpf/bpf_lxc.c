@@ -252,7 +252,8 @@ static __always_inline int drop_for_direction(struct __ctx_buff *ctx,
 #endif /* ENABLE_IPV4 || ENABLE_IPV6 */
 
 #define TAIL_CT_LOOKUP4(ID, NAME, DIR, CONDITION, TARGET_ID, TARGET_NAME)	\
-declare_tailcall_if(CONDITION, ID)						\
+__section_tail(CILIUM_MAP_CALLS, ID)						\
+static __always_inline								\
 int NAME(struct __ctx_buff *ctx)						\
 {										\
 	struct ct_buffer4 ct_buffer = {};					\
@@ -297,7 +298,8 @@ int NAME(struct __ctx_buff *ctx)						\
 }
 
 #define TAIL_CT_LOOKUP6(ID, NAME, DIR, CONDITION, TARGET_ID, TARGET_NAME)	\
-declare_tailcall_if(CONDITION, ID)						\
+__section_tail(CILIUM_MAP_CALLS, ID)						\
+static __always_inline								\
 int NAME(struct __ctx_buff *ctx)						\
 {										\
 	struct ct_buffer6 ct_buffer = {};					\
@@ -480,8 +482,9 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	 * within the cluster, it must match policy or be dropped. If it's
 	 * bound for the host/outside, perform the CIDR policy check.
 	 */
-	verdict = policy_can_egress6(ctx, tuple, l4_off, SECLABEL_IPV6, *dst_sec_identity,
-				     &policy_match_type, &audited, ext_err, &proxy_port);
+	verdict = policy_can_egress6(ctx, &POLICY_MAP, tuple, l4_off, SECLABEL_IPV6,
+				     *dst_sec_identity, &policy_match_type, &audited,
+				     ext_err, &proxy_port);
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		auth_type = (__u8)*ext_err;
@@ -538,7 +541,7 @@ ct_recreate6:
 #ifdef ENABLE_NODEPORT
 # ifdef ENABLE_DSR
 		/* See comment in handle_ipv4_from_lxc(). */
-		if (ct_state->dsr) {
+		if (ct_state->dsr_internal) {
 			ret = xlate_dsr_v6(ctx, tuple, l4_off);
 			if (ret != 0)
 				return ret;
@@ -598,7 +601,7 @@ ct_recreate6:
 	 */
 	if (*dst_sec_identity == HOST_ID) {
 		ctx_store_meta(ctx, CB_FROM_HOST, 0);
-		tail_call_static(ctx, &POLICY_CALL_MAP, HOST_EP_ID);
+		tail_call_static(ctx, POLICY_CALL_MAP, HOST_EP_ID);
 		return DROP_HOST_NOT_READY;
 	}
 #endif /* ENABLE_HOST_FIREWALL && !ENABLE_ROUTING */
@@ -733,7 +736,8 @@ encrypt_to_stack:
 	return CTX_ACT_OK;
 }
 
-declare_tailcall_if(is_defined(ENABLE_PER_PACKET_LB), CILIUM_CALL_IPV6_FROM_LXC_CONT)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_FROM_LXC_CONT)
+static __always_inline
 int tail_handle_ipv6_cont(struct __ctx_buff *ctx)
 {
 	__u32 dst_sec_identity = 0;
@@ -746,7 +750,7 @@ int tail_handle_ipv6_cont(struct __ctx_buff *ctx)
 
 #ifdef ENABLE_CUSTOM_CALLS
 	if (!encode_custom_prog_meta(ctx, ret, dst_sec_identity)) {
-		tail_call_static(ctx, &CUSTOM_CALLS_MAP,
+		tail_call_static(ctx, CUSTOM_CALLS_MAP,
 				 CUSTOM_CALLS_IDX_IPV6_EGRESS);
 		update_metrics(ctx_full_len(ctx), METRIC_EGRESS,
 			       REASON_MISSED_CUSTOM_CALL);
@@ -922,8 +926,9 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	 * within the cluster, it must match policy or be dropped. If it's
 	 * bound for the host/outside, perform the CIDR policy check.
 	 */
-	verdict = policy_can_egress4(ctx, tuple, l4_off, SECLABEL_IPV4, *dst_sec_identity,
-				     &policy_match_type, &audited, ext_err, &proxy_port);
+	verdict = policy_can_egress4(ctx, &POLICY_MAP, tuple, l4_off, SECLABEL_IPV4,
+				     *dst_sec_identity, &policy_match_type, &audited,
+				     ext_err, &proxy_port);
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		auth_type = (__u8)*ext_err;
@@ -994,7 +999,7 @@ ct_recreate4:
 		 * needed for old connections that were established prior to
 		 * the bpf_host support:
 		 */
-		if (ct_state->dsr) {
+		if (ct_state->dsr_internal) {
 			ret = xlate_dsr_v4(ctx, tuple, l4_off, has_l4_header);
 			if (ret != 0)
 				return ret;
@@ -1073,7 +1078,7 @@ ct_recreate4:
 	 */
 	if (*dst_sec_identity == HOST_ID) {
 		ctx_store_meta(ctx, CB_FROM_HOST, 0);
-		tail_call_static(ctx, &POLICY_CALL_MAP, HOST_EP_ID);
+		tail_call_static(ctx, POLICY_CALL_MAP, HOST_EP_ID);
 		return DROP_HOST_NOT_READY;
 	}
 #endif /* ENABLE_HOST_FIREWALL && !ENABLE_ROUTING */
@@ -1309,7 +1314,8 @@ encrypt_to_stack:
 	return CTX_ACT_OK;
 }
 
-declare_tailcall_if(is_defined(ENABLE_PER_PACKET_LB), CILIUM_CALL_IPV4_FROM_LXC_CONT)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_FROM_LXC_CONT)
+static __always_inline
 int tail_handle_ipv4_cont(struct __ctx_buff *ctx)
 {
 	__u32 dst_sec_identity = 0;
@@ -1323,7 +1329,7 @@ int tail_handle_ipv4_cont(struct __ctx_buff *ctx)
 
 #ifdef ENABLE_CUSTOM_CALLS
 	if (!encode_custom_prog_meta(ctx, ret, dst_sec_identity)) {
-		tail_call_static(ctx, &CUSTOM_CALLS_MAP,
+		tail_call_static(ctx, CUSTOM_CALLS_MAP,
 				 CUSTOM_CALLS_IDX_IPV4_EGRESS);
 		update_metrics(ctx_full_len(ctx), METRIC_EGRESS,
 			       REASON_MISSED_CUSTOM_CALL);
@@ -1491,7 +1497,8 @@ out:
 #ifdef ENABLE_IPV6
 static __always_inline int
 ipv6_policy(struct __ctx_buff *ctx, struct ipv6hdr *ip6, int ifindex, __u32 src_label,
-	    struct ipv6_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port)
+	    struct ipv6_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port,
+	    bool from_tunnel)
 {
 	struct ct_state *ct_state, ct_state_new = {};
 	struct ipv6_ct_tuple *tuple;
@@ -1562,8 +1569,9 @@ ipv6_policy(struct __ctx_buff *ctx, struct ipv6hdr *ip6, int ifindex, __u32 src_
 	if (skip_ingress_proxy)
 		goto skip_policy_enforcement;
 
-	verdict = policy_can_ingress6(ctx, tuple, l4_off, src_label, SECLABEL_IPV6,
-				      &policy_match_type, &audited, ext_err, proxy_port);
+	verdict = policy_can_ingress6(ctx, &POLICY_MAP, tuple, l4_off, src_label,
+				      SECLABEL_IPV6, &policy_match_type, &audited,
+				      ext_err, proxy_port);
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		struct remote_endpoint_info *sep = lookup_ip6_remote_endpoint(&orig_sip, 0);
 
@@ -1588,7 +1596,7 @@ skip_policy_enforcement:
 #ifdef ENABLE_NODEPORT
 	if (ret == CT_NEW || ret == CT_REOPENED) {
 # ifdef ENABLE_DSR
-		if (ret == CT_REOPENED && ct_state->dsr)
+		if (ret == CT_REOPENED && ct_state->dsr_internal)
 			ct_update_dsr(get_ct_map6(tuple), tuple, false);
 # endif /* ENABLE_DSR */
 		{
@@ -1607,6 +1615,7 @@ skip_policy_enforcement:
 
 	if (ret == CT_NEW) {
 		ct_state_new.src_sec_id = src_label;
+		ct_state_new.from_tunnel = from_tunnel;
 		ct_state_new.proxy_redirect = *proxy_port > 0;
 		ct_state_new.from_l7lb = false;
 
@@ -1637,8 +1646,8 @@ skip_policy_enforcement:
 	return CTX_ACT_OK;
 }
 
-declare_tailcall_if(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
-		    CILIUM_CALL_IPV6_TO_LXC_POLICY_ONLY)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_TO_LXC_POLICY_ONLY)
+static __always_inline
 int tail_ipv6_policy(struct __ctx_buff *ctx)
 {
 	struct ipv6_ct_tuple tuple = {};
@@ -1662,7 +1671,7 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 	}
 
 	ret = ipv6_policy(ctx, ip6, ifindex, src_label, &tuple, &ext_err,
-			  &proxy_port);
+			  &proxy_port, from_tunnel);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy6(ctx, &tuple, proxy_port, from_host);
@@ -1697,7 +1706,7 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 	 * proxy).
 	 */
 	if (!proxy_redirect && !encode_custom_prog_meta(ctx, ret, src_label)) {
-		tail_call_static(ctx, &CUSTOM_CALLS_MAP,
+		tail_call_static(ctx, CUSTOM_CALLS_MAP,
 				 CUSTOM_CALLS_IDX_IPV6_INGRESS);
 		update_metrics(ctx_full_len(ctx), METRIC_INGRESS,
 			       REASON_MISSED_CUSTOM_CALL);
@@ -1765,7 +1774,7 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 #endif
 
 	ret = ipv6_policy(ctx, ip6, 0, src_sec_identity, NULL, &ext_err,
-			  &proxy_port);
+			  &proxy_port, false);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy_hairpin_ipv6(ctx, proxy_port);
@@ -1789,7 +1798,7 @@ out:
 	 */
 	if (!proxy_redirect &&
 	    !encode_custom_prog_meta(ctx, ret, src_sec_identity)) {
-		tail_call_static(ctx, &CUSTOM_CALLS_MAP,
+		tail_call_static(ctx, CUSTOM_CALLS_MAP,
 				 CUSTOM_CALLS_IDX_IPV6_INGRESS);
 		update_metrics(ctx_full_len(ctx), METRIC_INGRESS,
 			       REASON_MISSED_CUSTOM_CALL);
@@ -1920,9 +1929,9 @@ ipv4_policy(struct __ctx_buff *ctx, struct iphdr *ip4, int ifindex, __u32 src_la
 		goto skip_policy_enforcement;
 #endif /* ENABLE_PER_PACKET_LB && !DISABLE_LOOPBACK_LB */
 
-	verdict = policy_can_ingress4(ctx, tuple, l4_off, is_untracked_fragment, src_label,
-				      SECLABEL_IPV4, &policy_match_type, &audited, ext_err,
-				      proxy_port);
+	verdict = policy_can_ingress4(ctx, &POLICY_MAP, tuple, l4_off, is_untracked_fragment,
+				      src_label, SECLABEL_IPV4, &policy_match_type, &audited,
+				      ext_err, proxy_port);
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		struct remote_endpoint_info *sep = lookup_ip4_remote_endpoint(orig_sip, 0);
 
@@ -1946,8 +1955,8 @@ skip_policy_enforcement:
 #ifdef ENABLE_NODEPORT
 	if (ret == CT_NEW || ret == CT_REOPENED) {
 # ifdef ENABLE_DSR
-		/* Clear .dsr flag for old connections: */
-		if (ret == CT_REOPENED && ct_state->dsr)
+		/* Clear .dsr_internal flag for old connections: */
+		if (ret == CT_REOPENED && ct_state->dsr_internal)
 			ct_update_dsr(get_ct_map4(tuple), tuple, false);
 # endif /* ENABLE_DSR */
 		{
@@ -1997,8 +2006,8 @@ skip_policy_enforcement:
 	return CTX_ACT_OK;
 }
 
-declare_tailcall_if(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
-		    CILIUM_CALL_IPV4_TO_LXC_POLICY_ONLY)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_TO_LXC_POLICY_ONLY)
+static __always_inline
 int tail_ipv4_policy(struct __ctx_buff *ctx)
 {
 	struct ipv4_ct_tuple tuple = {};
@@ -2066,7 +2075,7 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 	 * proxy).
 	 */
 	if (!proxy_redirect && !encode_custom_prog_meta(ctx, ret, src_label)) {
-		tail_call_static(ctx, &CUSTOM_CALLS_MAP,
+		tail_call_static(ctx, CUSTOM_CALLS_MAP,
 				 CUSTOM_CALLS_IDX_IPV4_INGRESS);
 		update_metrics(ctx_full_len(ctx), METRIC_INGRESS,
 			       REASON_MISSED_CUSTOM_CALL);
@@ -2245,7 +2254,7 @@ out:
 	 */
 	if (!proxy_redirect &&
 	    !encode_custom_prog_meta(ctx, ret, src_sec_identity)) {
-		tail_call_static(ctx, &CUSTOM_CALLS_MAP,
+		tail_call_static(ctx, CUSTOM_CALLS_MAP,
 				 CUSTOM_CALLS_IDX_IPV4_INGRESS);
 		update_metrics(ctx_full_len(ctx), METRIC_INGRESS,
 			       REASON_MISSED_CUSTOM_CALL);
@@ -2421,7 +2430,7 @@ int cil_to_container(struct __ctx_buff *ctx)
 	if (identity == HOST_ID) {
 		ctx_store_meta(ctx, CB_FROM_HOST, 1);
 		ctx_store_meta(ctx, CB_DST_ENDPOINT_ID, LXC_ID);
-		tail_call_static(ctx, &POLICY_CALL_MAP, HOST_EP_ID);
+		tail_call_static(ctx, POLICY_CALL_MAP, HOST_EP_ID);
 		return send_drop_notify(ctx, identity, sec_label, LXC_ID,
 					DROP_HOST_NOT_READY, CTX_ACT_DROP,
 					METRIC_INGRESS);

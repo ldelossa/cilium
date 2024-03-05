@@ -113,7 +113,7 @@ int ipv4_not_decrypted_ipsec_from_network_setup(struct __ctx_buff *ctx)
 	node_ip.ip4 = v4_pod_one;
 	map_update_elem(&NODE_MAP, &node_ip, &node_id, BPF_ANY);
 
-	tail_call_static(ctx, &entry_call_map, FROM_NETWORK);
+	tail_call_static(ctx, entry_call_map, FROM_NETWORK);
 	return TEST_ERROR;
 }
 
@@ -243,7 +243,7 @@ int ipv6_not_decrypted_ipsec_from_network_setup(struct __ctx_buff *ctx)
 	memcpy((__u8 *)&node_ip.k.ip6, (__u8 *)v6_pod_one, 16);
 	map_update_elem(&NODE_MAP, &node_ip.k, &node_id, BPF_ANY);
 
-	tail_call_static(ctx, &entry_call_map, FROM_NETWORK);
+	tail_call_static(ctx, entry_call_map, FROM_NETWORK);
 	return TEST_ERROR;
 }
 
@@ -347,7 +347,7 @@ int ipv4_decrypted_ipsec_from_network_setup(struct __ctx_buff *ctx)
 			      (__u8 *)DEST_EP_MAC, (__u8 *)DEST_NODE_MAC);
 
 	ctx->mark = MARK_MAGIC_DECRYPT;
-	tail_call_static(ctx, &entry_call_map, FROM_NETWORK);
+	tail_call_static(ctx, entry_call_map, FROM_NETWORK);
 	return TEST_ERROR;
 }
 
@@ -451,7 +451,7 @@ int ipv6_decrypted_ipsec_from_network_setup(struct __ctx_buff *ctx)
 			      0, (__u8 *)DEST_EP_MAC, (__u8 *)DEST_NODE_MAC);
 
 	ctx->mark = MARK_MAGIC_DECRYPT;
-	tail_call_static(ctx, &entry_call_map, FROM_NETWORK);
+	tail_call_static(ctx, entry_call_map, FROM_NETWORK);
 	return TEST_ERROR;
 }
 

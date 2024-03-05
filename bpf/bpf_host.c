@@ -144,31 +144,31 @@ handle_ipv6(struct __ctx_buff *ctx, __u32 secctx __maybe_unused,
 #ifdef ENABLE_HOST_FIREWALL
 	struct ct_buffer6 ct_buffer = {};
 	bool need_hostfw = false;
-	__u8 nexthdr;
-	int hdrlen;
 	bool is_host_id = false;
 #endif /* ENABLE_HOST_FIREWALL */
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
-	int __maybe_unused ret;
+	int ret;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
 
-#ifdef ENABLE_HOST_FIREWALL
-	nexthdr = ip6->nexthdr;
-	hdrlen = ipv6_hdrlen(ctx, &nexthdr);
-	if (hdrlen < 0)
-		return hdrlen;
+	if (is_defined(ENABLE_HOST_FIREWALL) || !from_host) {
+		__u8 nexthdr = ip6->nexthdr;
+		int hdrlen;
 
-	if (likely(nexthdr == IPPROTO_ICMPV6)) {
-		ret = icmp6_host_handle(ctx, ETH_HLEN + hdrlen);
-		if (ret == SKIP_HOST_FIREWALL)
-			goto skip_host_firewall;
-		if (IS_ERR(ret))
-			return ret;
+		hdrlen = ipv6_hdrlen(ctx, &nexthdr);
+		if (hdrlen < 0)
+			return hdrlen;
+
+		if (likely(nexthdr == IPPROTO_ICMPV6)) {
+			ret = icmp6_host_handle(ctx, ETH_HLEN + hdrlen, ext_err, !from_host);
+			if (ret == SKIP_HOST_FIREWALL)
+				goto skip_host_firewall;
+			if (IS_ERR(ret))
+				return ret;
+		}
 	}
-#endif /* ENABLE_HOST_FIREWALL */
 
 #ifdef ENABLE_NODEPORT
 	if (!from_host) {
@@ -213,8 +213,10 @@ handle_ipv6(struct __ctx_buff *ctx, __u32 secctx __maybe_unused,
 		if (map_update_elem(&CT_TAIL_CALL_BUFFER6, &zero, &ct_buffer, 0) < 0)
 			return DROP_INVALID_TC_BUFFER;
 	}
+#endif /* ENABLE_HOST_FIREWALL */
 
 skip_host_firewall:
+#ifdef ENABLE_HOST_FIREWALL
 	ctx_store_meta(ctx, CB_FROM_HOST,
 		       (need_hostfw ? FROM_HOST_FLAG_NEED_HOSTFW : 0) |
 		       (is_host_id ? FROM_HOST_FLAG_HOST_ID : 0));
@@ -414,13 +416,15 @@ tail_handle_ipv6_cont(struct __ctx_buff *ctx, bool from_host)
 	return ret;
 }
 
-declare_tailcall_if(is_defined(ENABLE_HOST_FIREWALL), CILIUM_CALL_IPV6_CONT_FROM_HOST)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_CONT_FROM_HOST)
+static __always_inline
 int tail_handle_ipv6_cont_from_host(struct __ctx_buff *ctx)
 {
 	return tail_handle_ipv6_cont(ctx, true);
 }
 
-declare_tailcall_if(is_defined(ENABLE_HOST_FIREWALL), CILIUM_CALL_IPV6_CONT_FROM_NETDEV)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_CONT_FROM_NETDEV)
+static __always_inline
 int tail_handle_ipv6_cont_from_netdev(struct __ctx_buff *ctx)
 {
 	return tail_handle_ipv6_cont(ctx, false);
@@ -495,7 +499,7 @@ handle_to_netdev_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext
 		return hdrlen;
 
 	if (likely(nexthdr == IPPROTO_ICMPV6)) {
-		ret = icmp6_host_handle(ctx, ETH_HLEN + hdrlen);
+		ret = icmp6_host_handle(ctx, ETH_HLEN + hdrlen, ext_err, false);
 		if (ret == SKIP_HOST_FIREWALL)
 			return CTX_ACT_OK;
 		if (IS_ERR(ret))
@@ -593,13 +597,13 @@ handle_ipv4(struct __ctx_buff *ctx, __u32 secctx __maybe_unused,
 			bool __maybe_unused is_dsr = false;
 
 			int ret = nodeport_lb4(ctx, ip4, ETH_HLEN, secctx, ext_err, &is_dsr);
-
+#ifdef ENABLE_IPV6
 			if (ret == NAT_46X64_RECIRC) {
 				ctx_store_meta(ctx, CB_SRC_LABEL, secctx);
 				return tail_call_internal(ctx, CILIUM_CALL_IPV6_FROM_NETDEV,
 							  ext_err);
 			}
-
+#endif
 			/* nodeport_lb4() returns with TC_ACT_REDIRECT for
 			 * traffic to L7 LB. Policy enforcement needs to take
 			 * place after L7 LB has processed the packet, so we
@@ -868,13 +872,15 @@ tail_handle_ipv4_cont(struct __ctx_buff *ctx, bool from_host)
 	return ret;
 }
 
-declare_tailcall_if(is_defined(ENABLE_HOST_FIREWALL), CILIUM_CALL_IPV4_CONT_FROM_HOST)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_CONT_FROM_HOST)
+static __always_inline
 int tail_handle_ipv4_cont_from_host(struct __ctx_buff *ctx)
 {
 	return tail_handle_ipv4_cont(ctx, true);
 }
 
-declare_tailcall_if(is_defined(ENABLE_HOST_FIREWALL), CILIUM_CALL_IPV4_CONT_FROM_NETDEV)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_CONT_FROM_NETDEV)
+static __always_inline
 int tail_handle_ipv4_cont_from_netdev(struct __ctx_buff *ctx)
 {
 	return tail_handle_ipv4_cont(ctx, false);
@@ -1535,8 +1541,8 @@ out:
 
 #if defined(ENABLE_HOST_FIREWALL)
 #ifdef ENABLE_IPV6
-declare_tailcall_if(__or(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
-			 is_defined(DEBUG)), CILIUM_CALL_IPV6_TO_HOST_POLICY_ONLY)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_TO_HOST_POLICY_ONLY)
+static __always_inline
 int tail_ipv6_host_policy_ingress(struct __ctx_buff *ctx)
 {
 	struct trace_ctx __maybe_unused trace = {
@@ -1556,8 +1562,8 @@ int tail_ipv6_host_policy_ingress(struct __ctx_buff *ctx)
 #endif /* ENABLE_IPV6 */
 
 #ifdef ENABLE_IPV4
-declare_tailcall_if(__or(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
-			 is_defined(DEBUG)), CILIUM_CALL_IPV4_TO_HOST_POLICY_ONLY)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_TO_HOST_POLICY_ONLY)
+static __always_inline
 int tail_ipv4_host_policy_ingress(struct __ctx_buff *ctx)
 {
 	struct trace_ctx __maybe_unused trace = {

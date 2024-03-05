@@ -90,7 +90,7 @@ int egressgw_snat1_setup(struct __ctx_buff *ctx)
 				  GATEWAY_NODE_IP, EGRESS_IP);
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -100,8 +100,7 @@ int egressgw_snat1_check(const struct __ctx_buff *ctx)
 {
 	return egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
 			.test = TEST_SNAT1,
-			.tx_packets = 1,
-			.rx_packets = 0,
+			.packets = 1,
 			.status_code = CTX_ACT_OK
 		});
 }
@@ -125,7 +124,7 @@ int egressgw_snat1_2_reply_setup(struct __ctx_buff *ctx)
 	ipcache_v4_add_entry(CLIENT_IP, 0, 0, CLIENT_NODE_IP, 0);
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_NETDEV);
+	tail_call_static(ctx, entry_call_map, FROM_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -136,8 +135,7 @@ int egressgw_snat1_2_reply_check(const struct __ctx_buff *ctx)
 	return egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
 			.test = TEST_SNAT1,
 			.dir = CT_INGRESS,
-			.tx_packets = 1,
-			.rx_packets = 1,
+			.packets = 2,
 			.status_code = CTX_ACT_REDIRECT,
 		});
 }
@@ -154,7 +152,7 @@ SETUP("tc", "tc_egressgw_snat2")
 int egressgw_snat2_setup(struct __ctx_buff *ctx)
 {
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -164,8 +162,7 @@ int egressgw_snat2_check(struct __ctx_buff *ctx)
 {
 	int ret = egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
 			.test = TEST_SNAT2,
-			.tx_packets = 1,
-			.rx_packets = 0,
+			.packets = 1,
 			.status_code = CTX_ACT_OK
 		});
 
@@ -193,7 +190,7 @@ int egressgw_skip_excluded_cidr_snat_setup(struct __ctx_buff *ctx)
 	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, EGRESS_GATEWAY_EXCLUDED_CIDR, 0);
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -269,7 +266,7 @@ int egressgw_fib_redirect_setup(struct __ctx_buff *ctx)
 				  GATEWAY_NODE_IP, EGRESS_IP2);
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -280,8 +277,7 @@ int egressgw_fib_redirect_check(const struct __ctx_buff *ctx __maybe_unused)
 	int ret = egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
 			.test = TEST_FIB,
 			.redirect = true,
-			.tx_packets = 1,
-			.rx_packets = 0,
+			.packets = 1,
 			.status_code = CTX_ACT_REDIRECT,
 		});
 

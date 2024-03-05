@@ -57,7 +57,7 @@ env:
   cilium_cli_ci_version:
   CILIUM_CLI_MODE: helm
   # renovate: datasource=github-releases depName=eksctl-io/eksctl
-  eksctl_version: v0.172.0
+  eksctl_version: v0.173.0
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
   kubectl_version: v1.29.2
 
@@ -151,7 +151,7 @@ jobs:
           # cilium-cli which is setting it to 'eni' because it auto-detects
           # the cluster as being EKS.
           CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
-            --cluster-name=${{ env.clusterName }} \
+            --helm-set=cluster.name=${{ env.clusterName }} \
             --helm-set=hubble.relay.enabled=true \
             --helm-set=enableIPv4Masquerade=false \
             --helm-set=cni.chainingMode=aws-cni \

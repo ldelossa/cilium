@@ -33,6 +33,7 @@ enum ct_entry_type {
 	CT_ENTRY_ANY		= 0,
 	CT_ENTRY_NODEPORT	= (1 << 0),
 	CT_ENTRY_DSR		= (1 << 1),
+	CT_ENTRY_SVC		= (1 << 2),
 };
 
 #ifdef ENABLE_IPV4
@@ -202,7 +203,7 @@ ct_lookup_fill_state(struct ct_state *state, const struct ct_entry *entry,
 		state->loopback = entry->lb_loopback;
 #endif
 		state->node_port = entry->node_port;
-		state->dsr = entry->dsr;
+		state->dsr_internal = entry->dsr_internal;
 		state->proxy_redirect = entry->proxy_redirect;
 		state->from_l7lb = entry->from_l7lb;
 		state->from_tunnel = entry->from_tunnel;
@@ -247,9 +248,14 @@ ct_entry_expired_rebalance(const struct ct_entry *entry)
 
 static __always_inline bool
 ct_entry_matches_types(const struct ct_entry *entry __maybe_unused,
-		       __u32 ct_entry_types)
+		       __u32 ct_entry_types, const struct ct_state *state)
 {
 	if (ct_entry_types == CT_ENTRY_ANY)
+		return true;
+
+	/* Only match CT entries that were created for the expected service: */
+	if ((ct_entry_types & CT_ENTRY_SVC) &&
+	    entry->rev_nat_index == state->rev_nat_index)
 		return true;
 
 #ifdef ENABLE_NODEPORT
@@ -258,7 +264,7 @@ ct_entry_matches_types(const struct ct_entry *entry __maybe_unused,
 		return true;
 
 # ifdef ENABLE_DSR
-	if ((ct_entry_types & CT_ENTRY_DSR) && entry->dsr)
+	if ((ct_entry_types & CT_ENTRY_DSR) && entry->dsr_internal)
 		return true;
 # endif
 #endif
@@ -280,7 +286,7 @@ __ct_lookup(const void *map, struct __ctx_buff *ctx, const void *tuple,
 
 	entry = map_lookup_elem(map, tuple);
 	if (entry) {
-		if (!ct_entry_matches_types(entry, ct_entry_types))
+		if (!ct_entry_matches_types(entry, ct_entry_types, ct_state))
 			goto ct_new;
 
 		cilium_dbg(ctx, DBG_CT_MATCH, entry->lifetime, entry->rev_nat_index);
@@ -293,18 +299,17 @@ __ct_lookup(const void *map, struct __ctx_buff *ctx, const void *tuple,
 		if (ct_entry_alive(entry))
 			*monitor = ct_update_timeout(entry, is_tcp, dir, seen_flags);
 
+		/* For backward-compatibility we need to update reverse NAT
+		 * index in the CT_SERVICE entry for old connections.
+		 */
+		if (dir == CT_SERVICE && entry->rev_nat_index == 0)
+			entry->rev_nat_index = ct_state->rev_nat_index;
+
 		if (ct_state)
 			ct_lookup_fill_state(ct_state, entry, dir, syn);
-
 #ifdef CONNTRACK_ACCOUNTING
-		/* FIXME: This is slow, per-cpu counters? */
-		if (dir == CT_INGRESS) {
-			__sync_fetch_and_add(&entry->rx_packets, 1);
-			__sync_fetch_and_add(&entry->rx_bytes, ctx_full_len(ctx));
-		} else if (dir == CT_EGRESS || dir == CT_SERVICE) {
-			__sync_fetch_and_add(&entry->tx_packets, 1);
-			__sync_fetch_and_add(&entry->tx_bytes, ctx_full_len(ctx));
-		}
+		__sync_fetch_and_add(&entry->packets, 1);
+		__sync_fetch_and_add(&entry->bytes, ctx_full_len(ctx));
 #endif
 		switch (action) {
 		case ACTION_CREATE:
@@ -916,7 +921,7 @@ ct_create_fill_entry(struct ct_entry *entry, const struct ct_state *state,
 		entry->lb_loopback = state->loopback;
 #endif
 		entry->node_port = state->node_port;
-		entry->dsr = state->dsr;
+		entry->dsr_internal = state->dsr_internal;
 		entry->from_tunnel = state->from_tunnel;
 #ifndef HAVE_FIB_IFINDEX
 		entry->ifindex = state->ifindex;
@@ -948,15 +953,9 @@ static __always_inline int ct_create6(const void *map_main, const void *map_rela
 	ct_update_timeout(&entry, is_tcp, dir, seen_flags);
 
 #ifdef CONNTRACK_ACCOUNTING
-	if (dir == CT_INGRESS) {
-		entry.rx_packets = 1;
-		entry.rx_bytes = ctx_full_len(ctx);
-	} else if (dir == CT_EGRESS || dir == CT_SERVICE) {
-		entry.tx_packets = 1;
-		entry.tx_bytes = ctx_full_len(ctx);
-	}
+	entry.packets = 1;
+	entry.bytes = ctx_full_len(ctx);
 #endif
-
 	cilium_dbg3(ctx, DBG_CT_CREATED6, entry.rev_nat_index,
 		    entry.src_sec_id, 0);
 
@@ -1009,15 +1008,9 @@ static __always_inline int ct_create4(const void *map_main,
 	ct_update_timeout(&entry, is_tcp, dir, seen_flags);
 
 #ifdef CONNTRACK_ACCOUNTING
-	if (dir == CT_INGRESS) {
-		entry.rx_packets = 1;
-		entry.rx_bytes = ctx_full_len(ctx);
-	} else if (dir == CT_EGRESS || dir == CT_SERVICE) {
-		entry.tx_packets = 1;
-		entry.tx_bytes = ctx_full_len(ctx);
-	}
+	entry.packets = 1;
+	entry.bytes = ctx_full_len(ctx);
 #endif
-
 	cilium_dbg3(ctx, DBG_CT_CREATED4, entry.rev_nat_index,
 		    entry.src_sec_id, 0);
 
@@ -1084,7 +1077,7 @@ __ct_has_nodeport_egress_entry(const struct ct_entry *entry,
 		return true;
 	}
 
-	return check_dsr && entry->dsr;
+	return check_dsr && entry->dsr_internal;
 }
 
 /* The function tries to determine whether the flow identified by the given
@@ -1125,7 +1118,7 @@ ct_has_dsr_egress_entry4(const void *map, struct ipv4_ct_tuple *ingress_tuple)
 	ingress_tuple->flags = prev_flags;
 
 	if (entry)
-		return entry->dsr;
+		return entry->dsr_internal;
 
 	return 0;
 }
@@ -1159,7 +1152,7 @@ ct_has_dsr_egress_entry6(const void *map, struct ipv6_ct_tuple *ingress_tuple)
 	ingress_tuple->flags = prev_flags;
 
 	if (entry)
-		return entry->dsr;
+		return entry->dsr_internal;
 
 	return 0;
 }
@@ -1179,19 +1172,6 @@ ct_update_svc_entry(const void *map, const void *tuple,
 }
 
 static __always_inline void
-ct_update_rev_nat_index(const void *map, const void *tuple,
-			const struct ct_state *state)
-{
-	struct ct_entry *entry;
-
-	entry = map_lookup_elem(map, tuple);
-	if (!entry)
-		return;
-
-	entry->rev_nat_index = state->rev_nat_index;
-}
-
-static __always_inline void
 ct_update_dsr(const void *map, const void *tuple, const bool dsr)
 {
 	struct ct_entry *entry;
@@ -1200,7 +1180,7 @@ ct_update_dsr(const void *map, const void *tuple, const bool dsr)
 	if (!entry)
 		return;
 
-	entry->dsr = dsr;
+	entry->dsr_internal = dsr;
 }
 
 static __always_inline void

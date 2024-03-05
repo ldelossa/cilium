@@ -786,7 +786,7 @@ create_ct:
 			return DROP_INVALID;
 
 		ct_state_new.src_sec_id = WORLD_IPV6_ID;
-		ct_state_new.dsr = 1;
+		ct_state_new.dsr_internal = 1;
 		ct_state_new.proxy_redirect = false;
 		ct_state_new.from_l7lb = false;
 
@@ -1023,11 +1023,8 @@ fib_ipv4:
 	return fib_redirect(ctx, true, &fib_params, allow_neigh_map, ext_err, &ifindex);
 }
 
-declare_tailcall_if(__or3(__not(is_defined(HAVE_LARGE_INSN_LIMIT)),
-			  __and(is_defined(ENABLE_HOST_FIREWALL),
-				is_defined(IS_BPF_HOST)),
-			  is_defined(IS_BPF_LXC)),
-		    CILIUM_CALL_IPV6_NODEPORT_REVNAT)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_REVNAT)
+static __always_inline
 int tail_nodeport_rev_dnat_ingress_ipv6(struct __ctx_buff *ctx)
 {
 	struct trace_ctx trace = {
@@ -1061,7 +1058,8 @@ drop:
 	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP, METRIC_EGRESS);
 }
 
-declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV6_NODEPORT_NAT_INGRESS)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_NAT_INGRESS)
+static __always_inline
 int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 {
 	struct ipv6_nat_target target = {
@@ -1135,7 +1133,8 @@ drop_err:
 					  METRIC_INGRESS);
 }
 
-declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV6_NODEPORT_NAT_EGRESS)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_NAT_EGRESS)
+static __always_inline
 int tail_nodeport_nat_egress_ipv6(struct __ctx_buff *ctx)
 {
 	const bool nat_46x64 = nat46x64_cb_xlate(ctx);
@@ -1579,11 +1578,8 @@ handle_nat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 	return __handle_nat_fwd_ipv6(ctx, trace, ext_err);
 }
 
-declare_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
-			       is_defined(ENABLE_IPV6)),
-			 __and(is_defined(ENABLE_HOST_FIREWALL),
-			       is_defined(IS_BPF_HOST))),
-		    CILIUM_CALL_IPV6_NODEPORT_NAT_FWD)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_NAT_FWD)
+static __always_inline
 int tail_handle_nat_fwd_ipv6(struct __ctx_buff *ctx)
 {
 	struct trace_ctx trace = {
@@ -2313,7 +2309,7 @@ create_ct:
 			return DROP_INVALID;
 
 		ct_state_new.src_sec_id = WORLD_IPV4_ID;
-		ct_state_new.dsr = 1;
+		ct_state_new.dsr_internal = 1;
 		ct_state_new.proxy_redirect = 0;
 		ct_state_new.from_l7lb = 0;
 
@@ -2497,11 +2493,8 @@ redirect:
 	return fib_redirect(ctx, true, &fib_params, allow_neigh_map, ext_err, &ifindex);
 }
 
-declare_tailcall_if(__or3(__not(is_defined(HAVE_LARGE_INSN_LIMIT)),
-			  __and(is_defined(ENABLE_HOST_FIREWALL),
-				is_defined(IS_BPF_HOST)),
-			  is_defined(IS_BPF_LXC)),
-		    CILIUM_CALL_IPV4_NODEPORT_REVNAT)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_NODEPORT_REVNAT)
+static __always_inline
 int tail_nodeport_rev_dnat_ingress_ipv4(struct __ctx_buff *ctx)
 {
 	struct trace_ctx trace = {
@@ -2540,7 +2533,8 @@ drop_err:
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
-declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV4_NODEPORT_NAT_INGRESS)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_NODEPORT_NAT_INGRESS)
+static __always_inline
 int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 {
 	struct ipv4_nat_target target = {
@@ -2630,7 +2624,8 @@ drop_err:
 					  METRIC_INGRESS);
 }
 
-declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV4_NODEPORT_NAT_EGRESS)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_NODEPORT_NAT_EGRESS)
+static __always_inline
 int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 {
 	struct bpf_fib_lookup_padded fib_params = {
@@ -2932,13 +2927,13 @@ skip_service_lookup:
 			src_sec_identity = WORLD_IPV4_ID;
 #endif
 
-		 /* Before forwarding the identity, make sure it's not a CIDR
-		  * identity, as these are __u32 values, but transporting them
-		  * via the VNI field in the VXLAN / Geneve header allows for
-		  * only 24 bits.
+		 /* Before forwarding the identity, make sure it's not local,
+		  * as in that case the next hop would't understand it.
 		  */
+		if (identity_is_local(src_sec_identity))
+			return DROP_INVALID_IDENTITY;
 
-		if (identity_is_cidr_range(src_sec_identity))
+		if (identity_is_host(src_sec_identity))
 			return DROP_INVALID_IDENTITY;
 
 		/* lookup with SCOPE_FORWARD: */
@@ -3078,7 +3073,7 @@ nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
      defined(IS_BPF_OVERLAY) &&						\
      DSR_ENCAP_MODE == DSR_ENCAP_GENEVE
 		/* For HS IPCache, we also need to revDNAT the OuterSrcIP: */
-		if (ct_state.dsr) {
+		if (ct_state.dsr_internal) {
 			struct bpf_tunnel_key key;
 
 			if (ctx_get_tunnel_key(ctx, &key, sizeof(key), 0) < 0)
@@ -3168,15 +3163,8 @@ handle_nat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
 	return __handle_nat_fwd_ipv4(ctx, cluster_id, trace, ext_err);
 }
 
-declare_tailcall_if(__or4(__and(is_defined(ENABLE_IPV4),
-				is_defined(ENABLE_IPV6)),
-			  __and(is_defined(ENABLE_HOST_FIREWALL),
-				is_defined(IS_BPF_HOST)),
-			  __and(is_defined(ENABLE_CLUSTER_AWARE_ADDRESSING),
-				is_defined(ENABLE_INTER_CLUSTER_SNAT)),
-			  __and(is_defined(ENABLE_EGRESS_GATEWAY_COMMON),
-				is_defined(IS_BPF_HOST))),
-		    CILIUM_CALL_IPV4_NODEPORT_NAT_FWD)
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_NODEPORT_NAT_FWD)
+static __always_inline
 int tail_handle_nat_fwd_ipv4(struct __ctx_buff *ctx)
 {
 	struct trace_ctx trace = {
