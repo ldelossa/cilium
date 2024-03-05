@@ -18,8 +18,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Register all auth providers (azure, gcp, oidc, openstack, ..).
 
 	"github.com/cilium/cilium-cli/k8s"
-
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	enterpriseCiliumClientset "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
 )
 
@@ -32,6 +32,7 @@ type EnterpriseClient struct {
 func NewEnterpriseClient(client *k8s.Client) (*EnterpriseClient, error) {
 	// Register the Cilium types in the default scheme.
 	_ = isovalentv1.AddToScheme(scheme.Scheme)
+	_ = isovalentv1alpha1.AddToScheme(scheme.Scheme)
 
 	rawKubeConfigLoader := client.RESTClientGetter.ToRawKubeConfigLoader()
 
@@ -69,4 +70,24 @@ func (c *EnterpriseClient) UpdateIsovalentEgressGatewayPolicy(ctx context.Contex
 
 func (c *EnterpriseClient) DeleteIsovalentEgressGatewayPolicy(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	return c.EnterpriseCiliumClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Delete(ctx, name, opts)
+}
+
+func (c *EnterpriseClient) ListIsovalentMulticastGroups(ctx context.Context, opts metav1.ListOptions) (*isovalentv1alpha1.IsovalentMulticastGroupList, error) {
+	return c.EnterpriseCiliumClientset.IsovalentV1alpha1().IsovalentMulticastGroups().List(ctx, opts)
+}
+
+func (c *EnterpriseClient) GetIsovalentMulticastGroup(ctx context.Context, name string, opts metav1.GetOptions) (*isovalentv1alpha1.IsovalentMulticastGroup, error) {
+	return c.EnterpriseCiliumClientset.IsovalentV1alpha1().IsovalentMulticastGroups().Get(ctx, name, opts)
+}
+
+func (c *EnterpriseClient) CreateIsovalentMulticastGroup(ctx context.Context, cmg *isovalentv1alpha1.IsovalentMulticastGroup, opts metav1.CreateOptions) (*isovalentv1alpha1.IsovalentMulticastGroup, error) {
+	return c.EnterpriseCiliumClientset.IsovalentV1alpha1().IsovalentMulticastGroups().Create(ctx, cmg, opts)
+}
+
+func (c *EnterpriseClient) UpdateIsovalentMulticastGroup(ctx context.Context, cmg *isovalentv1alpha1.IsovalentMulticastGroup, opts metav1.UpdateOptions) (*isovalentv1alpha1.IsovalentMulticastGroup, error) {
+	return c.EnterpriseCiliumClientset.IsovalentV1alpha1().IsovalentMulticastGroups().Update(ctx, cmg, opts)
+}
+
+func (c *EnterpriseClient) DeleteIsovalentMulticastGroup(ctx context.Context, name string, opts metav1.DeleteOptions) error {
+	return c.EnterpriseCiliumClientset.IsovalentV1alpha1().IsovalentMulticastGroups().Delete(ctx, name, opts)
 }

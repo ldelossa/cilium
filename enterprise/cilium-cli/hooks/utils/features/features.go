@@ -32,6 +32,8 @@ const (
 	SRv6            features.Feature = "enable-srv6"
 	SRv6LocatorPool features.Feature = "srv6-locator-pool-enabled"
 
+	Multicast features.Feature = "multicast"
+
 	// RemoteClusterTunnel: the routing mode configured in the remote cluster.
 	RemoteClusterTunnel features.Feature = "remote-cluster-tunnel"
 	// FallbackRoutingMode: whether a (and which) fallback routing mode is configured.
@@ -105,6 +107,10 @@ func extractFromConfigMap(ctx context.Context, ct *check.ConnectivityTest) error
 	ct.Features[FallbackRoutingMode] = features.Status{
 		Enabled: cm.Data["fallback-routing-mode"] != "",
 		Mode:    cm.Data["fallback-routing-mode"],
+	}
+
+	ct.Features[Multicast] = features.Status{
+		Enabled: cm.Data["multicast-enabled"] == "true",
 	}
 
 	return nil

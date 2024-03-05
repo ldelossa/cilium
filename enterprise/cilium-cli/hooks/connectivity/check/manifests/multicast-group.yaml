@@ -1,0 +1,6 @@
+apiVersion: isovalent.com/v1alpha1
+kind: IsovalentMulticastGroup
+metadata:
+  name: # set by the check package in WithIsovalentMulticastGroup()
+spec:
+  groupAddrs: # set by the check package in WithIsovalentMulticastGroup()

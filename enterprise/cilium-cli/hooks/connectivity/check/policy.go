@@ -12,13 +12,16 @@ package check
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 
-	"github.com/cilium/cilium-cli/connectivity/check"
-	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/cilium/cilium-cli/connectivity/check"
+	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	enterpriseK8s "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/k8s"
 )
 
@@ -48,15 +51,72 @@ func deleteIEGP(ctx context.Context, client *enterpriseK8s.EnterpriseClient, ieg
 	return nil
 }
 
+// createOrUpdateIMG creates the IMG and updates it if it already exists.
+func createOrUpdateIMG(ctx context.Context, client *enterpriseK8s.EnterpriseClient, img *isovalentv1alpha1.IsovalentMulticastGroup) error {
+	_, err := client.CreateIsovalentMulticastGroup(ctx, img, metav1.CreateOptions{})
+	if err == nil {
+		return nil
+	}
+
+	if !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	// Group is modified, update it.
+	mcastGroup, err := client.GetIsovalentMulticastGroup(ctx, img.Name, metav1.GetOptions{})
+	if err != nil {
+		//
+		return fmt.Errorf("failed to retrieve isovalent multicast group %s: %w", img.Name, err)
+	}
+
+	// override spec
+	mcastGroup.Spec = img.Spec
+
+	_, err = client.UpdateIsovalentMulticastGroup(ctx, mcastGroup, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update isovalent multicast group %s: %w", img.Name, err)
+	}
+
+	return nil
+}
+
+// deleteIMG deletes a IsovalentMulticastGroup from the cluster.
+func deleteIMG(ctx context.Context, client *enterpriseK8s.EnterpriseClient, img *isovalentv1alpha1.IsovalentMulticastGroup) error {
+	if err := client.DeleteIsovalentMulticastGroup(ctx, img.Name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("%s/%s group delete failed: %w", client.ClusterName(), img.Name, err)
+	}
+
+	return nil
+}
+
 // addiegps adds one or more CiliumEgressGatewayPolicy resources to the Test.
 func (t *EnterpriseTest) addIEGPs(iegps ...*isovalentv1.IsovalentEgressGatewayPolicy) (err error) {
 	t.iegps, err = check.RegisterPolicy(t.iegps, iegps...)
 	return err
 }
 
+// addimg adds one or more IsovalentMulticastGroup resources to the Test.
+func (t *EnterpriseTest) addIMGs(imgs ...*isovalentv1alpha1.IsovalentMulticastGroup) error {
+	for _, p := range imgs {
+		if p == nil {
+			return errors.New("cannot add nil IsovalentMulticastGroup to test")
+		}
+		if p.Name == "" {
+			return fmt.Errorf("adding IsovalentMulticastGroup with empty name to test: %v", p)
+		}
+		if _, ok := t.imgs[p.Name]; ok {
+			return fmt.Errorf("IsovalentMulticastGroup with name %s already in test scope", p.Name)
+		}
+
+		t.imgs[p.Name] = p
+	}
+
+	return nil
+}
+
 // applyPolicies applies all the Test's registered network policies.
 func (t *EnterpriseTest) applyPolicies(ctx context.Context) error {
-	if len(t.iegps) == 0 {
+	if len(t.iegps) == 0 && len(t.imgs) == 0 {
 		return nil
 	}
 
@@ -65,6 +125,16 @@ func (t *EnterpriseTest) applyPolicies(ctx context.Context) error {
 		for _, client := range t.Context().clients.clients() {
 			t.Infof("📜 Applying CiliumEgressGatewayPolicy '%s' to namespace '%s'..", iegp.Name, iegp.Namespace)
 			if err := createOrUpdateIEGP(ctx, client, iegp); err != nil {
+				return fmt.Errorf("policy application failed: %w", err)
+			}
+		}
+	}
+
+	// Apply all given Isovalent Multicast groups
+	for _, img := range t.imgs {
+		for _, client := range t.Context().clients.clients() {
+			t.Infof("📜 Applying IsovalentMulticastGroup '%s' to namespace '%s'..", img.Name, img.Namespace)
+			if err := createOrUpdateIMG(ctx, client, img); err != nil {
 				return fmt.Errorf("policy application failed: %w", err)
 			}
 		}
@@ -89,12 +159,16 @@ func (t *EnterpriseTest) applyPolicies(ctx context.Context) error {
 		t.Debugf("📜 Successfully applied %d IsovalentEgressGatewayPolicies", len(t.iegps))
 	}
 
+	if len(t.imgs) > 0 {
+		t.Debugf("📜 Successfully applied %d IsovalentMulticastGroups", len(t.imgs))
+	}
+
 	return nil
 }
 
 // deletePolicies deletes a given set of network policies from the cluster.
 func (t *EnterpriseTest) deletePolicies(ctx context.Context) error {
-	if len(t.iegps) == 0 {
+	if len(t.iegps) == 0 && len(t.imgs) == 0 {
 		return nil
 	}
 
@@ -108,8 +182,22 @@ func (t *EnterpriseTest) deletePolicies(ctx context.Context) error {
 		}
 	}
 
+	// Delete all the Test's imgs from all Clients.
+	for _, img := range t.imgs {
+		t.Infof("📜 Deleting IsovalentMulticastGroup '%s' from namespace '%s'..", img.Name, img.Namespace)
+		for _, client := range t.Context().clients.clients() {
+			if err := deleteIMG(ctx, client, img); err != nil {
+				return fmt.Errorf("deleting IsovalentMulticastGroup: %w", err)
+			}
+		}
+	}
+
 	if len(t.iegps) > 0 {
 		t.Debugf("📜 Successfully deleted %d IsovalentEgressGatewayPolicies", len(t.iegps))
+	}
+
+	if len(t.imgs) > 0 {
+		t.Debugf("📜 Successfully deleted %d IsovalentMulticastGroups", len(t.imgs))
 	}
 
 	return nil

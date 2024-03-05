@@ -16,20 +16,28 @@ import (
 	"fmt"
 	"net"
 
-	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
 	"github.com/cilium/cilium-cli/utils/features"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/scheme"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
+	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
+	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
 //go:embed manifests/egress-gateway-policy.yaml
 var egressGatewayPolicyYAML string
+
+//go:embed manifests/multicast-group.yaml
+var multicastGroupYAML string
 
 type EnterpriseTest struct {
 	*check.Test
@@ -38,6 +46,12 @@ type EnterpriseTest struct {
 
 	// Isovalent Egress Gateway Policies active during this test.
 	iegps map[string]*isovalentv1.IsovalentEgressGatewayPolicy
+
+	// Isovalent Multicast Groups active during this test.
+	imgs map[string]*isovalentv1alpha1.IsovalentMulticastGroup
+
+	// multicast deployments active during this test
+	mcastDeploys map[string]*appsv1.Deployment
 }
 
 func (t *EnterpriseTest) Context() *EnterpriseConnectivityTest {
@@ -176,6 +190,90 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgress
 	return t
 }
 
+type IsovalentMulticastGroupParams struct {
+	Name            string
+	GroupAddrPrefix string
+	Groups          int
+}
+
+// WithIsovalentMulticastGroup takes a string containing a YAML policy
+// document and adds the isovalent multicast group(s) to the scope of the
+// Test, to be applied when the test starts running. When calling this method,
+// note that the multicast enabled feature requirement is applied directly
+// here.
+func (t *EnterpriseTest) WithIsovalentMulticastGroup(params IsovalentMulticastGroupParams) *EnterpriseTest {
+	pl, err := check.ParsePolicyYAML[*isovalentv1alpha1.IsovalentMulticastGroup](multicastGroupYAML, scheme.Scheme)
+	if err != nil {
+		t.Fatalf("Parsing policy YAML: %s", err)
+	}
+
+	for i := range pl {
+		// Set the policy name
+		pl[i].Name = params.Name
+	}
+
+	if err := t.addIMGs(pl...); err != nil {
+		t.Fatalf("Adding IMGs to multicast group context: %s", err)
+	}
+
+	t.WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.Multicast))
+	return t
+}
+
+type MulticastDeploymentParams struct {
+	Name        string
+	Labels      map[string]string
+	IGMPVersion int
+}
+
+func (t *EnterpriseTest) WithMulticastDeployment(params MulticastDeploymentParams) *EnterpriseTest {
+	readinessProbe := &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				// we only need to run socat/ip route commands inside the container to check if the multicast is working
+				// checking if the ip route command is working is enough
+				Command: []string{"ip", "route"},
+			},
+		},
+		PeriodSeconds:       int32(3),
+		InitialDelaySeconds: int32(1),
+		FailureThreshold:    int32(20),
+	}
+	deployParams := deploymentParameters{
+		Name:     params.Name,
+		Kind:     kindMulticastName,
+		Image:    "nicolaka/netshoot:v0.12",
+		Replicas: 2,
+		Port:     8000,
+		Command:  []string{"sleep", "infinite"},
+		Affinity: &corev1.Affinity{
+			// do not schedule the pods on the same node
+			PodAntiAffinity: &corev1.PodAntiAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+					{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: params.Labels,
+						},
+						TopologyKey: "kubernetes.io/hostname",
+					},
+				},
+			},
+		},
+		Labels:                        params.Labels,
+		ReadinessProbe:                readinessProbe,
+		TerminationGracePeriodSeconds: ptr.To[int64](1),
+	}
+
+	dep := newMulticastDeployment(deployParams, params.IGMPVersion)
+
+	if err := t.addMulticastDeployment(dep); err != nil {
+		t.Fatalf("Adding multicast deployment to cilium context: %s", err)
+	}
+
+	t.WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.Multicast))
+	return t
+}
+
 func (t *EnterpriseTest) WithScenarios(sl ...check.Scenario) *EnterpriseTest {
 	t.Test.WithScenarios(sl...)
 
@@ -186,6 +284,11 @@ func (t *EnterpriseTest) setup(ctx context.Context) error {
 	if err := t.applyPolicies(ctx); err != nil {
 		t.CiliumLogs(ctx)
 		return fmt.Errorf("applying policies: %w", err)
+	}
+
+	if err := t.applyDeployments(ctx); err != nil {
+		t.CiliumLogs(ctx)
+		return fmt.Errorf("applying deployments: %w", err)
 	}
 
 	return nil

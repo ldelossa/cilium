@@ -13,16 +13,19 @@ package check
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/utils/features"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	enterpriseK8s "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/k8s"
 )
 
 type EnterpriseConnectivityTest struct {
 	*check.ConnectivityTest
 
-	// Clients for source and destination clusters.
+	// clients for source and destination clusters.
 	clients *deploymentClients
 }
 
@@ -44,9 +47,11 @@ func (ect *EnterpriseConnectivityTest) NewEnterpriseTest(name string) *Enterpris
 	ct := check.NewTest(name, ect.ConnectivityTest.Params().Verbose, ect.ConnectivityTest.Params().Debug)
 	ect.ConnectivityTest.AddTest(ct)
 	et := EnterpriseTest{
-		Test:  ct,
-		ctx:   ect,
-		iegps: make(map[string]*isovalentv1.IsovalentEgressGatewayPolicy),
+		Test:         ct,
+		ctx:          ect,
+		iegps:        make(map[string]*isovalentv1.IsovalentEgressGatewayPolicy),
+		imgs:         make(map[string]*isovalentv1alpha1.IsovalentMulticastGroup),
+		mcastDeploys: make(map[string]*appsv1.Deployment),
 	}
 
 	ct.WithSetupFunc(func(ctx context.Context, t *check.Test, ct *check.ConnectivityTest) error {
@@ -59,4 +64,8 @@ func (ect *EnterpriseConnectivityTest) NewEnterpriseTest(name string) *Enterpris
 func (ect *EnterpriseTest) WithFeatureRequirements(reqs ...features.Requirement) *EnterpriseTest {
 	ect.Test.WithFeatureRequirements(reqs...)
 	return ect
+}
+
+func (ect *EnterpriseConnectivityTest) EntClients() []*enterpriseK8s.EnterpriseClient {
+	return ect.clients.clients()
 }
