@@ -210,6 +210,9 @@ func (t *EnterpriseTest) WithIsovalentMulticastGroup(params IsovalentMulticastGr
 	for i := range pl {
 		// Set the policy name
 		pl[i].Name = params.Name
+
+		// Set the groups
+		pl[i].Spec.GroupAddrs = enterpriseTests.GenerateMulticastGroups(params.GroupAddrPrefix, params.Groups)
 	}
 
 	if err := t.addIMGs(pl...); err != nil {
