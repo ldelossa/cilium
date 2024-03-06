@@ -60,7 +60,7 @@ int egressgw_ha_redirect_setup(struct __ctx_buff *ctx)
 	policy_add_egress_allow_all_entry();
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_CONTAINER);
+	tail_call_static(ctx, entry_call_map, FROM_CONTAINER);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -99,7 +99,7 @@ int egressgw_ha_skip_excluded_cidr_redirect_setup(struct __ctx_buff *ctx)
 	policy_add_egress_allow_all_entry();
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_CONTAINER);
+	tail_call_static(ctx, entry_call_map, FROM_CONTAINER);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -139,7 +139,7 @@ int egressgw_skip_no_gateway_redirect_setup(struct __ctx_buff *ctx)
 	policy_add_egress_allow_all_entry();
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_CONTAINER);
+	tail_call_static(ctx, entry_call_map, FROM_CONTAINER);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }

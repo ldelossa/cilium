@@ -336,8 +336,10 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.annotations | object | `{}` | Annotations to be added to all top-level cilium-envoy objects (resources under templates/cilium-envoy) |
 | envoy.baseID | int | `0` |  Set Envoy'--base-id' to use when allocating shared memory regions. Only needs to be changed if multiple Envoy instances will run on the same node and may have conflicts. Supported values: 0 - 4294967295. Defaults to '0' |
 | envoy.connectTimeoutSeconds | int | `2` | Time in seconds after which a TCP connection attempt times out |
+| envoy.debug.admin.enabled | bool | `false` | Enable admin interface for cilium-envoy. This is useful for debugging and should not be enabled in production. |
+| envoy.debug.admin.port | int | `9901` | Port number (bound to loopback interface). kubectl port-forward can be used to access the admin interface. |
 | envoy.dnsPolicy | string | `nil` | DNS policy for Cilium envoy pods. Ref: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy |
-| envoy.enabled | bool | `false` | Enable Envoy Proxy in standalone DaemonSet. |
+| envoy.enabled | bool | `true` | Enable Envoy Proxy in standalone DaemonSet. |
 | envoy.extraArgs | list | `[]` | Additional envoy container arguments. |
 | envoy.extraContainers | list | `[]` | Additional containers added to the cilium Envoy DaemonSet. |
 | envoy.extraEnv | list | `[]` | Additional envoy container environment variables. |
@@ -380,6 +382,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.tolerations | list | `[{"operator":"Exists"}]` | Node tolerations for envoy scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ |
 | envoy.updateStrategy | object | `{"rollingUpdate":{"maxUnavailable":2},"type":"RollingUpdate"}` | cilium-envoy update strategy ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#updating-a-daemonset |
 | envoyConfig.enabled | bool | `false` | Enable CiliumEnvoyConfig CRD CiliumEnvoyConfig CRD can also be implicitly enabled by other options. |
+| envoyConfig.retryInterval | string | `"15s"` | Interval in which an attempt is made to reconcile failed EnvoyConfigs. If the duration is zero, the retry is deactivated. |
 | envoyConfig.secretsNamespace | object | `{"create":true,"name":"cilium-secrets"}` | SecretsNamespace is the namespace in which envoy SDS will retrieve secrets from. |
 | envoyConfig.secretsNamespace.create | bool | `true` | Create secrets namespace for CiliumEnvoyConfig CRDs. |
 | envoyConfig.secretsNamespace.name | string | `"cilium-secrets"` | The name of the secret namespace to which Cilium agents are given read access. |
@@ -424,6 +427,7 @@ contributors across the globe, there is almost always someone available to help.
 | gatewayAPI.secretsNamespace.create | bool | `true` | Create secrets namespace for Gateway API. |
 | gatewayAPI.secretsNamespace.name | string | `"cilium-secrets"` | Name of Gateway API secret namespace. |
 | gatewayAPI.secretsNamespace.sync | bool | `true` | Enable secret sync, which will make sure all TLS secrets used by Ingress are synced to secretsNamespace.name. If disabled, TLS secrets must be maintained externally. |
+| gatewayAPI.xffNumTrustedHops | int | `0` | The number of additional GatewayAPI proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address. |
 | gke.enabled | bool | `false` | Enable Google Kubernetes Engine integration |
 | healthChecking | bool | `true` | Enable connectivity health checking. |
 | healthPort | int | `9879` | TCP port for the agent health API. This is not the port for cilium-health. |

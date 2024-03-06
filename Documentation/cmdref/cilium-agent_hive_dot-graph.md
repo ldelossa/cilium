@@ -55,6 +55,8 @@ cilium-agent hive dot-graph [flags]
       --enable-multi-network                                         Enable support for multiple pod networks
       --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
+      --envoy-config-retry-interval duration                         Interval in which an attempt is made to reconcile failed EnvoyConfigs. If the duration is zero, the retry is deactivated. (default 15s)
+      --envoy-config-timeout duration                                Timeout that determines how long to wait for Envoy to N/ACK CiliumEnvoyConfig resources (default 2m0s)
       --envoy-secrets-namespace string                               EnvoySecretsNamespace is the namespace having secrets used by CEC
       --external-dns-proxy                                           Enable Cilium agent to use an external DNS proxy
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)

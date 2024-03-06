@@ -135,7 +135,7 @@ int nodeport_dsr_backend_setup(struct __ctx_buff *ctx)
 	ipcache_v6_add_entry(&backend_ip, 0, 112233, 0, 0);
 
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, FROM_NETDEV);
+	tail_call_static(ctx, entry_call_map, FROM_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }
@@ -229,8 +229,8 @@ int nodeport_dsr_backend_check(struct __ctx_buff *ctx)
 	ct_entry = map_lookup_elem(get_ct_map6(&tuple), &tuple);
 	if (!ct_entry)
 		test_fatal("no CT entry for DSR found");
-	if (!ct_entry->dsr)
-		test_fatal("CT entry doesn't have the .dsr flag set");
+	if (!ct_entry->dsr_internal)
+		test_fatal("CT entry doesn't have the .dsr_internal flag set");
 
 	struct ipv6_nat_entry *nat_entry;
 
@@ -248,6 +248,7 @@ int nodeport_dsr_backend_check(struct __ctx_buff *ctx)
 	test_finish();
 }
 
+static __always_inline
 int build_reply(struct __ctx_buff *ctx)
 {
 	union v6addr backend_ip = BACKEND_IP;
@@ -276,6 +277,7 @@ int build_reply(struct __ctx_buff *ctx)
 	return 0;
 }
 
+static __always_inline
 int check_reply(const struct __ctx_buff *ctx)
 {
 	union v6addr frontend_ip = FRONTEND_IP;
@@ -343,7 +345,7 @@ SETUP("tc", "tc_nodeport_dsr_backend_reply")
 int nodeport_dsr_backend_reply_reply_setup(struct __ctx_buff *ctx)
 {
 	/* Jump into the entrypoint */
-	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
+	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
 	return TEST_ERROR;
 }

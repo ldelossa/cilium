@@ -743,7 +743,7 @@ Limit ICMP/ICMPv6 types
 
 ICMP policy can be specified in addition to layer 3 policies or independently.
 It restricts the ability of an endpoint to emit and/or receive packets on a
-particular ICMP/ICMPv6 type (currently ICMP/ICMPv6 code is not supported).
+particular ICMP/ICMPv6 type (both type (integer) and corresponding CamelCase message (string) are supported).
 If any ICMP policy is specified, layer 4 and ICMP communication will be blocked
 unless it's related to a connection that is otherwise allowed by the policy.
 
@@ -754,25 +754,45 @@ which is defined as follows:
 .. code-block:: go
 
         // ICMPField is a ICMP field.
+        //
+        // +deepequal-gen=true
+        // +deepequal-gen:private-method=true
         type ICMPField struct {
-        	// Family is a IP address version.
-        	// Currently, we support `IPv4` and `IPv6`.
-        	// `IPv4` is set as default.
-        	//
-        	// +default=IPv4
-        	// +optional
-        	Family string `json:"family,omitempty"`
-
-        	// Type is a ICMP-type.
-        	// It should be 0-255 (8bit).
-        	Type uint8 `json:"type"`
+            // Family is a IP address version.
+            // Currently, we support `IPv4` and `IPv6`.
+            // `IPv4` is set as default.
+            //
+            // +kubebuilder:default=IPv4
+            // +kubebuilder:validation:Optional
+            // +kubebuilder:validation:Enum=IPv4;IPv6
+            Family string `json:"family,omitempty"`
+        
+	        // Type is a ICMP-type.
+	        // It should be an 8bit code (0-255), or it's CamelCase name (for example, "EchoReply").
+	        // Allowed ICMP types are:
+	        //     Ipv4: EchoReply | DestinationUnreachable | Redirect | Echo | EchoRequest |
+	        //		     RouterAdvertisement | RouterSelection | TimeExceeded | ParameterProblem |
+	        //			 Timestamp | TimestampReply | Photuris | ExtendedEcho Request | ExtendedEcho Reply
+	        //     Ipv6: DestinationUnreachable | PacketTooBig | TimeExceeded | ParameterProblem |
+	        //			 EchoRequest | EchoReply | MulticastListenerQuery| MulticastListenerReport |
+	        // 			 MulticastListenerDone | RouterSolicitation | RouterAdvertisement | NeighborSolicitation |
+	        // 			 NeighborAdvertisement | RedirectMessage | RouterRenumbering | ICMPNodeInformationQuery |
+	        // 			 ICMPNodeInformationResponse | InverseNeighborDiscoverySolicitation | InverseNeighborDiscoveryAdvertisement |
+	        // 			 HomeAgentAddressDiscoveryRequest | HomeAgentAddressDiscoveryReply | MobilePrefixSolicitation |
+	        // 			 MobilePrefixAdvertisement | DuplicateAddressRequestCodeSuffix | DuplicateAddressConfirmationCodeSuffix |
+	        // 			 ExtendedEchoRequest | ExtendedEchoReply
+	        //
+	        // +deepequal-gen=false
+	        // +kubebuilder:validation:XIntOrString
+	        // +kubebuilder:validation:Pattern="^([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]|EchoReply|DestinationUnreachable|Redirect|Echo|RouterAdvertisement|RouterSelection|TimeExceeded|ParameterProblem|Timestamp|TimestampReply|Photuris|ExtendedEchoRequest|ExtendedEcho Reply|PacketTooBig|ParameterProblem|EchoRequest|MulticastListenerQuery|MulticastListenerReport|MulticastListenerDone|RouterSolicitation|RouterAdvertisement|NeighborSolicitation|NeighborAdvertisement|RedirectMessage|RouterRenumbering|ICMPNodeInformationQuery|ICMPNodeInformationResponse|InverseNeighborDiscoverySolicitation|InverseNeighborDiscoveryAdvertisement|HomeAgentAddressDiscoveryRequest|HomeAgentAddressDiscoveryReply|MobilePrefixSolicitation|MobilePrefixAdvertisement|DuplicateAddressRequestCodeSuffix|DuplicateAddressConfirmationCodeSuffix)$"
+            Type *intstr.IntOrString `json:"type"`
         }
 
 Example (ICMP/ICMPv6)
 ~~~~~~~~~~~~~~~~~~~~~
 
 The following rule limits all endpoints with the label ``app=myService`` to
-only be able to emit packets using ICMP with type 8 and ICMPv6 with type 128,
+only be able to emit packets using ICMP with type 8 and ICMPv6 with message EchoRequest,
 to any layer 3 destination:
 
 .. only:: html

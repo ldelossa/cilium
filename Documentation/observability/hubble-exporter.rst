@@ -47,7 +47,17 @@ Verify that flow logs are stored in target files:
 
     kubectl -n kube-system exec ds/cilium -- tail -f /var/run/cilium/hubble/events.log
 
-Now you can configure your logging solution to consume logs from your Hubble export file path.
+Once you have configured the Hubble Exporter, you can configure your logging solution to consume
+logs from your Hubble export file path.
+
+To disable the static configuration, you must remove the ``hubble-export-file-path`` key in the
+``cilium-config`` ConfigMap and manually clean up the log files created in the specified
+location in the container. The below command will restart the Cilium pods. If you edit the
+ConfigMap manually, you will need to restart the Cilium pods.
+
+.. code-block:: shell-session
+
+    cilium config delete hubble-export-file-path
 
 Configuration options
 ---------------------
@@ -219,12 +229,6 @@ Wait for ``cilium`` pod to become ready:
 
     kubectl -n kube-system rollout status ds/cilium
 
-Verify that flow logs are stored in target files:
-
-.. code-block:: shell-session
-
-    kubectl -n kube-system exec ds/cilium -- tail -f /var/run/cilium/hubble/events.log
-
 You can change flow log settings without a need for pod to be restarted
 (changes should be reflected within 60s because of configmap propagation delay):
 
@@ -235,8 +239,8 @@ You can change flow log settings without a need for pod to be restarted
       --set hubble.export.dynamic.enabled=true \\
       --set hubble.export.dynamic.config.content[0].name=system \\
       --set hubble.export.dynamic.config.content[0].filePath=/var/run/cilium/hubble/events-system.log \\
-      --set hubble.export.dynamic.config.content[0].IncludeFilters[0].source_pod[0]='kube_system/*' \\
-      --set hubble.export.dynamic.config.content[0].IncludeFilters[1].destination_pod[0]='kube_system/*'
+      --set hubble.export.dynamic.config.content[0].includeFilters[0].source_pod[0]='kube_system/' \\
+      --set hubble.export.dynamic.config.content[0].includeFilters[1].destination_pod[0]='kube_system/'
 
 
 Dynamic flow logs can be configured with ``end`` property which means that it will

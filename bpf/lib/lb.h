@@ -342,11 +342,13 @@ bool lb6_svc_is_routable(const struct lb6_service *svc)
 	return __lb_svc_is_routable(svc->flags);
 }
 
+#ifdef ENABLE_LOCAL_REDIRECT_POLICY
 static __always_inline
 bool lb4_svc_is_localredirect(const struct lb4_service *svc)
 {
 	return svc->flags2 & SVC_FLAG_LOCALREDIRECT;
 }
+#endif /* ENABLE_LOCAL_REDIRECT_POLICY */
 
 static __always_inline
 bool lb4_svc_is_l7loadbalancer(const struct lb4_service *svc __maybe_unused)
@@ -865,9 +867,11 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 	if (unlikely(svc->count == 0))
 		return DROP_NO_SERVICE;
 
+	state->rev_nat_index = svc->rev_nat_index;
+
 	/* See lb4_local comments re svc endpoint lookup process */
 	ret = ct_lazy_lookup6(map, tuple, ctx, l4_off, CT_SERVICE,
-			      SCOPE_REVERSE, CT_ENTRY_ANY, state, &monitor);
+			      SCOPE_REVERSE, CT_ENTRY_SVC, state, &monitor);
 	switch (ret) {
 	case CT_NEW:
 #ifdef ENABLE_SESSION_AFFINITY
@@ -888,7 +892,6 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 		}
 
 		state->backend_id = backend_id;
-		state->rev_nat_index = svc->rev_nat_index;
 		state->proxy_redirect = false;
 		state->from_l7lb = false;
 
@@ -901,30 +904,7 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 
 		break;
 	case CT_REPLY:
-		/* See lb4_local comment */
-		if (state->rev_nat_index == 0) {
-			state->rev_nat_index = svc->rev_nat_index;
-			ct_update_rev_nat_index(map, tuple, state);
-		}
-
-		/* See lb4_local comment */
-		if (state->rev_nat_index != svc->rev_nat_index) {
-#ifdef ENABLE_SESSION_AFFINITY
-			if (lb6_svc_is_affinity(svc))
-				backend_id = lb6_affinity_backend_id_by_addr(svc,
-									     &client_id);
-#endif
-			if (!backend_id) {
-				backend_id = lb6_select_backend_id(ctx, key, tuple, svc);
-				if (!backend_id)
-					goto no_service;
-			}
-
-			state->rev_nat_index = svc->rev_nat_index;
-			ct_update_svc_entry(map, tuple, backend_id, svc->rev_nat_index);
-		} else {
-			backend_id = state->backend_id;
-		}
+		backend_id = state->backend_id;
 
 		/* If the lookup fails it means the user deleted the backend out from
 		 * underneath us. To resolve this fall back to hash. If this is a TCP
@@ -1532,8 +1512,10 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 	if (unlikely(svc->count == 0))
 		return DROP_NO_SERVICE;
 
+	state->rev_nat_index = svc->rev_nat_index;
+
 	ret = ct_lazy_lookup4(map, tuple, ctx, is_fragment, l4_off, has_l4_header,
-			      CT_SERVICE, SCOPE_REVERSE, CT_ENTRY_ANY, state, &monitor);
+			      CT_SERVICE, SCOPE_REVERSE, CT_ENTRY_SVC, state, &monitor);
 	switch (ret) {
 	case CT_NEW:
 #ifdef ENABLE_SESSION_AFFINITY
@@ -1555,7 +1537,6 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 		}
 
 		state->backend_id = backend_id;
-		state->rev_nat_index = svc->rev_nat_index;
 		state->proxy_redirect = false;
 		state->from_l7lb = false;
 
@@ -1568,41 +1549,7 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 
 		break;
 	case CT_REPLY:
-		/* For backward-compatibility we need to update reverse NAT
-		 * index in the CT_SERVICE entry for old connections, as later
-		 * in the code we check whether the right backend is used.
-		 * Having it set to 0 would trigger a new backend selection
-		 * which would in many cases would pick a different backend.
-		 */
-		if (unlikely(state->rev_nat_index == 0)) {
-			state->rev_nat_index = svc->rev_nat_index;
-			ct_update_rev_nat_index(map, tuple, state);
-		}
-
-		/* If the CT_SERVICE entry is from a non-related connection (e.g.
-		 * endpoint has been removed, but its CT entries were not (it is
-		 * totally possible due to the bug in DumpReliablyWithCallback)),
-		 * then a wrong (=from unrelated service) backend can be selected.
-		 * To avoid this, check that reverse NAT indices match. If not,
-		 * select a new backend.
-		 */
-		if (state->rev_nat_index != svc->rev_nat_index) {
-#ifdef ENABLE_SESSION_AFFINITY
-			if (lb4_svc_is_affinity(svc))
-				backend_id = lb4_affinity_backend_id_by_addr(svc,
-									     &client_id);
-#endif
-			if (!backend_id) {
-				backend_id = lb4_select_backend_id(ctx, key, tuple, svc);
-				if (!backend_id)
-					goto no_service;
-			}
-
-			state->rev_nat_index = svc->rev_nat_index;
-			ct_update_svc_entry(map, tuple, backend_id, svc->rev_nat_index);
-		} else {
-			backend_id = state->backend_id;
-		}
+		backend_id = state->backend_id;
 
 		/* If the lookup fails it means the user deleted the backend out from
 		 * underneath us. To resolve this fall back to hash. If this is a TCP

@@ -230,6 +230,10 @@ data:
   {{- if .Values.envoy.prometheus.enabled }}
   proxy-prometheus-port: "{{ .Values.envoy.prometheus.port }}"
   {{- end }}
+
+  {{- if and .Values.envoy.debug.admin.enabled .Values.envoy.debug.admin.port }}
+  proxy-admin-port: "{{ .Values.envoy.debug.admin.port }}"
+  {{- end }}
 {{- end }}
 
 {{- if .Values.operator.prometheus.enabled }}
@@ -247,6 +251,7 @@ data:
 
 {{- if or .Values.envoyConfig.enabled .Values.ingressController.enabled .Values.gatewayAPI.enabled (and (hasKey .Values "loadBalancer") (eq .Values.loadBalancer.l7.backend "envoy")) }}
   enable-envoy-config: "true"
+  envoy-config-retry-interval: {{ include "validateDuration" .Values.envoyConfig.retryInterval | quote }}
   {{- if .Values.envoyConfig.enabled }}
   envoy-secrets-namespace: {{ .Values.envoyConfig.secretsNamespace.name | quote }}
   {{- end }}
@@ -275,6 +280,7 @@ data:
   enable-gateway-api: "true"
   enable-gateway-api-secrets-sync: {{ .Values.gatewayAPI.secretsNamespace.sync | quote }}
   enable-gateway-api-proxy-protocol: {{ .Values.gatewayAPI.enableProxyProtocol | quote }}
+  gateway-api-xff-num-trusted-hops: {{ .Values.gatewayAPI.xffNumTrustedHops | quote }}
   gateway-api-secrets-namespace: {{ .Values.gatewayAPI.secretsNamespace.name | quote }}
   gateway-api-hostnetwork-enabled: {{ .Values.gatewayAPI.hostNetwork.enabled | quote }}
   gateway-api-hostnetwork-nodelabelselector: {{ include "mapToString" .Values.gatewayAPI.hostNetwork.nodes.matchLabels | quote }}
