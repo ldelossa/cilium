@@ -37,6 +37,35 @@ nodeport_rev_dnat_ingress_ipv4_hook(struct __ctx_buff *ctx __maybe_unused,
 				    __u32 *src_sec_identity __maybe_unused,
 				    __u32 *dst_sec_identity __maybe_unused)
 {
+#if defined(CILIUM_MESH) && !defined(IS_BPF_OVERLAY)
+	if (!ct_has_nodeport_egress_entry4(get_ct_map4(tuple), tuple, NULL, false)) {
+		struct remote_endpoint_info *info;
+		struct remote_endpoint_info *src;
+
+		/* CiliumMesh: this is a hacky check to forward a packet, which is a reply,
+		 * via the tunnel to the remote GW instance. The non-hacky check (to be
+		 * implemented) is to add a mapping IP => remote GW instead of REMOTE_NODE_ID.
+		 *
+		 * ctx_snat_done == src is from a CiliumMesh EP. Again, its a hack.
+		 */
+		if (ctx_snat_done(ctx)) {
+			info = ipcache_lookup4(&IPCACHE_MAP, ip4->daddr, V4_CACHE_KEY_LEN, 0);
+			if (info && identity_is_remote_node(info->sec_identity)) {
+				src = lookup_ip4_remote_endpoint(ip4->saddr, 0);
+				if (src)
+					*src_sec_identity = src->sec_identity;
+
+				*tunnel_endpoint = ip4->daddr;
+				*dst_sec_identity = info->sec_identity;
+
+				return CTX_ACT_REDIRECT;
+			}
+		}
+
+		return CTX_ACT_OK;
+	}
+#endif
+
 	return -1;
 }
 
