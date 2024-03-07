@@ -1060,7 +1060,7 @@ func (m *Manager) allocateSID(pool, metadata string) (*sidmanager.SIDInfo, error
 	} else {
 		allocator, found := m.sidAllocatorSyncers[pool]
 		if !found {
-			return nil, fmt.Errorf("allocator not found")
+			return nil, sidmanager.ErrAllocatorNotFound
 		}
 
 		behavior := m.selectBehavior(allocator.BehaviorType())
@@ -1137,7 +1137,17 @@ func (m *Manager) createIngressPathVRFs(vrfs []*VRF) {
 			// allocate a SID and defer possible cleanup.
 			info, err = m.allocateSID(vrf.LocatorPool, vrf.id.Name)
 			if err != nil {
-				l.WithField("vrf", vrf.id.Name).WithError(err).Error("Failed to allocate SID for VRF")
+				l := l.WithFields(logrus.Fields{
+					"vrf":         vrf.id.Name,
+					"locatorPool": vrf.LocatorPool,
+				})
+				if errors.Is(err, sidmanager.ErrAllocatorNotFound) {
+					// Allocator not ready yet, nothing to reconcile for now.
+					// This is expected e.g. if the VRF is deployed earlier than the referenced locator pool.
+					l.Debug("SID Allocator not ready yet")
+				} else {
+					l.WithError(err).Error("Failed to allocate SID for VRF")
+				}
 				return
 			}
 			defer func() {
