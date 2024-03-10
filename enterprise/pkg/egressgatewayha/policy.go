@@ -238,16 +238,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	healthyGatewayIPsByAZ := map[string][]string{}
 
 	for _, node := range operatorManager.nodes {
-		// if the group config doesn't match the node, ignore it and go to the next one
-		if !gc.selectsNodeAsGateway(node) {
-			continue
-		}
-
 		// if AZ affinity is enabled for the egress group, track the node's AZ.
 		//
-		// This will be used later on to ensure that even AZs with no healthy gateway nodes can get non
-		// local gateways asigned to (and because of this tracking needs to happen before ignoring an
-		// unhealthy node)
+		// This will be used later on to ensure that even AZs with no gateway nodes selected by the policy
+		// or no healthy gateway nodes can get non-local gateways assigned to
+		// (and because of this tracking needs to happen before ignoring a non-gateway node and unhealthy node)
 		if config.azAffinity.enabled() {
 			if nodeAZ, ok := node.Labels[core_v1.LabelTopologyZone]; ok {
 				// as the healthyGatewayIPsByAZ map is used also to keep track of all the available AZs,
@@ -257,6 +252,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 					healthyGatewayIPsByAZ[nodeAZ] = []string{}
 				}
 			}
+		}
+
+		// if the group config doesn't match the node, ignore it and go to the next one
+		if !gc.selectsNodeAsGateway(node) {
+			continue
 		}
 
 		// if the node is not healthy, ignore it and move to the next one
