@@ -70,6 +70,7 @@ runs:
             --helm-set=authentication.mutual.spire.enabled=${{ inputs.mutual-auth }} \
             --nodes-without-cilium=kind-worker3 \
             --helm-set-string=kubeProxyReplacement=${{ inputs.kpr }} \
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}' \
             --set='${{ inputs.misc }}'"
 
           IMAGE=""
