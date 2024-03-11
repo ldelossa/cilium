@@ -434,6 +434,46 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 				return nil
 			},
 		},
+		{
+			Description: "Collecting Tetragon SandboxPolicies",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				sandboxpolicies := schema.GroupVersionResource{
+					Group:    "cilium.io",
+					Resource: "sandboxpolicies",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, sandboxpolicies, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Tetragon SandboxPolicies: %w", err)
+				}
+				if err := collector.WriteYAML("tetragon-enterprise-sandboxpolicies-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to write Tetragon SandboxPolicies: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			Description: "Collecting Tetragon SandboxPoliciesNamespaced",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				sandboxpolicies := schema.GroupVersionResource{
+					Group:    "cilium.io",
+					Resource: "sandboxpoliciesnamespaced",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, sandboxpolicies, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Tetragon SandboxPoliciesNamespaced: %w", err)
+				}
+				if err := collector.WriteYAML("tetragon-enterprise-sandboxpoliciesnamespaced-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to write Tetragon SandboxPoliciesNamespaced: %w", err)
+				}
+				return nil
+			},
+		},
 	})
 
 	if collector.FeatureSet[enterpriseFeatures.SRv6].Enabled {
