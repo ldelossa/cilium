@@ -21,7 +21,7 @@ echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true --helm-se
 
 echo "CILIUM_CLI_RELEASE_REPO=isovalent/cilium-cli-releases" >> "$GITHUB_ENV"
 # renovate: datasource=github-releases depName=isovalent/cilium-cli-releases
-CILIUM_CLI_VERSION="v0.15.22-cee.1"
+CILIUM_CLI_VERSION="v0.16.0-cee.1"
 echo "CILIUM_CLI_VERSION=$CILIUM_CLI_VERSION" >> "$GITHUB_ENV"
 
 echo "PUSH_TO_DOCKER_HUB=false" >> "$GITHUB_ENV"
