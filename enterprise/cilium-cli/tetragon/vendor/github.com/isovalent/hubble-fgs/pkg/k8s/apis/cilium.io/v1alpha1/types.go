@@ -119,8 +119,8 @@ type TracingPolicySpec struct {
 	Lists []ListSpec `json:"lists,omitempty"`
 
 	// +kubebuilder:validation:Optional
-	// A killer spec.
-	Killers []KillerSpec `json:"killers,omitempty"`
+	// A enforcer spec.
+	Enforcers []EnforcerSpec `json:"enforcers,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	// A list of overloaded options
@@ -181,17 +181,66 @@ type FileSelector struct {
 	// A list of operation filters.
 	MatchDigests []DigestSelector `json:"matchDigests,omitempty"`
 	// +kubebuilder:validation:Optional
+	// A list of namespaces and IDs
+	MatchNamespaces []FileNamespaceSelector `json:"matchLinuxNamespaces,omitempty"`
+	// +kubebuilder:validation:Optional
+	// A list of capabilities and IDs
+	MatchCapabilities []FileCapabilitiesSelector `json:"matchLinuxCapabilities,omitempty"`
+	// +kubebuilder:validation:Optional
 	// A list of actions to execute when this selector matches. For now we only support a single action and users can select either Post or Block. We use an array to potentially support additional actions in the future.
 	MatchActions []FileActionSelector `json:"matchActions,omitempty"`
 }
 
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:MaxLength=128
+// +kubebuilder:validation:Pattern=\/.*
+// Required and should start with "/". Maximum length is 128 characters.
+type PathPrefix = string
+
+type FilePrefixSuffixPattern struct {
+	// +kubebuilder:validation:Required
+	// The prefix of the path to match.
+	Prefix PathPrefix `json:"prefix,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=128
+	// The suffix of the file to match. Can be empty. In that case, we only use the prefix. Maximum length is 128 characters.
+	Suffix string `json:"suffix,omitempty"`
+}
+
+type PathPrefixPattern struct {
+	// +kubebuilder:validation:Required
+	// The prefix of the path to match. Similar to file_paths.
+	Prefix PathPrefix `json:"prefix,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(self.type == 'FilePrefixSuffix' && has(self.file_prefix_suffix) && !has(self.path_prefix)) || (self.type == 'PathPrefix' && !has(self.file_prefix_suffix) && has(self.path_prefix))",message="Type should match the argument type."
+type FilePathPattern struct {
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=FilePrefixSuffix;PathPrefix
+	// FilePrefixSuffix can be used to match only files that have a specific prefix and optionally a suffix.
+	// PathPrefix has the same semantics as file_paths. This can be used for all files and directories that match a specific prefix.
+	Type string `json:"type"`
+	// +kubebuilder:validation:Optional
+	// Should be defined in the case of type=FilePrefixSuffix.
+	FilePrefixSuffix *FilePrefixSuffixPattern `json:"file_prefix_suffix,omitempty"`
+	// +kubebuilder:validation:Optional
+	// Should be defined in the case of type=PathPrefix.
+	PathPrefix *PathPrefixPattern `json:"path_prefix,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(has(self.file_paths_patterns) && (size(self.file_paths_patterns.filter(c, c.type == 'FilePrefixSuffix')) <= 32)) || (!has(self.file_paths_patterns))",message="We support up to 32 entries with type FilePrefixSuffix under file_paths_patterns."
+// +kubebuilder:validation:XValidation:rule="((has(self.file_paths) && (size(self.file_paths) > 0)) || (has(self.file_paths_patterns) && (size(self.file_paths_patterns) > 0))) && (!((has(self.file_paths) && (size(self.file_paths) > 0)) && (has(self.file_paths_patterns) && (size(self.file_paths_patterns) > 0))))",message="You should define exactly one of file_paths or file_paths_patterns."
 type FileSpec struct {
 	// +kubebuilder:validation:Optional
-	// What paths to monitor
+	// +kubebuilder:deprecatedversion:warning="file_paths is deprecated. Use file_paths_patterns instead"
+	// What paths to monitor. Only prefixes. Deprecated, please use file_paths_patterns instead.
 	Paths []string `json:"file_paths,omitempty"`
 	// +kubebuilder:validation:Optional
-	// What paths to exclude from monitored paths
+	// What paths to exclude from monitored paths. Applies both to file_paths and file_paths_patterns.
 	PathsExclude []string `json:"file_paths_exclude,omitempty"`
+	// +kubebuilder:validation:Optional
+	// What paths to monitor using patterns.
+	PathsPatterns []FilePathPattern `json:"file_paths_patterns,omitempty"`
 	// +kubebuilder:validation:Optional
 	// Config flags to enable/disable specific functionality
 	Config map[string]string `json:"file_config,omitempty"`
@@ -208,6 +257,29 @@ type FileSpec struct {
 	PodSelector *slimv1.LabelSelector `json:"podSelector,omitempty"`
 }
 
+type FileCapabilitiesSelector struct {
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=Effective;Inheritable;Permitted
+	// +kubebuilder:default=Effective
+	// Type of capabilities
+	Type string `json:"type"`
+	// +kubebuilder:validation:Enum=In;NotIn
+	// Namespace selector operator.
+	Operator string `json:"operator"`
+	// Capabilities to match.
+	Values []string `json:"values"`
+}
+
+type FileNamespaceSelector struct {
+	// +kubebuilder:validation:Enum=Uts;Ipc;Mnt;Pid;PidForChildren;Net;Time;TimeForChildren;Cgroup;User
+	// Namespace selector name.
+	Namespace string `json:"namespace"`
+	// +kubebuilder:validation:Enum=All;Host;NoHost
+	// +kubebuilder:default=All
+	// Namespace selector filter type.
+	Filter string `json:"filter"`
+}
+
 // FileExecSelector selects file operations.
 type FileExecSelector struct {
 	// +kubebuilder:validation:Optional
@@ -216,6 +288,12 @@ type FileExecSelector struct {
 	// +kubebuilder:validation:Optional
 	// A list of operation filters.
 	MatchDigests []DigestSelector `json:"matchDigests,omitempty"`
+	// +kubebuilder:validation:Optional
+	// A list of namespaces and IDs
+	MatchNamespaces []FileNamespaceSelector `json:"matchLinuxNamespaces,omitempty"`
+	// +kubebuilder:validation:Optional
+	// A list of capabilities and IDs
+	MatchCapabilities []FileCapabilitiesSelector `json:"matchLinuxCapabilities,omitempty"`
 	// +kubebuilder:validation:Optional
 	// A list of actions to execute when this selector matches. For now we only support a single action and users can select either Post or Block. We use an array to potentially support additional actions in the future.
 	MatchActions []FileActionSelector `json:"matchActions,omitempty"`
@@ -307,6 +385,9 @@ type DnsPolicySpec struct {
 	// +kubebuilder:validation:Optional
 	// A list of DNS ports
 	Ports []uint16 `json:"ports,omitempty"`
+	// +kubebuilder:validation:Optional
+	// Metrics Configuration
+	Metrics *PromMetrics `json:"metrics,omitempty"`
 }
 
 type NopSelector struct {
@@ -327,6 +408,9 @@ type PromMetrics struct {
 	// +kubebuilder:default=true
 	// +kubebuilder:validation:Optional
 	Enable bool `json:"enable"`
+	// +kubebuilder:validation:Optional
+	// Label Filters mask out labels in the metrics
+	LabelFilters []string `json:"labelFilters"`
 }
 
 type ParserPolicySpec struct {
@@ -339,6 +423,12 @@ type ParserPolicySpec struct {
 	// +kubebuilder:validation:Optional
 	// A Http spec.
 	Http HttpSpec `json:"http"`
+	// +kubebuilder:validation:Optional
+	// ICMP policy specification
+	Icmp IcmpPolicySpec `json:"icmp"`
+	// +kubebuilder:validation:Optional
+	// Raw socket policy specification
+	Rawsock RawsockPolicySpec `json:"rawsock"`
 	// +kubebuilder:validation:Optional
 	// UDP policy specification
 	Udp UdpPolicySpec `json:"udp"`
@@ -426,6 +516,31 @@ type TcpWatermarksPolicySpec struct {
 	// +kubebuilder:validation:Optional
 	// Configures the percent under average deemed to be a dip
 	DipTriggerPercent uint32 `json:"dipTriggerPercent"`
+}
+
+type IcmpPolicySpec struct {
+	// Enable ICMP observability
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	Enable bool `json:"enable"`
+	// Enable ICMPv6 info message observability
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	V6Info bool `json:"v6info"`
+}
+
+type RawsockPolicySpec struct {
+	// Enable raw socket observability
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	Enable bool `json:"enable"`
+	// Enable raw socket close events
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	ReportClose bool `json:"reportClose"`
+	// +kubebuilder:validation:Optional
+	// Metrics Configuration
+	Metrics *PromMetrics `json:"metrics,omitempty"`
 }
 
 type UdpPolicySpec struct {
@@ -589,6 +704,10 @@ type UdpEventDisablePolicySpec struct {
 	// +kubebuilder:validation:Optional
 	// Disable connect events
 	DisableConnect bool `json:"disableConnect"`
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	// Disable listen events
+	DisableListen bool `json:"disableListen"`
 	// +kubebuilder:default=false
 	// +kubebuilder:validation:Optional
 	// Disable close events

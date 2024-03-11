@@ -54,6 +54,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&TracingPolicyNamespacedList{},
 		&PodInfo{},
 		&PodInfoList{},
+		&SandboxPolicy{},
+		&SandboxPolicyList{},
+		&SandboxPolicyNamespaced{},
+		&SandboxPolicyNamespacedList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

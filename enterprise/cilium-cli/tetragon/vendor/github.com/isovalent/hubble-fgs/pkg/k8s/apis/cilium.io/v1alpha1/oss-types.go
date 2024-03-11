@@ -33,6 +33,10 @@ type KProbeSpec struct {
 	// Indicates whether the traced function is a syscall.
 	Syscall bool `json:"syscall"`
 	// +kubebuilder:validation:Optional
+	// A short message of 256 characters max that will be included
+	// in the event output to inform users what is going on.
+	Message string `json:"message"`
+	// +kubebuilder:validation:Optional
 	// A list of function arguments to include in the trace output.
 	Args []KProbeArg `json:"args,omitempty"`
 	// +kubebuilder:validation:Optional
@@ -51,7 +55,7 @@ type KProbeArg struct {
 	// +kubebuilder:validation:Minimum=0
 	// Position of the argument.
 	Index uint32 `json:"index"`
-	// +kubebuilder:validation:Enum=auto;int;uint32;int32;uint64;int64;char_buf;char_iovec;size_t;skb;sock;string;fd;file;filename;path;nop;bpf_attr;perf_event;bpf_map;user_namespace;capability;kiocb;iov_iter;cred;load_info;module;
+	// +kubebuilder:validation:Enum=auto;int;int8;uint8;int16;uint16;uint32;int32;uint64;int64;char_buf;char_iovec;size_t;skb;sock;string;fd;file;filename;path;nop;bpf_attr;perf_event;bpf_map;user_namespace;capability;kiocb;iov_iter;cred;load_info;module;syscall64;kernel_cap_t;cap_inheritable;cap_permitted;cap_effective;linux_binprm;data_loc
 	// +kubebuilder:default=auto
 	// Argument type.
 	Type string `json:"type"`
@@ -81,7 +85,7 @@ type KProbeArg struct {
 }
 
 type BinarySelector struct {
-	// +kubebuilder:validation:Enum=In;NotIn
+	// +kubebuilder:validation:Enum=In;NotIn;Prefix;NotPrefix
 	// Filter operation.
 	Operator string `json:"operator"`
 	// Value to compare the argument against.
@@ -103,6 +107,9 @@ type KProbeSelector struct {
 	// +kubebuilder:validation:Optional
 	// A list of argument filters. MatchArgs are ANDed.
 	MatchReturnArgs []ArgSelector `json:"matchReturnArgs,omitempty"`
+	// +kubebuilder:validation:Optional
+	// A list of actions to execute when MatchReturnArgs selector matches
+	MatchReturnActions []ActionSelector `json:"matchReturnActions,omitempty"`
 	// +kubebuilder:validation:Optional
 	// A list of binary exec name filters.
 	MatchBinaries []BinarySelector `json:"matchBinaries,omitempty"`
@@ -184,7 +191,7 @@ type ArgSelector struct {
 }
 
 type ActionSelector struct {
-	// +kubebuilder:validation:Enum=Post;FollowFD;UnfollowFD;Sigkill;CopyFD;Override;GetUrl;DnsLookup;NoPost;Signal;TrackSock;UntrackSock;NotifyKiller
+	// +kubebuilder:validation:Enum=Post;FollowFD;UnfollowFD;Sigkill;CopyFD;Override;GetUrl;DnsLookup;NoPost;Signal;TrackSock;UntrackSock;NotifyEnforcer
 	// Action to execute.
 	Action string `json:"action"`
 	// +kubebuilder:validation:Optional
@@ -214,6 +221,14 @@ type ActionSelector struct {
 	// or hours ('h' suffix). Only valid with the post action.
 	RateLimit string `json:"rateLimit"`
 	// +kubebuilder:validation:Optional
+	// The scope of the provided rate limit argument. Can be "thread" (default),
+	// "process" (all threads for the same process), or "global". If "thread" is
+	// selected then rate limiting applies per thread; if "process" is selected
+	// then rate limiting applies per process; if "global" is selected then rate
+	// limiting applies regardless of which process or thread caused the action.
+	// Only valid with the post action and with a rateLimit specified.
+	RateLimitScope string `json:"rateLimitScope"`
+	// +kubebuilder:validation:Optional
 	// Enable stack trace export. Only valid with the post action.
 	StackTrace bool `json:"stackTrace"`
 }
@@ -223,6 +238,10 @@ type TracepointSpec struct {
 	Subsystem string `json:"subsystem"`
 	// Tracepoint event
 	Event string `json:"event"`
+	// +kubebuilder:validation:Optional
+	// A short message of 256 characters max that will be included
+	// in the event output to inform users what is going on.
+	Message string `json:"message"`
 	// +kubebuilder:validation:Optional
 	// A list of function arguments to include in the trace output.
 	Args []KProbeArg `json:"args,omitempty"`
@@ -234,11 +253,18 @@ type TracepointSpec struct {
 type UProbeSpec struct {
 	// Name of the traced binary
 	Path string `json:"path"`
-	// Name of the traced symbol
-	Symbol string `json:"symbol"`
+	// List of the traced symbols
+	Symbols []string `json:"symbols"`
+	// +kubebuilder:validation:Optional
+	// A short message of 256 characters max that will be included
+	// in the event output to inform users what is going on.
+	Message string `json:"message"`
 	// +kubebuilder:validation:Optional
 	// Selectors to apply before producing trace output. Selectors are ORed.
 	Selectors []KProbeSelector `json:"selectors,omitempty"`
+	// +kubebuilder:validation:Optional
+	// A list of function arguments to include in the trace output.
+	Args []KProbeArg `json:"args,omitempty"`
 }
 
 type ListSpec struct {
@@ -328,7 +354,7 @@ type PodInfoList struct {
 	Items           []PodInfo `json:"items"`
 }
 
-type KillerSpec struct {
-	// syscalls where killer is executed in
-	Syscalls []string `json:"syscalls"`
+type EnforcerSpec struct {
+	// Calls where enforcer is executed in
+	Calls []string `json:"calls"`
 }

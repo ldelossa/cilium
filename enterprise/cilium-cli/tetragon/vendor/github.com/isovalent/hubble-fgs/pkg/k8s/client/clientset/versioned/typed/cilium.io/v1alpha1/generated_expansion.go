@@ -7,6 +7,10 @@ package v1alpha1
 
 type PodInfoExpansion interface{}
 
+type SandboxPolicyExpansion interface{}
+
+type SandboxPolicyNamespacedExpansion interface{}
+
 type TracingPolicyExpansion interface{}
 
 type TracingPolicyNamespacedExpansion interface{}
