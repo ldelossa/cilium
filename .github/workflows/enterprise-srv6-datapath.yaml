@@ -77,19 +77,19 @@ jobs:
         include:
           - name: '1'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240208.105738'
+            kernel: '5.15-20240305.092417'
             encap-mode: 'srh' # reduced not supported on kernels below 6.0
             sid-manger-enabled: 'true'
 
           - name: '2'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.1-20240208.105738'
+            kernel: '6.1-20240305.092417'
             encap-mode: 'reduced'
             sid-manger-enabled: 'true'
 
           - name: '3'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.6-20240208.105738'
+            kernel: '6.6-20240305.092417'
             encap-mode: 'reduced'
             sid-manger-enabled: 'false'
 
