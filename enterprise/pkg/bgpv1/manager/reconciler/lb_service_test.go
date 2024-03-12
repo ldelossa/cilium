@@ -401,9 +401,10 @@ func TestLBServiceHealthChecker(t *testing.T) {
 				},
 			}
 			oldc := &v2alpha1api.CiliumBGPVirtualRouter{
-				LocalASN:        64125,
-				Neighbors:       []v2alpha1api.CiliumBGPNeighbor{},
-				ServiceSelector: &svcSelector,
+				LocalASN:              64125,
+				Neighbors:             []v2alpha1api.CiliumBGPNeighbor{},
+				ServiceSelector:       &svcSelector,
+				ServiceAdvertisements: []v2alpha1api.BGPServiceAddressType{v2alpha1api.BGPLoadBalancerIPAddr},
 			}
 			testSC, err := instance.NewServerWithConfig(context.Background(), log, srvParams)
 			require.NoError(t, err)
@@ -424,7 +425,7 @@ func TestLBServiceHealthChecker(t *testing.T) {
 
 			epDiffStore := store.NewFakeDiffStore[*k8s.Endpoints]()
 
-			ossReconciler := reconciler.NewLBServiceReconciler(diffstore, epDiffStore).Reconciler.(*reconciler.LBServiceReconciler)
+			ossReconciler := reconciler.NewServiceReconciler(diffstore, epDiffStore).Reconciler.(*reconciler.ServiceReconciler)
 			serviceAnnouncements := ossReconciler.GetMetadata(testSC)
 
 			rParams := LBServiceReconcilerParams{
@@ -459,9 +460,10 @@ func TestLBServiceHealthChecker(t *testing.T) {
 			}
 
 			newc := &v2alpha1api.CiliumBGPVirtualRouter{
-				LocalASN:        64125,
-				Neighbors:       []v2alpha1api.CiliumBGPNeighbor{},
-				ServiceSelector: &svcSelector,
+				LocalASN:              64125,
+				Neighbors:             []v2alpha1api.CiliumBGPNeighbor{},
+				ServiceSelector:       &svcSelector,
+				ServiceAdvertisements: []v2alpha1api.BGPServiceAddressType{v2alpha1api.BGPLoadBalancerIPAddr},
 			}
 
 			err = ceeReconciler.Reconcile(context.Background(), reconciler.ReconcileParams{

@@ -20,7 +20,6 @@ reachability within the cluster.
 Prerequisites
 -------------
 
-- Cilium must be configured with IPAM mode ``cluster-pool``, ``kubernetes``, or ``multi-pool``.
 - If you are using the older MetalLB-based :ref:`bgp` feature, it must be disabled.
 
 Installation
@@ -283,6 +282,13 @@ io.cilium.podippool.name        ``.meta.name``
 =============================== ===================
 
 For additional details regarding CiliumPodIPPools, see the :ref:`ipam_crd_multi_pool` section.
+
+Other IPAM Types
+^^^^^^^^^^^^^^^^
+
+When using other IPAM types, the BGP Control Plane does not support advertising
+PodCIDRs and specifying ``virtualRouters[*].exportPodCIDR`` doesn't take any
+effect.
 
 Advertising Service Virtual IPs
 -------------------------------
@@ -554,6 +560,8 @@ Cilium Agent's logs rather than a more specific error message.
 If a ``CiliumBGPPeeringPolicy`` is deployed with an ``authSecretRef`` that Cilium cannot find, the BGP session will use an empty password and the agent will log an error such as in the following example::
 
    level=error msg="Failed to fetch secret \"secretname\": not found (will continue with empty password)" component=manager.fetchPeerPassword subsys=bgp-control-plane
+
+.. _bgp_control_plane_graceful_restart:
 
 Graceful Restart
 ^^^^^^^^^^^^^^^^

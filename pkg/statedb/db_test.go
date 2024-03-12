@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/stream"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,6 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/metrics/metric"
 	"github.com/cilium/cilium/pkg/statedb/index"
-	"github.com/cilium/cilium/pkg/stream"
 )
 
 func TestMain(m *testing.M) {
@@ -689,6 +689,35 @@ func TestDB_CompareAndSwap_CompareAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, hadOld)
 	wtxn.Abort()
+}
+
+func TestDB_ReadAfterWrite(t *testing.T) {
+	t.Parallel()
+
+	db, table, _ := newTestDB(t, tagsIndex)
+
+	txn := db.WriteTxn(table)
+
+	iter, _ := table.All(txn)
+	require.Len(t, Collect(iter), 0)
+
+	table.Insert(txn, testObject{ID: 1})
+
+	iter, _ = table.All(txn)
+	require.Len(t, Collect(iter), 1)
+
+	table.Delete(txn, testObject{ID: 1})
+	iter, _ = table.All(txn)
+	require.Len(t, Collect(iter), 0)
+
+	table.Insert(txn, testObject{ID: 2})
+	iter, _ = table.All(txn)
+	require.Len(t, Collect(iter), 1)
+
+	txn.Commit()
+
+	iter, _ = table.All(db.ReadTxn())
+	require.Len(t, Collect(iter), 1)
 }
 
 func TestWriteJSON(t *testing.T) {

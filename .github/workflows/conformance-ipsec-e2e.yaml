@@ -77,7 +77,7 @@ jobs:
 
           - name: "1"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'rhel8-20240221.111541'
+            kernel: 'rhel8-20240305.092417'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -85,10 +85,12 @@ jobs:
             encryption-node: 'false'
             key-one: 'gcm(aes)'
             key-two: 'cbc(aes)'
+            key-type-one: ""
+            key-type-two: ""
 
           - name: "2"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: "5.4-20240201.165956"
+            kernel: '5.4-20240305.092417'
             kube-proxy: "iptables"
             kpr: "false"
             tunnel: "disabled"
@@ -101,7 +103,7 @@ jobs:
 
           - name: "3"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: "5.10-20240201.165956"
+            kernel: '5.10-20240305.092417'
             kube-proxy: "iptables"
             kpr: "false"
             tunnel: "disabled"
@@ -115,7 +117,7 @@ jobs:
 
           - name: "4"
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: "bpf-next-20240226.012633"
+            kernel: 'bpf-next-20240309.012251'
             kube-proxy: "iptables"
             kpr: "false"
             tunnel: "geneve"
@@ -127,7 +129,7 @@ jobs:
             key-type-one: ""
             key-type-two: ""
 
-    timeout-minutes: 70
+    timeout-minutes: 75
     steps:
       - name: Checkout context ref (trusted)
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -169,7 +171,7 @@ jobs:
           misc: ${{ matrix.misc }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@7306e3cdc6caee738157f08e3e1ba26179f104e5 # v0.15.23
+        uses: cilium/cilium-cli@ca0d5a23b842d78ce3b5c79a80d546867493daf7 # v0.16.0
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -229,7 +231,6 @@ jobs:
           kubectl create -n kube-system secret generic cilium-ipsec-keys \
             --from-literal=keys="3${{ matrix.key-type-one }} ${key}"
 
-          export CILIUM_CLI_MODE=helm
           ./cilium-cli install ${{ steps.cilium-config.outputs.config }}
           kubectl -n cilium-spire wait --for=condition=Ready pod -l app=spire-server --timeout=300s
           kubectl -n cilium-spire wait --for=condition=Ready pod -l app=spire-agent --timeout=300s

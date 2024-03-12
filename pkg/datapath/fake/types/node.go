@@ -68,7 +68,8 @@ func (n *FakeNodeHandler) NodeNeighDiscoveryEnabled() bool {
 	return false
 }
 
-func (n *FakeNodeHandler) NodeNeighborRefresh(ctx context.Context, node nodeTypes.Node) {
+func (n *FakeNodeHandler) NodeNeighborRefresh(ctx context.Context, node nodeTypes.Node, refresh bool) error {
+	return nil
 }
 
 func (n *FakeNodeHandler) NodeCleanNeighbors(migrateOnly bool) {

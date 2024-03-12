@@ -31,13 +31,12 @@ concurrency:
 
 env:
   # renovate: datasource=golang-version depName=go
-  go_version: 1.22.0
+  go_version: 1.22.1
   # Adding k8s.local to the end makes kops happy-
   # has stricter DNS naming requirements.
   test_name: node-throughput
   cluster_base_name: ${{ github.run_id }}-${{ github.run_attempt }}.k8s.local
   GCP_PERF_RESULTS_BUCKET: gs://cilium-scale-results
-  CILIUM_CLI_MODE: helm
 
 jobs:
   install-and-scaletest:
@@ -89,7 +88,7 @@ jobs:
           go-version: ${{ env.go_version }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@7306e3cdc6caee738157f08e3e1ba26179f104e5 # v0.15.23
+        uses: cilium/cilium-cli@ca0d5a23b842d78ce3b5c79a80d546867493daf7 # v0.16.0
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}

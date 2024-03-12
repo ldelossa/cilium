@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -39,7 +40,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
-	"github.com/cilium/cilium/pkg/stream"
 )
 
 const (
