@@ -30,7 +30,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/ciliummesh"
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
-	multicastmaps "github.com/cilium/cilium/pkg/maps/multicast"
 	"github.com/cilium/cilium/pkg/promise"
 )
 
@@ -87,6 +86,5 @@ var (
 		"Datapath Enterprise",
 
 		cemaps.Cell,
-		multicastmaps.Cell,
 	)
 )

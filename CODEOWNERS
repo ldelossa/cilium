@@ -675,7 +675,6 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-cli/hooks/connectivity/tests/phantom.go @isovalent/clustermesh
 /enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
-/enterprise/cilium-dbg/cmd/bpf_multicast* @isovalent/traffic-engineering
 /enterprise/operator/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/operator/pkg/multinetwork/ @isovalent/multi-network
