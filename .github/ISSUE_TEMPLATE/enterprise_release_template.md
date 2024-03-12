@@ -61,7 +61,7 @@ _If you need help: ask in #enterprise-release._
         - [ ] `git cherry-pick --continue`
         - [ ] Update the commit message to reflect the correct enterprise version `vX.Y.Z-cee.1`
 - [ ] Open a pull request with this branch against the Isovalent repository
-  - `gh pr create -B ${CEE_BRANCH} --label "upstream-sync/${VERSION}"` (NOTE: Make sure this is against Isovalent tree!)
+  - `gh pr create -B ${CEE_BRANCH} --label "release-note/oss-sync"` (NOTE: Make sure this is against Isovalent tree!)
   - [ ] Wait for CI images to build+push
   - [ ] Run end-to-end CI tests by posting a comment `/test-backport-X.Y`
 - [ ] Merge the PR. Then push the new OSS sync tag:
