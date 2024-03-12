@@ -53,7 +53,7 @@ concurrency:
 
 env:
   cilium_cli_ci_version:
-  cilium_dnsproxy_chart_version: 1.14.1
+  cilium_dnsproxy_chart_version: 1.14.2
   kind_config: .github/kind-config.yaml
 
 jobs:
