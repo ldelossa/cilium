@@ -13,6 +13,8 @@ rules:
   verbs:
   - update
   resourceNames:
+  - isovalentmulticastgroups.isovalent.com
+  - isovalentmulticastnodes.isovalent.com
   - isovalentegressgatewaypolicies.isovalent.com
   - isovalentfqdngroups.isovalent.com
   - isovalentpodnetworks.isovalent.com
