@@ -291,7 +291,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	// according to the azAffinity config.
 	if config.azAffinity.enabled() {
 		for az, healthyGatewayIPs := range healthyGatewayIPsByAZ {
-			activeGWs, err := selectActiveGWs(az, gc.maxGatewayNodes, nil, healthyGatewayIPs)
+			var currentLocalActiveGWs []string
+			if status != nil {
+				currentLocalActiveGWs = gc.selectCurrentLocalActiveGWs(operatorManager, az, status.activeGatewayIPsByAZ[az])
+			}
+			activeGWs, err := selectActiveGWs(az, gc.maxGatewayNodes, currentLocalActiveGWs, healthyGatewayIPs)
 			if err != nil {
 				return nil, err
 			}
@@ -304,7 +308,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	//
 	// This function selects active non-local GWs from a list of healthy non-local GWs with random probability
 	// using a target zone name as a seed to make the result deterministic.
-	nonLocalActiveGatewayIPs := func(targetAz string, maxGW int) ([]string, error) {
+	nonLocalActiveGatewayIPs := func(targetAz string, maxGW int, currentActiveNonLocalGWs []string) ([]string, error) {
 		// sort the AZs lexicographically
 		sortedAZs := maps.Keys(healthyGatewayIPsByAZ)
 		sort.Strings(sortedAZs)
@@ -316,7 +320,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 			}
 		}
 
-		activeGWs, err := selectActiveGWs(targetAz, maxGW, nil, healthyNonLocalGWs)
+		activeGWs, err := selectActiveGWs(targetAz, maxGW, currentActiveNonLocalGWs, healthyNonLocalGWs)
 		if err != nil {
 			return nil, err
 		}
@@ -333,7 +337,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 		for az := range activeGatewayIPsByAZ {
 			// only if there are no local gateways, pick the ones from the other AZs
 			if len(activeGatewayIPsByAZ[az]) == 0 {
-				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes)
+				var currentNonLocalActiveGWs []string
+				if status != nil {
+					currentNonLocalActiveGWs = gc.selectCurrentNonLocalActiveGWs(operatorManager, az, status.activeGatewayIPsByAZ[az])
+				}
+				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes, currentNonLocalActiveGWs)
 				if err != nil {
 					return nil, err
 				}
@@ -344,7 +352,11 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	case azAffinityLocalPriority:
 		for az := range activeGatewayIPsByAZ {
 			if gc.maxGatewayNodes != 0 && len(activeGatewayIPsByAZ[az]) < gc.maxGatewayNodes {
-				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes-len(activeGatewayIPsByAZ[az]))
+				var currentNonLocalActiveGWs []string
+				if status != nil {
+					currentNonLocalActiveGWs = gc.selectCurrentNonLocalActiveGWs(operatorManager, az, status.activeGatewayIPsByAZ[az])
+				}
+				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes-len(activeGatewayIPsByAZ[az]), currentNonLocalActiveGWs)
 				if err != nil {
 					return nil, err
 				}
@@ -374,6 +386,36 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 		ActiveGatewayIPsByAZ: activeGatewayIPsByAZ,
 		HealthyGatewayIPs:    healthyGatewayIPs,
 	}, nil
+}
+
+// selectCurrentLocalActiveGWs selects the current local active GWs.
+// It excludes unhealthy and non-gateway nodes
+func (gc *groupConfig) selectCurrentLocalActiveGWs(operatorManager *OperatorManager, az string, currentActiveGWs []netip.Addr) []string {
+	return gc.selectActiveGWsIf(operatorManager, az, currentActiveGWs, func(nodeAZ, targetAZ string) bool {
+		return nodeAZ == targetAZ
+	})
+}
+
+// selectCurrentNonLocalActiveGWs selects the current non-local active GWs.
+// It excludes unhealthy and non-gateway nodes
+func (gc *groupConfig) selectCurrentNonLocalActiveGWs(operatorManager *OperatorManager, az string, currentActiveGWs []netip.Addr) []string {
+	return gc.selectActiveGWsIf(operatorManager, az, currentActiveGWs, func(nodeAZ, targetAZ string) bool {
+		return nodeAZ != targetAZ
+	})
+}
+
+func (gc *groupConfig) selectActiveGWsIf(operatorManager *OperatorManager, az string, currentActiveGWs []netip.Addr, predicate func(nodeAZ, targetAZ string) bool) []string {
+	var localGWs []netip.Addr
+	for _, gw := range currentActiveGWs {
+		node, nodeExists := operatorManager.nodesByIP[gw.String()]
+		if nodeExists {
+			if nodeAZ, azExists := node.Labels[core_v1.LabelTopologyZone]; azExists && predicate(nodeAZ, az) {
+				localGWs = append(localGWs, gw)
+			}
+		}
+	}
+
+	return gc.excludeUnhealthyAndStaleGWs(operatorManager, localGWs)
 }
 
 // excludeStaleNodes excludes unhealthy nodes and non-gateway nodes from the current active GWs.

@@ -49,11 +49,15 @@ const (
 	node2Name = "k8s2"
 	node3Name = "k8s3"
 	node4Name = "k8s4"
+	node5Name = "k8s5"
+	node6Name = "k8s6"
 
 	node1IP = "192.168.1.1"
 	node2IP = "192.168.1.2"
 	node3IP = "192.168.1.3"
 	node4IP = "192.168.1.4"
+	node5IP = "192.168.1.5"
+	node6IP = "192.168.1.6"
 
 	ep1IP = "10.0.0.1"
 	ep2IP = "10.0.0.2"
