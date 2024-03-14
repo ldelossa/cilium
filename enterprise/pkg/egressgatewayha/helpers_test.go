@@ -234,6 +234,7 @@ func newHealthcheckerMock() *healthcheckerMock {
 type policyParams struct {
 	name                 string
 	uid                  types.UID
+	generation           int64
 	endpointLabels       map[string]string
 	destinationCIDR      string
 	excludedCIDRs        []string
@@ -245,6 +246,7 @@ type policyParams struct {
 	activeGatewayIPs     []string
 	activeGatewayIPsByAZ map[string][]string
 	healthyGatewayIPs    []string
+	observedGeneration   int64
 }
 
 func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
@@ -279,10 +281,12 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		id: types.NamespacedName{
 			Name: params.name,
 		},
-		uid:           params.uid,
-		dstCIDRs:      []netip.Prefix{parsedDestinationCIDR},
-		excludedCIDRs: parsedExcludedCIDRs,
-		azAffinity:    params.azAffinity,
+		uid:                     params.uid,
+		generation:              params.generation,
+		groupStatusesGeneration: params.observedGeneration,
+		dstCIDRs:                []netip.Prefix{parsedDestinationCIDR},
+		excludedCIDRs:           parsedExcludedCIDRs,
+		azAffinity:              params.azAffinity,
 		endpointSelectors: []api.EndpointSelector{
 			{
 				LabelSelector: &slimv1.LabelSelector{
@@ -327,8 +331,9 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 
 	iegp := &Policy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: params.name,
-			UID:  params.uid,
+			Name:       params.name,
+			UID:        params.uid,
+			Generation: params.generation,
 		},
 		Spec: v1.IsovalentEgressGatewayPolicySpec{
 			Selectors: []v1.EgressRule{
@@ -363,6 +368,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 					HealthyGatewayIPs:    params.healthyGatewayIPs,
 				},
 			},
+			ObservedGeneration: params.observedGeneration,
 		},
 	}
 

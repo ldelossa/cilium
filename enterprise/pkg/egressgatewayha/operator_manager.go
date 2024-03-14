@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
@@ -79,6 +80,9 @@ type OperatorManager struct {
 	// nodeDataStore stores node name to node mapping
 	nodeDataStore map[string]nodeTypes.Node
 
+	// nodesByIP stores node IP to node mapping
+	nodesByIP map[string]nodeTypes.Node
+
 	// gatewayNodeDatatStore stores all nodes that are acting as a gateway
 	gatewayNodeDataStore map[string]nodeTypes.Node
 
@@ -124,6 +128,7 @@ func newEgressGatewayOperatorManager(p OperatorParams) *OperatorManager {
 		policies:             p.Policies,
 		ciliumNodes:          p.Nodes,
 		nodeDataStore:        make(map[string]nodeTypes.Node),
+		nodesByIP:            make(map[string]nodeTypes.Node),
 		gatewayNodeDataStore: make(map[string]nodeTypes.Node),
 		policyConfigs:        make(map[policyID]*PolicyConfig),
 		policyCache:          make(map[policyID]*Policy),
@@ -312,6 +317,15 @@ func (operatorManager *OperatorManager) onChangeNodeLocked(event string) {
 	sort.Slice(operatorManager.nodes, func(i, j int) bool {
 		return operatorManager.nodes[i].Name < operatorManager.nodes[j].Name
 	})
+
+	operatorManager.nodesByIP = make(map[string]nodeTypes.Node)
+	for _, n := range operatorManager.nodeDataStore {
+		for _, ipAddress := range n.IPAddresses {
+			if ipAddress.AddrType() == addressing.NodeInternalIP {
+				operatorManager.nodesByIP[ipAddress.ToString()] = n
+			}
+		}
+	}
 
 	operatorManager.reconciliationTrigger.TriggerWithReason(event)
 }

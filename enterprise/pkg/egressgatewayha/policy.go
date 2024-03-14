@@ -219,6 +219,9 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGate
 			UID:             iegp.GetUID(),
 			Labels:          iegp.GetLabels(),
 			Annotations:     iegp.GetAnnotations(),
+			// The Generation isn't needed in production code, as UpdateStatus ignores the generation.
+			// See the comment for the Spec bellow.
+			Generation: iegp.GetGeneration(),
 		},
 		// The Spec isn't needed in production code, as this update object will be passed into an UpdateStatus client-go
 		// method, that will promptly ignore the spec. However, it's needed in tests because the fake k8s client
@@ -232,7 +235,7 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGate
 	}
 }
 
-func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig) (*v1.IsovalentEgressGatewayPolicyGroupStatus, error) {
+func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig, status *groupStatus) (*v1.IsovalentEgressGatewayPolicyGroupStatus, error) {
 	healthyGatewayIPs := []string{}
 
 	activeGatewayIPsByAZ := map[string][]string{}
@@ -288,7 +291,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	// according to the azAffinity config.
 	if config.azAffinity.enabled() {
 		for az, healthyGatewayIPs := range healthyGatewayIPsByAZ {
-			activeGWs, err := selectActiveGWs(az, gc.maxGatewayNodes, healthyGatewayIPs)
+			activeGWs, err := selectActiveGWs(az, gc.maxGatewayNodes, nil, healthyGatewayIPs)
 			if err != nil {
 				return nil, err
 			}
@@ -313,7 +316,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 			}
 		}
 
-		activeGWs, err := selectActiveGWs(targetAz, maxGW, healthyNonLocalGWs)
+		activeGWs, err := selectActiveGWs(targetAz, maxGW, nil, healthyNonLocalGWs)
 		if err != nil {
 			return nil, err
 		}
@@ -352,8 +355,16 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	}
 
 	// Selects the active GWs from a list of the healthy GWs with random probability
-	// using a uid as a seed to make the result deterministic.
-	activeGatewayIPs, err := selectActiveGWs(string(config.uid), gc.maxGatewayNodes, healthyGatewayIPs)
+	// using a uid as a seed to make the result deterministic. The result is used for the
+	// non AZ affinity case.
+	//
+	// If the active GWs have already been selected, we exclude all the unhealthy and non gateway nodes,
+	// and back-fill the currently selected group of active gateways, until maxGateways is reached.
+	var currentActiveGWs []string
+	if status != nil {
+		currentActiveGWs = gc.excludeUnhealthyAndStaleGWs(operatorManager, status.activeGatewayIPs)
+	}
+	activeGatewayIPs, err := selectActiveGWs(string(config.uid), gc.maxGatewayNodes, currentActiveGWs, healthyGatewayIPs)
 	if err != nil {
 		return nil, err
 	}
@@ -365,10 +376,37 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	}, nil
 }
 
+// excludeStaleNodes excludes unhealthy nodes and non-gateway nodes from the current active GWs.
+func (gc *groupConfig) excludeUnhealthyAndStaleGWs(operatorManager *OperatorManager, currentActiveGWs []netip.Addr) []string {
+	var activeGWs []string
+	for _, gw := range currentActiveGWs {
+		node, ok := operatorManager.nodesByIP[gw.String()]
+		if ok && operatorManager.nodeIsHealthy(node.Name) && gc.selectsNodeAsGateway(node) {
+			activeGWs = append(activeGWs, gw.String())
+		}
+	}
+
+	return activeGWs
+}
+
 // selectActiveGWs selects the maxGW number of the active GWs from the healthy GWs
 // with random probability using a seed.
-func selectActiveGWs(seed string, maxGW int, healthyGWs []string) ([]string, error) {
+//
+// If currentActiveGWs are specified, we back-fill the currently selected active gateways,
+// until maxGateways is reached.
+func selectActiveGWs(seed string, maxGW int, currentActiveGWs, healthyGWs []string) ([]string, error) {
 	var activeGWs []string
+
+	if len(currentActiveGWs) > 0 {
+		for _, gw := range currentActiveGWs {
+			activeGWs = append(activeGWs, gw)
+			if maxGW != 0 && len(activeGWs) == maxGW {
+				return activeGWs, nil
+			}
+		}
+
+		healthyGWs = excludeCurrentActiveGWsFromHealthyGWs(currentActiveGWs, healthyGWs)
+	}
 
 	// Choose active GWs from the healthy GWs list with a pseudo-random permutation
 	// using a zone name as a seed
@@ -388,12 +426,36 @@ func selectActiveGWs(seed string, maxGW int, healthyGWs []string) ([]string, err
 	return activeGWs, nil
 }
 
+// excludeCurrentActiveGWsFromHealthyGWs excludes the gateway nodes that have been already
+// selected from the healthy gateways
+func excludeCurrentActiveGWsFromHealthyGWs(currentActiveGWs, healthyGWs []string) []string {
+	activeGWsSet := make(map[string]bool)
+	for _, gw := range currentActiveGWs {
+		activeGWsSet[gw] = true
+	}
+
+	var result []string
+	for _, gw := range healthyGWs {
+		if !activeGWsSet[gw] {
+			result = append(result, gw)
+		}
+	}
+
+	return result
+}
+
 // updateGroupStatuses updates the list of active and healthy gateway IPs in the
 // IEGP k8s resource for the receiver PolicyConfig
 func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager) error {
 	groupStatuses := []v1.IsovalentEgressGatewayPolicyGroupStatus{}
-	for _, gc := range config.groupConfigs {
-		iegp, err := gc.computeGroupStatus(operatorManager, config)
+
+	haveSeenLatestIEGP := config.groupStatusesGeneration == config.generation
+	for i, gc := range config.groupConfigs {
+		var status *groupStatus
+		if haveSeenLatestIEGP && i < len(config.groupStatuses) {
+			status = &config.groupStatuses[i]
+		}
+		iegp, err := gc.computeGroupStatus(operatorManager, config, status)
 		if err != nil {
 			return err
 		}
