@@ -586,6 +586,8 @@ Vagrantfile @cilium/ci-structure
 # Isovalent Teams
 # +++++++++++++++
 #
+# - @isovalent/cilium-mesh
+#   Responsible for maintaining the enterprise-specific Cilium Mesh feature
 # - @isovalent/cli:
 #   Provide user experience feedback on changes to Command-Line Interfaces.
 #   These owners are a stand-in for the user community to bring a user
@@ -670,10 +672,12 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/cilium-dbg/cmd/bpf_multicast* @isovalent/traffic-engineering
+/enterprise/operator/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/operator/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/annotation/ @isovalent/sig-k8s
 /enterprise/pkg/bgpv1/ @isovalent/traffic-engineering
+/enterprise/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
 /enterprise/pkg/fqdnha/ @isovalent/dns-proxy
