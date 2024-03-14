@@ -28,8 +28,8 @@ import (
 	nodetypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
-	"github.com/cilium/cilium/pkg/stream"
 
+	"github.com/cilium/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

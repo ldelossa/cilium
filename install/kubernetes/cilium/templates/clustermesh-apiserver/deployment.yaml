@@ -164,12 +164,13 @@ spec:
         {{- end }}
         - --cluster-name=$(CLUSTER_NAME)
         - --cluster-id=$(CLUSTER_ID)
-        - --kvstore-opt
-        - etcd.config=/var/lib/cilium/etcd-config.yaml
+        - --kvstore-opt=etcd.config=/var/lib/cilium/etcd-config.yaml
+        - --kvstore-opt=etcd.qps=20
+        - --kvstore-opt=etcd.bootstrapQps=10000
         {{- if hasKey .Values.clustermesh "maxConnectedClusters" }}
         - --max-connected-clusters={{ .Values.clustermesh.maxConnectedClusters }}
         {{- end }}
-        - --clustermesh-health-port={{ .Values.clustermesh.apiserver.healthPort }}
+        - --health-port={{ .Values.clustermesh.apiserver.healthPort }}
         {{- if ne .Values.clustermesh.apiserver.tls.authMode "legacy" }}
         - --cluster-users-enabled
         - --cluster-users-config-path=/var/lib/cilium/etcd-config/users.yaml
@@ -209,9 +210,9 @@ spec:
           httpGet:
             path: /readyz
             port: apiserv-health
-          periodSeconds: 30
-          initialDelaySeconds: 5
-          timeoutSeconds: 5
+          {{- with .Values.clustermesh.apiserver.readinessProbe }}
+          {{- toYaml . | trim | nindent 10 }}
+          {{- end }}
         {{- with .Values.clustermesh.apiserver.extraEnv }}
         {{- toYaml . | trim | nindent 8 }}
         {{- end }}
@@ -264,11 +265,13 @@ spec:
         - --cluster-id=$(CLUSTER_ID)
         - --kvstore-opt=etcd.config=/var/lib/cilium/etcd-config.yaml
         - --kvstore-opt=etcd.qps=100
+        - --kvstore-opt=etcd.bootstrapQps=10000
         - --kvstore-opt=etcd.maxInflight=10
         - --clustermesh-config=/var/lib/cilium/clustermesh
         {{- if hasKey .Values.clustermesh "maxConnectedClusters" }}
         - --max-connected-clusters={{ .Values.clustermesh.maxConnectedClusters }}
         {{- end }}
+        - --health-port={{ .Values.clustermesh.apiserver.kvstoremesh.healthPort }}
         {{- if .Values.clustermesh.apiserver.metrics.kvstoremesh.enabled }}
         - --prometheus-serve-addr=:{{ .Values.clustermesh.apiserver.metrics.kvstoremesh.port }}
         - --controller-group-metrics=all
@@ -276,6 +279,13 @@ spec:
         {{- with .Values.clustermesh.apiserver.kvstoremesh.extraArgs }}
         {{- toYaml . | trim | nindent 8 }}
         {{- end }}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: kvmesh-health
+          {{- with .Values.clustermesh.apiserver.kvstoremesh.readinessProbe }}
+          {{- toYaml . | trim | nindent 10 }}
+          {{- end }}
         env:
         - name: CLUSTER_NAME
           valueFrom:
@@ -290,8 +300,11 @@ spec:
         {{- with .Values.clustermesh.apiserver.kvstoremesh.extraEnv }}
         {{- toYaml . | trim | nindent 8 }}
         {{- end }}
-        {{- if .Values.clustermesh.apiserver.metrics.kvstoremesh.enabled }}
         ports:
+        - name: kvmesh-health
+          containerPort: {{ .Values.clustermesh.apiserver.kvstoremesh.healthPort }}
+          protocol: TCP
+        {{- if .Values.clustermesh.apiserver.metrics.kvstoremesh.enabled }}
         - name: kvmesh-metrics
           containerPort: {{ .Values.clustermesh.apiserver.metrics.kvstoremesh.port }}
           protocol: TCP

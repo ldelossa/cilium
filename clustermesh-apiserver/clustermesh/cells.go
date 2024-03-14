@@ -5,8 +5,10 @@ package clustermesh
 
 import (
 	cmk8s "github.com/cilium/cilium/clustermesh-apiserver/clustermesh/k8s"
+	"github.com/cilium/cilium/clustermesh-apiserver/health"
 	cmmetrics "github.com/cilium/cilium/clustermesh-apiserver/metrics"
 	"github.com/cilium/cilium/clustermesh-apiserver/option"
+	"github.com/cilium/cilium/clustermesh-apiserver/syncstate"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -45,11 +47,16 @@ var Cell = cell.Module(
 	cmk8s.ResourcesCell,
 
 	kvstore.Cell(kvstore.EtcdBackendName),
-	cell.Provide(func() *kvstore.ExtraOptions { return nil }),
+	cell.Provide(func(ss syncstate.SyncState) *kvstore.ExtraOptions {
+		return &kvstore.ExtraOptions{
+			BootstrapComplete: ss.WaitChannel(),
+		}
+	}),
 	store.Cell,
 
 	heartbeat.Cell,
-	healthAPIServerCell,
+	HealthAPIEndpointsCell,
+	health.HealthAPIServerCell,
 
 	cmmetrics.Cell,
 

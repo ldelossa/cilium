@@ -55,7 +55,7 @@ concurrency:
 
 env:
   # renovate: datasource=golang-version depName=go
-  go-version: 1.22.0
+  go-version: 1.22.1
 
 jobs:
   commit-status-start:
@@ -118,7 +118,7 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.22.0
+          go-version: 1.22.1
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
@@ -262,7 +262,7 @@ jobs:
           test-name: runtime-tests
           install-dependencies: true
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          image-version: "bpf-next-20240226.012633@sha256:5107cfa8f934959b38e99d5aaf5f10de5e430000f738b236570257d49e2ce8bc"
+          image-version: "bpf-next-20240309.012251@sha256:2b12cf91dad348d6e031c189628250179117d2ca0e0ea9e43864bce48323ac92"
           host-mount: ./
           cpu: 4
           mem: 12G
@@ -280,7 +280,7 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.22.0
+          go-version: 1.22.1
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}

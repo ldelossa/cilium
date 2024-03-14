@@ -262,6 +262,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableNat46X64Gateway, false, "Enable NAT46 and NAT64 gateway")
 	option.BindEnv(vp, option.EnableNat46X64Gateway)
 
+	flags.Bool(option.EnableIPIPTermination, false, "Enable plain IPIP/IP6IP6 termination")
+	option.BindEnv(vp, option.EnableIPIPTermination)
+
 	flags.Bool(option.EnableIPv6NDPName, defaults.EnableIPv6NDP, "Enable IPv6 NDP support")
 	option.BindEnv(vp, option.EnableIPv6NDPName)
 
@@ -343,6 +346,15 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.EnableL7Proxy, defaults.EnableL7Proxy, "Enable L7 proxy for L7 policy enforcement")
 	option.BindEnv(vp, option.EnableL7Proxy)
+
+	flags.Bool(option.BPFEventsDropEnabled, defaults.BPFEventsDropEnabled, "Expose 'drop' events for Cilium monitor and/or Hubble")
+	option.BindEnv(vp, option.BPFEventsDropEnabled)
+
+	flags.Bool(option.BPFEventsPolicyVerdictEnabled, defaults.BPFEventsPolicyVerdictEnabled, "Expose 'policy verdict' events for Cilium monitor and/or Hubble")
+	option.BindEnv(vp, option.BPFEventsPolicyVerdictEnabled)
+
+	flags.Bool(option.BPFEventsTraceEnabled, defaults.BPFEventsTraceEnabled, "Expose 'trace' events for Cilium monitor and/or Hubble")
+	option.BindEnv(vp, option.BPFEventsTraceEnabled)
 
 	flags.Bool(option.EnableTracing, false, "Enable tracing while determining policy (debugging)")
 	option.BindEnv(vp, option.EnableTracing)
@@ -1318,9 +1330,9 @@ func initEnv(vp *viper.Viper) {
 
 	option.Config.Opts.SetBool(option.Debug, debugDatapath)
 	option.Config.Opts.SetBool(option.DebugLB, debugDatapath)
-	option.Config.Opts.SetBool(option.DropNotify, true)
-	option.Config.Opts.SetBool(option.TraceNotify, true)
-	option.Config.Opts.SetBool(option.PolicyVerdictNotify, true)
+	option.Config.Opts.SetBool(option.DropNotify, option.Config.BPFEventsDropEnabled)
+	option.Config.Opts.SetBool(option.PolicyVerdictNotify, option.Config.BPFEventsPolicyVerdictEnabled)
+	option.Config.Opts.SetBool(option.TraceNotify, option.Config.BPFEventsTraceEnabled)
 	option.Config.Opts.SetBool(option.PolicyTracing, option.Config.EnableTracing)
 	option.Config.Opts.SetBool(option.ConntrackAccounting, false)
 	option.Config.Opts.SetBool(option.ConntrackLocal, false)
@@ -1870,6 +1882,9 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	if err != nil {
 		log.WithError(err).Warn("Failed to send agent start monitor message")
 	}
+
+	// Watches for node neighbors link updates.
+	d.nodeDiscovery.Manager.StartNodeNeighborLinkUpdater(d.datapath.NodeNeighbors())
 
 	if option.Config.DatapathMode != datapathOption.DatapathModeLBOnly {
 		if !d.datapath.NodeNeighbors().NodeNeighDiscoveryEnabled() {

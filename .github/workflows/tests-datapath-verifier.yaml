@@ -52,7 +52,7 @@ concurrency:
 
 env:
   # renovate: datasource=golang-version depName=go
-  go-version: 1.22.0
+  go-version: 1.22.1
 
 jobs:
   commit-status-start:
@@ -72,22 +72,22 @@ jobs:
       matrix:
         include:
           # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
-          - kernel: '5.4-20240215.093821'
+          - kernel: '5.4-20240305.092417'
             ci-kernel: '54'
           # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
-          - kernel: 'rhel8-20240221.111541'
+          - kernel: 'rhel8-20240305.092417'
             ci-kernel: '54'
           # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
-          - kernel: '5.10-20240215.093821'
+          - kernel: '5.10-20240305.092417'
             ci-kernel: '510'
           # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
-          - kernel: '5.15-20240215.093821'
+          - kernel: '5.15-20240305.092417'
             ci-kernel: '510'
           # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
-          - kernel: '6.1-20240215.093821'
+          - kernel: '6.1-20240305.092417'
             ci-kernel: '61'
           # renovate: datasource=docker depName=quay.io/lvh-images/complexity-test
-          - kernel: 'bpf-next-20240226.012633'
+          - kernel: 'bpf-next-20240309.012251'
             ci-kernel: 'netnext'
     timeout-minutes: 60
     steps:

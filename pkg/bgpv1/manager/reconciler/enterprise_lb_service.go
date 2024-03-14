@@ -22,39 +22,39 @@ import (
 
 type LocalServices localServices
 
-func (r *LBServiceReconciler) PopulateLocalServices(localNodeName string) (LocalServices, error) {
+func (r *ServiceReconciler) PopulateLocalServices(localNodeName string) (LocalServices, error) {
 	ls, err := r.populateLocalServices(localNodeName)
 	return LocalServices(ls), err
 }
 
-func (r *LBServiceReconciler) RequiresFullReconciliation(p ReconcileParams) bool {
+func (r *ServiceReconciler) RequiresFullReconciliation(p ReconcileParams) bool {
 	return r.requiresFullReconciliation(p)
 }
 
-func (r *LBServiceReconciler) FullReconciliationServiceList(sc *instance.ServerWithConfig) (toReconcile []*slim_corev1.Service, toWithdraw []resource.Key, err error) {
+func (r *ServiceReconciler) FullReconciliationServiceList(sc *instance.ServerWithConfig) (toReconcile []*slim_corev1.Service, toWithdraw []resource.Key, err error) {
 	return r.fullReconciliationServiceList(sc)
 }
 
-func (r *LBServiceReconciler) SvcDesiredRoutes(newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls LocalServices) ([]netip.Prefix, error) {
+func (r *ServiceReconciler) SvcDesiredRoutes(newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls LocalServices) ([]netip.Prefix, error) {
 	return r.svcDesiredRoutes(newc, svc, localServices(ls))
 }
 
-func (r *LBServiceReconciler) ReconcileServiceRoutes(ctx context.Context, sc *instance.ServerWithConfig, svc *slim_corev1.Service, desiredRoutes []netip.Prefix) error {
+func (r *ServiceReconciler) ReconcileServiceRoutes(ctx context.Context, sc *instance.ServerWithConfig, svc *slim_corev1.Service, desiredRoutes []netip.Prefix) error {
 	return r.reconcileServiceRoutes(ctx, sc, svc, desiredRoutes)
 }
 
-func (r *LBServiceReconciler) WithdrawService(ctx context.Context, sc *instance.ServerWithConfig, key resource.Key) error {
+func (r *ServiceReconciler) WithdrawService(ctx context.Context, sc *instance.ServerWithConfig, key resource.Key) error {
 	return r.withdrawService(ctx, sc, key)
 }
 
-func (r *LBServiceReconciler) DiffReconciliationServiceList() (toReconcile []*slim_corev1.Service, toWithdraw []resource.Key, err error) {
+func (r *ServiceReconciler) DiffReconciliationServiceList() (toReconcile []*slim_corev1.Service, toWithdraw []resource.Key, err error) {
 	return r.diffReconciliationServiceList()
 }
 
-func (r *LBServiceReconciler) GetMetadata(sc *instance.ServerWithConfig) LBServiceReconcilerMetadata {
+func (r *ServiceReconciler) GetMetadata(sc *instance.ServerWithConfig) LBServiceReconcilerMetadata {
 	return r.getMetadata(sc)
 }
 
-func (r *LBServiceReconciler) GetService(svcKey resource.Key) (*slim_corev1.Service, bool, error) {
+func (r *ServiceReconciler) GetService(svcKey resource.Key) (*slim_corev1.Service, bool, error) {
 	return r.diffStore.GetByKey(svcKey)
 }

@@ -36,6 +36,9 @@ cilium-agent [flags]
       --bpf-ct-timeout-service-any duration                          Timeout for service entries in non-TCP CT table (default 1m0s)
       --bpf-ct-timeout-service-tcp duration                          Timeout for established service entries in TCP CT table (default 2h13m20s)
       --bpf-ct-timeout-service-tcp-grace duration                    Timeout for graceful shutdown of service entries in TCP CT table (default 1m0s)
+      --bpf-events-drop-enabled                                      Expose 'drop' events for Cilium monitor and/or Hubble (default true)
+      --bpf-events-policy-verdict-enabled                            Expose 'policy verdict' events for Cilium monitor and/or Hubble (default true)
+      --bpf-events-trace-enabled                                     Expose 'trace' events for Cilium monitor and/or Hubble (default true)
       --bpf-fragments-map-max int                                    Maximum number of entries in fragments tracking map (default 8192)
       --bpf-lb-acceleration string                                   BPF load balancing acceleration via XDP ("native", "disabled") (default "disabled")
       --bpf-lb-algorithm string                                      BPF load balancing algorithm ("random", "maglev") (default "random")
@@ -125,6 +128,7 @@ cilium-agent [flags]
       --enable-ingress-controller                                    Enables Envoy secret sync for Ingress controller related TLS secrets
       --enable-inter-cluster-snat                                    Enable inter-cluster SNAT, to support overlapping PodCIDRs
       --enable-ip-masq-agent                                         Enable BPF ip-masq-agent
+      --enable-ipip-termination                                      Enable plain IPIP/IP6IP6 termination
       --enable-ipsec                                                 Enable IPSec support
       --enable-ipsec-key-watcher                                     Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations. (default true)
       --enable-ipv4                                                  Enable IPv4 support (default true)
@@ -332,7 +336,7 @@ cilium-agent [flags]
       --preallocate-bpf-maps                                         Enable BPF map pre-allocation (default true)
       --prepend-iptables-chains                                      Prepend custom iptables chains instead of appending (default true)
       --procfs string                                                Path to the host's proc filesystem mount (default "/proc")
-      --prometheus-serve-addr string                                 IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off) (default ":9962")
+      --prometheus-serve-addr string                                 IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off)
       --proxy-connect-timeout uint                                   Time after which a TCP connect attempt is considered failed unless completed (in seconds) (default 2)
       --proxy-gid uint                                               Group ID for proxy control plane sockets. (default 1337)
       --proxy-idle-timeout-seconds int                               Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s (default 60)

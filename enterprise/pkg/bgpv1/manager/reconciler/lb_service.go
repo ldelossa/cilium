@@ -54,8 +54,8 @@ type LBServiceReconciler struct {
 	signaler *signaler.BGPCPSignaler
 
 	// ossLBServiceReconciler holds the reference to the OSS LBServiceReconciler,
-	// set up in WireLBServiceReconcilers to avoid reconciler dependency loop
-	ossLBServiceReconciler *ossreconciler.LBServiceReconciler
+	// set up in WireServiceReconcilers to avoid reconciler dependency loop
+	ossLBServiceReconciler *ossreconciler.ServiceReconciler
 
 	// service health-checker
 	healthChecker    types.HealthCheckSubscriber
@@ -124,12 +124,12 @@ func WireLBServiceReconcilers(p WireLBServiceReconcilersParams) error {
 		return nil
 	}
 	var (
-		ossLBServiceReconciler *ossreconciler.LBServiceReconciler
+		ossLBServiceReconciler *ossreconciler.ServiceReconciler
 		ceeLBServiceReconciler *LBServiceReconciler
 	)
 	for _, configReconciler := range p.ConfigReconcilers {
 		switch r := configReconciler.(type) {
-		case *ossreconciler.LBServiceReconciler:
+		case *ossreconciler.ServiceReconciler:
 			ossLBServiceReconciler = r
 		case *LBServiceReconciler:
 			ceeLBServiceReconciler = r
