@@ -16,7 +16,7 @@ import (
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
-	"github.com/cilium/cilium-cli/cli"
+	"github.com/cilium/cilium-cli/api"
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/sysdump"
 )
@@ -24,7 +24,7 @@ import (
 // EnterpriseHooks implements cli.Hooks interface to add connectivity tests and
 // sysdump tasks that are specific to Isovalent Enterprise for Cilium.
 type EnterpriseHooks struct {
-	cli.NopHooks
+	api.NopHooks
 
 	ec   EnterpriseConnectivity
 	Opts *EnterpriseOptions

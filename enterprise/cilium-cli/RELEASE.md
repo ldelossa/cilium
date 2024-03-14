@@ -10,9 +10,9 @@ Release process and checklist for `cilium-cli` enterprise edition.
 ### Define environment variables
 
 Define the `OSS_VERSION`, `CEE_VERSION` and `CEE_VERSION_TAG` variables. For
-example, if you are releasing v0.16.1-cee.1 based on v0.15.24 OSS:
+example, if you are releasing v0.16.3-cee.1 based on v0.16.3 OSS:
 
-    export OSS_VERSION=v0.16.1
+    export OSS_VERSION=v0.16.3
     export CEE_VERSION=${OSS_VERSION}-cee.1
     export CEE_VERSION_TAG=enterprise/cilium-cli/${CEE_VERSION}
 
