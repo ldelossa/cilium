@@ -4,13 +4,17 @@
 package nodemap
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/ebpf"
+	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
 // compile time check of MapV2 interface
@@ -114,6 +118,73 @@ func LoadNodeMapV2() (MapV2, error) {
 	}
 
 	return &nodeMapV2{bpfMap: bpfMap}, nil
+}
+
+// migrateV1 will migrate the v1 NodeMap to this NodeMapv2
+//
+// Ensure this always occurs BEFORE we begin handling K8s Node events or else
+// both this migration and the node events will be writing to the map.
+func (m *nodeMapV2) migrateV1(NodeMapName string, EncryptMapName string) error {
+	log.Debug("Detecting V1 to V2 migration")
+
+	// load v1 node map
+	nodeMapPath := bpf.MapPath(NodeMapName)
+	v1, err := ebpf.LoadPinnedMap(nodeMapPath)
+	if errors.Is(err, unix.ENOENT) {
+		log.Debug("No v1 node map found, skipping migration")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	nodeMap := nodeMap{
+		bpfMap: v1,
+	}
+
+	// load encrypt map to get current SPI
+	encryptMapPath := bpf.MapPath(EncryptMapName)
+	en, err := ebpf.LoadPinnedMap(encryptMapPath)
+	if errors.Is(err, unix.ENOENT) {
+		log.Debug("No encrypt map found, skipping migration")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer en.Close()
+
+	var SPI uint8
+	if err = en.Lookup(uint32(0), &SPI); err != nil {
+		return err
+	}
+
+	// reads v1 map entries and writes them to V2 with the latest SPI found
+	// from EncryptMap
+	parse := func(k *NodeKey, v *NodeValue) {
+		v2 := NodeValueV2{
+			NodeID: v.NodeID,
+			SPI:    SPI,
+		}
+
+		log.WithFields(logrus.Fields{
+			logfields.NodeID: v2.NodeID,
+			logfields.IPAddr: k.IP,
+			logfields.SPI:    v2.SPI,
+		}).Debug("Migrating V1 node map entry to V2")
+
+		m.bpfMap.Put(k, &v2)
+	}
+
+	err = nodeMap.IterateWithCallback(parse)
+	if err != nil {
+		return fmt.Errorf("failed to iterate v1 node map %w", err)
+	}
+
+	// migration was successful so close and unpin the v1 NodeMap
+	v1.Close()
+	v1.Unpin()
+
+	return nil
 }
 
 func (m *nodeMapV2) init() error {
