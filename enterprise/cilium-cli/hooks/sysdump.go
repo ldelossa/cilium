@@ -12,11 +12,13 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -32,7 +34,7 @@ const (
 	enterpriseCLICommand          = "hubble-enterprise"
 )
 
-func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error {
+func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) error {
 	collector.AddTasks([]sysdump.Task{
 		{
 			CreatesSubtasks: true,
@@ -102,6 +104,67 @@ func addSysdumpTasks(collector *sysdump.Collector, opts EnterpriseOptions) error
 				if err = collector.SubmitTetragonBugtoolTasks(sysdump.FilterPods(p, collector.NodeList),
 					enterpriseAgentContainerName, enterpriseBugtoolPrefix, enterpriseCLICommand); err != nil {
 					return fmt.Errorf("failed to collect bugtool output from 'hubble-enterprise' pods: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting Hubble Timescape Helm values",
+			Quick:           false,
+			Task: func(ctx context.Context) error {
+				namespaces := []string{collector.Options.CiliumNamespace}
+				if opts.HubbleTimescapeNamespace != collector.Options.CiliumNamespace {
+					namespaces = append(namespaces, opts.HubbleTimescapeNamespace)
+				}
+
+				var taskErr error
+				for _, ns := range namespaces {
+					val, err := collector.Client.GetHelmValues(ctx, opts.HubbleTimescapeReleaseName, ns)
+					if err != nil {
+						taskErr = errors.Join(taskErr, err)
+					}
+					if val != "" {
+						if err := collector.WriteString("hubble-timescape-helm-values-<ts>.yaml", val); err != nil {
+							return fmt.Errorf("failed to collect hubble-timescape helm values")
+						}
+						return nil
+					}
+				}
+				return fmt.Errorf("failed to collect hubble-timescape helm values")
+			},
+		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting Hubble Timescape configmaps",
+			Quick:           false,
+			Task: func(ctx context.Context) error {
+				namespaces := []string{collector.Options.CiliumNamespace}
+				if opts.HubbleTimescapeNamespace != collector.Options.CiliumNamespace {
+					namespaces = append(namespaces, opts.HubbleTimescapeNamespace)
+				}
+				configMaps := []string{
+					"hubble-timescape-clickhouse-client-config",
+					"hubble-timescape-ingester-config",
+					"hubble-timescape-migrate-config",
+					"hubble-timescape-rbac-policy",
+					"hubble-timescape-server-config",
+				}
+
+				for _, ns := range namespaces {
+					for _, cm := range configMaps {
+						configMap, err := collector.Client.GetConfigMap(ctx, ns, cm, metav1.GetOptions{})
+						if kerrors.IsNotFound(err) {
+							// Ignore not found. Might not be enabled or we're looking at the wrong namespace
+							continue
+						}
+						if err != nil {
+							return fmt.Errorf("failed to get Hubble Timescape configmaps: %w", err)
+						}
+						if err := collector.WriteYAML(fmt.Sprintf("%s-<ts>.yaml", cm), configMap); err != nil {
+							return fmt.Errorf("failed to collect Hubble Timescape configmaps: %w", err)
+						}
+					}
 				}
 				return nil
 			},
