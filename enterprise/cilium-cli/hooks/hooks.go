@@ -12,13 +12,15 @@ package hooks
 
 import (
 	"context"
-
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
+	"slices"
 
 	"github.com/cilium/cilium-cli/api"
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/sysdump"
+	"github.com/spf13/cobra"
+
+	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
+	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
 // EnterpriseHooks implements cli.Hooks interface to add connectivity tests and
@@ -37,6 +39,17 @@ type EnterpriseOptions struct {
 	HubbleTimescapeReleaseName string
 	HubbleTimescapeSelector    string
 	HubbleTimescapeNamespace   string
+}
+
+func NewEnterpriseHook() *EnterpriseHooks {
+	return &EnterpriseHooks{
+		Opts: &EnterpriseOptions{
+			HubbleTimescapeSelector:    "app.kubernetes.io/part-of=hubble-timescape",
+			HubbleTimescapeReleaseName: "hubble-timescape",
+			HubbleTimescapeNamespace:   "hubble-timescape",
+			HubbleUINamespace:          "hubble-ui",
+		},
+	}
 }
 
 // AddConnectivityTests registers connectivity tests that are specific to
@@ -75,4 +88,39 @@ func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.Conne
 	}
 
 	return nil
+}
+
+func (eh *EnterpriseHooks) InitializeCommand(command *cobra.Command) {
+	// This hook removes all subcommands except for those contained in `supportedCommands`.
+	// Therefore, we show a help message only for the `cilium sysdump` usage.
+	supportedCommands := []string{
+		"sysdump",
+		"version",
+	}
+	command.Short = "CLI to collect troubleshooting information for Isovalent Enterprise for Cilium"
+	command.Long = ""
+	command.Example = `# Collect sysdump from the entire cluster.
+cilium sysdump
+
+# Collect sysdump from specific nodes.
+cilium sysdump --node-list node-a,node-b,node-c`
+	for _, cmd := range command.Commands() {
+		if !slices.Contains(supportedCommands, cmd.Name()) {
+			cmd.Hidden = true
+		}
+		if cmd.Name() == "sysdump" {
+			cmd.Flags().StringVar(&eh.Opts.HubbleUINamespace,
+				"hubble-ui-namespace", eh.Opts.HubbleUINamespace,
+				"The namespace Hubble UI is running in")
+			cmd.Flags().StringVar(&eh.Opts.HubbleTimescapeReleaseName,
+				"hubble-timescape-helm-release-name", eh.Opts.HubbleTimescapeReleaseName,
+				"The Hubble Timescape Helm release name for which to get values")
+			cmd.Flags().StringVar(&eh.Opts.HubbleTimescapeNamespace,
+				"hubble-timescape-namespace", eh.Opts.HubbleTimescapeNamespace,
+				"The namespace Hubble Timescape is running in")
+			cmd.Flags().StringVar(&eh.Opts.HubbleTimescapeSelector,
+				"hubble-timescape-selector", eh.Opts.HubbleTimescapeSelector,
+				"The labels used to target Hubble Timescape pods")
+		}
+	}
 }
