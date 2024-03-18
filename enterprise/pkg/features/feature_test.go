@@ -47,8 +47,8 @@ func TestFeatureWithFn(t *testing.T) {
 			cell.Provide(func() testConfig2 {
 				return testConfig2{EnableXXX: confValue}
 			}),
-			cell.Provide(func() *FeatureGatesConfig {
-				return &FeatureGatesConfig{
+			cell.Provide(func() FeatureGatesConfig {
+				return FeatureGatesConfig{
 					FeatureGates: []string{},
 				}
 			}),
@@ -77,8 +77,8 @@ func TestFeatureWithFn(t *testing.T) {
 func TestSpecValidation(t *testing.T) {
 	runTestHive := func(spec Spec) (func(), error) {
 		h := hive.New(
-			cell.Provide(func() (*FeatureGatesConfig, testConfig) {
-				return &FeatureGatesConfig{}, testConfig{}
+			cell.Provide(func() (FeatureGatesConfig, testConfig) {
+				return FeatureGatesConfig{}, testConfig{}
 			}),
 			cell.ProvidePrivate(newGateChecker),
 			FeatureWithConfigT[testConfig](spec),
@@ -150,8 +150,8 @@ func TestSpecValidation(t *testing.T) {
 func TestFeature(t *testing.T) {
 	runTestHive := func(spec Spec, conf testConfig, allowedGates []string) (func(), error) {
 		h := hive.New(
-			cell.Provide(func() (*FeatureGatesConfig, *testConfig) {
-				return &FeatureGatesConfig{
+			cell.Provide(func() (FeatureGatesConfig, *testConfig) {
+				return FeatureGatesConfig{
 					FeatureGates: allowedGates,
 				}, &conf
 			}),
@@ -234,7 +234,7 @@ func TestFeature(t *testing.T) {
 }
 
 func Test_gateChecker(t *testing.T) {
-	c, err := newGateChecker(&FeatureGatesConfig{
+	c, err := newGateChecker(FeatureGatesConfig{
 		FeatureGates: []string{"A", "B", "C"},
 	})
 	assert.NoError(t, err)
@@ -244,14 +244,14 @@ func Test_gateChecker(t *testing.T) {
 	assert.Contains(t, c.allowedFeatures, "B")
 	assert.Contains(t, c.allowedFeatures, "C")
 
-	c, err = newGateChecker(&FeatureGatesConfig{
+	c, err = newGateChecker(FeatureGatesConfig{
 		FeatureGates: []string{"AllBetaFeatures", "AllAlphaFeatures", "AllLimitedFeatures"},
 	})
 	assert.NoError(t, err)
 	assert.True(t, c.allowAllAlpha)
 	assert.True(t, c.allowAllBeta)
 	assert.True(t, c.allowAllLimited)
-	c, err = newGateChecker(&FeatureGatesConfig{
+	c, err = newGateChecker(FeatureGatesConfig{
 		FeatureGates: []string{},
 	})
 	assert.NoError(t, err)

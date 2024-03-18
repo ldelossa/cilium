@@ -20,6 +20,6 @@ type FeatureGatesConfig struct {
 	FeatureGates []string `mapstructure:"feature-gates"`
 }
 
-func (c *FeatureGatesConfig) Flags(flags *pflag.FlagSet) {
+func (c FeatureGatesConfig) Flags(flags *pflag.FlagSet) {
 	flags.StringSlice("feature-gates", c.FeatureGates, "Slice of alpha features to enable, passing AllAlpha, AllBeta, AllLimited enables all alpha, beta and limited features (respectively).")
 }

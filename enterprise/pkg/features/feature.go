@@ -43,9 +43,13 @@ const (
 	allowAll        = "AllFeatures"
 )
 
+// AllowAll is used in testing hive components, can be used to override features config
+// such that all features are allowed.
+var AllowAll = []string{allowAll}
+
 var logger = logrus.WithField(logfields.LogSubsys, "cilium-feature-checks")
 
-func newGateChecker(fcfg *FeatureGatesConfig) (*gateChecker, error) {
+func newGateChecker(fcfg FeatureGatesConfig) (*gateChecker, error) {
 	gc := &gateChecker{
 		allowedFeatures: sets.Set[string](sets.NewString(fcfg.FeatureGates...)),
 	}

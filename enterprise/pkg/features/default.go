@@ -11,6 +11,6 @@
 
 package features
 
-var defaultConf = &FeatureGatesConfig{
+var defaultConf = FeatureGatesConfig{
 	FeatureGates: []string{},
 }
