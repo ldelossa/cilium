@@ -69,7 +69,7 @@ jobs:
 
   installation-and-connectivity:
     name: Setup & Test
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.GH_RUNNER_EXTRA_POWER }}
     timeout-minutes: 60
 
     steps:
