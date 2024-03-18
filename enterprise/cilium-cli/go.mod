@@ -6,7 +6,7 @@ go 1.22.0
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.16.0-pre.0
-	github.com/cilium/cilium-cli v0.16.2
+	github.com/cilium/cilium-cli v0.16.3
 	github.com/cloudflare/cfssl v1.6.5
 	github.com/google/go-cmp v0.6.0
 	github.com/stretchr/testify v1.9.0

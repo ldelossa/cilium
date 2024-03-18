@@ -92,7 +92,7 @@ kind-egressgwha-install-cilium: kind-ready ## Install a local Cilium version int
 		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
 		$(KIND_VALUES_FILES) \
 		--helm-values=$(ROOT_DIR)/contrib/testing/kind-egressgwha-values.yaml \
-		--nodes-without-cilium=kind-worker3 \
+		--nodes-without-cilium \
 		--version= \
 		>/dev/null 2>&1 &
 
@@ -107,6 +107,6 @@ kind-egressgwha-install-cilium-fast: kind-ready ## Install a local Cilium versio
 			--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
 			$(KIND_VALUES_FAST_FILES) \
 			--helm-values=$(ROOT_DIR)/contrib/testing/kind-egressgwha-values.yaml \
-			--nodes-without-cilium=kind-worker3 \
+			--nodes-without-cilium \
 			--version= >/dev/null 2>&1 & \
 	done
