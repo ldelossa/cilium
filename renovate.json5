@@ -47,6 +47,20 @@
       ],
     },
     {
+      // Don't update CILIUM_CLI_VERSION environment variable in main-ce branch.
+      // CILIUM_CLI_VERSION is only used in stable branches to pick up the
+      // latest released version of cilium-cli to run connectivity tests. In
+      // main-ce branch, CI workflows always build cilium-cli locally to run
+      // connectivity tests using the latest unreleased code.
+      "enabled": false,
+      "matchDepNames": [
+        "isovalent/cilium-cli-releases",
+      ],
+      "matchBaseBranches": [
+        "main-ce",
+      ],
+    },
+    {
       "groupName": "Hubble CLI Enterprise",
       "groupSlug": "hubble-cli-ee",
       "ignoreUnstable": false,
