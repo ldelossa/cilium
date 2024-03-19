@@ -25,7 +25,6 @@ import (
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/k8s"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/utils"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -293,6 +292,9 @@ func (ds *DaemonSuite) TestUpdateConsumerMap(c *C) {
 			},
 		},
 	}
+	for i := range rules {
+		rules[i].Sanitize()
+	}
 
 	ds.d.envoyXdsServer.RemoveAllNetworkPolicies()
 
@@ -466,6 +468,9 @@ func (ds *DaemonSuite) TestL4_L7_Shadowing(c *C) {
 			},
 		},
 	}
+	for i := range rules {
+		rules[i].Sanitize()
+	}
 
 	ds.d.envoyXdsServer.RemoveAllNetworkPolicies()
 
@@ -548,6 +553,9 @@ func (ds *DaemonSuite) TestL4_L7_ShadowingShortCircuit(c *C) {
 				},
 			},
 		},
+	}
+	for i := range rules {
+		rules[i].Sanitize()
 	}
 
 	ds.d.envoyXdsServer.RemoveAllNetworkPolicies()
@@ -636,6 +644,9 @@ func (ds *DaemonSuite) TestL3_dependent_L7(c *C) {
 			},
 		},
 	}
+	for i := range rules {
+		rules[i].Sanitize()
+	}
 
 	ds.d.envoyXdsServer.RemoveAllNetworkPolicies()
 
@@ -710,6 +721,9 @@ func (ds *DaemonSuite) TestReplacePolicy(c *C) {
 			Labels:           lbls,
 			EndpointSelector: api.NewESFromLabels(lblBar),
 		},
+	}
+	for i := range rules {
+		rules[i].Sanitize()
 	}
 
 	_, err := ds.d.PolicyAdd(rules, policyAddOptions)
@@ -791,6 +805,9 @@ func (ds *DaemonSuite) TestRemovePolicy(c *C) {
 				},
 			},
 		},
+	}
+	for i := range rules {
+		rules[i].Sanitize()
 	}
 
 	ds.d.envoyXdsServer.RemoveAllNetworkPolicies()
@@ -876,6 +893,9 @@ func (ds *DaemonSuite) TestIncrementalPolicy(c *C) {
 				},
 			},
 		},
+	}
+	for i := range rules {
+		rules[i].Sanitize()
 	}
 
 	ds.d.envoyXdsServer.RemoveAllNetworkPolicies()
@@ -1278,9 +1298,6 @@ func (ds *DaemonSuite) Test_addCiliumNetworkPolicyV2(c *C) {
 
 		rules, policyImportErr := args.cnp.Parse()
 		c.Assert(policyImportErr, checker.DeepEquals, want.err)
-
-		policyImportErr = k8s.PreprocessRules(rules, ds.d.k8sWatcher.K8sSvcCache)
-		c.Assert(policyImportErr, IsNil)
 
 		// Only add policies if we have successfully parsed them. Otherwise, if
 		// parsing fails, `rules` is nil, which would wipe out the repo.

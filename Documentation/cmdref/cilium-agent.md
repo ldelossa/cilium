@@ -83,6 +83,7 @@ cilium-agent [flags]
       --devices strings                                              List of devices facing cluster/external network (used for BPF NodePort, BPF masquerading and host firewall); supports '+' as wildcard in device name, e.g. 'eth+'
       --direct-routing-device string                                 Device name used to connect nodes in direct routing mode (used by BPF NodePort, BPF host routing; if empty, automatically set to a device with k8s InternalIP/ExternalIP or with a default route)
       --disable-endpoint-crd                                         Disable use of CiliumEndpoint CRD
+      --disable-envoy-version-check                                  Do not perform Envoy version check
       --disable-iptables-feeder-rules strings                        Chains to ignore when installing feeder rules.
       --dns-max-ips-per-restored-rule int                            Maximum number of IPs to maintain for each restored DNS rule (default 1000)
       --dns-policy-unload-on-shutdown                                Unload DNS policy rules on graceful shutdown
@@ -178,6 +179,7 @@ cilium-agent [flags]
       --encryption-strict-mode-cidr string                           In strict-mode encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --endpoint-queue-size int                                      Size of EventQueue per-endpoint (default 25)
+      --envoy-base-id uint                                           Envoy base ID
       --envoy-config-retry-interval duration                         Interval in which an attempt is made to reconcile failed EnvoyConfigs. If the duration is zero, the retry is deactivated. (default 15s)
       --envoy-config-timeout duration                                Timeout that determines how long to wait for Envoy to N/ACK CiliumEnvoyConfig resources (default 2m0s)
       --envoy-log string                                             Path to a separate Envoy log file, if any
@@ -250,7 +252,6 @@ cilium-agent [flags]
       --identity-restore-grace-period duration                       Time to wait before releasing unused restored CIDR identities during agent restart (default 10m0s)
       --ingress-secrets-namespace string                             IngressSecretsNamespace is the namespace having tls secrets used by CEC, originating from Ingress controller
       --install-no-conntrack-iptables-rules                          Install Iptables rules to skip netfilter connection tracking on all pod traffic. This option is only effective when Cilium is running in direct routing and full KPR mode. Moreover, this option cannot be enabled when Cilium is running in a managed Kubernetes environment or in a chained CNI setup.
-      --ip-allocation-timeout duration                               Time after which an incomplete CIDR allocation is considered failed (default 2m0s)
       --ip-masq-agent-config-path string                             ip-masq-agent configuration file path (default "/etc/config/ip-masq-agent")
       --ipam string                                                  Backend to use for IPAM (default "cluster-pool")
       --ipam-cilium-node-update-rate duration                        Maximum rate at which the CiliumNode custom resource is updated (default 15s)
@@ -337,6 +338,7 @@ cilium-agent [flags]
       --prepend-iptables-chains                                      Prepend custom iptables chains instead of appending (default true)
       --procfs string                                                Path to the host's proc filesystem mount (default "/proc")
       --prometheus-serve-addr string                                 IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off)
+      --proxy-admin-port int                                         Port to serve Envoy admin interface on.
       --proxy-connect-timeout uint                                   Time after which a TCP connect attempt is considered failed unless completed (in seconds) (default 2)
       --proxy-gid uint                                               Group ID for proxy control plane sockets. (default 1337)
       --proxy-idle-timeout-seconds int                               Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s (default 60)

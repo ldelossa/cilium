@@ -20,7 +20,7 @@ description of your use case by opening a pull request to this file and adding
 a section describing your usage of Cilium. If you are open to others contacting
 you about your use of Cilium on Slack, add your Slack nickname as well.
 
-    N: Name of user (company or individual)
+    N: Name of user (company)
     D: Description
     U: Usage of features
     L: Link with further information (optional)
@@ -39,8 +39,8 @@ Requirements to be listed
  * You must represent the user listed. Do *NOT* add entries on behalf of
    other users.
  * There is no minimum deployment size but we request to list permanent
-   deployments only, i.e., no demo or trial deployments. Commercial or
-   production use is not required. A well-done home lab setup can be equally
+   production deployments only, i.e., no demo or trial deployments. Commercial
+   use is not required. A well-done home lab setup can be equally
    interesting as a large-scale commercial deployment.
 
 Users (Alphabetically)

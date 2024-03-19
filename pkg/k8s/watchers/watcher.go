@@ -25,7 +25,6 @@ import (
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint"
-	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipcache"
 	ipcacheTypes "github.com/cilium/cilium/pkg/ipcache/types"
@@ -48,7 +47,6 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
-	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
 	"github.com/cilium/cilium/pkg/source"
@@ -129,13 +127,10 @@ type nodeDiscoverManager interface {
 
 type policyManager interface {
 	TriggerPolicyUpdates(force bool, reason string)
-	PolicyAdd(rules api.Rules, opts *policy.AddOptions) (newRev uint64, err error)
-	PolicyDelete(labels labels.LabelArray, opts *policy.DeleteOptions) (newRev uint64, err error)
 }
 
 type policyRepository interface {
 	GetSelectorCache() *policy.SelectorCache
-	TranslateRules(translator policy.Translator) (*policy.TranslationResult, error)
 }
 
 type svcManager interface {
@@ -168,9 +163,6 @@ type cgroupManager interface {
 }
 
 type ipcacheManager interface {
-	AllocateCIDRs(prefixes []netip.Prefix, newlyAllocatedIdentities map[netip.Prefix]*identity.Identity) ([]*identity.Identity, error)
-	ReleaseCIDRIdentitiesByCIDR(prefixes []netip.Prefix)
-
 	// GH-21142: Re-evaluate the need for these APIs
 	Upsert(ip string, hostIP net.IP, hostKey uint8, k8sMeta *ipcache.K8sMetadata, newIdentity ipcache.Identity) (namedPortsChanged bool, err error)
 	LookupByIP(IP string) (ipcache.Identity, bool)
@@ -566,59 +558,9 @@ func (k *K8sWatcher) k8sServiceHandler() {
 			if err := k.addK8sSVCs(event.ID, event.OldService, svc, event.Endpoints); err != nil {
 				scopedLog.WithError(err).Error("Unable to add/update service to implement k8s event")
 			}
-
-			// Normally, only services without a label selector (i.e. "bottomless" or empty services)
-			// are allowed as targets of a toServices rule.
-			// This is to minimize the chances of a pod IP being selected by this rule, which might
-			// cause conflicting entries in the ipcache.
-			//
-			// This requirement, however, is dropped for HighScale IPCache mode, because pod IPs are
-			// normally excluded from the ipcache regardless.
-			if !option.Config.EnableHighScaleIPcache && !svc.IsExternal() {
-				return
-			}
-
-			var oldEP k8s.Endpoints
-			if event.OldEndpoints != nil {
-				oldEP = *event.OldEndpoints
-			}
-			translator := k8s.NewK8sTranslator(event.ID, oldEP, *event.Endpoints, svc.Labels)
-			result, err := k.policyRepository.TranslateRules(translator)
-			if err != nil {
-				log.WithError(err).Error("Unable to repopulate egress policies from ToService rules")
-				break
-			} else if result.NumToServicesRules > 0 {
-				// Only trigger policy updates if ToServices rules are in effect
-				k.ipcache.ReleaseCIDRIdentitiesByCIDR(result.PrefixesToRelease)
-				_, err := k.ipcache.AllocateCIDRs(result.PrefixesToAdd, nil)
-				if err != nil {
-					scopedLog.WithError(err).
-						Error("Unabled to allocate ipcache CIDR for toService rule")
-					break
-				}
-				k.policyManager.TriggerPolicyUpdates(true, "Kubernetes service endpoint added")
-			}
-
 		case k8s.DeleteService:
 			if err := k.delK8sSVCs(event.ID, event.Service, event.Endpoints); err != nil {
 				scopedLog.WithError(err).Error("Unable to delete service to implement k8s event")
-			}
-
-			if !option.Config.EnableHighScaleIPcache && !svc.IsExternal() {
-				return
-			}
-
-			// Use the current Endpoints object as the "old" object and an empty
-			// Endpoints as "new" object.
-			translator := k8s.NewK8sTranslator(event.ID, *event.Endpoints, k8s.Endpoints{}, svc.Labels)
-			result, err := k.policyRepository.TranslateRules(translator)
-			if err != nil {
-				log.WithError(err).Error("Unable to depopulate egress policies from ToService rules")
-				break
-			} else if result.NumToServicesRules > 0 {
-				// Only trigger policy updates if ToServices rules are in effect
-				k.ipcache.ReleaseCIDRIdentitiesByCIDR(result.PrefixesToRelease)
-				k.policyManager.TriggerPolicyUpdates(true, "Kubernetes service endpoint deleted")
 			}
 		}
 	}

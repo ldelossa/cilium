@@ -9,11 +9,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	ipcacheTypes "github.com/cilium/cilium/pkg/ipcache/types"
 	cilium_v2_alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -71,38 +69,17 @@ func (p *PolicyWatcher) updateCIDRGroupRefPolicies(
 
 		initialRecvTime := time.Now()
 
-		// We need to deepcopy this structure because we are writing
-		// fields.
-		// See https://github.com/cilium/cilium/blob/27fee207f5422c95479422162e9ea0d2f2b6c770/pkg/policy/api/ingress.go#L112-L134
-		cnpCpy := cnp.DeepCopy()
+		resourceID := resourceIDForCiliumNetworkPolicy(key, cnp)
 
-		translationStart := time.Now()
-		translatedCNP := p.resolveCIDRGroupRef(cnpCpy)
-		metrics.CIDRGroupTranslationTimeStats.Observe(time.Since(translationStart).Seconds())
-
-		resourceKind := ipcacheTypes.ResourceKindCNP
-		if len(key.Namespace) == 0 {
-			resourceKind = ipcacheTypes.ResourceKindCCNP
-		}
-		resourceID := ipcacheTypes.NewResourceID(
-			resourceKind,
-			cnpCpy.ObjectMeta.Namespace,
-			cnpCpy.ObjectMeta.Name,
-		)
-		err := p.updateCiliumNetworkPolicyV2(cnpCpy, translatedCNP, initialRecvTime, resourceID)
-		if err == nil {
-			p.cnpCache[key] = cnpCpy
-		}
-
-		errs = append(errs, err)
+		errs = append(errs, p.resolveCiliumNetworkPolicyRefs(cnp, key, initialRecvTime, resourceID))
 	}
 	return errors.Join(errs...)
 }
 
-func (p *PolicyWatcher) resolveCIDRGroupRef(cnp *types.SlimCNP) *types.SlimCNP {
+func (p *PolicyWatcher) resolveCIDRGroupRef(cnp *types.SlimCNP) {
 	refs := getCIDRGroupRefs(cnp)
 	if len(refs) == 0 {
-		return cnp
+		return
 	}
 
 	cidrsSets, err := p.cidrGroupRefsToCIDRsSets(refs)
@@ -115,9 +92,7 @@ func (p *PolicyWatcher) resolveCIDRGroupRef(cnp *types.SlimCNP) *types.SlimCNP {
 		}).WithError(err).Warning("Unable to translate all CIDR groups to CIDRs")
 	}
 
-	translated := translateCIDRGroupRefs(cnp, cidrsSets)
-
-	return translated
+	translateCIDRGroupRefs(cnp, cidrsSets)
 }
 
 func hasCIDRGroupRef(cnp *types.SlimCNP, cidrGroup string) bool {
@@ -209,18 +184,15 @@ func (p *PolicyWatcher) cidrGroupRefsToCIDRsSets(cidrGroupRefs []string) (map[st
 	return cidrsSet, errors.Join(errs...)
 }
 
-func translateCIDRGroupRefs(cnp *types.SlimCNP, cidrsSets map[string][]api.CIDR) *types.SlimCNP {
-	cnpCpy := cnp.DeepCopy()
-
-	if cnpCpy.Spec != nil {
-		translateSpec(cnpCpy.Spec, cidrsSets)
+func translateCIDRGroupRefs(cnp *types.SlimCNP, cidrsSets map[string][]api.CIDR) {
+	if cnp.Spec != nil {
+		translateSpec(cnp.Spec, cidrsSets)
 	}
-	for i := range cnpCpy.Specs {
-		if cnpCpy.Specs[i] != nil {
-			translateSpec(cnpCpy.Specs[i], cidrsSets)
+	for i := range cnp.Specs {
+		if cnp.Specs[i] != nil {
+			translateSpec(cnp.Specs[i], cidrsSets)
 		}
 	}
-	return cnpCpy
 }
 
 func translateSpec(spec *api.Rule, cidrsSets map[string][]api.CIDR) {
