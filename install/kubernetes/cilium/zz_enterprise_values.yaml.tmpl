@@ -3,14 +3,14 @@ enterprise:
 
   # featureGates is a list of feature IDs that are allowed to be enabled.
   # Enabling a feature without adding it to this list will cause the agent or
-  # operator to fail to start. 
+  # operator to fail to start.
   # Note: This list is not used to enable features, but to allow features to be
   # enabled via their respective configuration options.
   #
   # To allow all Alpha, Beta and Limited features you can pass AllowAlphaFeatures,
   # AllowBetaFeatures and AllowLimitedFeatures respectively.
   #
-  # Example usage: featureGates: [AllBetaFeatures, DatapathModeIPDualStack] 
+  # Example usage: featureGates: [AllBetaFeatures, DatapathModeIPDualStack]
   # would allow all beta features and the DatapathModeIPDualStack feature.
   featureGates: []
 
@@ -90,13 +90,15 @@ hubble:
     #   - name: foo
     #     value: bar
     resources: {}
-    securityContext: {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
+    securityContext:
+      privileged: false
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop:
+          - ALL
 
     loggingLevel: info
 
