@@ -7,7 +7,6 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.16.0-pre.0
 	github.com/cilium/cilium-cli v0.16.3
-	github.com/cloudflare/cfssl v1.6.5
 	github.com/google/go-cmp v0.6.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
@@ -45,6 +44,7 @@ require (
 	github.com/cilium/stream v0.0.0-20240226091623-f979d32855f8 // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20231127174521-c97da4b42413 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
+	github.com/cloudflare/cfssl v1.6.5 // indirect
 	github.com/cncf/xds/go v0.0.0-20231128003011-0fa0005c9caa // indirect
 	github.com/containerd/containerd v1.7.12 // indirect
 	github.com/containerd/log v0.1.0 // indirect
