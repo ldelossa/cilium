@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium-cli/utils/features"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
+	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/scheme"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
 
@@ -89,7 +90,7 @@ type IsovalentEgressGatewayPolicyParams struct {
 // note that the egress gateway enabled feature requirement is applied directly
 // here.
 func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgressGatewayPolicyParams) *EnterpriseTest {
-	pl, err := parseIsovalentEgressGatewayPolicyYAML(egressGatewayPolicyYAML)
+	pl, err := check.ParsePolicyYAML[*isovalentv1.IsovalentEgressGatewayPolicy](egressGatewayPolicyYAML, scheme.Scheme)
 	if err != nil {
 		t.Fatalf("Parsing policy YAML: %s", err)
 	}

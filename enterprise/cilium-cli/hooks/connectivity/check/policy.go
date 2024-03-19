@@ -12,51 +12,31 @@ package check
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
+	"maps"
 
+	"github.com/cilium/cilium-cli/connectivity/check"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
-	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/scheme"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	enterpriseK8s "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/k8s"
 )
 
 // createOrUpdateIEGP creates the IEGP and updates it if it already exists.
 func createOrUpdateIEGP(ctx context.Context, client *enterpriseK8s.EnterpriseClient, iegp *isovalentv1.IsovalentEgressGatewayPolicy) error {
-	// Creating, so a resource will definitely be modified.
-	_, err := client.CreateIsovalentEgressGatewayPolicy(ctx, iegp, metav1.CreateOptions{})
-	if err == nil {
-		// Early exit.
-		return nil
-	}
+	_, err := check.CreateOrUpdatePolicy(ctx, client.EnterpriseCiliumClientset.IsovalentV1().IsovalentEgressGatewayPolicies(),
+		iegp, func(current *isovalentv1.IsovalentEgressGatewayPolicy) bool {
+			if maps.Equal(current.GetLabels(), iegp.GetLabels()) &&
+				current.Spec.DeepEqual(&iegp.Spec) {
+				return false
+			}
 
-	if !k8serrors.IsAlreadyExists(err) {
-		// A real error happened.
-		return err
-	}
+			current.ObjectMeta.Labels = iegp.ObjectMeta.Labels
+			current.Spec = iegp.Spec
+			return true
+		})
 
-	// Policy already exists, let's retrieve it.
-	policy, err := client.GetIsovalentEgressGatewayPolicy(ctx, iegp.Name, metav1.GetOptions{})
-	if err != nil {
-		// A real error happened.
-		return fmt.Errorf("failed to retrieve isovalent egress gateway policy %s: %w", iegp.Name, err)
-	}
-
-	// Overload the field that should stay unchanged.
-	policy.ObjectMeta.Labels = iegp.ObjectMeta.Labels
-	policy.Spec = iegp.Spec
-
-	// Let's update the policy.
-	_, err = client.UpdateIsovalentEgressGatewayPolicy(ctx, policy, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to update isovalent egress gateway policy %s: %w", iegp.Name, err)
-	}
-
-	return nil
+	return err
 }
 
 // deleteIEGP deletes a CiliumEgressGatewayPolicy from the cluster.
@@ -69,22 +49,9 @@ func deleteIEGP(ctx context.Context, client *enterpriseK8s.EnterpriseClient, ieg
 }
 
 // addiegps adds one or more CiliumEgressGatewayPolicy resources to the Test.
-func (t *EnterpriseTest) addIEGPs(iegps ...*isovalentv1.IsovalentEgressGatewayPolicy) error {
-	for _, p := range iegps {
-		if p == nil {
-			return errors.New("cannot add nil IsovalentEgressGatewayPolicy to test")
-		}
-		if p.Name == "" {
-			return fmt.Errorf("adding IsovalentEgressGatewayPolicy with empty name to test: %v", p)
-		}
-		if _, ok := t.iegps[p.Name]; ok {
-			return fmt.Errorf("IsovalentEgressGatewayPolicy with name %s already in test scope", p.Name)
-		}
-
-		t.iegps[p.Name] = p
-	}
-
-	return nil
+func (t *EnterpriseTest) addIEGPs(iegps ...*isovalentv1.IsovalentEgressGatewayPolicy) (err error) {
+	t.iegps, err = check.RegisterPolicy(t.iegps, iegps...)
+	return err
 }
 
 // applyPolicies applies all the Test's registered network policies.
@@ -146,34 +113,4 @@ func (t *EnterpriseTest) deletePolicies(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// parseIsovalentEgressGatewayPolicyYAML decodes policy yaml into a slice of
-// IsovalentEgressGatewayPolicies.
-func parseIsovalentEgressGatewayPolicyYAML(policy string) (iegps []*isovalentv1.IsovalentEgressGatewayPolicy, err error) {
-	if policy == "" {
-		return nil, nil
-	}
-
-	yamls := strings.Split(policy, "\n---")
-
-	for _, yaml := range yamls {
-		if strings.TrimSpace(yaml) == "" {
-			continue
-		}
-
-		obj, kind, err := serializer.NewCodecFactory(scheme.Scheme, serializer.EnableStrict).UniversalDeserializer().Decode([]byte(yaml), nil, nil)
-		if err != nil {
-			return nil, fmt.Errorf("decoding policy yaml: %s\nerror: %w", yaml, err)
-		}
-
-		switch policy := obj.(type) {
-		case *isovalentv1.IsovalentEgressGatewayPolicy:
-			iegps = append(iegps, policy)
-		default:
-			return nil, fmt.Errorf("unknown policy type '%s' in: %s", kind.Kind, yaml)
-		}
-	}
-
-	return iegps, nil
 }
