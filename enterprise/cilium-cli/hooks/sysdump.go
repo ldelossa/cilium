@@ -72,6 +72,26 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		},
 		{
 			CreatesSubtasks: true,
+			Description:     "Collect hubble-relay rbac policies",
+			Quick:           false,
+			Task: func(ctx context.Context) error {
+				cm := "hubble-rbac-policy"
+				configMap, err := collector.Client.GetConfigMap(ctx, collector.Options.CiliumNamespace, cm, metav1.GetOptions{})
+				if kerrors.IsNotFound(err) {
+					// Ignore not found. Might not be enabled or we're looking at the wrong namespace
+					return nil
+				}
+				if err != nil {
+					return fmt.Errorf("failed to get Hubble Relay RBAC policy configmap: %w", err)
+				}
+				if err := collector.WriteYAML(fmt.Sprintf("%s-<ts>.yaml", cm), configMap); err != nil {
+					return fmt.Errorf("failed to collect Hubble Relay RBAC policy configmap: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			CreatesSubtasks: true,
 			Description:     "Collecting Hubble Timescape Helm values",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
