@@ -127,7 +127,6 @@ jobs:
             --helm-set=devices='{eth+}' \
             --helm-set=endpointRoutes.enabled=true \
             --helm-set=kubeProxyReplacement=true \
-            --helm-set=tunnel=disabled \
             --helm-set=routingMode=native \
             --helm-set=securityContext.privileged=true \
             --helm-set=ipam.mode=cluster-pool \

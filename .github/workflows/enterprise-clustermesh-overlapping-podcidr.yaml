@@ -110,10 +110,10 @@ jobs:
           --helm-set=socketLB.enabled=true \
           --helm-set=socketLB.hostNamespaceOnly=true \
           --helm-set=endpointHealthChecking.enabled=false \
-          --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}'
+          --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}' \
+          --helm-set=routingMode=tunnel \
+          --helm-set=tunnelProtocol=vxlan \
         "
-
-        CILIUM_INSTALL_TUNNEL="--helm-set=tunnel=vxlan"
 
         CILIUM_INSTALL_IPFAMILY="--helm-set=ipv4.enabled=true --helm-set=ipv6.enabled=false"
         KIND_POD_CIDR_1="10.242.0.0/16"
@@ -123,7 +123,7 @@ jobs:
 
         CONNECTIVITY_TEST_DEFAULTS="--hubble=false --flow-validation=disabled --external-target=google.com --collect-sysdump-on-failure"
 
-        echo cilium_install_defaults="${CILIUM_INSTALL_DEFAULTS} ${CILIUM_INSTALL_TUNNEL} ${CILIUM_INSTALL_IPFAMILY}" >> $GITHUB_OUTPUT
+        echo cilium_install_defaults="${CILIUM_INSTALL_DEFAULTS} ${CILIUM_INSTALL_IPFAMILY}" >> $GITHUB_OUTPUT
         echo connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS} >> $GITHUB_OUTPUT
 
         echo kind_pod_cidr_1=${KIND_POD_CIDR_1} >> $GITHUB_OUTPUT
