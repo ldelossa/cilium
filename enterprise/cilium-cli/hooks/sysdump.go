@@ -104,16 +104,17 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				for _, ns := range namespaces {
 					val, err := collector.Client.GetHelmValues(ctx, opts.HubbleTimescapeReleaseName, ns)
 					if err != nil {
-						taskErr = errors.Join(taskErr, err)
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect hubble-timescape helm values from namespace %q: %w", ns, err))
+						continue
 					}
-					if val != "" {
-						if err := collector.WriteString("hubble-timescape-helm-values-<ts>.yaml", val); err != nil {
-							return fmt.Errorf("failed to collect hubble-timescape helm values")
-						}
-						return nil
+					if err := collector.WriteString("hubble-timescape-helm-values-<ts>.yaml", val); err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect hubble-timescape helm values from namespace %q: %w", ns, err))
+						continue
 					}
+					// we didn't hit any errors, return early with the successful values
+					return nil
 				}
-				return fmt.Errorf("failed to collect hubble-timescape helm values")
+				return taskErr
 			},
 		},
 		{
