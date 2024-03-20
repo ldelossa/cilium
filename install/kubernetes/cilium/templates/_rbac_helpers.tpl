@@ -15,7 +15,7 @@ securityContext:
 resources:
   {{- toYaml .Values.hubble.rbac.resources | nindent 4 }}
 command:
-  - /root/hubble-rbac
+  - /usr/bin/hubble-rbac
 args:
   - --logging-level={{ .Values.hubble.rbac.loggingLevel }}
   - --hubble-policy-mode=config
