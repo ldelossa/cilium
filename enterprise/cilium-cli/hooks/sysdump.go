@@ -185,17 +185,26 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 			Description:     "Collecting logs from 'hubble-ui' enterprise pods",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
-				p, err := collector.Client.ListPods(ctx, opts.HubbleUINamespace, metav1.ListOptions{
-					LabelSelector: collector.Options.HubbleUILabelSelector,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to get logs from 'hubble-ui' pods")
+				namespaces := []string{opts.HubbleUINamespace, collector.Options.CiliumNamespace}
+
+				var taskErr error
+				for _, ns := range namespaces {
+					p, err := collector.Client.ListPods(ctx, ns, metav1.ListOptions{
+						LabelSelector: collector.Options.HubbleUILabelSelector,
+					})
+					if err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to get logs from '%s/hubble-ui' pods: %w", ns, err))
+						continue
+					}
+					if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
+						collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect logs from '%s/hubble-ui' pods: %w", ns, err))
+						continue
+					}
+					// we didn't hit any errors, return early with the successful logs
+					return nil
 				}
-				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
-					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
-					return fmt.Errorf("failed to collect logs from 'hubble-ui' pods")
-				}
-				return nil
+				return taskErr
 			},
 		},
 		{
@@ -235,17 +244,25 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		},
 		{
 			CreatesSubtasks: true,
-			Description:     "Collecting Hubble Auth Configmap",
+			Description:     "Collecting Hubble UI Enterprise oauth2-proxy Configmap",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
-				configMap, err := collector.Client.GetConfigMap(ctx, collector.Options.CiliumNamespace, "oauth2-proxy", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to get Hubble Auth Configmap")
+				namespaces := []string{opts.HubbleUINamespace, collector.Options.CiliumNamespace}
+				var taskErr error
+				for _, ns := range namespaces {
+					configMap, err := collector.Client.GetConfigMap(ctx, ns, "oauth2-proxy", metav1.GetOptions{})
+					if err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to get Hubble UI Enterprise '%s/oauth2-proxy' Configmap: %w", ns, err))
+						continue
+					}
+					if err := collector.WriteYAML("hubble-enterprise-oauth2-proxy-configmap-<ts>.yaml", configMap); err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to get Hubble UI Enterprise '%s/oauth2-proxy' Configmap: %w", ns, err))
+						continue
+					}
+					// we didn't hit any errors, return early with the successful config
+					return nil
 				}
-				if err := collector.WriteYAML("hubble-enterprise-oauth-configmap-<ts>.yaml", configMap); err != nil {
-					return fmt.Errorf("failed to collect Hubble Enterprise Oauth Configmap: %w", err)
-				}
-				return nil
+				return taskErr
 			},
 		},
 		{
