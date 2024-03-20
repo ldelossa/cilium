@@ -14,6 +14,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
@@ -21,6 +23,8 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/yaml"
 
 	"github.com/cilium/cilium-cli/sysdump"
 )
@@ -31,6 +35,16 @@ const (
 	enterpriseBugtoolPrefix      = "hubble-enterprise-bugtool"
 	enterpriseCLICommand         = "hubble-enterprise"
 )
+
+var (
+	fluentdAWSKeyIDRegexp     *regexp.Regexp
+	fluentdAWSSecretKeyRegexp *regexp.Regexp
+)
+
+func init() {
+	fluentdAWSKeyIDRegexp = regexp.MustCompile(`(aws_key_id).*`)
+	fluentdAWSSecretKeyRegexp = regexp.MustCompile(`(aws_sec_key).*`)
+}
 
 func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) error {
 	collector.AddTasks([]sysdump.Task{
@@ -279,6 +293,51 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 					return fmt.Errorf("failed to collect Hubble Enterprise configmap: %w", err)
 				}
 				return nil
+			},
+		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting Hubble Enterprise Helm values",
+			Quick:           false,
+			Task: func(ctx context.Context) error {
+				namespaces := []string{opts.HubbleEnterpriseNamespace}
+
+				var taskErr error
+				for _, ns := range namespaces {
+					val, err := collector.Client.GetHelmValues(ctx, opts.HubbleEnterpriseReleaseName, ns)
+					if err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect hubble-enterprise helm values from namespace %q: %w", ns, err))
+						continue
+					}
+
+					var data map[string]any
+					if err := yamlutil.Unmarshal([]byte(val), &data); err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect hubble-enterprise helm values from namespace %q: %w", ns, err))
+						continue
+					}
+
+					// sanitize tls related options. Private keys in are especially
+					// important to avoid collecting, but we skip other fields in case
+					// the user made a mistake configuring.
+					sanitizeRBACTLSOptions(data)
+					// sanitize fluentd AWS output in-case the user hard-coded creds in there
+					sanitizeFluentdAWSCreds(data)
+
+					b, err := yaml.Marshal(data)
+					if err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect hubble-enterprise helm values from namespace %q: %w", ns, err))
+						continue
+					}
+					val = string(b)
+
+					if err := collector.WriteString("hubble-enterprise-helm-values-<ts>.yaml", val); err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect hubble-enterprise helm values from namespace %q: %w", ns, err))
+						continue
+					}
+					// we didn't hit any errors, return early with the successful values
+					return nil
+				}
+				return taskErr
 			},
 		},
 		{
@@ -664,4 +723,73 @@ func addSRv6LocatorPoolSysdumpTasks(collector *sysdump.Collector) {
 			},
 		},
 	})
+}
+
+func setMapValueIfExists(m map[string]any, path string, val any) {
+	keys := strings.Split(path, ".")
+	for i, key := range keys {
+		if i == len(keys)-1 {
+			if _, exists := m[key]; exists {
+				m[key] = val
+			}
+			return
+		}
+		m2, ok := m[key]
+		if !ok {
+			return
+		}
+		m3, ok := m2.(map[string]any)
+		if !ok {
+			return
+		}
+		m = m3
+	}
+}
+
+func getMapValueIfExists(m map[string]any, path string) (any, bool) {
+	keys := strings.Split(path, ".")
+	for i, key := range keys {
+		if i == len(keys)-1 {
+			val, ok := m[key]
+			return val, ok
+		}
+		m2, ok := m[key]
+		if !ok {
+			return nil, false
+		}
+		m3, ok := m2.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		m = m3
+	}
+	return nil, false
+}
+
+func sanitizeRBACTLSOptions(data map[string]any) {
+	setMapValueIfExists(data, "rbac.metricsProxy.oidcCert", "xxx")
+	setMapValueIfExists(data, "rbac.metricsProxy.tlsKey", "xxx")
+	setMapValueIfExists(data, "rbac.metricsProxy.cert", "xxx")
+	setMapValueIfExists(data, "rbac.metricsProxy.clientCA", "xxx")
+	setMapValueIfExists(data, "rbac.observerProxy.oidcCert", "xxx")
+	setMapValueIfExists(data, "rbac.observerProxy.tlsKey", "xxx")
+	setMapValueIfExists(data, "rbac.observerProxy.cert", "xxx")
+	setMapValueIfExists(data, "rbac.observerProxy.clientCA", "xxx")
+}
+
+func sanitizeFluentdAWSCreds(data map[string]any) {
+	var fluentdOutput string
+	if output, ok := getMapValueIfExists(data, "export.fluentd.output"); ok {
+		outputStr, ok := output.(string)
+		if !ok {
+			return
+		}
+		fluentdOutput = outputStr
+	}
+
+	for _, re := range []*regexp.Regexp{fluentdAWSKeyIDRegexp, fluentdAWSSecretKeyRegexp} {
+		fluentdOutput = re.ReplaceAllString(fluentdOutput, "$1 xxx")
+	}
+
+	setMapValueIfExists(data, "export.fluentd.output", fluentdOutput)
 }

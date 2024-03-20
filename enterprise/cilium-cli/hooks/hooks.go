@@ -39,15 +39,20 @@ type EnterpriseOptions struct {
 	HubbleTimescapeReleaseName string
 	HubbleTimescapeSelector    string
 	HubbleTimescapeNamespace   string
+
+	HubbleEnterpriseReleaseName string
+	HubbleEnterpriseNamespace   string
 }
 
 func NewEnterpriseHook() *EnterpriseHooks {
 	return &EnterpriseHooks{
 		Opts: &EnterpriseOptions{
-			HubbleTimescapeSelector:    "app.kubernetes.io/part-of=hubble-timescape",
-			HubbleTimescapeReleaseName: "hubble-timescape",
-			HubbleTimescapeNamespace:   "hubble-timescape",
-			HubbleUINamespace:          "hubble-ui",
+			HubbleTimescapeSelector:     "app.kubernetes.io/part-of=hubble-timescape",
+			HubbleTimescapeReleaseName:  "hubble-timescape",
+			HubbleTimescapeNamespace:    "hubble-timescape",
+			HubbleUINamespace:           "hubble-ui",
+			HubbleEnterpriseReleaseName: "hubble-enterprise",
+			HubbleEnterpriseNamespace:   "kube-system",
 		},
 	}
 }
