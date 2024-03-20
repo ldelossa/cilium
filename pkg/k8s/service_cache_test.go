@@ -4,11 +4,13 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
 
 	check "github.com/cilium/checkmate"
+	"github.com/cilium/stream"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/cilium/cilium/pkg/checker"
@@ -244,6 +246,10 @@ func testServiceCache(c *check.C,
 	default:
 	}
 
+	// Add late subscriber, it should receive all events until it unsubscribes
+	subCtx, subCancel := context.WithCancel(context.Background())
+	svcNotifications := stream.ToChannel(subCtx, svcCache.Notifications(), stream.WithBufferSize(1))
+
 	// Deleting the service will result in a service delete event
 	svcCache.DeleteService(k8sSvc, swgSvcs)
 	c.Assert(testutils.WaitUntil(func() bool {
@@ -251,6 +257,11 @@ func testServiceCache(c *check.C,
 		defer event.SWG.Done()
 		c.Assert(event.Action, check.Equals, DeleteService)
 		c.Assert(event.ID, check.Equals, svcID)
+
+		n := <-svcNotifications
+		c.Assert(n.Action, check.Equals, DeleteService)
+		c.Assert(n.ID, check.Equals, svcID)
+
 		return true
 	}, 2*time.Second), check.IsNil)
 
@@ -261,6 +272,11 @@ func testServiceCache(c *check.C,
 		defer event.SWG.Done()
 		c.Assert(event.Action, check.Equals, UpdateService)
 		c.Assert(event.ID, check.Equals, svcID)
+
+		n := <-svcNotifications
+		c.Assert(n.Action, check.Equals, UpdateService)
+		c.Assert(n.ID, check.Equals, svcID)
+
 		return true
 	}, 2*time.Second), check.IsNil)
 
@@ -271,7 +287,19 @@ func testServiceCache(c *check.C,
 		defer event.SWG.Done()
 		c.Assert(event.Action, check.Equals, UpdateService)
 		c.Assert(event.ID, check.Equals, svcID)
+
+		n := <-svcNotifications
+		c.Assert(n.Action, check.Equals, UpdateService)
+		c.Assert(n.ID, check.Equals, svcID)
+
 		return true
+	}, 2*time.Second), check.IsNil)
+
+	// Stop subscription and wait for it to expire
+	subCancel()
+	c.Assert(testutils.WaitUntil(func() bool {
+		_, stillSubscribed := <-svcNotifications
+		return !stillSubscribed
 	}, 2*time.Second), check.IsNil)
 
 	endpoints, serviceReady := svcCache.correlateEndpoints(svcID)
@@ -323,6 +351,109 @@ func testServiceCache(c *check.C,
 		swgEps.Wait()
 		return true
 	}, 2*time.Second), check.IsNil)
+}
+
+func (s *K8sSuite) TestForEachService(c *check.C) {
+	svcCache := NewServiceCache(fakeTypes.NewNodeAddressing())
+
+	k8sSvc1 := &slim_corev1.Service{
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+			Labels: map[string]string{
+				"foo": "bar",
+			},
+		},
+		Spec: slim_corev1.ServiceSpec{
+			ClusterIP: "127.0.0.1",
+			Selector: map[string]string{
+				"foo": "bar",
+			},
+			Type: slim_corev1.ServiceTypeClusterIP,
+		},
+	}
+	k8sEndpoints1 := ParseEndpoints(&slim_corev1.Endpoints{
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+		},
+		Subsets: []slim_corev1.EndpointSubset{
+			{
+				Addresses: []slim_corev1.EndpointAddress{{IP: "2.2.2.2"}},
+				Ports: []slim_corev1.EndpointPort{
+					{
+						Name:     "http-test-svc",
+						Port:     8080,
+						Protocol: slim_corev1.ProtocolTCP,
+					},
+				},
+			},
+		},
+	})
+
+	k8sSvc2 := &slim_corev1.Service{
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Name:      "baz",
+			Namespace: "qux",
+		},
+		Spec: slim_corev1.ServiceSpec{
+			ClusterIP: "192.168.1.1",
+			Type:      slim_corev1.ServiceTypeClusterIP,
+		},
+	}
+	k8sEndpoints2 := ParseEndpointSliceV1(&slim_discovery_v1.EndpointSlice{
+		AddressType: slim_discovery_v1.AddressTypeIPv4,
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Name:      "baz-xxxxx",
+			Namespace: "qux",
+			Labels: map[string]string{
+				slim_discovery_v1.LabelServiceName: "baz",
+			},
+		},
+		Endpoints: []slim_discovery_v1.Endpoint{
+			{
+				Addresses: []string{
+					"1.1.1.1",
+					"1.0.0.1",
+				},
+			},
+		},
+	})
+
+	swg := lock.NewStoppableWaitGroup()
+	svcCache.UpdateService(k8sSvc1, swg)
+	svcCache.UpdateService(k8sSvc2, swg)
+
+	svcID1, eps1 := svcCache.UpdateEndpoints(k8sEndpoints1, swg)
+	c.Assert(testutils.WaitUntil(func() bool {
+		event := <-svcCache.Events
+		defer event.SWG.Done()
+		c.Assert(event.Action, check.Equals, UpdateService)
+		c.Assert(event.ID, check.Equals, svcID1)
+		c.Assert(event.Endpoints, check.Equals, eps1)
+		return true
+	}, 2*time.Second), check.IsNil)
+
+	svcID2, eps2 := svcCache.UpdateEndpoints(k8sEndpoints2, swg)
+	c.Assert(testutils.WaitUntil(func() bool {
+		println("waiting for events2")
+		event := <-svcCache.Events
+		defer event.SWG.Done()
+		c.Assert(event.Action, check.Equals, UpdateService)
+		c.Assert(event.ID, check.Equals, svcID2)
+		c.Assert(event.Endpoints, check.Equals, eps2)
+		return true
+	}, 2*time.Second), check.IsNil)
+
+	services := map[ServiceID]*Endpoints{}
+	svcCache.ForEachService(func(svcID ServiceID, svc *Service, eps *Endpoints) bool {
+		services[svcID] = eps
+		return true
+	})
+	c.Assert(services, check.DeepEquals, map[ServiceID]*Endpoints{
+		svcID1: eps1,
+		svcID2: eps2,
+	})
 }
 
 func (s *K8sSuite) TestCacheActionString(c *check.C) {

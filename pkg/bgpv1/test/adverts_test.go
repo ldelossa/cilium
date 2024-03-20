@@ -189,6 +189,7 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 	// is dependency on previous test step.
 	var steps = []struct {
 		name         string
+		ipPoolOp     string // "add" / "update" / "delete"
 		ipPools      []ipam_types.IPAMPoolAllocation
 		poolLabels   map[string]string
 		nodePools    []ipam_types.IPAMPoolAllocation
@@ -196,7 +197,8 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 		expected     []routeEvent
 	}{
 		{
-			name: "nil pool labels",
+			name:     "nil pool labels",
+			ipPoolOp: "add",
 			ipPools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
@@ -207,7 +209,7 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 			nodePools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
-					CIDRs: []ipam_types.IPAMPodCIDR{"10.1.1.0/24", "10.1.2.0/24"},
+					CIDRs: []ipam_types.IPAMPodCIDR{"10.1.1.0/24"},
 				},
 			},
 			poolSelector: &slim_metav1.LabelSelector{
@@ -216,7 +218,8 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 			expected: []routeEvent{},
 		},
 		{
-			name: "nil node pools",
+			name:     "nil node pools",
+			ipPoolOp: "update",
 			ipPools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
@@ -231,18 +234,19 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 			expected: []routeEvent{},
 		},
 		{
-			name: "matching ipv4 pool",
+			name:     "advertise matching ipv4 pool",
+			ipPoolOp: "update",
 			ipPools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
-					CIDRs: []ipam_types.IPAMPodCIDR{"11.1.0.0/16"},
+					CIDRs: []ipam_types.IPAMPodCIDR{"10.1.0.0/16"},
 				},
 			},
 			poolLabels: map[string]string{"label": "matched"},
 			nodePools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
-					CIDRs: []ipam_types.IPAMPodCIDR{"11.1.1.0/24"},
+					CIDRs: []ipam_types.IPAMPodCIDR{"10.1.1.0/24"},
 				},
 			},
 			poolSelector: &slim_metav1.LabelSelector{
@@ -251,14 +255,37 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 			expected: []routeEvent{
 				{
 					sourceASN:   ciliumASN,
-					prefix:      "11.1.1.0",
+					prefix:      "10.1.1.0",
 					prefixLen:   24,
 					isWithdrawn: false,
 				},
 			},
 		},
 		{
-			name: "update matching ipv4 pool",
+			name:     "withdraw existing ipv4 pool",
+			ipPoolOp: "delete",
+			ipPools: []ipam_types.IPAMPoolAllocation{
+				{
+					Pool: "pool1",
+				},
+			},
+			poolLabels: map[string]string{"label": "matched"},
+			nodePools:  nil,
+			poolSelector: &slim_metav1.LabelSelector{
+				MatchLabels: map[string]string{"label": "matched"},
+			},
+			expected: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "10.1.1.0",
+					prefixLen:   24,
+					isWithdrawn: true,
+				},
+			},
+		},
+		{
+			name:     "advertise new ipv4 pool",
+			ipPoolOp: "add",
 			ipPools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
@@ -278,12 +305,6 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 			expected: []routeEvent{
 				{
 					sourceASN:   ciliumASN,
-					prefix:      "11.1.1.0",
-					prefixLen:   24,
-					isWithdrawn: true,
-				},
-				{
-					sourceASN:   ciliumASN,
 					prefix:      "11.2.1.0",
 					prefixLen:   24,
 					isWithdrawn: false,
@@ -291,7 +312,30 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 			},
 		},
 		{
-			name: "matching ipv6 pool",
+			name:     "withdraw new ipv4 pool",
+			ipPoolOp: "delete",
+			ipPools: []ipam_types.IPAMPoolAllocation{
+				{
+					Pool: "pool1",
+				},
+			},
+			poolLabels: map[string]string{"label": "matched"},
+			nodePools:  nil,
+			poolSelector: &slim_metav1.LabelSelector{
+				MatchLabels: map[string]string{"label": "matched"},
+			},
+			expected: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "11.2.1.0",
+					prefixLen:   24,
+					isWithdrawn: true,
+				},
+			},
+		},
+		{
+			name:     "advertise matching ipv6 pool",
+			ipPoolOp: "add",
 			ipPools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
@@ -315,16 +359,33 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 					prefixLen:   96,
 					isWithdrawn: false,
 				},
+			},
+		},
+		{
+			name:     "withdraw existing ipv6 pool",
+			ipPoolOp: "delete",
+			ipPools: []ipam_types.IPAMPoolAllocation{
+				{
+					Pool: "pool1",
+				},
+			},
+			poolLabels: map[string]string{"label": "matched"},
+			nodePools:  nil,
+			poolSelector: &slim_metav1.LabelSelector{
+				MatchLabels: map[string]string{"label": "matched"},
+			},
+			expected: []routeEvent{
 				{
 					sourceASN:   ciliumASN,
-					prefix:      "11.2.1.0",
-					prefixLen:   24,
+					prefix:      "2001:0:0:1234:5678::",
+					prefixLen:   96,
 					isWithdrawn: true,
 				},
 			},
 		},
 		{
-			name: "update matching ipv6 pool",
+			name:     "advertise new ipv6 pool",
+			ipPoolOp: "add",
 			ipPools: []ipam_types.IPAMPoolAllocation{
 				{
 					Pool:  "pool1",
@@ -342,12 +403,6 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 				MatchLabels: map[string]string{"label": "matched"},
 			},
 			expected: []routeEvent{
-				{
-					sourceASN:   ciliumASN,
-					prefix:      "2001:0:0:1234:5678::",
-					prefixLen:   96,
-					isWithdrawn: true,
-				},
 				{
 					sourceASN:   ciliumASN,
 					prefix:      "2002:0:0:1234:5678::",
@@ -379,7 +434,7 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 
 	tracker := fixture.fakeClientSet.CiliumFakeClientset.Tracker()
 
-	for i, step := range steps {
+	for _, step := range steps {
 		t.Run(step.name, func(t *testing.T) {
 			// Setup pod ip pool objects with test case pool cidrs.
 			var poolObjs []*v2alpha1.CiliumPodIPPool
@@ -394,17 +449,18 @@ func Test_PodIPPoolAdvert(t *testing.T) {
 				poolObjs = append(poolObjs, poolObj)
 			}
 
-			// Add or update the pod ip pool object in the object tracker.
-			if i == 0 {
-				for _, obj := range poolObjs {
+			// Add / update / delete the pod ip pool object in the object tracker.
+			for _, obj := range poolObjs {
+				switch step.ipPoolOp {
+				case "add":
 					err = tracker.Add(obj)
-				}
-			} else {
-				for _, obj := range poolObjs {
+				case "update":
 					err = tracker.Update(v2alpha1.SchemeGroupVersion.WithResource("ciliumpodippools"), obj, "")
+				case "delete":
+					err = tracker.Delete(v2alpha1.SchemeGroupVersion.WithResource("ciliumpodippools"), "", obj.Name)
 				}
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			// get the local CiliumNode
 			obj, err := tracker.Get(v2.SchemeGroupVersion.WithResource("ciliumnodes"), "", baseNode.name)
@@ -809,6 +865,203 @@ func Test_LBEgressAdvertisementWithClusterIP(t *testing.T) {
 			srvObj := newClusterIPServiceObj(clusterIPSrvConfig{
 				name:      step.srvName,
 				clusterIP: step.clusterIP,
+			})
+
+			if step.op == "add" {
+				err = tracker.Add(&srvObj)
+			} else {
+				err = tracker.Update(slim_metav1.Unversioned.WithResource("services"), &srvObj, "")
+			}
+			require.NoError(t, err, step.description)
+
+			// validate expected result
+			receivedEvents, err := gobgpPeers[0].getRouteEvents(testCtx, len(step.expectedRouteEvents))
+			require.NoError(t, err, step.description)
+
+			// match events in any order
+			require.ElementsMatch(t, step.expectedRouteEvents, receivedEvents, step.description)
+		})
+	}
+}
+
+// Test_LBEgressAdvertisementWithExternalIP validates Service v4 and v6 IPs is advertised, withdrawn and modified on changing policy.
+func Test_LBEgressAdvertisementWithExternalIP(t *testing.T) {
+	testutils.PrivilegedTest(t)
+
+	var steps = []struct {
+		description         string
+		srvName             string
+		externalIP          string
+		op                  string // add or update
+		expectedRouteEvents []routeEvent
+	}{
+		{
+			description: "advertise service IP",
+			srvName:     "service-a",
+			externalIP:  "10.100.1.1",
+			op:          "add",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "10.100.1.1",
+					prefixLen:   32,
+					isWithdrawn: false,
+				},
+			},
+		},
+		{
+			description: "withdraw service IP",
+			srvName:     "service-a",
+			externalIP:  "",
+			op:          "update",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "10.100.1.1",
+					prefixLen:   32,
+					isWithdrawn: true,
+				},
+			},
+		},
+		{
+			description: "re-advertise service IP",
+			srvName:     "service-a",
+			externalIP:  "10.100.1.1",
+			op:          "update",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "10.100.1.1",
+					prefixLen:   32,
+					isWithdrawn: false,
+				},
+			},
+		},
+		{
+			description: "update service IP",
+			srvName:     "service-a",
+			externalIP:  "10.200.1.1",
+			op:          "update",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "10.100.1.1",
+					prefixLen:   32,
+					isWithdrawn: true,
+				},
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "10.200.1.1",
+					prefixLen:   32,
+					isWithdrawn: false,
+				},
+			},
+		},
+		{
+			description: "advertise v6 service IP",
+			srvName:     "service-b",
+			externalIP:  "cccc::1",
+			op:          "add",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "cccc::1",
+					prefixLen:   128,
+					isWithdrawn: false,
+				},
+			},
+		},
+		{
+			description: "withdraw v6 service IP",
+			srvName:     "service-b",
+			externalIP:  "",
+			op:          "update",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "cccc::1",
+					prefixLen:   128,
+					isWithdrawn: true,
+				},
+			},
+		},
+		{
+			description: "re-advertise v6 service IP",
+			srvName:     "service-b",
+			externalIP:  "cccc::1",
+			op:          "update",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "cccc::1",
+					prefixLen:   128,
+					isWithdrawn: false,
+				},
+			},
+		},
+		{
+			description: "update v6 service IP",
+			srvName:     "service-b",
+			externalIP:  "dddd::1",
+			op:          "update",
+			expectedRouteEvents: []routeEvent{
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "cccc::1",
+					prefixLen:   128,
+					isWithdrawn: true,
+				},
+				{
+					sourceASN:   ciliumASN,
+					prefix:      "dddd::1",
+					prefixLen:   128,
+					isWithdrawn: false,
+				},
+			},
+		},
+	}
+
+	testCtx, testDone := context.WithTimeout(context.Background(), maxTestDuration)
+	defer testDone()
+
+	// setup topology
+	gobgpPeers, fixture, cleanup, err := setup(testCtx, []gobgpConfig{gobgpConf}, newFixtureConf())
+	require.NoError(t, err)
+	require.Len(t, gobgpPeers, 1)
+	defer cleanup()
+
+	// setup neighbor
+	err = setupSingleNeighbor(testCtx, fixture, gobgpASN)
+	require.NoError(t, err)
+
+	// wait for peering to come up
+	err = gobgpPeers[0].waitForSessionState(testCtx, []string{"ESTABLISHED"})
+	require.NoError(t, err)
+
+	// setup bgp policy with service selection
+	fixture.config.policy.Spec.VirtualRouters[0].ServiceSelector = &slim_metav1.LabelSelector{
+		MatchExpressions: []slim_metav1.LabelSelectorRequirement{
+			// always true match
+			{
+				Key:      "somekey",
+				Operator: "NotIn",
+				Values:   []string{"not-somekey"},
+			},
+		},
+	}
+	fixture.config.policy.Spec.VirtualRouters[0].ServiceAdvertisements = []v2alpha1.BGPServiceAddressType{
+		v2alpha1.BGPExternalIPAddr,
+	}
+	_, err = fixture.policyClient.Update(testCtx, &fixture.config.policy, meta_v1.UpdateOptions{})
+	require.NoError(t, err)
+
+	tracker := fixture.fakeClientSet.SlimFakeClientset.Tracker()
+
+	for _, step := range steps {
+		t.Run(step.description, func(t *testing.T) {
+			srvObj := newExternalIPServiceObj(externalIPsSrvConfig{
+				name:       step.srvName,
+				externalIP: step.externalIP,
 			})
 
 			if step.op == "add" {

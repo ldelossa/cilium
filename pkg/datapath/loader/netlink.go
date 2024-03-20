@@ -542,7 +542,6 @@ func addHostDeviceAddr(hostDev netlink.Link, ipv4, ipv6 net.IP) error {
 		if err := netlink.AddrReplace(hostDev, &addr); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -746,6 +745,9 @@ func ensureDevice(sysctl sysctl.Sysctl, attrs netlink.Link) (netlink.Link, error
 	l, err := netlink.LinkByName(name)
 	if err != nil {
 		if err := netlink.LinkAdd(attrs); err != nil {
+			if errors.Is(err, unix.ENOTSUP) {
+				err = fmt.Errorf("%w, maybe kernel module for %s is not available?", err, attrs.Type())
+			}
 			return nil, fmt.Errorf("creating device %s: %w", name, err)
 		}
 
