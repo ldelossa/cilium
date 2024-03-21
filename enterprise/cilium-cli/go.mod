@@ -228,8 +228,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace (
-	github.com/cilium/cilium => ../../
-
-	github.com/cilium/tetragon/pkg/k8s => ./tetragon/
-)
+replace github.com/cilium/cilium => ../../
