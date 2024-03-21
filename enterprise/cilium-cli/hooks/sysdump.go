@@ -26,12 +26,10 @@ import (
 )
 
 const (
-	tetragonLabelSelector         = "app.kubernetes.io/name=tetragon"
-	tetragonOperatorLabelSelector = "app.kubernetes.io/name=tetragon-operator"
-	enterpriseLabelSelector       = "app.kubernetes.io/name=hubble-enterprise"
-	enterpriseAgentContainerName  = "enterprise"
-	enterpriseBugtoolPrefix       = "hubble-enterprise-bugtool"
-	enterpriseCLICommand          = "hubble-enterprise"
+	enterpriseLabelSelector      = "app.kubernetes.io/name=hubble-enterprise"
+	enterpriseAgentContainerName = "enterprise"
+	enterpriseBugtoolPrefix      = "hubble-enterprise-bugtool"
+	enterpriseCLICommand         = "hubble-enterprise"
 )
 
 func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) error {
@@ -50,42 +48,6 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
 					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
 					return fmt.Errorf("failed to collect logs from 'hubble-enterprise' pods")
-				}
-				return nil
-			},
-		},
-		{
-			CreatesSubtasks: true,
-			Description:     "Collecting logs from 'tetragon' pods",
-			Quick:           false,
-			Task: func(ctx context.Context) error {
-				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
-					LabelSelector: tetragonLabelSelector,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to get logs from 'tetragon' pods")
-				}
-				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
-					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
-					return fmt.Errorf("failed to collect logs from 'tetragon' pods")
-				}
-				return nil
-			},
-		},
-		{
-			CreatesSubtasks: true,
-			Description:     "Collecting logs from 'tetragon-operator' pods",
-			Quick:           false,
-			Task: func(ctx context.Context) error {
-				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
-					LabelSelector: tetragonOperatorLabelSelector,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to get logs from 'tetragon-operator' pods")
-				}
-				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
-					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
-					return fmt.Errorf("failed to collect logs from 'tetragon-operator' pods")
 				}
 				return nil
 			},
@@ -277,21 +239,6 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				}
 				if err := collector.WriteYAML("hubble-enterprise-configmap-<ts>.yaml", configMap); err != nil {
 					return fmt.Errorf("failed to collect Hubble Enterprise configmap: %w", err)
-				}
-				return nil
-			},
-		},
-		{
-			CreatesSubtasks: true,
-			Description:     "Collecting Tetragon Configmap",
-			Quick:           false,
-			Task: func(ctx context.Context) error {
-				configMap, err := collector.Client.GetConfigMap(ctx, collector.Options.CiliumNamespace, "tetragon-config", metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to get Tetragon configmap")
-				}
-				if err := collector.WriteYAML("tetragon-configmap-<ts>.yaml", configMap); err != nil {
-					return fmt.Errorf("failed to collect Tetragon configmap: %w", err)
 				}
 				return nil
 			},
