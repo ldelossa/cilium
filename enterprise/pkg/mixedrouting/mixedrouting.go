@@ -22,7 +22,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/clustermesh"
 	dpipc "github.com/cilium/cilium/pkg/datapath/ipcache"
-	"github.com/cilium/cilium/pkg/datapath/iptables"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -92,9 +91,7 @@ type params struct {
 	DaemonConfig *option.DaemonConfig
 	Tunnel       tunnel.Config
 
-	NodeManager     nodemanager.NodeManager
-	IPTablesManager *iptables.Manager
-	IPCache         *ipcache.IPCache
+	IPCache *ipcache.IPCache
 
 	Metrics Metrics
 }
@@ -123,11 +120,9 @@ func newManager(in params) *manager {
 	// The node manager must be used in its lightweight form when
 	// mgr.enabledWithFallback() is false, as is only partially initialized.
 	mgr.nodes = &nodeManager{
-		logger:     mgr.logger,
-		modes:      mgr.modes,
-		downstream: in.NodeManager,
-		ipsetter:   in.IPTablesManager,
-		epmapper:   mgr.endpoints,
+		logger:   mgr.logger,
+		modes:    mgr.modes,
+		epmapper: mgr.endpoints,
 	}
 
 	return &mgr
@@ -144,6 +139,9 @@ func (mgr *manager) configureLocalNode(lns *node.LocalNodeStore) {
 }
 
 func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.ClusterMesh, nomgr nodemanager.NodeManager) {
+	// The downstream is configured here to avoid a circular dependency in Hive.
+	mgr.nodes.downstream = nomgr
+
 	// We don't need to hook the extra logic if the local node is configured
 	// with a single routing mode, as it will be always selected anyway.
 	// However, we still inject the lightweight version of the node manager
@@ -155,15 +153,21 @@ func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.Clust
 
 	clustermesh.InjectCENodeObserver(cm, mgr.nodes)
 	linuxdatapath.InjectCEEnableEncapsulation(dp, mgr.nodes.needsEncapsulation)
+}
+
+func (mgr *manager) ipsetFilter() nodemanager.IPSetFilterFn {
+	if !mgr.enabledWithFallback() {
+		return nil
+	}
 
 	// Note: the current approach works assuming that the fallback routing mode
 	// is tunnel (the only supported configuration at the moment), by filtering
 	// out the ipset insertions/deletions if the preferred routing mode towards
 	// the given node is tunneling (and the local routing mode is set to native,
 	// otherwise they would not have been inserted in the first place). To support
-	// native routing fallback, instead, we should force the creation of the ipset
-	// and manually insert the appropriate entries.
-	nodemanager.InjectCEIPSetManager(nomgr, mgr.nodes)
+	// native routing fallback, instead, we should also enable the ipset manager
+	// logic in that case (as otherwise disabled).
+	return mgr.nodes.ipsetFilter
 }
 
 func (mgr *manager) setupEndpointManager(cm *clustermesh.ClusterMesh, lst *dpipc.BPFListener) {

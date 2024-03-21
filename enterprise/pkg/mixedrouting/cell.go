@@ -30,6 +30,10 @@ var Cell = cell.Module(
 		// and the compilation of the corresponding logic when the primary routing
 		// mode is native, and fallback it tunnel.
 		datapathConfigProvider,
+
+		// Configure the filter to limit the upsertion of ipset entries to only the
+		// ones corresponding to nodes that should be reached in native routing mode.
+		(*manager).ipsetFilter,
 	),
 
 	cell.Invoke(
@@ -41,7 +45,7 @@ var Cell = cell.Module(
 
 		// Hook the extra logic to observe node upsertions and deletions, retrieve
 		// the routing modes annotations and configure the datapath accordingly
-		// (e.g., node routes, ipset entries, ...).
+		// (e.g., node routes, ...).
 		(*manager).setupNodeManager,
 
 		// Hook the extra logic to observe endpoint upsertions and deletions,
