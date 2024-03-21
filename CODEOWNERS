@@ -594,7 +594,14 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/clustermesh
 #   Responsible for maintaining enterprise-specific cluster mesh features
 # - @isovalent/core-structure
-#   A team responsible for mindfulness of isovalent/cilium codebase.
+#   A team responsible for mindfulness of isovalent/cilium codebase. If the
+#   core-structure team gets added as a reviewer for a pull request, it likely
+#   indicates that the pull request is directly modifying upstream files.
+#   Directly modifying upstream files is strongly discouraged, especially in
+#   main-ce branch, as it becomes more and more difficult to stay in sync with
+#   the upstream main branch without causing conflicts. If you are not sure how
+#   to avoid modifying upstream files, start a discussion in #cee-oss-codebase
+#   Slack channel: https://isovalent.slack.com/archives/C05188W95GT
 # - @isovalent/dns-proxy
 #   Responsible for maintaining DNS Proxy HA
 # - @isovalent/egress-gateway
@@ -629,7 +636,12 @@ Vagrantfile @cilium/ci-structure
 # - @isovalent/traffic-engineering
 #   Responsible for maintaining features related to traffic engineering such as SRv6.
 # - @isovalent/void
-#   An empty team to indicate the lack of code owners.
+#   An empty team to indicate the lack of code owners. If the void team gets
+#   added as a reviewer for a pull request, it most likely indicates that the
+#   pull request is modifying enterprise-only files without a proper code owner.
+#   Update CODEOWNERS file and assign proper owners. If you are not sure which
+#   teams should own the files, post a Slack message in #cee-oss-codebase Slack
+#   channel: https://isovalent.slack.com/archives/C05188W95GT
 * @isovalent/core-structure
 **/*enterprise* @isovalent/void
 /.github/**/*enterprise* @isovalent/infrastructure
