@@ -11,6 +11,10 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// IsovalentBFDNodeConfigs returns a IsovalentBFDNodeConfigInformer.
+	IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInformer
+	// IsovalentBFDProfiles returns a IsovalentBFDProfileInformer.
+	IsovalentBFDProfiles() IsovalentBFDProfileInformer
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
 	// IsovalentMeshEndpoints returns a IsovalentMeshEndpointInformer.
@@ -40,6 +44,16 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// IsovalentBFDNodeConfigs returns a IsovalentBFDNodeConfigInformer.
+func (v *version) IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInformer {
+	return &isovalentBFDNodeConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBFDProfiles returns a IsovalentBFDProfileInformer.
+func (v *version) IsovalentBFDProfiles() IsovalentBFDProfileInformer {
+	return &isovalentBFDProfileInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.

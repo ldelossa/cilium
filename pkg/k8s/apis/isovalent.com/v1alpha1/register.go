@@ -63,6 +63,16 @@ const (
 	IsovalentMeshEndpointPluralName     = "isovalentmeshendpoints"
 	IsovalentMeshEndpointKindDefinition = "IsovalentMeshEndpoint"
 	IsovalentMeshEndpointName           = IsovalentMeshEndpointPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentBFDProfile
+	IsovalentBFDProfilePluralName     = "isovalentbfdprofiles"
+	IsovalentBFDProfileKindDefinition = "IsovalentBFDProfile"
+	IsovalentBFDProfileName           = IsovalentBFDProfilePluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentBFDNodeConfig
+	IsovalentBFDNodeConfigPluralName     = "isovalentbfdnodeconfigs"
+	IsovalentBFDNodeConfigKindDefinition = "IsovalentBFDNodeConfig"
+	IsovalentBFDNodeConfigName           = IsovalentBFDNodeConfigPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -124,6 +134,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentMulticastNodeList{},
 		&IsovalentMeshEndpoint{},
 		&IsovalentMeshEndpointList{},
+		&IsovalentBFDProfile{},
+		&IsovalentBFDProfileList{},
+		&IsovalentBFDNodeConfig{},
+		&IsovalentBFDNodeConfigList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

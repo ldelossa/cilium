@@ -15,6 +15,8 @@ import (
 
 type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	IsovalentBFDNodeConfigsGetter
+	IsovalentBFDProfilesGetter
 	IsovalentFQDNGroupsGetter
 	IsovalentMeshEndpointsGetter
 	IsovalentMulticastGroupsGetter
@@ -29,6 +31,14 @@ type IsovalentV1alpha1Interface interface {
 // IsovalentV1alpha1Client is used to interact with features provided by the isovalent.com group.
 type IsovalentV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInterface {
+	return newIsovalentBFDNodeConfigs(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBFDProfiles() IsovalentBFDProfileInterface {
+	return newIsovalentBFDProfiles(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterface {

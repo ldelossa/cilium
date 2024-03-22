@@ -58,6 +58,12 @@ const (
 
 	// IsovalentMeshEndpointCRDName is the full name of the IsovalentMeshEndpoint CRD.
 	IsovalentMeshEndpointCRDName = k8sconstv1alpha1.IsovalentMeshEndpointKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBFDProfileCRDName is the full name of the IsovalentBFDProfile CRD.
+	IsovalentBFDProfileCRDName = k8sconstv1alpha1.IsovalentBFDProfileKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBFDNodeConfigCRDName is the full name of the IsovalentBFDNodeConfig CRD.
+	IsovalentBFDNodeConfigCRDName = k8sconstv1alpha1.IsovalentBFDNodeConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -71,16 +77,18 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv1alpha1.IFGName):                   createIFGCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):        createSRv6SIDManagerCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):       createSRv6LocatorPoolCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName):      createSRv6EgressPolicyCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.VRFName):                   createVRFCRD,
-		synced.CRDResourceName(k8sconstv1.IEGPName):                        createIEGPCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IPNName):                   createIPNCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):        createMulticastGroupCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):         createMulticastNodeCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IsovalentMeshEndpointName): createIsovalentMeshEndpointCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IFGName):                    createIFGCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):         createSRv6SIDManagerCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):        createSRv6LocatorPoolCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName):       createSRv6EgressPolicyCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.VRFName):                    createVRFCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):                         createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IPNName):                    createIPNCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):         createMulticastGroupCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):          createMulticastNodeCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentMeshEndpointName):  createIsovalentMeshEndpointCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDProfileName):    createBFDProfileCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDNodeConfigName): createBFDNodeConfigCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -125,6 +133,12 @@ var (
 
 	//go:embed crds/v1alpha1/isovalentmeshendpoints.yaml
 	crdsv2Alpha1Isovalentmeshendpoints []byte
+
+	//go:embed crds/v1alpha1/isovalentbfdprofiles.yaml
+	crdsv1Alpha1IsovalentBFDProfile []byte
+
+	//go:embed crds/v1alpha1/isovalentbfdnodeconfigs.yaml
+	crdsv1Alpha1IsovalentBFDNodeConfig []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -160,6 +174,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentMulticastNodes
 	case IsovalentMeshEndpointCRDName:
 		crdBytes = crdsv2Alpha1Isovalentmeshendpoints
+	case IsovalentBFDProfileCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBFDProfile
+	case IsovalentBFDNodeConfigCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBFDNodeConfig
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -297,6 +315,32 @@ func createIsovalentMeshEndpointCRD(clientset apiextensionsclient.Interface) err
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IsovalentMeshEndpointName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBFDProfileCRD creates and updates the IsovalentBFDProfile CRD.
+func createBFDProfileCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBFDProfileCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBFDProfileName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBFDNodeConfigCRD creates and updates the IsovalentBFDNodeConfig CRD.
+func createBFDNodeConfigCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBFDNodeConfigCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBFDNodeConfigName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

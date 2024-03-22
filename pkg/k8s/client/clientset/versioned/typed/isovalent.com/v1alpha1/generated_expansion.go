@@ -5,6 +5,10 @@
 
 package v1alpha1
 
+type IsovalentBFDNodeConfigExpansion interface{}
+
+type IsovalentBFDProfileExpansion interface{}
+
 type IsovalentFQDNGroupExpansion interface{}
 
 type IsovalentMeshEndpointExpansion interface{}

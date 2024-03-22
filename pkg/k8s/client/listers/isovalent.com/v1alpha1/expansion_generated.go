@@ -5,6 +5,14 @@
 
 package v1alpha1
 
+// IsovalentBFDNodeConfigListerExpansion allows custom methods to be added to
+// IsovalentBFDNodeConfigLister.
+type IsovalentBFDNodeConfigListerExpansion interface{}
+
+// IsovalentBFDProfileListerExpansion allows custom methods to be added to
+// IsovalentBFDProfileLister.
+type IsovalentBFDProfileListerExpansion interface{}
+
 // IsovalentFQDNGroupListerExpansion allows custom methods to be added to
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}

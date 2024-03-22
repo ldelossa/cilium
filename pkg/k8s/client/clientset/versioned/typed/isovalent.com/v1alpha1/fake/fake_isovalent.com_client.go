@@ -15,6 +15,14 @@ type FakeIsovalentV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentBFDNodeConfigs() v1alpha1.IsovalentBFDNodeConfigInterface {
+	return &FakeIsovalentBFDNodeConfigs{c}
+}
+
+func (c *FakeIsovalentV1alpha1) IsovalentBFDProfiles() v1alpha1.IsovalentBFDProfileInterface {
+	return &FakeIsovalentBFDProfiles{c}
+}
+
 func (c *FakeIsovalentV1alpha1) IsovalentFQDNGroups() v1alpha1.IsovalentFQDNGroupInterface {
 	return &FakeIsovalentFQDNGroups{c}
 }
