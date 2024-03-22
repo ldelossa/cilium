@@ -17,7 +17,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/remoteproxy"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ipcache"
-	"github.com/cilium/cilium/pkg/proxy"
 )
 
 var Cell = cell.Module(
@@ -41,7 +40,5 @@ var Cell = cell.Module(
 		if !cfg.EnableExternalDNSProxy || proxyAgentServer == nil || doubleProxy == nil {
 			return
 		}
-		// Override the DNS proxy port with a hardcoded default.
-		proxy.DefaultProxyConfig.DNSProxyPort = 10001
 	}),
 )
