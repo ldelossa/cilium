@@ -1586,6 +1586,14 @@
     },
     "enterprise": {
       "properties": {
+        "bfd": {
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
         "bgpControlPlane": {
           "properties": {
             "enableServiceHealthChecking": {

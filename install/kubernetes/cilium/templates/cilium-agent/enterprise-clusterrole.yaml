@@ -19,6 +19,7 @@ rules:
   - isovalentvrfs
   - isovalentmulticastgroups
   - isovalentmeshendpoints
+  - isovalentbfdprofiles
   verbs:
   - list
   - watch
@@ -51,6 +52,8 @@ rules:
   resources:
   - isovalentmulticastnodes
   - isovalentmulticastnodes/status
+  - isovalentbfdnodeconfigs
+  - isovalentbfdnodeconfigs/status
   verbs:
   - create
   - update

@@ -22,6 +22,8 @@ rules:
   - isovalentsrv6sidmanagers.isovalent.com
   - isovalentsrv6locatorpools.isovalent.com
   - isovalentvrfs.isovalent.com
+  - isovalentbfdprofiles.isovalent.com
+  - isovalentbfdnodeconfigs.isovalent.com
 {{- if .Values.enterprise.ciliummesh.enabled }}
   - isovalentmeshendpoints.isovalent.com
 {{- end }}
@@ -47,6 +49,19 @@ rules:
   - update
   - delete
   - patch
+{{- end }}
+{{- if or .Values.enterprise.bfd.enabled }}
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentbfdnodeconfigs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
 {{- end }}
 - apiGroups:
   - cilium.io

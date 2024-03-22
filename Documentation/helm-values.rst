@@ -1108,6 +1108,10 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
+   * - :spelling:ignore:`enterprise.bfd.enabled`
+     - Enables Bidirectional Forwarding Detection (BFD) feature.
+     - bool
+     - ``false``
    * - :spelling:ignore:`enterprise.bgpControlPlane.enableServiceHealthChecking`
      - Enables BGP integration with service health-checking.
      - bool

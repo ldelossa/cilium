@@ -327,6 +327,7 @@ contributors across the globe, there is almost always someone available to help.
 | eni.subnetIDsFilter | list | `[]` | Filter via subnet IDs which will dictate which subnets are going to be used to create new ENIs Important note: This requires that each instance has an ENI with a matching subnet attached when Cilium is deployed. If you only want to control subnets for ENIs attached by Cilium, use the CNI configuration file settings (cni.customConf) instead. |
 | eni.subnetTagsFilter | list | `[]` | Filter via tags (k=v) which will dictate which subnets are going to be used to create new ENIs Important note: This requires that each instance has an ENI with a matching subnet attached when Cilium is deployed. If you only want to control subnets for ENIs attached by Cilium, use the CNI configuration file settings (cni.customConf) instead. |
 | eni.updateEC2AdapterLimitViaAPI | bool | `true` | Update ENI Adapter limits from the EC2 API |
+| enterprise.bfd.enabled | bool | `false` | Enables Bidirectional Forwarding Detection (BFD) feature. |
 | enterprise.bgpControlPlane.enableServiceHealthChecking | bool | `false` | Enables BGP integration with service health-checking. |
 | enterprise.ciliummesh.enabled | bool | `false` | Enables Cilium Mesh |
 | enterprise.clustermesh.enableOverlappingPodCIDRSupport | bool | `false` | Enable overlapping PodCIDR support |
