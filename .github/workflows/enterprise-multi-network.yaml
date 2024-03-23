@@ -161,6 +161,7 @@ jobs:
           ci-version: ${{ env.cilium_cli_ci_version }}
           binary-name: cilium-cli
           binary-dir: ./
+          local-path: './enterprise/cilium-cli'
 
       - name: Provision LVH VMs
         uses: cilium/little-vm-helper@9d758b756305e83718a51b792a5aeabd022a39ec # v0.0.16
