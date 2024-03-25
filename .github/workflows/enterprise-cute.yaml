@@ -479,7 +479,19 @@ jobs:
           channel-id: '${{ steps.vars.outputs.notify }}'
           slack-message: '${{ steps.notify_message.outputs.message }}'
 
-      - name: Collect logs and sysdump
+      - name: Collect sysdumps
+        if: ${{ !success() && (steps.cute_upgrade.outcome != 'skipped' || steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        shell: bash
+        working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
+        run: |
+          mkdir -p ${{ env.upload_dir }}/cilium-sysdumps
+          # Move all previously created sysdumps
+          mv *.zip ${{ env.upload_dir }}/cilium-sysdumps/
+          
+          cilium status
+          cilium sysdump --output-filename ${{ env.upload_dir }}/cilium-sysdumps/cilium-sysdump-final
+
+      - name: Collect metrics and logs
         if: ${{ !success() && (steps.cute_upgrade.outcome != 'skipped' || steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
         shell: bash
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
@@ -496,9 +508,6 @@ jobs:
             kubectl -n $CILIUM_NS logs $POD > ${{ env.upload_dir }}/cilium-logs/$POD.log
           done
 
-          cilium status
-          mkdir -p ${{ env.upload_dir }}/cilium-sysdumps
-          cilium sysdump --output-filename ${{ env.upload_dir }}/cilium-sysdumps/cilium-sysdump-final
           # To debug https://github.com/cilium/cilium/issues/26062
           head -n -0 /proc/buddyinfo /proc/pagetypeinfo || true
 
