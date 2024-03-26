@@ -280,12 +280,12 @@ static __always_inline int handle_ipv4(struct __ctx_buff *ctx,
 				       __s8 *ext_err __maybe_unused)
 {
 	struct remote_endpoint_info *info;
-	int ret __maybe_unused;
 	void *data_end, *data;
 	struct iphdr *ip4;
 	struct endpoint_info *ep;
 	bool decrypted;
 	bool __maybe_unused is_dsr = false;
+	int ret;
 
 	/* verifier workaround (dereference of modified ctx ptr) */
 	if (!revalidate_data_pull(ctx, &data, &data_end, &ip4))
