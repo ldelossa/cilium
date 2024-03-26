@@ -656,6 +656,7 @@ Vagrantfile @cilium/ci-structure
 /.github/workflows/enterprise-*fqdn-ha*.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-kind.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
+/.github/workflows/enterprise-multicast.yaml @isovalent/traffic-engineering
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
 /.github/workflows/enterprise-*srv6*.yaml @isovalent/traffic-engineering
 /bpf/complexity-tests/**/**/*enterprise_*.txt @isovalent/cilium-datapath
