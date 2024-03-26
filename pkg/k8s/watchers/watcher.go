@@ -66,7 +66,6 @@ const (
 	k8sAPIGroupCiliumEndpointSliceV2Alpha1      = "cilium/v2alpha1::CiliumEndpointSlice"
 	k8sAPIGroupCiliumClusterwideEnvoyConfigV2   = "cilium/v2::CiliumClusterwideEnvoyConfig"
 	k8sAPIGroupCiliumEnvoyConfigV2              = "cilium/v2::CiliumEnvoyConfig"
-	k8sAPIGroupIsovalentEgressGatewayPolicyV1   = "isovalent/v1::IsovalentEgressGatewayPolicy"
 
 	metricCLRP = "CiliumLocalRedirectPolicy"
 	metricPod  = "Pod"

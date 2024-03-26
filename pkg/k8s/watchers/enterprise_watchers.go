@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	k8sAPIGroupIsovalentMeshEndpointV1Alpha1 = "isovalent/v1alpha1::IsovalentMeshEndpoint"
+	k8sAPIGroupIsovalentEgressGatewayPolicyV1 = "isovalent/v1::IsovalentEgressGatewayPolicy"
+	k8sAPIGroupIsovalentMeshEndpointV1Alpha1  = "isovalent/v1alpha1::IsovalentMeshEndpoint"
 )
 
 var isovalentResourceToGroupMapping = map[string]watcherInfo{
