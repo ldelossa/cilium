@@ -595,6 +595,8 @@ Vagrantfile @cilium/ci-structure
 #   consistency of flags and options.
 # - @isovalent/clustermesh
 #   Responsible for maintaining enterprise-specific cluster mesh features
+# - @isovalent/cilium-datapath
+#   Responsible for maintaining enterprise-specific datapath code
 # - @isovalent/core-structure
 #   A team responsible for mindfulness of isovalent/cilium codebase. If the
 #   core-structure team gets added as a reviewer for a pull request, it likely
@@ -655,6 +657,7 @@ Vagrantfile @cilium/ci-structure
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
 /.github/workflows/enterprise-*srv6*.yaml @isovalent/traffic-engineering
+/bpf/complexity-tests/**/**/*enterprise_*.txt @isovalent/cilium-datapath
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
