@@ -110,6 +110,7 @@ jobs:
           --helm-set=socketLB.enabled=true \
           --helm-set=socketLB.hostNamespaceOnly=true \
           --helm-set=endpointHealthChecking.enabled=false \
+          --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}'
         "
 
         CILIUM_INSTALL_TUNNEL="--helm-set=tunnel=vxlan"

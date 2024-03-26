@@ -100,6 +100,7 @@ jobs:
             --helm-set=operator.image.tag=${SHA} \
             --helm-set=operator.image.useDigest=false \
             --helm-set-string=extraConfig.external-dns-proxy=true \
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}'
           "
 
           CONNECTIVITY_TEST_DEFAULTS="--hubble=false --flow-validation=disabled --collect-sysdump-on-failure"

@@ -143,6 +143,7 @@ jobs:
             --helm-set=enterprise.srv6.enabled=true \
             --helm-set=enterprise.srv6.encapMode=${{ matrix.encap-mode }} \
             --helm-set=enterprise.srv6.locatorPoolEnabled=${{ matrix.sid-manger-enabled }} \
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}'
           "
 
           echo sha=${SHA} >> $GITHUB_OUTPUT
