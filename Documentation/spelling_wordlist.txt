@@ -30,6 +30,7 @@ DTrace
 Dangaard
 Datadog
 Dataplane
+Deconfigure
 Dinan
 Dockerfile
 Dockerfiles
@@ -137,6 +138,7 @@ Yunsong
 Zannoni
 Zhou
 aarch
+addr
 alibabacloud
 allocatable
 allocateLoadBalancerNodePorts
@@ -382,6 +384,7 @@ impactful
 ingressing
 init
 initContainer
+initialDelaySeconds
 inlined
 inlines
 inlining
@@ -736,6 +739,7 @@ unix
 unlabel
 unmanaged
 unmigrated
+unselect
 unsettable
 untriaged
 untrusted

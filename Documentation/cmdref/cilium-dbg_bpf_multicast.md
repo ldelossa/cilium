@@ -2,7 +2,7 @@
 
 ## cilium-dbg bpf multicast
 
-Access to multicast maps
+Manage multicast BPF programs
 
 ### Options
 

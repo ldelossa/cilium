@@ -20,6 +20,8 @@ Manage the multicast groups.
 
 ### SEE ALSO
 
-* [cilium-dbg bpf multicast](cilium-dbg_bpf_multicast.md)	 - Access to multicast maps
+* [cilium-dbg bpf multicast](cilium-dbg_bpf_multicast.md)	 - Manage multicast BPF programs
+* [cilium-dbg bpf multicast group add](cilium-dbg_bpf_multicast_group_add.md)	 - Add a multicast group.
+* [cilium-dbg bpf multicast group delete](cilium-dbg_bpf_multicast_group_delete.md)	 - Delete a multicast group.
 * [cilium-dbg bpf multicast group list](cilium-dbg_bpf_multicast_group_list.md)	 - List the multicast groups.
 

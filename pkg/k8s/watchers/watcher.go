@@ -117,11 +117,9 @@ type endpointManager interface {
 	UpdatePolicyMaps(context.Context, *sync.WaitGroup) *sync.WaitGroup
 }
 
-type nodeDiscoverManager interface {
-	WaitForLocalNodeInit()
+type nodeManager interface {
 	NodeDeleted(n nodeTypes.Node)
 	NodeUpdated(n nodeTypes.Node)
-	ClusterSizeDependantInterval(baseInterval time.Duration) time.Duration
 }
 
 type policyManager interface {
@@ -189,7 +187,7 @@ type K8sWatcher struct {
 
 	endpointManager endpointManager
 
-	nodeDiscoverManager   nodeDiscoverManager
+	nodeManager           nodeManager
 	policyManager         policyManager
 	policyRepository      policyRepository
 	svcManager            svcManager
@@ -227,7 +225,7 @@ func NewK8sWatcher(
 	k8sResourceSynced *synced.Resources,
 	k8sAPIGroups *synced.APIGroups,
 	endpointManager endpointManager,
-	nodeDiscoverManager nodeDiscoverManager,
+	nodeManager nodeManager,
 	policyManager policyManager,
 	policyRepository policyRepository,
 	svcManager svcManager,
@@ -247,7 +245,7 @@ func NewK8sWatcher(
 		k8sAPIGroups:          k8sAPIGroups,
 		K8sSvcCache:           serviceCache,
 		endpointManager:       endpointManager,
-		nodeDiscoverManager:   nodeDiscoverManager,
+		nodeManager:           nodeManager,
 		policyManager:         policyManager,
 		policyRepository:      policyRepository,
 		svcManager:            svcManager,

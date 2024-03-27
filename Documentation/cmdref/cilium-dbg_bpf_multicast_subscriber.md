@@ -20,6 +20,8 @@ Manage the multicast subscribers.
 
 ### SEE ALSO
 
-* [cilium-dbg bpf multicast](cilium-dbg_bpf_multicast.md)	 - Access to multicast maps
+* [cilium-dbg bpf multicast](cilium-dbg_bpf_multicast.md)	 - Manage multicast BPF programs
+* [cilium-dbg bpf multicast subscriber add](cilium-dbg_bpf_multicast_subscriber_add.md)	 - Add a remote subscriber to the multicast group.
+* [cilium-dbg bpf multicast subscriber delete](cilium-dbg_bpf_multicast_subscriber_delete.md)	 - Delete a subscriber from the multicast group.
 * [cilium-dbg bpf multicast subscriber list](cilium-dbg_bpf_multicast_subscriber_list.md)	 - List the multicast subscribers for the given group.
 

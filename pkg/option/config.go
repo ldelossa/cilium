@@ -896,9 +896,6 @@ const (
 	// control plane, e.g. when using the managed etcd feature
 	EnableWellKnownIdentities = "enable-well-known-identities"
 
-	// EnableRemoteNodeIdentity enables use of the remote-node identity
-	EnableRemoteNodeIdentity = "enable-remote-node-identity"
-
 	// PolicyAuditModeArg argument enables policy audit mode.
 	PolicyAuditModeArg = "policy-audit-mode"
 
@@ -1669,7 +1666,6 @@ type DaemonConfig struct {
 	PreAllocateMaps         bool
 	IPv6NodeAddr            string
 	IPv4NodeAddr            string
-	SidecarIstioProxyImage  string
 	SocketPath              string
 	TracePayloadlen         int
 	Version                 string
@@ -2013,9 +2009,6 @@ type DaemonConfig struct {
 	// This is requires if identiy resolution is required to bring up the
 	// control plane, e.g. when using the managed etcd feature
 	EnableWellKnownIdentities bool
-
-	// EnableRemoteNodeIdentity enables use of the remote-node identity
-	EnableRemoteNodeIdentity bool
 
 	// Azure options
 
@@ -2523,12 +2516,6 @@ func (c *DaemonConfig) NodeIpsetNeeded() bool {
 	return !c.TunnelingEnabled() && c.IptablesMasqueradingEnabled()
 }
 
-// RemoteNodeIdentitiesEnabled returns true if the remote-node identity feature
-// is enabled
-func (c *DaemonConfig) RemoteNodeIdentitiesEnabled() bool {
-	return c.EnableRemoteNodeIdentity
-}
-
 // NodeEncryptionEnabled returns true if node encryption is enabled
 func (c *DaemonConfig) NodeEncryptionEnabled() bool {
 	return c.EncryptNode
@@ -2923,7 +2910,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
 	c.EnableSocketLB = vp.GetBool(EnableSocketLB)
 	c.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)
-	c.EnableRemoteNodeIdentity = vp.GetBool(EnableRemoteNodeIdentity)
 	c.EnableBPFTProxy = vp.GetBool(EnableBPFTProxy)
 	c.EnableXTSocketFallback = vp.GetBool(EnableXTSocketFallbackName)
 	c.EnableAutoDirectRouting = vp.GetBool(EnableAutoDirectRoutingName)

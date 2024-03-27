@@ -7,10 +7,10 @@ List the multicast subscribers for the given group.
 ### Synopsis
 
 List the multicast subscribers for the given group. 
-To get the subscribers for all the groups, use 'cilium bpf multicast subscriber list all'.
+	To get the subscribers for all the groups, use 'cilium-dbg bpf multicast subscriber list all'.
 
 ```
-cilium-dbg bpf multicast subscriber list < group-address | all > [flags]
+cilium-dbg bpf multicast subscriber list < group | all > [flags]
 ```
 
 ### Options
