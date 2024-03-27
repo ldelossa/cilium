@@ -155,10 +155,10 @@ func (r *RemoteFQDNProxy) RemoveRestoredRules(endpointID uint16) {
 	r.client.RemoveRestoredRules(context.TODO(), &fqdnpb.EndpointID{EndpointID: uint32(endpointID)})
 }
 
-func (r *RemoteFQDNProxy) UpdateAllowed(endpointID uint64, destPort uint16, newRules policy.L7DataMap) error {
+func (r *RemoteFQDNProxy) UpdateAllowed(endpointID uint64, destPort restore.PortProto, newRules policy.L7DataMap) error {
 	msg := &fqdnpb.FQDNRules{
 		EndpointID: endpointID,
-		DestPort:   uint32(destPort),
+		DestPort:   uint32(destPort.Port()),
 	}
 
 	msg.Rules = &fqdnpb.L7Rules{
@@ -291,7 +291,7 @@ func rulesFromProtobufMsg(rules *fqdnpb.RestoredRules) restore.DNSRules {
 			ipRules = append(ipRules, ipRule)
 		}
 
-		result[uint16(port)] = ipRules
+		result[(restore.PortProto)(port)] = ipRules
 	}
 	return result
 }
