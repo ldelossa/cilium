@@ -83,7 +83,7 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
 
 - [ ] Wait for the images to build at [build-images-releases] workflow
   - You can check quay.io whether the images matching your tag have appeared: [quay-agent], [quay-operator]
-  - [ ] This workflow also generates the `vX.Y.Z-cee.1-gen-tag` tag, which includes the generated code. Verify that the tag is created. If it isn't, for some reason, you can use the `atlantis-gen` workflow to generate it.
+  - [ ] For `<=v1.14-ce`, this workflow also generates the `vX.Y.Z-cee.1-gen-tag` tag, which includes the generated code. Verify that the tag is created. If it isn't, for some reason, you can use the `atlantis-gen` workflow to generate it.
 - [ ] Build the helm charts for the release via [helm-repo] workflow. You can check whether they were picked up with:
 
         helm repo add isovalent https://helm.isovalent.com
