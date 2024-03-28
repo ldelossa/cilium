@@ -11,10 +11,11 @@
 !/go.sum
 !/go.mod
 !/VERSION
-!/GO_VERSION
 
 # directories
 !/.git
 !/api
-!/images/cilium-dnsproxy/build-gops.sh
+!/enterprise/fqdn-proxy
+!/images/runtime/build-gops.sh
+!/pkg
 !/vendor

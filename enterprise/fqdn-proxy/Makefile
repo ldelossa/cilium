@@ -1,7 +1,7 @@
 # Copyright 2017-2020 Authors of Cilium
 # SPDX-License-Identifier: Apache-2.0
 
-include Makefile.defs
+include ../../Makefile.defs
 
 TARGETS := dnsproxy
 

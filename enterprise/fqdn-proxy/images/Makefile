@@ -47,4 +47,4 @@ check-builder-image:
 	CHECK=true scripts/update-cilium-builder-image.sh
 
 cilium-dnsproxy-image: .buildx_builder
-	ROOT_CONTEXT=true scripts/build-image.sh cilium-dnsproxy images/cilium-dnsproxy linux/amd64,linux/arm64 $(OUTPUT) "$$(cat .buildx_builder)" $(REGISTRIES)
+	ROOT_CONTEXT=true scripts/build-image.sh cilium-dnsproxy enterprise/fqdn-proxy/images/cilium-dnsproxy linux/amd64,linux/arm64 $(OUTPUT) "$$(cat .buildx_builder)" $(REGISTRIES)
