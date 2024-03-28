@@ -364,8 +364,12 @@
      - Configure the maximum number of entries for the neighbor table.
      - int
      - ``524288``
+   * - :spelling:ignore:`bpf.nodeMapMax`
+     - Configures the maximum number of entries for the node table.
+     - int
+     - ``nil``
    * - :spelling:ignore:`bpf.policyMapMax`
-     - Configure the maximum number of entries in endpoint policy map (per endpoint).
+     - Configure the maximum number of entries in endpoint policy map (per endpoint). @schema type: [null, integer] @schema
      - int
      - ``16384``
    * - :spelling:ignore:`bpf.preallocateMaps`
@@ -679,11 +683,11 @@
    * - :spelling:ignore:`clustermesh.apiserver.service.externalTrafficPolicy`
      - The externalTrafficPolicy of service used for apiserver access.
      - string
-     - ``nil``
+     - ``"Cluster"``
    * - :spelling:ignore:`clustermesh.apiserver.service.internalTrafficPolicy`
      - The internalTrafficPolicy of service used for apiserver access.
      - string
-     - ``nil``
+     - ``"Cluster"``
    * - :spelling:ignore:`clustermesh.apiserver.service.nodePort`
      - Optional port to use as the node port for apiserver access.  WARNING: make sure to configure a different NodePort in each cluster if kube-proxy replacement is enabled, as Cilium is currently affected by a known bug (#24692) when NodePorts are handled by the KPR implementation. If a service with the same NodePort exists both in the local and the remote cluster, all traffic originating from inside the cluster and targeting the corresponding NodePort will be redirected to a local backend, regardless of whether the destination node belongs to the local or the remote cluster.
      - int
@@ -1926,7 +1930,7 @@
      - ``nil``
    * - :spelling:ignore:`hubble.relay.sortBufferLenMax`
      - Max number of flows that can be buffered for sorting before being sent to the client (per request) (e.g. 100).
-     - string
+     - int
      - ``nil``
    * - :spelling:ignore:`hubble.relay.terminationGracePeriodSeconds`
      - Configure termination grace period for hubble relay Deployment.
@@ -2190,8 +2194,8 @@
      - ``{"digest":"","override":null,"pullPolicy":"Always","repository":"quay.io/isovalent-dev/cilium-ci","tag":"latest","useDigest":false}``
    * - :spelling:ignore:`imagePullSecrets`
      - Configure image pull secrets for pulling container images
-     - string
-     - ``nil``
+     - list
+     - ``[]``
    * - :spelling:ignore:`ingressController.default`
      - Set cilium ingress controller to be the default ingress controller This will let cilium ingress controller route entries without ingress class set
      - bool
@@ -2237,7 +2241,7 @@
      - list
      - ``["lbipam.cilium.io","service.beta.kubernetes.io","service.kubernetes.io","cloud.google.com"]``
    * - :spelling:ignore:`ingressController.loadbalancerMode`
-     - Default ingress load balancer mode Supported values: shared, dedicated For granular control, use the following annotations on the ingress resource ingress.cilium.io/loadbalancer-mode: shared
+     - Default ingress load balancer mode Supported values: shared, dedicated For granular control, use the following annotations on the ingress resource: "ingress.cilium.io/loadbalancer-mode: dedicated" (or "shared").
      - string
      - ``"dedicated"``
    * - :spelling:ignore:`ingressController.secretsNamespace`
@@ -2338,11 +2342,11 @@
      - ``["fd00::/104"]``
    * - :spelling:ignore:`ipam.operator.externalAPILimitBurstSize`
      - The maximum burst size when rate limiting access to external APIs. Also known as the token bucket capacity.
-     - string
+     - int
      - ``20``
    * - :spelling:ignore:`ipam.operator.externalAPILimitQPS`
      - The maximum queries per second when rate limiting access to external APIs. Also known as the bucket refill rate, which is used to refill the bucket up to the burst size capacity.
-     - string
+     - float
      - ``4.0``
    * - :spelling:ignore:`ipv4.enabled`
      - Enable IPv4 support.
@@ -2900,6 +2904,14 @@
      - The priority class to use for the preflight pod.
      - string
      - ``""``
+   * - :spelling:ignore:`preflight.readinessProbe.initialDelaySeconds`
+     - For how long kubelet should wait before performing the first probe
+     - int
+     - ``5``
+   * - :spelling:ignore:`preflight.readinessProbe.periodSeconds`
+     - interval between checks of the readiness probe
+     - int
+     - ``5``
    * - :spelling:ignore:`preflight.resources`
      - preflight resource limits & requests ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
      - object
@@ -2988,10 +3000,6 @@
      - interval between checks of the readiness probe
      - int
      - ``30``
-   * - :spelling:ignore:`remoteNodeIdentity`
-     - Enable use of the remote node identity. ref: https://docs.cilium.io/en/v1.7/install/upgrade/#configmap-remote-node-identity
-     - bool
-     - ``true``
    * - :spelling:ignore:`resourceQuotas`
      - Enable resource quotas for priority classes used in the cluster.
      - object

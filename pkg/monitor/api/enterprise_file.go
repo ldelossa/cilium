@@ -8,16 +8,16 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package monitor
+package api
 
 func init() {
 	// @@ source files list begin
-	var enterpriseSourceFileNames = map[int]string{
+	var enterpriseSourceFileNames = map[uint8]string{
 		// enterprise source files from bpf/
 		201: "enterprise_nodeport.h",
 	}
 
 	for k, v := range enterpriseSourceFileNames {
-		sourceFileNames[k] = v
+		files[k] = v
 	}
 }

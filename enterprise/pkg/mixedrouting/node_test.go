@@ -16,13 +16,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
 
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/node/addressing"
-	nodemanager "github.com/cilium/cilium/pkg/node/manager"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
-	"github.com/cilium/cilium/pkg/slices"
 )
 
 type op string
@@ -38,51 +35,22 @@ type fakeNodeEntry struct {
 }
 
 type fakeNodeDownstream struct {
-	ops      []fakeNodeEntry
-	ipsetter nodemanager.CEIPSetManager
-	nodeIPs  []string
+	ops []fakeNodeEntry
 }
 
-func newFakeNodeDownstream(ipsetter nodemanager.CEIPSetManager) *fakeNodeDownstream {
-	return &fakeNodeDownstream{ipsetter: ipsetter}
+func newFakeNodeDownstream() *fakeNodeDownstream {
+	return &fakeNodeDownstream{}
 }
 
 func (fd *fakeNodeDownstream) clear() { fd.ops = nil }
 
 func (fd *fakeNodeDownstream) NodeUpdated(node nodeTypes.Node) {
 	fd.ops = append(fd.ops, fakeNodeEntry{opUpsert, node})
-
-	// Simulate the behavior of the real NodeUpdated implementation.
-	var ipscache []string
-	for _, addr := range node.IPAddresses {
-		if addr.Type == addressing.NodeInternalIP {
-			ipscache = append(ipscache, addr.IP.String())
-			fd.ipsetter.AddToNodeIpset(addr.IP)
-		}
-	}
-
-	for _, addr := range slices.Diff(fd.nodeIPs, ipscache) {
-		fd.ipsetter.RemoveFromNodeIpset(net.ParseIP(addr))
-	}
-
-	fd.nodeIPs = ipscache
 }
 
 func (fd *fakeNodeDownstream) NodeDeleted(node nodeTypes.Node) {
 	fd.ops = append(fd.ops, fakeNodeEntry{opDelete, node})
-	for _, addr := range node.IPAddresses {
-		if addr.Type == addressing.NodeInternalIP {
-			fd.ipsetter.RemoveFromNodeIpset(addr.IP)
-		}
-	}
-	fd.nodeIPs = nil
 }
-
-type fakeIPSetter map[string]struct{}
-
-func newFakeIPSetter() fakeIPSetter                    { return make(map[string]struct{}) }
-func (fis fakeIPSetter) AddToNodeIpset(ip net.IP)      { fis[ip.String()] = struct{}{} }
-func (fis fakeIPSetter) RemoveFromNodeIpset(ip net.IP) { delete(fis, ip.String()) }
 
 type fakeEPMapper map[string]routingModeType
 
@@ -118,14 +86,13 @@ func newNode(name string, id uint32, modes routingModesType, internalIPs []strin
 }
 
 func TestNodeManager(t *testing.T) {
+	fd := newFakeNodeDownstream()
 	mgr := nodeManager{
-		logger:   logging.DefaultLogger,
-		modes:    routingModesType{routingModeNative, routingModeVXLAN},
-		epmapper: newFakeEPMapper(),
-		ipsetter: newFakeIPSetter(),
+		logger:     logging.DefaultLogger,
+		modes:      routingModesType{routingModeNative, routingModeVXLAN},
+		downstream: fd,
+		epmapper:   newFakeEPMapper(),
 	}
-	fd := newFakeNodeDownstream(&mgr)
-	mgr.downstream = fd
 
 	ips1 := []string{"10.1.2.3", "fd00::1234"}
 	ips2 := []string{"10.1.2.3", "fd00::6789"}
@@ -135,20 +102,15 @@ func TestNodeManager(t *testing.T) {
 	no3 := *newNode("foo", 3, []routingModeType{routingModeNative}, ips2)
 	no4 := *newNode("foo", 4, []routingModeType{routingModeNative}, ips1)
 
-	// Simulate the presence of a stale ipset entry
-	mgr.ipsetter.AddToNodeIpset(net.ParseIP("10.1.2.3"))
-
 	mgr.NodeUpdated(no1)
 	require.Len(t, fd.ops, 1, "Insertion should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opUpsert, no1}, fd.ops[0], "Insertion should propagate to downstream")
-	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
 	require.Equal(t, toMapping(ips1, routingModeVXLAN), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeUpdated(no2)
 	require.Len(t, fd.ops, 1, "Update should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opUpsert, no2}, fd.ops[0], "Update should propagate to downstream")
-	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
 	require.Equal(t, toMapping(ips2, routingModeVXLAN), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
@@ -156,14 +118,12 @@ func TestNodeManager(t *testing.T) {
 	require.Len(t, fd.ops, 2, "Routing mode change should trigger deletion followed by insertion")
 	require.Equal(t, fakeNodeEntry{opDelete, no2}, fd.ops[0], "Routing mode change should trigger deletion followed by insertion")
 	require.Equal(t, fakeNodeEntry{opUpsert, no3}, fd.ops[1], "Routing mode change should trigger deletion followed by insertion")
-	require.ElementsMatch(t, maps.Keys(mgr.ipsetter.(fakeIPSetter)), ips2, "ipset not configured correctly")
 	require.Equal(t, toMapping(ips2, routingModeNative), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeUpdated(no4)
 	require.Len(t, fd.ops, 1, "Update should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opUpsert, no4}, fd.ops[0], "Update should propagate to downstream")
-	require.ElementsMatch(t, maps.Keys(mgr.ipsetter.(fakeIPSetter)), ips1, "ipset not configured correctly")
 	require.Equal(t, toMapping(ips1, routingModeNative), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
@@ -171,14 +131,12 @@ func TestNodeManager(t *testing.T) {
 	require.Len(t, fd.ops, 2, "Routing mode change should trigger deletion followed by insertion")
 	require.Equal(t, fakeNodeEntry{opDelete, no4}, fd.ops[0], "Routing mode change should trigger deletion followed by insertion")
 	require.Equal(t, fakeNodeEntry{opUpsert, no2}, fd.ops[1], "Routing mode change should trigger deletion followed by insertion")
-	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
 	require.Equal(t, toMapping(ips2, routingModeVXLAN), mgr.epmapper.(fakeEPMapper), "endpoint mapping not configured correctly")
 	fd.clear()
 
 	mgr.NodeDeleted(no2)
 	require.Len(t, fd.ops, 1, "Deletion should propagate to downstream")
 	require.Equal(t, fakeNodeEntry{opDelete, no2}, fd.ops[0], "Deletion should propagate to downstream")
-	require.Empty(t, mgr.ipsetter.(fakeIPSetter), "ipset not configured correctly")
 	require.Empty(t, mgr.epmapper.(fakeEPMapper), "endpoint mapping not reset correctly")
 	fd.clear()
 }
@@ -227,7 +185,9 @@ func TestNodeManagerNeedsEncapsulation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s|%s", tt.local, tt.remote), func(t *testing.T) {
 			mgr := nodeManager{logger: logging.DefaultLogger, modes: tt.local}
-			require.Equal(t, tt.expected, mgr.needsEncapsulation(newNode("foo", 0, tt.remote, nil)))
+			node := newNode("foo", 0, tt.remote, nil)
+			require.Equal(t, tt.expected, mgr.needsEncapsulation(node))
+			require.Equal(t, tt.expected, mgr.ipsetFilter(node))
 		})
 	}
 }

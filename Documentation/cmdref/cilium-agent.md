@@ -56,6 +56,7 @@ cilium-agent [flags]
       --bpf-map-dynamic-size-ratio float                             Ratio (0.0-1.0] of total system memory to use for dynamic sizing of CT, NAT and policy BPF maps (default 0.0025)
       --bpf-nat-global-max int                                       Maximum number of entries for the global BPF NAT table (default 524288)
       --bpf-neigh-global-max int                                     Maximum number of entries for the global BPF neighbor table (default 524288)
+      --bpf-node-map-max uint32                                      Sets size of node bpf map which will be the max number of unique Node IPs in the cluster (default 16384)
       --bpf-policy-map-max int                                       Maximum number of entries in endpoint policy map (per endpoint) (default 16384)
       --bpf-root string                                              Path to BPF filesystem
       --bpf-sock-rev-map-max int                                     Maximum number of entries for the SockRevNAT BPF map (default 262144)
@@ -345,6 +346,8 @@ cilium-agent [flags]
       --proxy-idle-timeout-seconds int                               Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s (default 60)
       --proxy-max-connection-duration-seconds int                    Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
       --proxy-max-requests-per-connection int                        Set Envoy HTTP option max_requests_per_connection. Default 0 (disable)
+      --proxy-portrange-max uint16                                   End of port range that is used to allocate ports for L7 proxies. (default 20000)
+      --proxy-portrange-min uint16                                   Start of port range that is used to allocate ports for L7 proxies. (default 10000)
       --proxy-prometheus-port int                                    Port to serve Envoy metrics on. Default 0 (disabled).
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
       --restore                                                      Restores state, if possible, from previous daemon (default true)

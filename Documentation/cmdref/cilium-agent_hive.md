@@ -13,6 +13,7 @@ cilium-agent hive [flags]
 ```
       --agent-liveness-update-interval duration                      Interval at which the agent updates liveness time for the datapath (default 1s)
       --api-rate-limit stringToString                                API rate limiting configuration (example: --api-rate-limit endpoint-create=rate-limit:10/m,rate-burst:2) (default [])
+      --bpf-node-map-max uint32                                      Sets size of node bpf map which will be the max number of unique Node IPs in the cluster (default 16384)
       --certificates-directory string                                Root directory to find certificates specified in L7 TLS policy enforcement (default "/var/run/cilium/certs")
       --cluster-id uint32                                            Unique identifier of the cluster
       --cluster-name string                                          Name of the cluster (default "default")
@@ -104,6 +105,8 @@ cilium-agent hive [flags]
       --proxy-idle-timeout-seconds int                               Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s (default 60)
       --proxy-max-connection-duration-seconds int                    Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
       --proxy-max-requests-per-connection int                        Set Envoy HTTP option max_requests_per_connection. Default 0 (disable)
+      --proxy-portrange-max uint16                                   End of port range that is used to allocate ports for L7 proxies. (default 20000)
+      --proxy-portrange-min uint16                                   Start of port range that is used to allocate ports for L7 proxies. (default 10000)
       --proxy-prometheus-port int                                    Port to serve Envoy metrics on. Default 0 (disabled).
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
       --tunnel-port uint16                                           Tunnel port (default 8472 for "vxlan" and 6081 for "geneve")

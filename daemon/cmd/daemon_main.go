@@ -282,10 +282,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.String(option.IPv6MCastDevice, "", "Device that joins a Solicited-Node multicast group for IPv6")
 	option.BindEnv(vp, option.IPv6MCastDevice)
 
-	flags.Bool(option.EnableRemoteNodeIdentity, defaults.EnableRemoteNodeIdentity, "Enable use of remote node identity")
-	flags.MarkDeprecated(option.EnableRemoteNodeIdentity, "Remote Node Identity is needed for various other features to work or work fully, including EgressGateway and Policies. There is no benefit to having it turned off. It will be removed in v1.16.")
-	option.BindEnv(vp, option.EnableRemoteNodeIdentity)
-
 	flags.String(option.EncryptInterface, "", "Transparent encryption interface")
 	option.BindEnv(vp, option.EncryptInterface)
 
@@ -1354,6 +1350,7 @@ func initEnv(vp *viper.Viper) {
 	if option.Config.EnableIPSec &&
 		!option.Config.TunnelingEnabled() &&
 		len(option.Config.EncryptInterface) == 0 &&
+		len(option.Config.GetDevices()) == 0 &&
 		option.Config.IPAM != ipamOption.IPAMENI {
 		link, err := linuxdatapath.NodeDeviceNameWithDefaultRoute()
 		if err != nil {
@@ -1378,17 +1375,6 @@ func initEnv(vp *viper.Viper) {
 		if option.Config.EnableIPSec {
 			log.Fatal("IPSec cannot be used with the host firewall.")
 		}
-		if option.Config.EnableEndpointRoutes && !option.Config.EnableRemoteNodeIdentity {
-			log.Fatalf("The host firewall requires remote-node identities (%s) when running with %s",
-				option.EnableRemoteNodeIdentity, option.EnableEndpointRoutes)
-		}
-	}
-
-	if option.Config.EnableIPv6Masquerade && option.Config.EnableBPFMasquerade && option.Config.EnableHostFirewall {
-		// We should be able to support this, but we first need to
-		// check how this plays in the datapath if BPF-masquerading is
-		// enabled for IPv4 only or IPv6 only.
-		log.Fatal("IPv6 BPF masquerade is not supported along with the host firewall.")
 	}
 
 	if option.Config.EnableHighScaleIPcache {

@@ -18,7 +18,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	nodemanager "github.com/cilium/cilium/pkg/node/manager"
 	"github.com/cilium/cilium/pkg/node/store"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 )
@@ -34,9 +33,6 @@ type nodeManager struct {
 
 	downstream store.NodeManager
 	nodesCache lock.Map[nodeTypes.Identity, *nodeTypes.Node]
-
-	ipsetter  nodemanager.CEIPSetManager
-	ipsetSkip lock.Map[string, struct{}]
 
 	epmapper endpointMapper
 }
@@ -69,7 +65,6 @@ func (nm *nodeManager) NodeUpdated(node nodeTypes.Node) {
 	log.Debug("Observed node upsertion")
 	nm.nodesCache.Store(id, &node)
 
-	nm.updateIpsetSkipSet(prev, &node, log)
 	nm.updateEndpointAssociations(prev, &node, log)
 
 	nm.downstream.NodeUpdated(node)
@@ -90,37 +85,21 @@ func (nm *nodeManager) NodeDeleted(node nodeTypes.Node) {
 	log.Debug("Observed node deletion")
 	nm.nodesCache.Delete(id)
 
-	nm.updateIpsetSkipSet(&node, nil, log)
 	nm.updateEndpointAssociations(&node, nil, log)
 
 	nm.downstream.NodeDeleted(node)
 }
 
-// AddToNodeIpset wraps the corresponding iptables.Manager method, skipping the
-// insertion if the IP address belongs to the exclusion list (i.e., it was
-// configured to prefer tunnel routing).
-func (nm *nodeManager) AddToNodeIpset(nodeIP net.IP) {
-	ipstr := nodeIP.String()
-	if _, ok := nm.ipsetSkip.Load(ipstr); ok {
-		nm.logger.WithField(logfields.IPAddr, ipstr).
-			Debug("Skipping ipset insertion, as the IP belongs to the exclusion list")
-
-		// Ensure that no stale entry is present.
-		nm.RemoveFromNodeIpset(nodeIP)
-		return
-	}
-
-	nm.ipsetter.AddToNodeIpset(nodeIP)
-}
-
-// RemoveFromNodeIpset wraps the corresponding iptables.Manager method.
-func (nm *nodeManager) RemoveFromNodeIpset(nodeIP net.IP) {
-	nm.ipsetter.RemoveFromNodeIpset(nodeIP)
-}
-
 // needsEncapsulation returns whether tunnel encapsulation shall be used towards
 // the given remote node. It fallbacks to the local primary mode when unknown.
 func (nm *nodeManager) needsEncapsulation(node *nodeTypes.Node) bool {
+	return needsEncapsulation(nm.routingMode(node, false /* silent */))
+}
+
+// ipsetFilter returns whether the insertion of the ipset entries for the given
+// node should be filtered out (i.e., when the preferred routing mode towards
+// the given node is tunneling).
+func (nm *nodeManager) ipsetFilter(node *nodeTypes.Node) bool {
 	return needsEncapsulation(nm.routingMode(node, false /* silent */))
 }
 
@@ -160,32 +139,6 @@ func (nm *nodeManager) routingMode(node *nodeTypes.Node, verbose bool) routingMo
 	}
 
 	return mode
-}
-
-// updateIpsetSkipSet updates the set of IPs for which the ipset entry insertion
-// and removal should be skipped. Specifically, it includes all NodeInternalIP
-// addresses of nodes towards which tunnel routing is preferred.
-func (nm *nodeManager) updateIpsetSkipSet(old, new *nodeTypes.Node, log logrus.FieldLogger) {
-	// Don't add the IPs to the exclusion list if native routing is preferred.
-	if new != nil && !nm.needsEncapsulation(new) {
-		new = nil
-	}
-
-	onAdded := func(ip net.IP) {
-		ipstr := ip.String()
-		if _, loaded := nm.ipsetSkip.LoadOrStore(ipstr, struct{}{}); !loaded {
-			log.WithField(logfields.IPAddr, ipstr).Debug("Added IP address to ipset exclusion list")
-		}
-	}
-
-	onDeleted := func(ip net.IP) {
-		ipstr := ip.String()
-		if _, loaded := nm.ipsetSkip.LoadAndDelete(ipstr); loaded {
-			log.WithField(logfields.IPAddr, ipstr).Debug("Removed IP address from ipset exclusion list")
-		}
-	}
-
-	nm.forEachAddress(old, new, false /* InternalIPs only */, onAdded, onDeleted)
 }
 
 // updateEndpointAssociations updates the mappings between Node{Internal,External}IP

@@ -114,7 +114,6 @@ type Proxy struct {
 func createProxy(
 	minPort uint16,
 	maxPort uint16,
-	dnsProxyPort uint16,
 	datapathUpdater DatapathUpdater,
 	envoyIntegration *envoyProxyIntegration,
 	dnsIntegration *dnsProxyIntegration,
@@ -125,13 +124,13 @@ func createProxy(
 		redirects:        make(map[string]*Redirect),
 		datapathUpdater:  datapathUpdater,
 		allocatedPorts:   make(map[uint16]bool),
-		proxyPorts:       defaultProxyPortMap(dnsProxyPort),
+		proxyPorts:       defaultProxyPortMap(),
 		envoyIntegration: envoyIntegration,
 		dnsIntegration:   dnsIntegration,
 	}
 }
 
-func defaultProxyPortMap(dnsProxyPort uint16) map[string]*ProxyPort {
+func defaultProxyPortMap() map[string]*ProxyPort {
 	return map[string]*ProxyPort{
 		"cilium-http-egress": {
 			proxyType: types.ProxyTypeHTTP,
@@ -147,7 +146,6 @@ func defaultProxyPortMap(dnsProxyPort uint16) map[string]*ProxyPort {
 			proxyType: types.ProxyTypeDNS,
 			ingress:   false,
 			localOnly: true,
-			proxyPort: dnsProxyPort,
 		},
 		"cilium-proxylib-egress": {
 			proxyType: types.ProxyTypeAny,
@@ -588,7 +586,7 @@ func (p *Proxy) createNewRedirect(
 		return 0, proxyTypeNotFoundError(types.ProxyType(l4.GetL7Parser()), l4.GetListener(), l4.GetIngress()), nil, nil
 	}
 
-	redirect := newRedirect(localEndpoint, ppName, pp, l4.GetPort())
+	redirect := newRedirect(localEndpoint, ppName, pp, l4.GetPort(), l4.GetProtocol())
 	_ = redirect.updateRules(l4) // revertFunc not used because revert will remove whole redirect
 	// Rely on create*Redirect to update rules, unlike the update case above.
 

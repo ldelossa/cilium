@@ -30,10 +30,9 @@ var (
 	nm         manager.NodeManager
 	mtuConfig  = mtu.NewConfiguration(0, false, false, false, false, 0, nil)
 	fakeConfig = &option.DaemonConfig{
-		RoutingMode:              option.RoutingModeTunnel,
-		EnableRemoteNodeIdentity: true,
-		EnableIPSec:              true,
-		EncryptNode:              true,
+		RoutingMode: option.RoutingModeTunnel,
+		EnableIPSec: true,
+		EncryptNode: true,
 	}
 )
 
@@ -44,7 +43,7 @@ func (g *GetNodesSuite) SetUpTest(c *C) {
 
 func (g *GetNodesSuite) SetUpSuite(c *C) {
 	var err error
-	nm, err = manager.New(fakeConfig, nil, nil, manager.NewNodeMetrics(), cell.TestScope())
+	nm, err = manager.New(fakeConfig, nil, nil, nil, manager.NewNodeMetrics(), cell.TestScope())
 	c.Assert(err, IsNil)
 }
 

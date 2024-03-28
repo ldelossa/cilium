@@ -21,6 +21,7 @@ import (
 	"github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
 
 	"github.com/cilium/cilium/pkg/fqdn/re"
+	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy"
@@ -120,7 +121,7 @@ func TestUpdateAllowedOrdering(t *testing.T) {
 		mockCachedSelector("foo=bar"): dnsRules,
 	}
 	for _, upd := range updates {
-		if err := proxy.UpdateAllowed(upd.endpointID, uint16(upd.destPort), dm); err != nil {
+		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPort), dm); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -188,7 +189,7 @@ func TestUpdateAllowedOrderingWithRetries(t *testing.T) {
 	t.Cleanup(proxy.Cleanup)
 
 	for _, upd := range updates {
-		if err := proxy.UpdateAllowed(upd.endpointID, uint16(upd.destPort), nil); err != nil {
+		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPort), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
