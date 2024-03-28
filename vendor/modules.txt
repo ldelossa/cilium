@@ -874,9 +874,6 @@ github.com/inconshreveable/mousetrap
 # github.com/ishidawataru/sctp v0.0.0-20230406120618-7ff4192f6ff2
 ## explicit; go 1.12
 github.com/ishidawataru/sctp
-# github.com/isovalent/fqdn-proxy v1.14.0-rc1.0.20240402005849-49ace0e7003e
-## explicit; go 1.22.0
-github.com/isovalent/fqdn-proxy/api/v1/dnsproxy
 # github.com/jeremywohl/flatten v1.0.1
 ## explicit
 github.com/jeremywohl/flatten

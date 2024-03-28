@@ -28,7 +28,7 @@ import (
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/u8proto"
 
-	fqdnpb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
+	fqdnpb "github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 )
 
 var _ fqdnproxy.DNSProxier = &RemoteFQDNProxy{}

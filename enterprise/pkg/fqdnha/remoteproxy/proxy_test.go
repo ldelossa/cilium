@@ -18,7 +18,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
+	"github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 
 	"github.com/cilium/cilium/pkg/fqdn/re"
 	"github.com/cilium/cilium/pkg/fqdn/restore"

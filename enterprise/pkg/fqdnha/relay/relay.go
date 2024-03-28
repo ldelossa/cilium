@@ -16,7 +16,7 @@ import (
 	"github.com/cilium/dns"
 	"google.golang.org/grpc"
 
-	pb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
+	pb "github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 
 	"github.com/cilium/cilium/daemon/cmd"
 	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"

@@ -59,7 +59,6 @@ require (
 	github.com/hashicorp/consul/api v1.28.2
 	github.com/hashicorp/go-immutable-radix/v2 v2.1.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/isovalent/fqdn-proxy v1.14.0-rc1.0.20240402005849-49ace0e7003e
 	github.com/jeremywohl/flatten v1.0.1
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/kr/pretty v0.3.1

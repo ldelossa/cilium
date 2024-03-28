@@ -431,8 +431,6 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/ishidawataru/sctp v0.0.0-20230406120618-7ff4192f6ff2 h1:i2fYnDurfLlJH8AyyMOnkLHnHeP8Ff/DDpuZA/D3bPo=
 github.com/ishidawataru/sctp v0.0.0-20230406120618-7ff4192f6ff2/go.mod h1:co9pwDoBCm1kGxawmb4sPq0cSIOOWNPT4KnHotMP1Zg=
-github.com/isovalent/fqdn-proxy v1.14.0-rc1.0.20240402005849-49ace0e7003e h1:R3v0sZG96kN/z5SlVaFsN3QvjyzgPT+HogFfLcY5Q1Q=
-github.com/isovalent/fqdn-proxy v1.14.0-rc1.0.20240402005849-49ace0e7003e/go.mod h1:qBXQAULgR7QvP/7WCxWW+e0v+RysAN4O6yU9jUfC4Ng=
 github.com/jeremywohl/flatten v1.0.1 h1:LrsxmB3hfwJuE+ptGOijix1PIfOoKLJ3Uee/mzbgtrs=
 github.com/jeremywohl/flatten v1.0.1/go.mod h1:4AmD/VxjWcI5SRB0n6szE2A6s2fsNHDLO0nAlMHgfLQ=
 github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9YPoQUg=

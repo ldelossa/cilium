@@ -42,7 +42,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
+	pb "github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
