@@ -184,8 +184,7 @@ jobs:
           #   give enough time to the clustermesh-apiserver to restart after
           #   the upgrade/downgrade before that agents regenerate the endpoints.
           # * The ingress controller requires KPR to be enabled.
-          # * Host firewall is not compatible with IPSec (#11969), nor with IPv6
-          #   BPF masquerade (#26074)
+          # * Host firewall is not compatible with IPSec (#11969).
           # * We disable the standalone Envoy Proxy DaemonSet (enabled by default
           #   since cilium/cilium#30034) as it appears to be currently affected
           #   a bug causing traffic matched by FQDN and L7 policies to be incorrectly
@@ -219,7 +218,6 @@ jobs:
             --set routingMode=${{ (matrix.routing == 'native' || matrix.routing == 'mixed') && 'native' || 'tunnel' }} \
             --set autoDirectNodeRoutes=${{ matrix.routing == 'native' || matrix.routing == 'mixed' }} \
             --set bpf.masquerade=${{ matrix.kube-proxy == 'none' }} \
-            --set enableIPv6Masquerade=${{ matrix.kube-proxy != 'none' }} \
             --set endpointRoutes.enabled=${{ matrix.endpoint-routes }} \
           "
 
