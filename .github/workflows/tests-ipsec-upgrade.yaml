@@ -16,10 +16,10 @@ on:
       extra-args:
         description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
         required: false
-        default: "{}"
+        default: '{}'
   # Run every 6 hours
   schedule:
-    - cron: "0 5/6 * * *"
+    - cron:  '0 5/6 * * *'
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
@@ -65,18 +65,18 @@ jobs:
 
   setup-and-test:
     runs-on: ubuntu-latest-4cores-16gb
-    name: "Setup & Test"
+    name: 'Setup & Test'
     env:
-      job_name: "Setup & Test"
+      job_name: 'Setup & Test'
     strategy:
       fail-fast: false
       max-parallel: 16
       matrix:
-        config: ["5.4", "5.10", "6.1", "bpf-next"]
-        mode: ["minor", "patch"]
+        config: ['5.4', '5.10', '6.1', 'bpf-next']
+        mode: ['minor', 'patch']
         include:
           # Define three config sets
-          - config: "5.4"
+          - config: '5.4'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: '5.4-20240305.092417'
             kube-proxy: 'iptables'
@@ -84,7 +84,7 @@ jobs:
             tunnel: 'disabled'
             encryption: 'ipsec'
 
-          - config: "5.10"
+          - config: '5.10'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: '5.10-20240305.092417'
             kube-proxy: 'iptables'
@@ -93,7 +93,7 @@ jobs:
             encryption: 'ipsec'
             endpoint-routes: 'true'
 
-          - config: "6.1"
+          - config: '6.1'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: '6.1-20240305.092417'
             kube-proxy: 'iptables'
@@ -102,7 +102,7 @@ jobs:
             encryption: 'ipsec'
             endpoint-routes: 'false'
 
-          - config: "bpf-next"
+          - config: 'bpf-next'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: 'bpf-next-20240315.012542'
             kube-proxy: 'iptables'
@@ -112,37 +112,37 @@ jobs:
             endpoint-routes: 'true'
 
           # Add names to matrix combinations of {config, mode}
-          - config: "5.4"
-            mode: "minor"
-            name: "1"
+          - config: '5.4'
+            mode: 'minor'
+            name: '1'
 
-          - config: "5.10"
-            mode: "minor"
-            name: "2"
+          - config: '5.10'
+            mode: 'minor'
+            name: '2'
 
-          - config: "6.1"
-            mode: "minor"
-            name: "3"
+          - config: '6.1'
+            mode: 'minor'
+            name: '3'
 
-          - config: "bpf-next"
-            mode: "minor"
-            name: "4"
+          - config: 'bpf-next'
+            mode: 'minor'
+            name: '4'
 
-          - config: "5.4"
-            mode: "patch"
-            name: "5"
+          - config: '5.4'
+            mode: 'patch'
+            name: '5'
 
-          - config: "5.10"
-            mode: "patch"
-            name: "6"
+          - config: '5.10'
+            mode: 'patch'
+            name: '6'
 
-          - config: "6.1"
-            mode: "patch"
-            name: "7"
+          - config: '6.1'
+            mode: 'patch'
+            name: '7'
 
-          - config: "bpf-next"
-            mode: "patch"
-            name: "8"
+          - config: 'bpf-next'
+            mode: 'patch'
+            name: '8'
 
     timeout-minutes: 70
     steps:
@@ -222,7 +222,7 @@ jobs:
         uses: ./.github/actions/cilium-config
         with:
           image-tag: ${{ steps.vars.outputs.image_tag }}
-          chart-dir: "./untrusted/cilium-downgrade/install/kubernetes/cilium"
+          chart-dir: './untrusted/cilium-downgrade/install/kubernetes/cilium'
           tunnel: ${{ matrix.tunnel }}
           endpoint-routes: ${{ matrix.endpoint-routes }}
           ipv6: ${{ matrix.ipv6 }}
@@ -234,7 +234,7 @@ jobs:
           egress-gateway: ${{ matrix.egress-gateway }}
           host-fw: ${{ matrix.host-fw }}
           mutual-auth: false
-          misc: "bpfClockProbe=false,cni.uninstall=false"
+          misc: 'bpfClockProbe=false,cni.uninstall=false'
 
       - name: Derive newest Cilium installation config
         id: cilium-newest-config
@@ -242,7 +242,7 @@ jobs:
         uses: ./.github/actions/cilium-config
         with:
           image-tag: ${{ steps.vars.outputs.sha }}
-          chart-dir: "./untrusted/cilium-newest/install/kubernetes/cilium"
+          chart-dir: './untrusted/cilium-newest/install/kubernetes/cilium'
           tunnel: ${{ matrix.tunnel }}
           endpoint-routes: ${{ matrix.endpoint-routes }}
           ipv6: ${{ matrix.ipv6 }}
@@ -254,7 +254,7 @@ jobs:
           egress-gateway: ${{ matrix.egress-gateway }}
           host-fw: ${{ matrix.host-fw }}
           mutual-auth: false
-          misc: "bpfClockProbe=false,cni.uninstall=false"
+          misc: 'bpfClockProbe=false,cni.uninstall=false'
 
       - name: Install Cilium CLI
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
@@ -297,6 +297,7 @@ jobs:
           path: untrusted/cilium-newest
           sparse-checkout: |
             install/kubernetes/cilium
+
       - name: Checkout ${{ steps.vars.outputs.downgrade_version }} branch to get the Helm chart
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
