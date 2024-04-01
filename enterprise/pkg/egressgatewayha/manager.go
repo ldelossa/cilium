@@ -78,11 +78,6 @@ const (
 )
 
 type Config struct {
-	// Install egress gateway IP rules and routes in order to properly steer
-	// egress gateway traffic to the correct ENI interface.
-	// Deprecated, has no effect, and will removed in v1.16"
-	InstallEgressGatewayHARoutes bool
-
 	// Healthcheck timeout after which an egress gateway is marked not healthy.
 	// This also configures the frequency of probes to a value of healthcheckTimeout / 2
 	// Deprecated, has no effect, and will removed in v1.16"
@@ -94,14 +89,11 @@ type Config struct {
 }
 
 var defaultConfig = Config{
-	InstallEgressGatewayHARoutes:                 false,
 	EgressGatewayHAHealthcheckTimeout:            1 * time.Second,
 	EgressGatewayHAReconciliationTriggerInterval: 1 * time.Second,
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
-	flags.Bool("install-egress-gateway-ha-routes", def.InstallEgressGatewayHARoutes, "Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface")
-	flags.MarkDeprecated("install-egress-gateway-ha-routes", "This option is deprecated, has no effect, and will be removed in v1.16")
 	flags.Duration("egress-gateway-ha-healthcheck-timeout", def.EgressGatewayHAHealthcheckTimeout, "Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2")
 	flags.MarkDeprecated("egress-gateway-ha-healthcheck-timeout", "This option is deprecated, has no effect, and will be removed in v1.16")
 

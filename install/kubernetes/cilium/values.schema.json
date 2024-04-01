@@ -1631,9 +1631,6 @@
             "enabled": {
               "type": "boolean"
             },
-            "installRoutes": {
-              "type": "boolean"
-            },
             "reconciliationTriggerInterval": {
               "type": "string"
             }

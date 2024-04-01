@@ -28,9 +28,6 @@ enable-cilium-mesh: "true"
 {{- if .Values.enterprise.egressGatewayHA.enabled }}
 enable-ipv4-egress-gateway-ha: "true"
 {{- end }}
-{{- if .Values.enterprise.egressGatewayHA.installRoutes }}
-install-egress-gateway-ha-routes: "true"
-{{- end }}
 {{- if hasKey .Values.enterprise.egressGatewayHA "reconciliationTriggerInterval" }}
 egress-gateway-ha-reconciliation-trigger-interval: {{ .Values.enterprise.egressGatewayHA.reconciliationTriggerInterval | quote }}
 {{- end }}
