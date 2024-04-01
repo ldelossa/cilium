@@ -367,10 +367,15 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 			return false, fmt.Errorf("failed to create locator: %w", err)
 		}
 
+		structure, err := m.structureFromResource(locator.Structure)
+		if err != nil {
+			return false, fmt.Errorf("failed to create SID structure: %w", err)
+		}
+
 		behaviorType := types.BehaviorTypeFromString(locator.BehaviorType)
 
 		if oldAllocatorSyncer, ok := m.allocators[la.PoolRef]; !ok {
-			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
+			newAllocator, err := NewStructuredSIDAllocator(l, structure, behaviorType)
 			if err != nil {
 				return false, fmt.Errorf("failed to create new SID allocator: %w", err)
 			}
@@ -382,10 +387,12 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 			needsSync = true
 		} else {
 			// No change to the spec, skip update
-			if oldAllocatorSyncer.Locator() == l && oldAllocatorSyncer.BehaviorType() == behaviorType {
+			if oldAllocatorSyncer.Locator() == l &&
+				oldAllocatorSyncer.Structure() == structure &&
+				oldAllocatorSyncer.BehaviorType() == behaviorType {
 				continue
 			}
-			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
+			newAllocator, err := NewStructuredSIDAllocator(l, structure, behaviorType)
 			if err != nil {
 				return false, fmt.Errorf("failed to create new SID allocator: %w", err)
 			}
@@ -481,19 +488,14 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 					continue
 				}
 
-				structure, err := types.NewSIDStructure(
-					sid.SID.Structure.LocatorBlockLenBits,
-					sid.SID.Structure.LocatorNodeLenBits,
-					sid.SID.Structure.FunctionLenBits,
-					sid.SID.Structure.ArgumentLenBits,
-				)
+				structure, err := m.structureFromResource(sid.SID.Structure)
 				if err != nil {
 					errorSIDs++
 					errs = errors.Join(errs, fmt.Errorf("cannot parse SID Structure on the status: %w", err))
 					continue
 				}
 
-				s, err := types.NewSID(addr, structure)
+				s, err := types.NewSID(addr)
 				if err != nil {
 					errorSIDs++
 					errs = errors.Join(errs, fmt.Errorf("cannot create SID from SID and SID Structure on the status: %w", err))
@@ -506,7 +508,9 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 				// stopping. We can ignore this here. So that
 				// it will be deleted from the status in the
 				// next sync.
-				if s.AsLocator() != allocator.Locator() || types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
+				if !allocator.Locator().Contains(s.Addr) ||
+					allocator.Structure() != structure ||
+					types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
 					staleSIDs++
 					continue
 				}
@@ -663,23 +667,16 @@ func (m *sidManager) locatorFromResource(r *v1alpha1.IsovalentSRv6Locator) (type
 	if err != nil {
 		return types.Locator{}, err
 	}
+	return types.NewLocator(prefix)
+}
 
-	structure, err := types.NewSIDStructure(
-		r.Structure.LocatorBlockLenBits,
-		r.Structure.LocatorNodeLenBits,
-		r.Structure.FunctionLenBits,
-		r.Structure.ArgumentLenBits,
+func (m *sidManager) structureFromResource(r v1alpha1.IsovalentSRv6SIDStructure) (types.SIDStructure, error) {
+	return types.NewSIDStructure(
+		r.LocatorBlockLenBits,
+		r.LocatorNodeLenBits,
+		r.FunctionLenBits,
+		r.ArgumentLenBits,
 	)
-	if err != nil {
-		return types.Locator{}, err
-	}
-
-	locator, err := types.NewLocator(prefix, structure)
-	if err != nil {
-		return types.Locator{}, err
-	}
-
-	return locator, nil
 }
 
 // sidToResource converts internal SID structure to SID on k8s resource
@@ -687,10 +684,10 @@ func (m *sidManager) sidInfoToResource(si *SIDInfo) *v1alpha1.IsovalentSRv6SIDIn
 	sid := v1alpha1.IsovalentSRv6SID{
 		Addr: si.SID.Addr.String(),
 		Structure: v1alpha1.IsovalentSRv6SIDStructure{
-			LocatorBlockLenBits: si.SID.Structure().LocatorBlockLenBits(),
-			LocatorNodeLenBits:  si.SID.Structure().LocatorNodeLenBits(),
-			FunctionLenBits:     si.SID.Structure().FunctionLenBits(),
-			ArgumentLenBits:     si.SID.Structure().ArgumentLenBits(),
+			LocatorBlockLenBits: si.Structure.LocatorBlockLenBits(),
+			LocatorNodeLenBits:  si.Structure.LocatorNodeLenBits(),
+			FunctionLenBits:     si.Structure.FunctionLenBits(),
+			ArgumentLenBits:     si.Structure.ArgumentLenBits(),
 		},
 	}
 	return &v1alpha1.IsovalentSRv6SIDInfo{

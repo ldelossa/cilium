@@ -155,7 +155,7 @@ func fromAPILocator(loc *isovalent_api_v1alpha1.IsovalentSRv6Locator) (*LocatorI
 		return nil, fmt.Errorf("failed to parse SID structure of existing SID Manager %v: %w", loc.Structure, err)
 	}
 
-	locInfo, err := types.NewLocator(nodeSIDPrefix, nodeSIDStructure)
+	locInfo, err := types.NewLocator(nodeSIDPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create locator from existing SID Manager %v: %w", loc, err)
 	}
@@ -166,6 +166,7 @@ func fromAPILocator(loc *isovalent_api_v1alpha1.IsovalentSRv6Locator) (*LocatorI
 
 	return &LocatorInfo{
 		Locator:      locInfo,
+		SIDStructure: nodeSIDStructure,
 		BehaviorType: types.BehaviorTypeFromString(loc.BehaviorType),
 	}, nil
 }

@@ -1043,17 +1043,18 @@ func (m *Manager) allocateSID(pool, metadata string) (*sidmanager.SIDInfo, error
 			return nil, err
 		}
 
-		sid, err := srv6Types.NewSID(addr, legacySIDStructure)
+		sid, err := srv6Types.NewSID(addr)
 		if err != nil {
 			m.sidAlloc.Release(res.IP, "")
 			return nil, fmt.Errorf("failed to create SID: %w", err)
 		}
 
 		info := &sidmanager.SIDInfo{
-			Owner:    ownerName,
-			MetaData: metadata,
-			SID:      sid,
-			Behavior: srv6Types.BehaviorEndDT4,
+			Owner:     ownerName,
+			MetaData:  metadata,
+			SID:       sid,
+			Structure: legacySIDStructure,
+			Behavior:  srv6Types.BehaviorEndDT4,
 		}
 
 		return info, nil

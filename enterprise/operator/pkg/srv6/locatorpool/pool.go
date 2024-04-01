@@ -22,6 +22,7 @@ import (
 // LocatorInfo is a combination of Locator and BehaviorType
 type LocatorInfo struct {
 	types.Locator
+	types.SIDStructure
 	types.BehaviorType
 }
 
@@ -132,7 +133,7 @@ func (p *pool) GetPrefix() netip.Prefix {
 
 // validNodeLocator validates that node locator was indeed created from this locator pool.
 func (p *pool) validNodeLocator(nodeLoc *LocatorInfo) bool {
-	if p.config.structure != nodeLoc.Structure() {
+	if p.config.structure != nodeLoc.SIDStructure {
 		return false
 	}
 
@@ -183,16 +184,14 @@ func (p *pool) AllocateNext() (*LocatorInfo, error) {
 		return nil, fmt.Errorf("%w: %w", ErrLocatorPoolExhausted, err)
 	}
 
-	loc, err := types.NewLocator(
-		p.encodeNodeID(uint16(nodeID)),
-		p.config.structure,
-	)
+	loc, err := types.NewLocator(p.encodeNodeID(uint16(nodeID)))
 	if err != nil {
 		return nil, err
 	}
 
 	return &LocatorInfo{
 		Locator:      loc,
+		SIDStructure: p.config.structure,
 		BehaviorType: types.BehaviorTypeFromString(p.config.behaviorType),
 	}, nil
 }

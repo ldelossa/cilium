@@ -110,11 +110,11 @@ var (
 	poolName2  = "pool2"
 	structure1 = types.MustNewSIDStructure(32, 16, 16, 0)
 	structure2 = types.MustNewSIDStructure(32, 16, 24, 0)
-	locator1   = types.MustNewLocator(netip.MustParsePrefix("fd00:1:1::/48"), structure1)
-	locator2   = types.MustNewLocator(netip.MustParsePrefix("fd00:2:1::/48"), structure1)
-	locator3   = types.MustNewLocator(netip.MustParsePrefix("fd00:3:1::/48"), structure1)
-	locator4   = types.MustNewLocator(netip.MustParsePrefix("fd00:3:1::/48"), structure2)
-	sid1       = types.MustNewSID(netip.MustParseAddr("fd00:1:1:1::"), structure1)
+	locator1   = types.MustNewLocator(netip.MustParsePrefix("fd00:1:1::/48"))
+	locator2   = types.MustNewLocator(netip.MustParsePrefix("fd00:2:1::/48"))
+	locator3   = types.MustNewLocator(netip.MustParsePrefix("fd00:3:1::/48"))
+	locator4   = types.MustNewLocator(netip.MustParsePrefix("fd00:3:1::/48"))
+	sid1       = types.MustNewSID(netip.MustParseAddr("fd00:1:1:1::"))
 
 	resourceStructure1 = v1alpha1.IsovalentSRv6SIDStructure{
 		LocatorBlockLenBits: structure1.LocatorBlockLenBits(),
@@ -225,6 +225,7 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
 			return assert.True(t, found, "Allocator not found") &&
 				assert.Equal(t, locator1, allocator.Locator(), "Locator mismatched") &&
+				assert.Equal(t, structure1, allocator.Structure(), "Structure mismatched") &&
 				assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
@@ -239,6 +240,7 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
 			return assert.True(t, found, "Allocator not found") &&
 				assert.Equal(t, locator3, allocator.Locator(), "Locator mismatched") &&
+				assert.Equal(t, structure1, allocator.Structure(), "Structure mismatched") &&
 				assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
@@ -253,6 +255,7 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
 			return assert.True(t, found, "Allocator not found") &&
 				assert.Equal(t, locator4, allocator.Locator(), "Locator mismatched") &&
+				assert.Equal(t, structure2, allocator.Structure(), "Structure mismatched") &&
 				assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
@@ -267,6 +270,7 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
 			return assert.True(t, found, "Allocator not found") &&
 				assert.Equal(t, locator4, allocator.Locator(), "Locator mismatched") &&
+				assert.Equal(t, structure2, allocator.Structure(), "Structure mismatched") &&
 				assert.Equal(t, types.BehaviorTypeUSID, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
@@ -282,9 +286,11 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 			allocator2, found2 := o.Allocator(sidmanager.Spec.LocatorAllocations[1].PoolRef)
 			return assert.True(t, found1, "Allocator1 not found") &&
 				assert.Equal(t, locator4, allocator1.Locator(), "Locator1 mismatched") &&
+				assert.Equal(t, structure2, allocator1.Structure(), "Structure1 mismatched") &&
 				assert.Equal(t, types.BehaviorTypeUSID, allocator1.BehaviorType(), "BehaviorType1 mismatched") &&
 				assert.True(t, found2, "Allocator2 not found") &&
 				assert.Equal(t, locator2, allocator2.Locator(), "Locator2 mismatched") &&
+				assert.Equal(t, structure1, allocator2.Structure(), "Structure2 mismatched") &&
 				assert.Equal(t, types.BehaviorTypeBase, allocator2.BehaviorType(), "BehaviorType2 mismatched")
 		})
 	})

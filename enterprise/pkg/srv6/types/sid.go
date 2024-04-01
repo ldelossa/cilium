@@ -16,71 +16,52 @@ import (
 )
 
 // Locator represents a single Locator. It embeds the netip.Prefix, so it can
-// be treated as an IP address. In addition to that, it holds a SID structure
-// information.
+// be treated as an IP prefix.
 type Locator struct {
 	netip.Prefix
-	structure SIDStructure
 }
 
-// NewLocator constructs Locator from IPv6 netip.Prefix and SIDStructure
-func NewLocator(prefix netip.Prefix, structure SIDStructure) (Locator, error) {
+// NewLocator constructs Locator from IPv6 netip.prefix
+func NewLocator(prefix netip.Prefix) (Locator, error) {
 	if !prefix.Addr().Is6() {
 		return Locator{}, fmt.Errorf("locator prefix must be IPv6")
 	}
-
-	if prefix.Bits() != int(structure.LocatorLenBits()) {
-		return Locator{}, fmt.Errorf("locator prefix length (%d) doesn't match with structure (%d)",
-			prefix.Bits(), structure.LocatorLenBits())
+	if prefix.Bits()%8 != 0 {
+		return Locator{}, fmt.Errorf("locator prefix length must be byte-aligned")
 	}
-
 	return Locator{
-		Prefix:    prefix,
-		structure: structure,
+		Prefix: prefix,
 	}, nil
 }
 
 // MustNewLocator is NewLocator but panics on error. Should be used only in tests.
-func MustNewLocator(prefix netip.Prefix, structure SIDStructure) Locator {
-	l, err := NewLocator(prefix, structure)
+func MustNewLocator(prefix netip.Prefix) Locator {
+	l, err := NewLocator(prefix)
 	if err != nil {
 		panic(err)
 	}
 	return l
 }
 
-// Structure returns a pointer to the SID structure
-func (l *Locator) Structure() SIDStructure {
-	return l.structure
-}
-
-// String returns a human-readable string representation of this Locator
-func (l *Locator) String() string {
-	return l.Prefix.String() + l.structure.String()
-}
-
 // SID represents a single SID. It embeds the netip.Addr, so it can be treated
-// as an IP address. In addition to that, it holds a SID structure information
-// and implements some helper functions to manipulate part of that.
+// as an IP address.
 type SID struct {
 	netip.Addr
-	structure SIDStructure
 }
 
 // NewSID constructs SID from IPv6 netip.Addr and SIDStructure
-func NewSID(addr netip.Addr, structure SIDStructure) (SID, error) {
+func NewSID(addr netip.Addr) (SID, error) {
 	if !addr.Is6() {
 		return SID{}, fmt.Errorf("SID must be IPv6")
 	}
 	return SID{
-		Addr:      addr,
-		structure: structure,
+		Addr: addr,
 	}, nil
 }
 
 // MustNewSID is NewSID but panics on error. Should be used only in tests.
-func MustNewSID(addr netip.Addr, structure SIDStructure) SID {
-	sid, err := NewSID(addr, structure)
+func MustNewSID(addr netip.Addr) SID {
+	sid, err := NewSID(addr)
 	if err != nil {
 		panic(err)
 	}
@@ -89,26 +70,20 @@ func MustNewSID(addr netip.Addr, structure SIDStructure) SID {
 
 // NewSIDFromLFA constructs SID from locator, function and argument parts
 func NewSIDFromLFA(l Locator, f []byte, a []byte) (SID, error) {
-	funcLenBytes := l.structure.FunctionLenBytes()
-	argLenBytes := l.structure.ArgumentLenBytes()
+	// We don't have to check for byte alignment here as we already validate it on construction
+	locLenBytes := l.Bits() / 8
+	funcLenBytes := len(f)
+	argLenBytes := len(a)
 
-	if len(f) != int(funcLenBytes) {
-		return SID{}, fmt.Errorf("function length mismatched with structure")
-	}
-
-	if len(a) != int(argLenBytes) {
-		return SID{}, fmt.Errorf("argument length mismatched with structure")
+	if locLenBytes+funcLenBytes+argLenBytes > 16 {
+		return SID{}, fmt.Errorf("total length exceeds IPv6 address length")
 	}
 
 	arr := l.Addr().As16()
-	locLenBytes := l.structure.LocatorLenBytes()
 	copy(arr[locLenBytes:locLenBytes+funcLenBytes], f)
 	copy(arr[locLenBytes+funcLenBytes:locLenBytes+funcLenBytes+argLenBytes], a)
 
-	return SID{
-		Addr:      netip.AddrFrom16(arr),
-		structure: l.structure,
-	}, nil
+	return NewSID(netip.AddrFrom16(arr))
 }
 
 // MustNewSIDFromLFA is NewSIDFromLFA but panics on error. Should be used only in tests.
@@ -120,71 +95,50 @@ func MustNewSIDFromLFA(l Locator, f []byte, a []byte) SID {
 	return sid
 }
 
-// Structure returns a pointer to the SID structure
-func (s *SID) Structure() SIDStructure {
-	return s.structure
-}
-
-// AsLocator extracts locator part from SID and return it as a Locator object
-func (s *SID) AsLocator() Locator {
-	// It's impossible to have invalid locator length (0 or over 128bits)
-	// as we already validate it on construction.
-	prefix, _ := s.Prefix(int(s.structure.LocatorLenBits()))
-	return Locator{
-		Prefix:    prefix,
-		structure: s.structure,
-	}
-}
-
-// Locator extracts locator part from SID and return it as a slice
-func (s *SID) Locator() []byte {
+// LocatorBytes extracts locator part from SID and return it as a slice
+func (s *SID) LocatorBytes(structure SIDStructure) []byte {
 	arr := s.As16()
-	return arr[:s.structure.LocatorLenBytes()]
+	return arr[:structure.LocatorLenBytes()]
 }
 
-// LocatorBlock extracts locator block part from SID and return it as a slice
-func (s *SID) LocatorBlock() []byte {
+// LocatorBlockBytes extracts locator block part from SID and return it as a slice
+func (s *SID) LocatorBlockBytes(structure SIDStructure) []byte {
 	arr := s.As16()
-	return arr[:s.structure.LocatorBlockLenBytes()]
+	return arr[:structure.LocatorBlockLenBytes()]
 }
 
-// LocatorNode extracts locator node part from SID and return it as a slice
-func (s *SID) LocatorNode() []byte {
+// LocatorNodeBytes extracts locator node part from SID and return it as a slice
+func (s *SID) LocatorNodeBytes(structure SIDStructure) []byte {
 	arr := s.As16()
-	locBLenBytes := s.structure.LocatorBlockLenBytes()
-	locNLenBytes := s.structure.LocatorNodeLenBytes()
+	locBLenBytes := structure.LocatorBlockLenBytes()
+	locNLenBytes := structure.LocatorNodeLenBytes()
 	return arr[locBLenBytes : locBLenBytes+locNLenBytes]
 }
 
-// Function extracts function part from SID and return it as a slice
-func (s *SID) Function() []byte {
+// FunctionBytes extracts function part from SID and return it as a slice
+func (s *SID) FunctionBytes(structure SIDStructure) []byte {
 	arr := s.As16()
-	locLenBytes := s.structure.LocatorLenBytes()
-	funcLenBytes := s.structure.FunctionLenBytes()
+	locLenBytes := structure.LocatorLenBytes()
+	funcLenBytes := structure.FunctionLenBytes()
 	return arr[locLenBytes : locLenBytes+funcLenBytes]
 }
 
-// Argument extracts argument part from SID and return it as a slice
-func (s *SID) Argument() []byte {
+// ArgumentBytes extracts argument part from SID and return it as a slice
+func (s *SID) ArgumentBytes(structure SIDStructure) []byte {
 	arr := s.As16()
-	locLenBytes := s.structure.LocatorLenBytes()
-	funcLenBytes := s.structure.FunctionLenBytes()
-	argLenBytes := s.structure.ArgumentLenBytes()
+	locLenBytes := structure.LocatorLenBytes()
+	funcLenBytes := structure.FunctionLenBytes()
+	argLenBytes := structure.ArgumentLenBytes()
 	return arr[locLenBytes+funcLenBytes : locLenBytes+funcLenBytes+argLenBytes]
 }
 
-// Rest extracts non-SID part and return it as a slice
-func (s *SID) Rest() []byte {
+// RestBytes extracts non-SID part and return it as a slice
+func (s *SID) RestBytes(structure SIDStructure) []byte {
 	arr := s.As16()
-	locLenBytes := s.structure.LocatorLenBytes()
-	funcLenBytes := s.structure.FunctionLenBytes()
-	argLenBytes := s.structure.ArgumentLenBytes()
+	locLenBytes := structure.LocatorLenBytes()
+	funcLenBytes := structure.FunctionLenBytes()
+	argLenBytes := structure.ArgumentLenBytes()
 	return arr[locLenBytes+funcLenBytes+argLenBytes:]
-}
-
-// String returns human-readable string representation of this SID
-func (s *SID) String() string {
-	return s.Addr.String() + s.structure.String()
 }
 
 // Transpose transposes the given SID as defined in the RFC9252 Section 4 and

@@ -74,43 +74,37 @@ func TestNewSIDStructure(t *testing.T) {
 
 func TestNewLocator(t *testing.T) {
 	tests := []struct {
-		name      string
-		prefix    netip.Prefix
-		structure SIDStructure
-		locator   Locator
-		errorStr  string
+		name     string
+		prefix   netip.Prefix
+		locator  Locator
+		errorStr string
 	}{
 		{
-			name:      "ValidLocator",
-			prefix:    netip.MustParsePrefix("fd00::/48"),
-			structure: SIDStructure{32, 16, 16, 0},
+			name:   "ValidLocator",
+			prefix: netip.MustParsePrefix("fd00::/48"),
 			locator: Locator{
-				Prefix:    netip.MustParsePrefix("fd00::/48"),
-				structure: MustNewSIDStructure(32, 16, 16, 0),
+				Prefix: netip.MustParsePrefix("fd00::/48"),
 			},
 		},
 		{
-			name:      "InvalidPrefix",
-			prefix:    netip.MustParsePrefix("10.0.0.0/24"),
-			structure: SIDStructure{32, 16, 16, 0},
-			errorStr:  "locator prefix must be IPv6",
+			name:     "InvalidPrefix",
+			prefix:   netip.MustParsePrefix("10.0.0.0/24"),
+			errorStr: "locator prefix must be IPv6",
 		},
 		{
-			name:      "PrefixStructureBitsMismatch",
-			prefix:    netip.MustParsePrefix("fd00::/48"),
-			structure: SIDStructure{48, 16, 16, 0},
-			errorStr:  "locator prefix length (48) doesn't match with structure (64)",
+			name:     "ByteUnalignedPrefix",
+			prefix:   netip.MustParsePrefix("fd00::/49"),
+			errorStr: "locator prefix length must be byte-aligned",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			l, err := NewLocator(test.prefix, test.structure)
+			_, err := NewLocator(test.prefix)
 			if test.errorStr != "" {
 				require.Error(t, err)
 				require.Equal(t, test.errorStr, err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.locator, l)
 			}
 		})
 	}
@@ -118,32 +112,28 @@ func TestNewLocator(t *testing.T) {
 
 func TestNewSID(t *testing.T) {
 	tests := []struct {
-		name      string
-		addr      netip.Addr
-		structure SIDStructure
-		sid       SID
-		errorStr  string
+		name     string
+		addr     netip.Addr
+		sid      SID
+		errorStr string
 	}{
 		{
-			name:      "ValidSID",
-			addr:      netip.MustParseAddr("fd00::"),
-			structure: SIDStructure{32, 16, 16, 0},
+			name: "ValidSID",
+			addr: netip.MustParseAddr("fd00::"),
 			sid: SID{
-				Addr:      netip.MustParseAddr("fd00::"),
-				structure: SIDStructure{32, 16, 16, 0},
+				Addr: netip.MustParseAddr("fd00::"),
 			},
 		},
 		{
-			name:      "InvalidAddr",
-			addr:      netip.MustParseAddr("10.0.0.0"),
-			structure: SIDStructure{32, 16, 16, 0},
-			sid:       SID{},
-			errorStr:  "SID must be IPv6",
+			name:     "InvalidAddr",
+			addr:     netip.MustParseAddr("10.0.0.0"),
+			sid:      SID{},
+			errorStr: "SID must be IPv6",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sid, err := NewSID(test.addr, test.structure)
+			sid, err := NewSID(test.addr)
 			if test.errorStr != "" {
 				require.Equal(t, test.errorStr, err.Error())
 			} else {
@@ -156,8 +146,7 @@ func TestNewSID(t *testing.T) {
 
 func TestTranspose(t *testing.T) {
 	addr := netip.MustParseAddr("fd00:1234:5678:9abc:deff:edcb:a987:6543")
-	structure := MustNewSIDStructure(40, 24, 16, 0)
-	sid := MustNewSID(addr, structure)
+	sid := MustNewSID(addr)
 
 	tt := []struct {
 		name          string
@@ -167,7 +156,7 @@ func TestTranspose(t *testing.T) {
 		expectedSID   []byte
 	}{
 		{
-			name:          "IOS-XR Default (LB: 40, LN: 24, F: 16, A: 0, TO: 64, TL: 16)",
+			name:          "Valid (TO: 64, TL: 16)",
 			offset:        64,
 			length:        16,
 			expectedLabel: 0xdeff0,
@@ -179,7 +168,7 @@ func TestTranspose(t *testing.T) {
 			}(),
 		},
 		{
-			name:          "IOS-XR F3216 (LB: 32, LN: 16, F: 16, A: 0, TO: 48, TL: 16)",
+			name:          "Valid (TO: 48, TL: 16)",
 			offset:        48,
 			length:        16,
 			expectedLabel: 0x9abc0,

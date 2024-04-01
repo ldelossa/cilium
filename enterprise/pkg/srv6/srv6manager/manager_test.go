@@ -51,12 +51,17 @@ import (
 
 type fakeSIDAllocator struct {
 	sid           srv6Types.SID
+	structure     srv6Types.SIDStructure
 	behaviorType  srv6Types.BehaviorType
 	allocatedSIDs []*sidmanager.SIDInfo
 }
 
 func (fsa *fakeSIDAllocator) Locator() srv6Types.Locator {
 	return srv6Types.Locator{}
+}
+
+func (fsa *fakeSIDAllocator) Structure() srv6Types.SIDStructure {
+	return fsa.structure
 }
 
 func (fsa *fakeSIDAllocator) BehaviorType() srv6Types.BehaviorType {
@@ -305,10 +310,8 @@ func TestSRv6Manager(t *testing.T) {
 
 	sid1IP := net.ParseIP("fd00:0:0:1::")
 	sid2IP := net.ParseIP("fd00:0:1:1::")
-	sid3 := srv6Types.MustNewSID(
-		netip.MustParseAddr("fd00:0:1:2::"),
-		srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-	)
+	sid3 := srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:1:2::"))
+	structure := srv6Types.MustNewSIDStructure(32, 16, 16, 0)
 
 	vrf0 := &v1alpha1.IsovalentVRF{
 		ObjectMeta: metav1.ObjectMeta{
@@ -701,6 +704,7 @@ func TestSRv6Manager(t *testing.T) {
 			// This allocator always returns fixed SID for AllocateNext
 			allocator := &fakeSIDAllocator{
 				sid:          sid3,
+				structure:    structure,
 				behaviorType: srv6Types.BehaviorTypeBase,
 			}
 
@@ -1215,24 +1219,20 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			},
 			existingAllocations: []*sidmanager.SIDInfo{
 				{
-					Owner:    ownerName,
-					MetaData: "vrf0",
-					SID: srv6Types.MustNewSID(
-						netip.MustParseAddr("fd00:0:0:1::"),
-						srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-					),
+					Owner:        ownerName,
+					MetaData:     "vrf0",
+					SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+					Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 					BehaviorType: srv6Types.BehaviorTypeBase,
 					Behavior:     srv6Types.BehaviorEndDT4,
 				},
 			},
 			behaviorType: srv6Types.BehaviorTypeBase,
 			expectedAllocation: &sidmanager.SIDInfo{
-				Owner:    ownerName,
-				MetaData: "vrf0",
-				SID: srv6Types.MustNewSID(
-					netip.MustParseAddr("fd00:0:0:1::"),
-					srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-				),
+				Owner:        ownerName,
+				MetaData:     "vrf0",
+				SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+				Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 				BehaviorType: srv6Types.BehaviorTypeBase,
 				Behavior:     srv6Types.BehaviorEndDT4,
 			},
@@ -1242,12 +1242,10 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			vrf:  nil,
 			existingAllocations: []*sidmanager.SIDInfo{
 				{
-					Owner:    ownerName,
-					MetaData: "vrf0",
-					SID: srv6Types.MustNewSID(
-						netip.MustParseAddr("fd00:0:0:1::"),
-						srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-					),
+					Owner:        ownerName,
+					MetaData:     "vrf0",
+					SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+					Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 					BehaviorType: srv6Types.BehaviorTypeBase,
 					Behavior:     srv6Types.BehaviorEndDT4,
 				},
@@ -1267,12 +1265,10 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			},
 			existingAllocations: []*sidmanager.SIDInfo{
 				{
-					Owner:    ownerName,
-					MetaData: "vrf0",
-					SID: srv6Types.MustNewSID(
-						netip.MustParseAddr("fd00:0:0:1::"),
-						srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-					),
+					Owner:        ownerName,
+					MetaData:     "vrf0",
+					SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+					Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 					BehaviorType: srv6Types.BehaviorTypeBase,
 					Behavior:     srv6Types.BehaviorEndDT4,
 				},
@@ -1294,12 +1290,10 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			},
 			existingAllocations: []*sidmanager.SIDInfo{
 				{
-					Owner:    ownerName,
-					MetaData: "vrf0",
-					SID: srv6Types.MustNewSID(
-						netip.MustParseAddr("fd00:0:0:1::"),
-						srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-					),
+					Owner:        ownerName,
+					MetaData:     "vrf0",
+					SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+					Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 					BehaviorType: srv6Types.BehaviorTypeBase,
 					Behavior:     srv6Types.BehaviorEndDT4,
 				},
@@ -1321,34 +1315,28 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			},
 			existingAllocations: []*sidmanager.SIDInfo{
 				{
-					Owner:    ownerName,
-					MetaData: "vrf0",
-					SID: srv6Types.MustNewSID(
-						netip.MustParseAddr("fd00:0:0:1::"),
-						srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-					),
+					Owner:        ownerName,
+					MetaData:     "vrf0",
+					SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+					Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 					BehaviorType: srv6Types.BehaviorTypeBase,
 					Behavior:     srv6Types.BehaviorEndDT4,
 				},
 				{
-					Owner:    ownerName,
-					MetaData: "vrf0",
-					SID: srv6Types.MustNewSID(
-						netip.MustParseAddr("fd00:0:0:2::"),
-						srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-					),
+					Owner:        ownerName,
+					MetaData:     "vrf0",
+					SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:2::")),
+					Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 					BehaviorType: srv6Types.BehaviorTypeBase,
 					Behavior:     srv6Types.BehaviorEndDT4,
 				},
 			},
 			behaviorType: srv6Types.BehaviorTypeBase,
 			expectedAllocation: &sidmanager.SIDInfo{
-				Owner:    ownerName,
-				MetaData: "vrf0",
-				SID: srv6Types.MustNewSID(
-					netip.MustParseAddr("fd00:0:0:1::"),
-					srv6Types.MustNewSIDStructure(32, 16, 16, 0),
-				),
+				Owner:        ownerName,
+				MetaData:     "vrf0",
+				SID:          srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:0:1::")),
+				Structure:    srv6Types.MustNewSIDStructure(32, 16, 16, 0),
 				BehaviorType: srv6Types.BehaviorTypeBase,
 				Behavior:     srv6Types.BehaviorEndDT4,
 			},

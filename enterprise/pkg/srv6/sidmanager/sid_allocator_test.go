@@ -22,18 +22,19 @@ import (
 func TestStructuredSIDAllocator(t *testing.T) {
 	locator := types.MustNewLocator(
 		netip.MustParsePrefix("fd00::/64"),
-		types.MustNewSIDStructure(48, 16, 16, 0),
 	)
 
+	structure := types.MustNewSIDStructure(48, 16, 16, 0)
+
 	t.Run("TestAllocate", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
+		allocator, err := NewStructuredSIDAllocator(locator, structure, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Valid allocation
 		info, err := allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key1", types.BehaviorEndDT4)
 		require.NoError(t, err)
-		require.Equal(t, info.SID.Addr, netip.MustParseAddr("fd00:0:0:0:1::"))
-		require.Equal(t, info.SID.Structure(), types.MustNewSIDStructure(48, 16, 16, 0))
+		require.Equal(t, netip.MustParseAddr("fd00:0:0:0:1::"), info.SID.Addr)
+		require.Equal(t, types.MustNewSIDStructure(48, 16, 16, 0), info.Structure)
 
 		// Cannot allocate duplicated SID
 		_, err = allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key2", types.BehaviorEndDT4)
@@ -57,14 +58,14 @@ func TestStructuredSIDAllocator(t *testing.T) {
 	})
 
 	t.Run("TestAllocateNext", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
+		allocator, err := NewStructuredSIDAllocator(locator, structure, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Valid allocation
 		info, err := allocator.AllocateNext("test1", "key2", types.BehaviorEndDT4)
 		require.NoError(t, err)
-		require.Len(t, info.SID.Function(), 2)
-		require.NotEqual(t, []byte{0, 0}, info.SID.Function())
+		require.Len(t, info.SID.FunctionBytes(structure), 2)
+		require.NotEqual(t, []byte{0, 0}, info.SID.FunctionBytes(structure))
 
 		// Behavior and BehaviorType mismatched
 		_, err = allocator.AllocateNext("test1", "key3", types.BehaviorUDT4)
@@ -72,7 +73,7 @@ func TestStructuredSIDAllocator(t *testing.T) {
 	})
 
 	t.Run("TestRelease", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
+		allocator, err := NewStructuredSIDAllocator(locator, structure, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Valid release
@@ -91,7 +92,7 @@ func TestStructuredSIDAllocator(t *testing.T) {
 	})
 
 	t.Run("TestAllocatedSIDs", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
+		allocator, err := NewStructuredSIDAllocator(locator, structure, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Getting specific owner's SIDs

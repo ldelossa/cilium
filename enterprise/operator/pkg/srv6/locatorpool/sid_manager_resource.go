@@ -164,10 +164,10 @@ func toAPILocator(loc *LocatorInfo) *isovalent_api_v1alpha1.IsovalentSRv6Locator
 	return &isovalent_api_v1alpha1.IsovalentSRv6Locator{
 		Prefix: loc.Prefix.String(),
 		Structure: isovalent_api_v1alpha1.IsovalentSRv6SIDStructure{
-			LocatorBlockLenBits: loc.Structure().LocatorBlockLenBits(),
-			LocatorNodeLenBits:  loc.Structure().LocatorNodeLenBits(),
-			FunctionLenBits:     loc.Structure().FunctionLenBits(),
-			ArgumentLenBits:     loc.Structure().ArgumentLenBits(),
+			LocatorBlockLenBits: loc.LocatorBlockLenBits(),
+			LocatorNodeLenBits:  loc.LocatorNodeLenBits(),
+			FunctionLenBits:     loc.FunctionLenBits(),
+			ArgumentLenBits:     loc.ArgumentLenBits(),
 		},
 		BehaviorType: loc.BehaviorType.String(),
 	}
