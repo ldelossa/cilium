@@ -486,7 +486,7 @@ jobs:
         run: |
           mkdir -p ${{ env.upload_dir }}/cilium-sysdumps
           # Move all previously created sysdumps
-          mv *.zip ${{ env.upload_dir }}/cilium-sysdumps/
+          mv *.zip ${{ env.upload_dir }}/cilium-sysdumps/ || true
           
           cilium status
           cilium sysdump --output-filename ${{ env.upload_dir }}/cilium-sysdumps/cilium-sysdump-final
