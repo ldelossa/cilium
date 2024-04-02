@@ -60,12 +60,12 @@ runs:
         node_count=$(kubectl get nodes -o=jsonpath='{range.items[*]}{.metadata.name}{"\n"}{end}' | wc -l | xargs)
         echo "Cluster node count: $node_count"
 
-        use_internal_ip_for_ipsec=false
-        [[ $(cilium config view | grep -c '^use-cilium-internal-ip-for-ipsec[[:blank:]]*true$' || true) -gt 0 ]] && use_internal_ip_for_ipsec=true
-        echo "Cilium use-cilium-internal-ip-for-ipsec: $use_internal_ip_for_ipsec"
+        ipam_eni_or_azure=false
+        [[ $(cilium config view | grep -c '^ipam[[:blank:]]*\(eni\|azure\)$') -gt 0 ]] && ipam_eni_or_azure=true
+        echo "IPAM is ENI or Azure: $ipam_eni_or_azure"
 
         ipv6_enabled=false
-        [[ $(cilium config view | grep -c '^enable-ipv6[[:blank:]]*true$' || true) -gt 0 ]] && ipv6_enabled=true
+        [[ $(cilium config view | grep -c '^enable-ipv6[[:blank:]]*true$') -gt 0 ]] && ipv6_enabled=true
         echo "Cilium enable-ipv6: $ipv6_enabled"
 
         remote_nodes=$((node_count-1))
@@ -77,38 +77,38 @@ runs:
           after_rotation=1
         # non-per-node to per-node key rotation
         elif [[ "${{ steps.before-rotation-key.outputs.ipsec_per_node_key }}" == "false" && "${{ steps.after-rotation-key.outputs.ipsec_per_node_key }}" == "true" ]]; then
-          if [[ "$use_internal_ip_for_ipsec" == "true" && "$ipv6_enabled" == "true" ]]; then
+          if [[ "$ipam_eni_or_azure" == "true" && "$ipv6_enabled" == "true" ]]; then
             after_rotation=$((remote_nodes*6))
-          elif [[ "$use_internal_ip_for_ipsec" == "true" && "$ipv6_enabled" == "false" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "true" && "$ipv6_enabled" == "false" ]]; then
             after_rotation=$((remote_nodes*3))
-          elif [[ "$use_internal_ip_for_ipsec" == "false" && "$ipv6_enabled" == "true" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "false" && "$ipv6_enabled" == "true" ]]; then
             after_rotation=$((remote_nodes*4))
-          elif [[ "$use_internal_ip_for_ipsec" == "false" && "$ipv6_enabled" == "false" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "false" && "$ipv6_enabled" == "false" ]]; then
             after_rotation=$((remote_nodes*2))
           fi
           both_active=$((after_rotation+1))
         # per-node to per-node key rotation
         elif [[ "${{ steps.before-rotation-key.outputs.ipsec_per_node_key }}" == "true" && "${{ steps.after-rotation-key.outputs.ipsec_per_node_key }}" == "true" ]]; then
-          if [[ "$use_internal_ip_for_ipsec" == "true" && "$ipv6_enabled" == "true" ]]; then
+          if [[ "$ipam_eni_or_azure" == "true" && "$ipv6_enabled" == "true" ]]; then
             after_rotation=$((remote_nodes*6))
-          elif [[ "$use_internal_ip_for_ipsec" == "true" && "$ipv6_enabled" == "false" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "true" && "$ipv6_enabled" == "false" ]]; then
             after_rotation=$((remote_nodes*3))
-          elif [[ "$use_internal_ip_for_ipsec" == "false" && "$ipv6_enabled" == "true" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "false" && "$ipv6_enabled" == "true" ]]; then
             after_rotation=$((remote_nodes*4))
-          elif [[ "$use_internal_ip_for_ipsec" == "false" && "$ipv6_enabled" == "false" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "false" && "$ipv6_enabled" == "false" ]]; then
             after_rotation=$((remote_nodes*2))
           fi
           both_active=$((after_rotation*2))
         # per-node to non-per-node key rotation
         else
           after_rotation=1
-          if [[ "$use_internal_ip_for_ipsec" == "true" && "$ipv6_enabled" == "true" ]]; then
+          if [[ "$ipam_eni_or_azure" == "true" && "$ipv6_enabled" == "true" ]]; then
             both_active=$((remote_nodes*6))
-          elif [[ "$use_internal_ip_for_ipsec" == "true" && "$ipv6_enabled" == "false" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "true" && "$ipv6_enabled" == "false" ]]; then
             both_active=$((remote_nodes*3))
-          elif [[ "$use_internal_ip_for_ipsec" == "false" && "$ipv6_enabled" == "true" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "false" && "$ipv6_enabled" == "true" ]]; then
             both_active=$((remote_nodes*4))
-          elif [[ "$use_internal_ip_for_ipsec" == "false" && "$ipv6_enabled" == "false" ]]; then
+          elif [[ "$ipam_eni_or_azure" == "false" && "$ipv6_enabled" == "false" ]]; then
             both_active=$((remote_nodes*2))
           fi
           both_active=$((both_active+1))
