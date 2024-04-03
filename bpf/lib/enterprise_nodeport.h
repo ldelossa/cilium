@@ -19,8 +19,7 @@ nodeport_nat_egress_ipv4_hook(struct __ctx_buff *ctx __maybe_unused,
 	__u32 src_identity = ctx_load_meta(ctx, CB_SRC_LABEL) ?: WORLD_IPV4_ID;
 	int ret;
 
-	ret = cilium_mesh_nodeport_egress_policy(ctx, ip4, dst_sec_identity, tuple, l4_off,
-						 ext_err);
+	ret = cilium_mesh_policy_egress(ctx, ip4, dst_sec_identity, tuple, l4_off, ext_err);
 	if (ret != CTX_ACT_OK)
 		return send_drop_notify_ext(ctx, src_identity, dst_sec_identity, 0,
 					ret, *ext_err, CTX_ACT_DROP, METRIC_EGRESS);

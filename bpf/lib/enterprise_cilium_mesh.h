@@ -79,12 +79,12 @@ cilium_mesh_policy_can_ingress4(struct __ctx_buff *ctx, __be32 ip, __u32 dst_id,
 }
 
 static __always_inline int
-cilium_mesh_nodeport_egress_policy(struct __ctx_buff *ctx __maybe_unused,
-				   struct iphdr *ip4 __maybe_unused,
-				   __u32 dst_sec_identity __maybe_unused,
-				   struct ipv4_ct_tuple *tuple __maybe_unused,
-				   int l4_off __maybe_unused,
-				   __s8 *ext_err __maybe_unused)
+cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
+			  struct iphdr *ip4 __maybe_unused,
+			  __u32 dst_sec_identity __maybe_unused,
+			  struct ipv4_ct_tuple *tuple __maybe_unused,
+			  int l4_off __maybe_unused,
+			  __s8 *ext_err __maybe_unused)
 {
 #ifndef IS_BPF_OVERLAY
 	__u8 policy_match_type = 0;
