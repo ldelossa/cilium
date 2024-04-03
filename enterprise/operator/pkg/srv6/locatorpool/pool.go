@@ -96,13 +96,65 @@ func validatePool(conf poolConfig) error {
 		return fmt.Errorf("prefix %q: %w", conf.prefix, ErrPrefixNotByteAligned)
 	}
 
-	// validate  LocB + LocN  > prefix length
-	if conf.structure.LocatorLenBits() <= uint8(conf.prefix.Bits()) {
+	// Validate locator length is byte aligned. This is an implementation limitaiton.
+	if conf.locatorLen%8 != 0 {
+		return fmt.Errorf("locator length (%d) must be byte-aligned: %s", conf.locatorLen, ErrPrefixNotByteAligned)
+	}
+
+	poolPrefixLen := uint8(conf.prefix.Bits())
+
+	// Ensure the locator allocation doesn't violate the structure.
+	//
+	// Invalid: Allocatable range doesn't use whole locB + locN
+	//
+	// |<-- locB -->|<-- locN -->|<-- func -->|<-- arg -->|
+	// |<-- pool prefix ->|
+	// |<-- locator prefix -->|
+	//                    |<->|
+	//                      ^ allocatable range
+	//
+	// Valid: Allocatable range matches structure
+	//
+	// |<-- locB -->|<-- locN -->|<-- func -->|<-- arg -->|
+	// |<-- pool prefix ->|
+	// |<-- locator prefix ----->|
+	//                    |<---->|
+	//                       ^ allocatable range
+	//
+	// Valid: Allocatable range doesn't match structure but is within
+	//        locB + locN + func (doesn't contain the end of func)
+	//
+	// |<-- locB -->|<-- locN -->|<-- func -->|<-- arg -->|
+	// |<-- pool prefix ->|
+	// |<-- locator prefix ----------------->|
+	//                    |<---------------->|
+	//                           ^ allocatable range
+	//
+	// Invalid: Allocatable range contains the end of func or overlapping with arg
+	//
+	// |<-- locB -->|<-- locN -->|<-- func -->|<-- arg -->|
+	// |<-- pool prefix ->|
+	// |<--- locator prefix ----------------->|
+	//                    |<----------------->|
+	//                           ^ allocatable range
+	//
+	// |<-- locB -->|<-- locN -->|<-- func -->|<-- arg -->|
+	// |<-- pool prefix ->|
+	// |<------ locator prefix ------------------->|
+	//                    |<---------------------->|
+	//                           ^ allocatable range
+
+	// Ensure that the pool prefix length is larger or equal to the locB and smaller than locB + locN + func
+	if poolPrefixLen < conf.structure.LocatorBlockLenBits() ||
+		poolPrefixLen >= conf.structure.LocatorLenBits()+conf.structure.FunctionLenBits() {
 		return ErrInvalidPrefixAndSIDStruct
 	}
 
-	// validate LocB <= prefix length
-	if conf.structure.LocatorBlockLenBits() > uint8(conf.prefix.Bits()) {
+	// Ensure that the locator prefix length is larger than pool prefix length (hence larger than locB) and
+	// larger or equal to locB + locN and smaller than locB + locN + func.
+	if conf.locatorLen <= poolPrefixLen ||
+		conf.locatorLen < conf.structure.LocatorLenBits() ||
+		conf.locatorLen >= conf.structure.LocatorLenBits()+conf.structure.FunctionLenBits() {
 		return ErrInvalidPrefixAndSIDStruct
 	}
 

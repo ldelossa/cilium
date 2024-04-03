@@ -33,7 +33,19 @@ func Test_PoolCreation(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "Base",
+			},
+			expectedPoolErr: nil,
+		},
+		{
+			description: "valid pool config, locatorLen and structure mismatch",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
 				behaviorType: "Base",
 			},
 			expectedPoolErr: nil,
@@ -43,6 +55,7 @@ func Test_PoolCreation(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
 				behaviorType: "invalid",
 			},
@@ -53,6 +66,7 @@ func Test_PoolCreation(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/64"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
 				behaviorType: "Base",
 			},
@@ -63,6 +77,7 @@ func Test_PoolCreation(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00::/32"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
 				behaviorType: "Base",
 			},
@@ -73,6 +88,7 @@ func Test_PoolCreation(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/65"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
 				behaviorType: "Base",
 			},
@@ -83,17 +99,50 @@ func Test_PoolCreation(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("10.10.10.0/24"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
 				behaviorType: "Base",
 			},
 			expectedPoolErr: ErrInvalidPrefix,
 		},
+		{
+			description: "invalid pool config, locatorLen is smaller than LocN",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/32"),
+				locatorLen:   40,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			expectedPoolErr: ErrInvalidPrefixAndSIDStruct,
+		},
+		{
+			description: "invalid pool config, locatorLen contains the end of Func",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/32"),
+				locatorLen:   80,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			expectedPoolErr: ErrInvalidPrefixAndSIDStruct,
+		},
+		{
+			description: "invalid pool config, locatorLen overlapping with Arg",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/32"),
+				locatorLen:   88,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			expectedPoolErr: ErrInvalidPrefixAndSIDStruct,
+		},
 	}
-
-	req := require.New(t)
 
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
+			req := require.New(t)
 			_, err := newPool(tt.config)
 			if tt.expectedPoolErr != nil {
 				req.Contains(err.Error(), tt.expectedPoolErr.Error())
@@ -117,6 +166,7 @@ func Test_AllocateNext(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -129,6 +179,7 @@ func Test_AllocateNext(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -141,6 +192,7 @@ func Test_AllocateNext(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -189,6 +241,7 @@ func Test_AllocateRelease(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -213,6 +266,7 @@ func Test_AllocateRelease(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -248,6 +302,7 @@ func Test_AllocateRelease(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -271,6 +326,7 @@ func Test_AllocateRelease(t *testing.T) {
 			config: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   56,
 				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
 				behaviorType: "Base",
 			},
@@ -347,6 +403,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 			poolConfig: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
 				behaviorType: "Base",
 			},
@@ -362,6 +419,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 			poolConfig: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
 				behaviorType: "Base",
 			},
@@ -377,6 +435,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 			poolConfig: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
 				behaviorType: "Base",
 			},
@@ -392,6 +451,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 			poolConfig: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
 				behaviorType: "Base",
 			},
@@ -407,6 +467,7 @@ func Test_ValidNodeLocator(t *testing.T) {
 			poolConfig: poolConfig{
 				name:         "pool-1",
 				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				locatorLen:   64,
 				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
 				behaviorType: "Base",
 			},
