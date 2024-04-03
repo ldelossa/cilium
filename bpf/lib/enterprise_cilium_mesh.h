@@ -9,14 +9,17 @@
 #include "lib/policy.h"
 #include "lib/policy_log.h"
 
-static __always_inline void *cilium_mesh_endpoint_policy_map(__u32 ip)
+static __always_inline void *cilium_mesh_endpoint_policy_map(__u32 ip __maybe_unused)
 {
+#if !defined(SKIP_POLICY_MAP)
 	struct endpoint_key key = {};
 
 	key.ip4 = ip;
 	key.family = ENDPOINT_KEY_IPV4;
 
 	return map_lookup_elem(&CILIUM_MESH_POLICY_MAP, &key);
+#endif
+	return 0;
 }
 
 static __always_inline int
