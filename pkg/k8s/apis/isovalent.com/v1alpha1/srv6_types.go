@@ -85,8 +85,12 @@ type IsovalentSRv6Locator struct {
 	// +kubebuilder:validation:Pattern="^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))/([0-9]|[0-9][0-9]|1[0-1][0-9]|12[0-8])$"
 	Prefix string `json:"prefix"`
 
-	// Structure is a structure of the SID. This will be derived from
-	// the Structure in the IsovalentSRv6LocatorPool definition.
+	// Structure is a structure of the SID derived from this pool. This
+	// structure is used for calculating the allocatable range of locators
+	// and later for calculating the allocatable range of functions and
+	// arguments. The allocatable locator range is calculated as follows:
+	//
+	// Structure.LocatorBlockLenBits + Structure.LocatorNodeLenBits - LocatorLenBits
 	//
 	// +kubebuilder:validation:Required
 	Structure IsovalentSRv6SIDStructure `json:"structure"`
@@ -230,6 +234,15 @@ type IsovalentSRv6LocatorPoolSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern="^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))/([0-9]|[0-9][0-9]|1[0-1][0-9]|12[0-8])$"
 	Prefix string `json:"prefix"`
+
+	// LocatorLenBits is a prefix length of the locator allocated from this
+	// pool. When omitted, the locator length is calculated based on the
+	// structure.
+	//
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=128
+	LocatorLenBits *uint8 `json:"locatorLenBits"`
 
 	// Structure is a structure of the SID.
 	//

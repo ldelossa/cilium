@@ -478,7 +478,7 @@ func (in *IsovalentSRv6LocatorPool) DeepEqual(other *IsovalentSRv6LocatorPool) b
 		return false
 	}
 
-	if in.Spec != other.Spec {
+	if !in.Spec.DeepEqual(&other.Spec) {
 		return false
 	}
 
@@ -495,6 +495,14 @@ func (in *IsovalentSRv6LocatorPoolSpec) DeepEqual(other *IsovalentSRv6LocatorPoo
 	if in.Prefix != other.Prefix {
 		return false
 	}
+	if (in.LocatorLenBits == nil) != (other.LocatorLenBits == nil) {
+		return false
+	} else if in.LocatorLenBits != nil {
+		if *in.LocatorLenBits != *other.LocatorLenBits {
+			return false
+		}
+	}
+
 	if in.Structure != other.Structure {
 		return false
 	}

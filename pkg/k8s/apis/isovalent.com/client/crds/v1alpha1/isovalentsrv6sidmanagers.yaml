@@ -66,9 +66,13 @@ spec:
                             pattern: ^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))/([0-9]|[0-9][0-9]|1[0-1][0-9]|12[0-8])$
                             type: string
                           structure:
-                            description: Structure is a structure of the SID. This
-                              will be derived from the Structure in the IsovalentSRv6LocatorPool
-                              definition.
+                            description: "Structure is a structure of the SID derived
+                              from this pool. This structure is used for calculating
+                              the allocatable range of locators and later for calculating
+                              the allocatable range of functions and arguments. The
+                              allocatable locator range is calculated as follows:
+                              \n Structure.LocatorBlockLenBits + Structure.LocatorNodeLenBits
+                              - LocatorLenBits"
                             properties:
                               argumentLenBits:
                                 description: Argument length as described in RFC8986.
