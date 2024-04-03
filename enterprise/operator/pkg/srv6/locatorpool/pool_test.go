@@ -175,6 +175,32 @@ func Test_AllocateNext(t *testing.T) {
 			expectedErr:  nil,
 		},
 		{
+			description: "valid allocations for pool with mismatched locator length and structure",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			allocations:  65535,
+			expectedFree: 0,
+			expectedErr:  nil,
+		},
+		{
+			description: "valid allocations for pool with mismatched locator length and structure, capped",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/40"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			allocations:  65535,
+			expectedFree: 0,
+			expectedErr:  nil,
+		},
+		{
 			description: "valid allocations for pool, fill half",
 			config: poolConfig{
 				name:         "pool-1",
@@ -188,6 +214,19 @@ func Test_AllocateNext(t *testing.T) {
 			expectedErr:  nil,
 		},
 		{
+			description: "valid allocations for pool with mismatched locator length and structure, fill half",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			allocations:  32768,
+			expectedFree: 32767,
+			expectedErr:  nil,
+		},
+		{
 			description: "exceed allocations for pool",
 			config: poolConfig{
 				name:         "pool-1",
@@ -197,6 +236,19 @@ func Test_AllocateNext(t *testing.T) {
 				behaviorType: "Base",
 			},
 			allocations:  256,
+			expectedFree: 0,
+			expectedErr:  ErrLocatorPoolExhausted,
+		},
+		{
+			description: "exceed allocations for pool with mismatched locator length and structure",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			allocations:  65536,
 			expectedFree: 0,
 			expectedErr:  ErrLocatorPoolExhausted,
 		},
@@ -262,6 +314,31 @@ func Test_AllocateRelease(t *testing.T) {
 			expectedErr:      nil,
 		},
 		{
+			description: "allocations with mismatched locator length and structure",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			allocatedLocators: []*LocatorInfo{
+				{
+					Locator:      types.MustNewLocator(netip.MustParsePrefix("fd00:0:1:100::/64")),
+					SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator:      types.MustNewLocator(netip.MustParsePrefix("fd00:0:1:ff00::/64")),
+					SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+			},
+			releasedLocators: []*LocatorInfo{},
+			expectedFree:     65533,
+			expectedErr:      nil,
+		},
+		{
 			description: "single allocations and release",
 			config: poolConfig{
 				name:         "pool-1",
@@ -295,6 +372,42 @@ func Test_AllocateRelease(t *testing.T) {
 				},
 			},
 			expectedFree: 255,
+			expectedErr:  nil,
+		},
+		{
+			description: "single allocations and release with mismatched locator length and structure",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			allocatedLocators: []*LocatorInfo{
+				{
+					Locator:      types.MustNewLocator(netip.MustParsePrefix("fd00:0:1:100::/64")),
+					SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator:      types.MustNewLocator(netip.MustParsePrefix("fd00:0:1:ff00::/64")),
+					SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+			},
+			releasedLocators: []*LocatorInfo{
+				{
+					Locator:      types.MustNewLocator(netip.MustParsePrefix("fd00:0:1:100::/64")),
+					SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator:      types.MustNewLocator(netip.MustParsePrefix("fd00:0:1:ff00::/64")),
+					SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+			},
+			expectedFree: 65535,
 			expectedErr:  nil,
 		},
 		{
@@ -410,6 +523,22 @@ func Test_ValidNodeLocator(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			description: "valid node locator with mismatched locator length and structure",
+			nodeLocator: &LocatorInfo{
+				Locator:      types.MustNewLocator(netip.MustParsePrefix("2001:db8:1:1::/64")),
+				SIDStructure: types.MustNewSIDStructure(32, 16, 32, 0),
+				BehaviorType: types.BehaviorTypeBase,
+			},
+			poolConfig: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				locatorLen:   64,
+				structure:    types.MustNewSIDStructure(32, 16, 32, 0),
+				behaviorType: "Base",
+			},
+			expectedErr: nil,
+		},
+		{
 			description: "invalid node locator, prefix mismatch",
 			nodeLocator: &LocatorInfo{
 				Locator:      types.MustNewLocator(netip.MustParsePrefix("2002:db8:1:1::/64")),
@@ -475,10 +604,10 @@ func Test_ValidNodeLocator(t *testing.T) {
 		},
 	}
 
-	req := require.New(t)
-
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
+			req := require.New(t)
+
 			pool, err := newPool(tt.poolConfig)
 			req.NoError(err)
 

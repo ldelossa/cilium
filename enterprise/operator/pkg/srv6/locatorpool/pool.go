@@ -69,12 +69,12 @@ func newPool(conf poolConfig) (LocatorPool, error) {
 		return nil, err
 	}
 
-	maxAlloc := calculateMax(conf.structure.LocatorLenBits(), uint8(conf.prefix.Bits()))
+	maxAlloc := calculateMax(conf.locatorLen, uint8(conf.prefix.Bits()))
 
 	p := &pool{
 		config:    conf,
 		startIdx:  uint8(conf.prefix.Bits() / 8),
-		endIdx:    conf.structure.LocatorLenBytes(),
+		endIdx:    conf.locatorLen / 8,
 		allocator: allocator.NewAllocationMap(maxAlloc, ""),
 	}
 
@@ -96,7 +96,7 @@ func validatePool(conf poolConfig) error {
 		return fmt.Errorf("prefix %q: %w", conf.prefix, ErrPrefixNotByteAligned)
 	}
 
-	// Validate locator length is byte aligned. This is an implementation limitaiton.
+	// Validate locator length is byte aligned. This is an implementation limitation.
 	if conf.locatorLen%8 != 0 {
 		return fmt.Errorf("locator length (%d) must be byte-aligned: %s", conf.locatorLen, ErrPrefixNotByteAligned)
 	}
@@ -194,8 +194,8 @@ func (p *pool) validNodeLocator(nodeLoc *LocatorInfo) bool {
 		return false
 	}
 
-	// nodeLocatorPrefix should be equal to SID Locator length
-	if nodeLoc.Prefix.Bits() != int(p.config.structure.LocatorLenBits()) {
+	// nodeLocatorPrefix should be equal to locator length
+	if nodeLoc.Bits() != int(p.config.locatorLen) {
 		return false
 	}
 
