@@ -294,7 +294,7 @@ func (p *pool) encodeNodeID(nodeID uint16) netip.Prefix {
 		copy(addr[p.startIdx:p.endIdx], nodeIDBytes[maxNodeBytes-(p.endIdx-p.startIdx):])
 	}
 
-	return netip.PrefixFrom(netip.AddrFrom16(addr), int(p.config.structure.LocatorLenBits()))
+	return netip.PrefixFrom(netip.AddrFrom16(addr), int(p.config.locatorLen))
 }
 
 // internal state for testing
