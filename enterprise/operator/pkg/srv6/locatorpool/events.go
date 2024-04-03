@@ -183,9 +183,17 @@ func (lpm *LocatorPoolManager) parsePool(pool *isovalent_api_v1alpha1.IsovalentS
 		return
 	}
 
+	var locatorLen uint8
+	if pool.Spec.LocatorLenBits == nil {
+		locatorLen = sidStructure.LocatorLenBits()
+	} else {
+		locatorLen = *pool.Spec.LocatorLenBits
+	}
+
 	return poolConfig{
 		name:         pool.Name,
 		prefix:       prefix,
+		locatorLen:   locatorLen,
 		structure:    sidStructure,
 		behaviorType: pool.Spec.BehaviorType,
 	}, nil

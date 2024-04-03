@@ -47,6 +47,7 @@ const (
 type poolConfig struct {
 	name         string
 	prefix       netip.Prefix
+	locatorLen   uint8
 	structure    types.SIDStructure
 	behaviorType string
 }
