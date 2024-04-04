@@ -16,13 +16,13 @@ nodeport_nat_egress_ipv4_hook(struct __ctx_buff *ctx __maybe_unused,
 			      __s8 *ext_err __maybe_unused)
 {
 #if defined(CILIUM_MESH) && !defined(IS_BPF_OVERLAY)
-	__u32 src_identity = ctx_load_meta(ctx, CB_SRC_LABEL) ?: WORLD_IPV4_ID;
+	__u32 src_sec_identity = ctx_load_meta(ctx, CB_SRC_LABEL) ?: WORLD_IPV4_ID;
 	int ret;
 
 	ret = cilium_mesh_policy_egress(ctx, ip4, dst_sec_identity, tuple, l4_off, ext_err);
 	if (ret != CTX_ACT_OK)
-		return send_drop_notify_ext(ctx, src_identity, dst_sec_identity, 0,
-					ret, *ext_err, CTX_ACT_DROP, METRIC_EGRESS);
+		return send_drop_notify_ext(ctx, src_sec_identity, dst_sec_identity, 0, ret,
+					    *ext_err, CTX_ACT_DROP, METRIC_EGRESS);
 #endif
 	return CTX_ACT_OK;
 }
