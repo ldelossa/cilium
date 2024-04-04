@@ -111,13 +111,13 @@ func (p *Parser) Decode(data []byte, decoded *pb.Flow) error {
 		packetOffset = monitor.DropNotifyLen
 		dn = &monitor.DropNotify{}
 		if err := monitor.DecodeDropNotify(data, dn); err != nil {
-			return fmt.Errorf("failed to parse drop: %v", err)
+			return fmt.Errorf("failed to parse drop: %w", err)
 		}
 		eventSubType = dn.SubType
 	case monitorAPI.MessageTypeTrace:
 		tn = &monitor.TraceNotify{}
 		if err := monitor.DecodeTraceNotify(data, tn); err != nil {
-			return fmt.Errorf("failed to parse trace: %v", err)
+			return fmt.Errorf("failed to parse trace: %w", err)
 		}
 		eventSubType = tn.ObsPoint
 
@@ -133,7 +133,7 @@ func (p *Parser) Decode(data []byte, decoded *pb.Flow) error {
 	case monitorAPI.MessageTypePolicyVerdict:
 		pvn = &monitor.PolicyVerdictNotify{}
 		if err := monitor.DecodePolicyVerdictNotify(data, pvn); err != nil {
-			return fmt.Errorf("failed to parse policy verdict: %v", err)
+			return fmt.Errorf("failed to parse policy verdict: %w", err)
 		}
 		eventSubType = pvn.SubType
 		packetOffset = monitor.PolicyVerdictNotifyLen
@@ -481,6 +481,7 @@ func decodeTrafficDirection(srcEP uint32, dn *monitor.DropNotify, tn *monitor.Tr
 
 			// isSourceEP != isReply ==
 			//  (isSourceEP && !isReply) || (!isSourceEP && isReply)
+			// GH-31226: currently broken for monitor.TraceReasonEncryptOverlay showing INGRESS
 			if isSourceEP != isReply {
 				return pb.TrafficDirection_EGRESS
 			}

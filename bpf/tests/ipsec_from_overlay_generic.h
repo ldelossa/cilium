@@ -1,6 +1,16 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
+#define NODE_ID 2333
+#define ENCRYPT_KEY 3
+#define ENABLE_IPV4
+#define ENABLE_IPV6
+#define ENABLE_IPSEC
+#define TUNNEL_MODE
+#define ENCAP_IFINDEX 4
+#define DEST_IFINDEX 5
+#define DEST_LXC_ID 200
+
 #include "common.h"
 #include <bpf/ctx/skb.h>
 #include "pktgen.h"
@@ -13,17 +23,6 @@
 #undef SECLABEL
 #undef SECLABEL_IPV4
 #undef SECLABEL_IPV6
-
-#define NODE_ID 2333
-#define ENCRYPT_KEY 3
-#define ENABLE_IPV4
-#define ENABLE_IPV6
-#define ENABLE_IPSEC
-#define TUNNEL_MODE
-#define HAVE_ENCAP
-#define ENCAP_IFINDEX 4
-#define DEST_IFINDEX 5
-#define DEST_LXC_ID 200
 
 #define skb_change_type mock_skb_change_type
 int mock_skb_change_type(__maybe_unused struct __sk_buff *skb, __u32 type)
@@ -48,8 +47,8 @@ int mock_skb_get_tunnel_key(__maybe_unused struct __sk_buff *skb,
 __section("mock-handle-policy")
 int mock_handle_policy(struct __ctx_buff *ctx __maybe_unused)
 {
-	/* https://github.com/cilium/cilium/blob/b825f4e47e7eea9908ec8324591d7cc95238e1b8/bpf/bpf_lxc.c#L1927 */
-#if !defined(ENABLE_ROUTING) && defined(TUNNEL_MODE) && !defined(ENABLE_NODEPORT)
+	/* https://github.com/cilium/cilium/blob/v1.16.0-pre.1/bpf/bpf_lxc.c#L2040 */
+#if !defined(ENABLE_ROUTING) && !defined(ENABLE_NODEPORT)
 	return TC_ACT_OK;
 #else
 	return TC_ACT_REDIRECT;
@@ -137,14 +136,17 @@ SETUP("tc", "ipv4_not_decrypted_ipsec_from_overlay")
 int ipv4_not_decrypted_ipsec_from_overlay_setup(struct __ctx_buff *ctx)
 {
 	struct node_key node_ip = {};
-	__u32 node_id = NODE_ID;
+	struct node_value node_value = {
+		.id = NODE_ID,
+		.spi = 0,
+	};
 
 	/* We need to populate the node ID map because we'll lookup into it on
 	 * ingress to find the node ID to use to match against XFRM IN states.
 	 */
 	node_ip.family = ENDPOINT_KEY_IPV4;
 	node_ip.ip4 = v4_pod_one;
-	map_update_elem(&NODE_MAP, &node_ip, &node_id, BPF_ANY);
+	map_update_elem(&NODE_MAP_V2, &node_ip, &node_value, BPF_ANY);
 
 	tail_call_static(ctx, entry_call_map, FROM_OVERLAY);
 	return TEST_ERROR;
@@ -267,14 +269,17 @@ int ipv6_not_decrypted_ipsec_from_overlay_setup(struct __ctx_buff *ctx)
 		__u32 _;
 		struct node_key k;
 	} node_ip __align_stack_8 = {};
-	__u32 node_id = NODE_ID;
+	struct node_value node_value = {
+		.id = NODE_ID,
+		.spi = 0,
+	};
 
 	/* We need to populate the node ID map because we'll lookup into it on
 	 * ingress to find the node ID to use to match against XFRM IN states.
 	 */
 	node_ip.k.family = ENDPOINT_KEY_IPV6;
 	memcpy((__u8 *)&node_ip.k.ip6, (__u8 *)v6_pod_one, 16);
-	map_update_elem(&NODE_MAP, &node_ip.k, &node_id, BPF_ANY);
+	map_update_elem(&NODE_MAP_V2, &node_ip.k, &node_value, BPF_ANY);
 
 	tail_call_static(ctx, entry_call_map, FROM_OVERLAY);
 	return TEST_ERROR;

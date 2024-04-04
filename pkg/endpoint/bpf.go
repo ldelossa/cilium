@@ -123,7 +123,7 @@ func (e *Endpoint) writeInformationalComments(w io.Writer) error {
 			fmt.Fprintf(fw, " * - %s\n", "(no labels)")
 		} else {
 			for _, v := range e.SecurityIdentity.Labels {
-				fmt.Fprintf(fw, " * - %s\n", v)
+				fmt.Fprintf(fw, " * - %s\n", v.String())
 			}
 		}
 	}
@@ -146,7 +146,7 @@ func (e *Endpoint) writeHeaderfile(prefix string) error {
 	// corrupted header files on the filesystem.
 	f, err := renameio.TempFile(prefix, headerPath)
 	if err != nil {
-		return fmt.Errorf("failed to open temporary file: %s", err)
+		return fmt.Errorf("failed to open temporary file: %w", err)
 	}
 	defer f.Cleanup()
 
@@ -400,14 +400,14 @@ func (e *Endpoint) addNewRedirects(proxyWaitGroup *completion.WaitGroup) (desire
 	for dirLogStr, ingress := range map[string]bool{"ingress": true, "egress": false} {
 		err, ff, rf = e.addNewRedirectsFromDesiredPolicy(ingress, desiredRedirects, proxyWaitGroup)
 		if err != nil {
-			return desiredRedirects, fmt.Errorf("unable to allocate %s redirects: %s", dirLogStr, err), nil, nil
+			return desiredRedirects, fmt.Errorf("unable to allocate %s redirects: %w", dirLogStr, err), nil, nil
 		}
 		finalizeList.Append(ff)
 		revertStack.Push(rf)
 
 		err, ff, rf = e.addVisibilityRedirects(ingress, desiredRedirects, proxyWaitGroup)
 		if err != nil {
-			return desiredRedirects, fmt.Errorf("unable to allocate %s visibility redirects: %s", dirLogStr, err), nil, nil
+			return desiredRedirects, fmt.Errorf("unable to allocate %s visibility redirects: %w", dirLogStr, err), nil, nil
 		}
 		finalizeList.Append(ff)
 		revertStack.Push(rf)
@@ -552,7 +552,7 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 		err = e.waitForProxyCompletions(datapathRegenCtxt.proxyWaitGroup)
 		stats.proxyWaitForAck.End(err == nil)
 		if err != nil {
-			return 0, false, fmt.Errorf("Error while updating network policy: %s", err)
+			return 0, false, fmt.Errorf("Error while updating network policy: %w", err)
 		}
 
 		return e.nextPolicyRevision, false, nil
@@ -574,7 +574,7 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 		err = lxcmap.WriteEndpoint(datapathRegenCtxt.epInfoCache)
 		stats.mapSync.End(err == nil)
 		if err != nil {
-			return 0, compilationExecuted, fmt.Errorf("Exposing new BPF failed: %s", err)
+			return 0, compilationExecuted, fmt.Errorf("Exposing new BPF failed: %w", err)
 		}
 	}
 
@@ -617,7 +617,7 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	err = e.syncPolicyMap()
 	stats.mapSync.End(err == nil)
 	if err != nil {
-		return 0, compilationExecuted, fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %s", err)
+		return 0, compilationExecuted, fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %w", err)
 	}
 
 	stateDirComplete = headerfileChanged && compilationExecuted
@@ -754,7 +754,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 		}
 
 		if err = e.writeHeaderfile(nextDir); err != nil {
-			return false, fmt.Errorf("Unable to write header file: %s", err)
+			return false, fmt.Errorf("Unable to write header file: %w", err)
 		}
 
 		if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
@@ -871,7 +871,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 		err = e.syncPolicyMap()
 		stats.mapSync.End(err == nil)
 		if err != nil {
-			return false, fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %s", err)
+			return false, fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %w", err)
 		}
 
 		// At this point, traffic is no longer redirected to the proxy for
@@ -913,7 +913,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 	}
 	if datapathRegenCtxt.regenerationLevel >= regeneration.RegenerateWithDatapathRewrite {
 		if err := e.writeHeaderfile(nextDir); err != nil {
-			return false, fmt.Errorf("unable to write header file: %s", err)
+			return false, fmt.Errorf("unable to write header file: %w", err)
 		}
 	}
 
@@ -977,7 +977,7 @@ func (e *Endpoint) deleteMaps() []error {
 	}
 	for name, path := range maps {
 		if err := os.RemoveAll(path); err != nil {
-			errors = append(errors, fmt.Errorf("unable to remove %s map file %s: %s", name, path, err))
+			errors = append(errors, fmt.Errorf("unable to remove %s map file %s: %w", name, path, err))
 		}
 	}
 
@@ -989,20 +989,20 @@ func (e *Endpoint) deleteMaps() []error {
 				err = os.RemoveAll(ctPath)
 			}
 			if err != nil {
-				errors = append(errors, fmt.Errorf("unable to remove CT map %s: %s", ctPath, err))
+				errors = append(errors, fmt.Errorf("unable to remove CT map %s: %w", ctPath, err))
 			}
 		}
 	}
 
 	// Remove handle_policy() tail call entry for EP
 	if err := policymap.RemoveGlobalMapping(uint32(e.ID), option.Config.EnableEnvoyConfig); err != nil {
-		errors = append(errors, fmt.Errorf("unable to remove endpoint from global policy map: %s", err))
+		errors = append(errors, fmt.Errorf("unable to remove endpoint from global policy map: %w", err))
 	}
 
 	// Remove rate-limit from bandwidth manager map.
 	if e.bps != 0 {
 		if err := e.owner.Datapath().BandwidthManager().DeleteEndpointBandwidthLimit(e.ID); err != nil {
-			errors = append(errors, fmt.Errorf("unable to remote endpoint from bandwidth manager map: %s", err))
+			errors = append(errors, fmt.Errorf("unable to remote endpoint from bandwidth manager map: %w", err))
 		}
 	}
 
@@ -1162,20 +1162,31 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 
 	e.PolicyDebug(nil, "ApplyPolicyMapChanges")
 
-	err := e.applyPolicyMapChanges()
+	changed, err := e.applyPolicyMapChanges()
 	if err != nil {
 		return err
 	}
 
-	// Ignoring the revertFunc; keep all successful changes even if some fail.
-	err, _ = e.updateNetworkPolicy(proxyWaitGroup)
+	// Only update Envoy if there are envoy redirects and there were queued incremental changes.
+	// This is safe to do here, since a PolicyMapChange cannot
+	// cause an envoy redirect to appear or disappear. It only allows for
+	// incremental updates. Thus, we don't need to worry about stale
+	// policy not being cleaned up.
+	if changed && (e.desiredPolicy.L4Policy.HasEnvoyRedirect() || e.isIngress) {
+		// Ignoring the revertFunc; keep all successful changes even if some fail.
+		e.getLogger().Debug("Endpoint has envoy redirects, applying changes to Envoy")
+		err, _ = e.updateNetworkPolicy(proxyWaitGroup)
+	} else {
+		e.getLogger().Debug("Endpoint has no envoy redirects, skipping Envoy update")
+	}
 
 	return err
 }
 
 // applyPolicyMapChanges applies any incremental policy map changes
 // collected on the desired policy.
-func (e *Endpoint) applyPolicyMapChanges() error {
+// Returns true if any changes were applied
+func (e *Endpoint) applyPolicyMapChanges() (bool, error) {
 	errors := 0
 
 	e.PolicyDebug(nil, "applyPolicyMapChanges")
@@ -1236,16 +1247,17 @@ func (e *Endpoint) applyPolicyMapChanges() error {
 	}
 
 	if errors > 0 {
-		return fmt.Errorf("updating desired PolicyMap state failed")
+		return true, fmt.Errorf("updating desired PolicyMap state failed")
 	}
 	if len(adds)+len(deletes) > 0 {
 		e.getLogger().WithFields(logrus.Fields{
 			logfields.AddedPolicyID:   adds,
 			logfields.DeletedPolicyID: deletes,
 		}).Debug("Applied policy map updates due identity changes")
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 // syncPolicyMap updates the bpf policy map state based on the
@@ -1254,7 +1266,7 @@ func (e *Endpoint) applyPolicyMapChanges() error {
 func (e *Endpoint) syncPolicyMap() error {
 	// Apply pending policy map changes first so that desired map is up-to-date before
 	// we diff the maps below.
-	err := e.applyPolicyMapChanges()
+	_, err := e.applyPolicyMapChanges()
 	if err != nil {
 		return err
 	}
@@ -1362,7 +1374,7 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 
 	// Apply pending policy map changes first so that desired map is up-to-date before
 	// we diff the maps below.
-	err := e.applyPolicyMapChanges()
+	_, err := e.applyPolicyMapChanges()
 	if err != nil {
 		return err
 	}
@@ -1384,7 +1396,7 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 
 		e.policyMap, err = policymap.OpenOrCreate(e.policyMapPath())
 		if err != nil {
-			return fmt.Errorf("unable to open PolicyMap for endpoint: %s", err)
+			return fmt.Errorf("unable to open PolicyMap for endpoint: %w", err)
 		}
 
 		// Try to dump again, fail if error occurs.
@@ -1513,7 +1525,8 @@ func CheckHealth(ep *Endpoint) error {
 		return nil
 	}
 	_, err := netlink.LinkByName(iface)
-	if _, ok := err.(netlink.LinkNotFoundError); ok {
+	var linkNotFoundError netlink.LinkNotFoundError
+	if errors.As(err, &linkNotFoundError) {
 		return fmt.Errorf("Endpoint is invalid: %w", err)
 	}
 	if err != nil {

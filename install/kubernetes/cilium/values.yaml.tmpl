@@ -726,7 +726,7 @@ ingressController:
   # -- Enable proxy protocol for all Ingress listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
   enableProxyProtocol: false
   # -- IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service
-  ingressLBAnnotationPrefixes: ['lbipam.cilium.io', 'service.beta.kubernetes.io', 'service.kubernetes.io', 'cloud.google.com']
+  ingressLBAnnotationPrefixes: ['lbipam.cilium.io', 'nodeipam.cilium.io', 'service.beta.kubernetes.io', 'service.kubernetes.io', 'cloud.google.com']
   # @schema
   # type: [null, string]
   # @schema
@@ -867,6 +867,8 @@ encryption:
     # -- Maximum duration of the IPsec key rotation. The previous key will be
     # removed after that delay.
     keyRotationDuration: "5m"
+    # -- Enable IPSec encrypted overlay
+    encryptedOverlay: false
   wireguard:
     # -- Enables the fallback to the user-space implementation.
     userspaceFallback: false
@@ -1762,7 +1764,7 @@ readinessProbe:
   # -- interval between checks of the readiness probe
   periodSeconds: 30
 # -- Configure the kube-proxy replacement in Cilium BPF datapath
-# Valid options are "true", "false", "disabled" (deprecated), "partial" (deprecated), "strict" (deprecated).
+# Valid options are "true" or "false".
 # ref: https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/
 #kubeProxyReplacement: "false"
 
@@ -2628,6 +2630,8 @@ nodeinit:
     override: ~
     repository: "${CILIUM_NODEINIT_REPO}"
     tag: "${CILIUM_NODEINIT_VERSION}"
+    digest: "${CILIUM_NODEINIT_DIGEST}"
+    useDigest: true
     pullPolicy: "${PULL_POLICY}"
   # -- The priority class to use for the nodeinit pod.
   priorityClassName: ""
@@ -2820,6 +2824,10 @@ clustermesh:
   # maximum allocatable cluster-local identities.
   # Supported values are 255 and 511.
   maxConnectedClusters: 255
+  # -- Enable the synchronization of Kubernetes EndpointSlices corresponding to
+  # the remote endpoints of appropriately-annotated global services through ClusterMesh
+  enableEndpointSliceSynchronization: false
+
   # -- Annotations to be added to all top-level clustermesh objects (resources under templates/clustermesh-apiserver and templates/clustermesh-config)
   annotations: {}
   # -- Clustermesh explicit configuration.

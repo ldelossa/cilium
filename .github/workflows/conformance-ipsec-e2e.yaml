@@ -140,6 +140,8 @@ jobs:
             devices: 'eth0'
             key-one: 'cbc(aes)'
             key-two: 'cbc(aes)'
+            key-type-one: '+'
+            key-type-two: '+'
 
           - name: '6'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -153,6 +155,22 @@ jobs:
             devices: 'eth0'
             key-one: 'gcm(aes)'
             key-two: 'gcm(aes)'
+            key-type-one: '+'
+            key-type-two: '+'
+
+          - name: '7'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '5.15-20240305.092417'
+            kube-proxy: 'iptables'
+            kpr: 'false'
+            tunnel: 'vxlan'
+            encryption: 'ipsec'
+            encryption-node: 'false'
+            encryption-overlay: 'true'
+            key-one: 'gcm(aes)'
+            key-two: 'gcm(aes)'
+            key-type-one: '+'
+            key-type-two: '+'
 
     timeout-minutes: 75
     steps:
@@ -190,13 +208,14 @@ jobs:
           lb-acceleration: ${{ matrix.lb-acceleration }}
           encryption: ${{ matrix.encryption }}
           encryption-node: ${{ matrix.encryption-node }}
+          encryption-overlay: ${{ matrix.encryption-overlay }}
           egress-gateway: ${{ matrix.egress-gateway }}
           host-fw: ${{ matrix.host-fw }}
           ingress-controller: ${{ matrix.ingress-controller }}
           misc: ${{ matrix.misc }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@de740a64da1b12dc8488cf3af2474c60d52c349e # v0.16.3
+        uses: cilium/cilium-cli@a9579d1afc528b085930c5237a69ee77b2c2be76 # v0.16.4
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}

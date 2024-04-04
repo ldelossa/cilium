@@ -1211,6 +1211,9 @@
           },
           "type": "object"
         },
+        "enableEndpointSliceSynchronization": {
+          "type": "boolean"
+        },
         "maxConnectedClusters": {
           "type": "integer"
         },
@@ -1460,6 +1463,9 @@
         },
         "ipsec": {
           "properties": {
+            "encryptedOverlay": {
+              "type": "boolean"
+            },
             "interface": {
               "type": "string"
             },
@@ -3685,6 +3691,9 @@
               },
               {
                 "type": "string"
+              },
+              {
+                "type": "string"
               }
             ]
           },
@@ -4075,6 +4084,9 @@
         },
         "image": {
           "properties": {
+            "digest": {
+              "type": "string"
+            },
             "override": {
               "type": [
                 "null",
@@ -4089,6 +4101,9 @@
             },
             "tag": {
               "type": "string"
+            },
+            "useDigest": {
+              "type": "boolean"
             }
           },
           "type": "object"

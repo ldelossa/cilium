@@ -152,7 +152,7 @@ jobs:
             --helm-set=enterprise.ciliummesh.enabled=true \
             --helm-set=tunnel=vxlan \
             --helm-set=autoDirectNodeRoutes=false \
-            --helm-set=kubeProxyReplacement=strict \
+            --helm-set=kubeProxyReplacement=true \
             --helm-set=k8s.requireIPv4PodCIDR=true \
             --helm-set=k8s.requireIPv6PodCIDR=false \
             "

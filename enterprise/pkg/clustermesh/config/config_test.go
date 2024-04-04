@@ -30,7 +30,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg:  Config{},
 			dcfg: &option.DaemonConfig{
 				RoutingMode:          option.RoutingModeNative,
-				KubeProxyReplacement: option.KubeProxyReplacementDisabled,
+				KubeProxyReplacement: option.KubeProxyReplacementFalse,
 			},
 			assertion: assert.NoError,
 		},
@@ -47,25 +47,19 @@ func TestConfigValidate(t *testing.T) {
 			assertion: assert.Error,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and KPR disabled",
-			cfg:       Config{EnableClusterAwareAddressing: true},
-			dcfg:      &option.DaemonConfig{KubeProxyReplacement: option.KubeProxyReplacementDisabled},
-			assertion: assert.Error,
-		},
-		{
-			name: "ClusterAwareAddressing enabled and KPR partial (NodePort disabled)",
+			name: "ClusterAwareAddressing enabled and KPR true (NodePort disabled)",
 			cfg:  Config{EnableClusterAwareAddressing: true},
 			dcfg: &option.DaemonConfig{
-				KubeProxyReplacement: option.KubeProxyReplacementPartial,
+				KubeProxyReplacement: option.KubeProxyReplacementTrue,
 				EnableNodePort:       false,
 			},
-			assertion: assert.Error,
+			assertion: assert.NoError,
 		},
 		{
-			name: "ClusterAwareAddressing enabled and KPR partial (NodePort enabled)",
+			name: "ClusterAwareAddressing enabled and KPR true (NodePort enabled)",
 			cfg:  Config{EnableClusterAwareAddressing: true},
 			dcfg: &option.DaemonConfig{
-				KubeProxyReplacement: option.KubeProxyReplacementPartial,
+				KubeProxyReplacement: option.KubeProxyReplacementTrue,
 				EnableNodePort:       true,
 			},
 			assertion: assert.NoError,
@@ -86,12 +80,6 @@ func TestConfigValidate(t *testing.T) {
 				KubeProxyReplacement: option.KubeProxyReplacementFalse,
 				EnableNodePort:       true,
 			},
-			assertion: assert.NoError,
-		},
-		{
-			name:      "ClusterAwareAddressing enabled and KPR strict",
-			cfg:       Config{EnableClusterAwareAddressing: true},
-			dcfg:      &option.DaemonConfig{KubeProxyReplacement: option.KubeProxyReplacementStrict},
 			assertion: assert.NoError,
 		},
 		{
