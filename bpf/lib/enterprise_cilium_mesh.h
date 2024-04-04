@@ -86,7 +86,6 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 			  int l4_off __maybe_unused,
 			  __s8 *ext_err __maybe_unused)
 {
-#ifndef IS_BPF_OVERLAY
 	__u8 policy_match_type = 0;
 	int verdict = CTX_ACT_OK;
 	__u16 proxy_port = 0;
@@ -111,7 +110,7 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 					   0 /* auth_type */ );
 		return verdict;
 	 }
-#endif
+
 	return CTX_ACT_OK;
 }
 

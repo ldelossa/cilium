@@ -15,7 +15,7 @@ nodeport_nat_egress_ipv4_hook(struct __ctx_buff *ctx __maybe_unused,
 			      int l4_off __maybe_unused,
 			      __s8 *ext_err __maybe_unused)
 {
-#ifdef CILIUM_MESH
+#if defined(CILIUM_MESH) && !defined(IS_BPF_OVERLAY)
 	__u32 src_identity = ctx_load_meta(ctx, CB_SRC_LABEL) ?: WORLD_IPV4_ID;
 	int ret;
 
