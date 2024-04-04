@@ -14,6 +14,7 @@ rules:
   resources:
   - isovalentegressgatewaypolicies
   - isovalentsrv6sidmanagers
+  - isovalentsrv6locatorpools
   - isovalentsrv6egresspolicies
   - isovalentvrfs
   - isovalentmulticastgroups
