@@ -10,6 +10,7 @@ triggers:
     - enterprise-multi-network.yaml
     - enterprise-srv6-datapath.yaml
     - enterprise-multicast.yaml
+    - enterprise-conformance-cilium-mesh.yaml
   /ci-clustermesh:
     workflows:
     - enterprise-clustermesh-mixed-routing.yaml
