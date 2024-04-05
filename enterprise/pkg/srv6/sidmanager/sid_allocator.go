@@ -55,6 +55,7 @@ type SIDInfo struct {
 	Owner        string
 	MetaData     string
 	SID          types.SID
+	Locator      types.Locator
 	Structure    types.SIDStructure
 	BehaviorType types.BehaviorType
 	Behavior     types.Behavior
@@ -65,6 +66,9 @@ func (a *SIDInfo) SIDAndBehaviorEqual(b *SIDInfo) bool {
 		return false
 	}
 	if a.SID != b.SID {
+		return false
+	}
+	if a.Locator != b.Locator {
 		return false
 	}
 	if a.Structure != b.Structure {
@@ -92,6 +96,7 @@ func (in *SIDInfo) DeepCopyInto(out *SIDInfo) {
 	out.Owner = in.Owner
 	out.MetaData = in.MetaData
 	out.SID = in.SID
+	out.Locator = in.Locator
 	out.Structure = in.Structure
 	out.BehaviorType = in.BehaviorType
 	out.Behavior = in.Behavior
@@ -296,6 +301,7 @@ func (a *StructuredSIDAllocator) Allocate(addr netip.Addr, owner string, metadat
 		Owner:        owner,
 		MetaData:     metadata,
 		SID:          sid,
+		Locator:      a.locator,
 		Structure:    a.structure,
 		BehaviorType: a.BehaviorType(),
 		Behavior:     behavior,
@@ -329,6 +335,7 @@ func (a *StructuredSIDAllocator) AllocateNext(owner string, metadata string, beh
 		Owner:        owner,
 		MetaData:     metadata,
 		SID:          sid,
+		Locator:      a.locator,
 		Structure:    a.structure,
 		BehaviorType: a.BehaviorType(),
 		Behavior:     behavior,
