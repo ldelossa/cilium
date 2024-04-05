@@ -98,7 +98,7 @@ func validatePool(conf poolConfig) error {
 
 	// Validate locator length is byte aligned. This is an implementation limitation.
 	if conf.locatorLen%8 != 0 {
-		return fmt.Errorf("locator length (%d) must be byte-aligned: %s", conf.locatorLen, ErrPrefixNotByteAligned)
+		return fmt.Errorf("locator length (%d) must be byte-aligned: %w", conf.locatorLen, ErrPrefixNotByteAligned)
 	}
 
 	poolPrefixLen := uint8(conf.prefix.Bits())

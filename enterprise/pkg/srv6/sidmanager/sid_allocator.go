@@ -22,6 +22,11 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 )
 
+const (
+	// Maximum number of bytes for function part
+	maxFunctionBytes = 2
+)
+
 type SIDAllocator interface {
 	// Locator returns a Locator associated with this allocator
 	Locator() types.Locator
@@ -112,6 +117,9 @@ type StructuredSIDAllocator struct {
 
 	// A lock to protect allocatedSIDs
 	allocatedSIDsLock lock.Mutex
+
+	// Number of allocatable bits
+	allocatableBits uint8
 }
 
 func NewStructuredSIDAllocator(locator types.Locator, structure types.SIDStructure, behaviorType types.BehaviorType) (SIDAllocator, error) {
@@ -123,29 +131,35 @@ func NewStructuredSIDAllocator(locator types.Locator, structure types.SIDStructu
 		return nil, fmt.Errorf("unknown behavior type")
 	}
 
-	// Cap the maximum number of allocations regardless of the function length.
+	// We support locator prefix length overlapping with function part.
+	// Calculate the number of allocatable bits. For example, if the locator
+	// is 64bit and structure is [32, 16, 32, 0], allocatable bits are
+	// (32 + 16 + 32) - 64 = 16.
+	//
+	// Also, cap the maximum number of allocations regardless of the function length.
 	// We need this to reduce memory consumption because allocator.AllocationBitmap
 	// manages allocation state with a bitmap that each bit represents allocation state.
 	// Thus we consume maxAllocations bits for each StructuredSIDAllocator instance.
 	// 65536 SIDs should be large enough for our current use case (SRv6 L3VPN with
 	// per-VRF SID allocation) because users only allocates very small number of SIDs
 	// in practice (number of VRFs on the node).
-	maxAllocations := math.Min(
-		math.Pow(2, float64(structure.FunctionLenBits())),
-		float64(math.MaxUint16),
+	allocatableBits := math.Min(
+		float64(maxFunctionBytes*8),
+		float64((structure.LocatorLenBits()+structure.FunctionLenBits())-uint8(locator.Bits())),
 	)
 
-	allocator := allocator.NewAllocationMap(int(maxAllocations), "")
+	allocator := allocator.NewAllocationMap(int(math.Pow(2, float64(allocatableBits))), "")
 
 	// Some implementation doesn't accept zero function part. Pre-allocate it to avoid callers getting it.
 	allocator.Allocate(0)
 
 	return &StructuredSIDAllocator{
-		locator:       locator,
-		structure:     structure,
-		behaviorType:  behaviorType,
-		allocator:     allocator,
-		allocatedSIDs: make(map[int]*SIDInfo),
+		locator:         locator,
+		structure:       structure,
+		behaviorType:    behaviorType,
+		allocator:       allocator,
+		allocatedSIDs:   make(map[int]*SIDInfo),
+		allocatableBits: uint8(allocatableBits),
 	}, nil
 }
 
@@ -165,7 +179,8 @@ func (a *StructuredSIDAllocator) BehaviorType() types.BehaviorType {
 // For example, when the locator fd00:1:2:3::/64 and function
 // part is 0x1234, create fd00:1:2:3:1234::.
 func (a *StructuredSIDAllocator) encodeSID(f int) (types.SID, error) {
-	funcSlice := make([]byte, a.structure.FunctionLenBytes())
+	locLenBytes := a.locator.Bits() / 8
+	funcSlice := a.locator.Addr().AsSlice()[locLenBytes : a.structure.LocatorLenBytes()+a.structure.FunctionLenBytes()]
 
 	// We only support a function part of
 	//
@@ -174,14 +189,14 @@ func (a *StructuredSIDAllocator) encodeSID(f int) (types.SID, error) {
 	// 3) 16bit long function in maximum
 	//
 	// So, these are the all possible cases.
-	switch a.structure.FunctionLenBits() {
+	switch a.allocatableBits {
 	case 8:
-		funcSlice[0] = uint8(f)
+		funcSlice[len(funcSlice)-1] = uint8(f)
 	case 16:
-		binary.BigEndian.PutUint16(funcSlice, uint16(f))
+		binary.BigEndian.PutUint16(funcSlice[len(funcSlice)-2:], uint16(f))
 	default:
 		// This shouldn't happen as we validate SID structure on construction
-		return types.SID{}, fmt.Errorf("unsupported function length %d", a.structure.FunctionLenBits())
+		return types.SID{}, fmt.Errorf("unsupported allocatable function length %d", a.allocatableBits)
 	}
 
 	// We don't have argument part support so far
@@ -201,14 +216,14 @@ func (a *StructuredSIDAllocator) decodeSID(sid types.SID) (int, error) {
 	funcSlice := sid.FunctionBytes(a.structure)
 
 	var f int
-	switch a.structure.FunctionLenBits() {
+	switch a.allocatableBits {
 	case 8:
-		f = int(funcSlice[0])
+		f = int(funcSlice[len(funcSlice)-1])
 	case 16:
-		f = int(binary.BigEndian.Uint16(funcSlice))
+		f = int(binary.BigEndian.Uint16(funcSlice[len(funcSlice)-2:]))
 	default:
 		// This shouldn't happen as we validate SID structure on construction
-		return 0, fmt.Errorf("unsupported function length %d", a.structure.FunctionLenBits())
+		return 0, fmt.Errorf("unsupported allocatable function length %d", a.allocatableBits)
 	}
 
 	return f, nil
