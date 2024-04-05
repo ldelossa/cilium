@@ -66,6 +66,10 @@ func StartCiliumMeshEndpointSliceCreator(ctx context.Context, clientset client.C
 			}
 			return true
 		},
+		// Function to do additional cleanup when service is not found.
+		func(namespace, name string) error {
+			return nil
+		},
 	)
 	go sif.Start(wait.NeverStop)
 	go extSif.Start(wait.NeverStop)

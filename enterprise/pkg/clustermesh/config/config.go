@@ -55,9 +55,7 @@ func (cfg Config) Validate(dcfg *option.DaemonConfig) error {
 
 	// We cannot rely on the EnableNodePort value only because it may be
 	// mutated depending on the KPR settings. Hence, check them both.
-	if dcfg.KubeProxyReplacement == option.KubeProxyReplacementDisabled ||
-		(dcfg.KubeProxyReplacement == option.KubeProxyReplacementPartial && !dcfg.EnableNodePort) ||
-		(dcfg.KubeProxyReplacement == option.KubeProxyReplacementFalse && !dcfg.EnableNodePort) {
+	if dcfg.KubeProxyReplacement == option.KubeProxyReplacementFalse && !dcfg.EnableNodePort {
 		return fmt.Errorf("--%s depends on BPF NodePort", EnableClusterAwareAddressing)
 	}
 

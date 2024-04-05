@@ -179,7 +179,7 @@ func (lpm *LocatorPoolManager) parsePool(pool *isovalent_api_v1alpha1.IsovalentS
 		pool.Spec.Structure.FunctionLenBits,
 		pool.Spec.Structure.ArgumentLenBits)
 	if err != nil {
-		err = fmt.Errorf("failed to create SID structure: %s - %w", ErrInvalidSID, err)
+		err = fmt.Errorf("failed to create SID structure: %w - %w", ErrInvalidSID, err)
 		return
 	}
 

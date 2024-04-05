@@ -18,7 +18,7 @@ efficient and flexible.
 
 ## Prerequisites
 
-* Kubernetes: `>= 1.16.0-0`
+* Kubernetes: `>= 1.21.0-0`
 * Helm: `>= 3.0`
 
 ## Getting Started
@@ -243,6 +243,7 @@ contributors across the globe, there is almost always someone available to help.
 | clustermesh.config.clusters | list | `[]` | List of clusters to be peered in the mesh. |
 | clustermesh.config.domain | string | `"mesh.cilium.io"` | Default dns domain for the Clustermesh API servers This is used in the case cluster addresses are not provided and IPs are used. |
 | clustermesh.config.enabled | bool | `false` | Enable the Clustermesh explicit configuration. |
+| clustermesh.enableEndpointSliceSynchronization | bool | `false` | Enable the synchronization of Kubernetes EndpointSlices corresponding to the remote endpoints of appropriately-annotated global services through ClusterMesh |
 | clustermesh.maxConnectedClusters | int | `255` | The maximum number of clusters to support in a ClusterMesh. This value cannot be changed on running clusters, and all clusters in a ClusterMesh must be configured with the same value. Values > 255 will decrease the maximum allocatable cluster-local identities. Supported values are 255 and 511. |
 | clustermesh.useAPIServer | bool | `false` | Deploy clustermesh-apiserver for clustermesh |
 | cni.binPath | string | `"/opt/cni/bin"` | Configure the path to the CNI binary directory on the host. |
@@ -297,6 +298,7 @@ contributors across the globe, there is almost always someone available to help.
 | enableRuntimeDeviceDetection | bool | `false` | Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered. |
 | enableXTSocketFallback | bool | `true` | Enables the fallback compatibility solution for when the xt_socket kernel module is missing and it is needed for the datapath L7 redirection to work properly. See documentation for details on when this can be disabled: https://docs.cilium.io/en/stable/operations/system_requirements/#linux-kernel. |
 | encryption.enabled | bool | `false` | Enable transparent network encryption. |
+| encryption.ipsec.encryptedOverlay | bool | `false` | Enable IPSec encrypted overlay |
 | encryption.ipsec.interface | string | `""` | The interface to use for encrypted traffic. |
 | encryption.ipsec.keyFile | string | `"keys"` | Name of the key file inside the Kubernetes secret configured via secretName. |
 | encryption.ipsec.keyRotationDuration | string | `"5m"` | Maximum duration of the IPsec key rotation. The previous key will be removed after that delay. |
@@ -609,7 +611,7 @@ contributors across the globe, there is almost always someone available to help.
 | ingressController.hostNetwork.nodes.matchLabels | object | `{}` | Specify the labels of the nodes where the Ingress listeners should be exposed  matchLabels:   kubernetes.io/os: linux   kubernetes.io/hostname: kind-worker |
 | ingressController.hostNetwork.sharedHTTPPort | int | `0` | Configure a specific port on the host network that gets used for the shared HTTP listener. This is used for HTTP and HTTPS. |
 | ingressController.hostNetwork.sharedTLSPassthroughPort | int | `0` | Configure a specific port on the host network that gets used for the shared TLS passthrough listener |
-| ingressController.ingressLBAnnotationPrefixes | list | `["lbipam.cilium.io","service.beta.kubernetes.io","service.kubernetes.io","cloud.google.com"]` | IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service |
+| ingressController.ingressLBAnnotationPrefixes | list | `["lbipam.cilium.io","nodeipam.cilium.io","service.beta.kubernetes.io","service.kubernetes.io","cloud.google.com"]` | IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service |
 | ingressController.loadbalancerMode | string | `"dedicated"` | Default ingress load balancer mode Supported values: shared, dedicated For granular control, use the following annotations on the ingress resource: "ingress.cilium.io/loadbalancer-mode: dedicated" (or "shared"). |
 | ingressController.secretsNamespace | object | `{"create":true,"name":"cilium-secrets","sync":true}` | SecretsNamespace is the namespace in which envoy SDS will retrieve TLS secrets from. |
 | ingressController.secretsNamespace.create | bool | `true` | Create secrets namespace for Ingress. |
@@ -694,7 +696,7 @@ contributors across the globe, there is almost always someone available to help.
 | nodeinit.extraEnv | list | `[]` | Additional nodeinit environment variables. |
 | nodeinit.extraVolumeMounts | list | `[]` | Additional nodeinit volumeMounts. |
 | nodeinit.extraVolumes | list | `[]` | Additional nodeinit volumes. |
-| nodeinit.image | object | `{"override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"62093c5c233ea914bfa26a10ba41f8780d9b737f"}` | node-init image. |
+| nodeinit.image | object | `{"digest":"sha256:e1d442546e868db1a3289166c14011e0dbd32115b338b963e56f830972bc22a2","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"62093c5c233ea914bfa26a10ba41f8780d9b737f","useDigest":true}` | node-init image. |
 | nodeinit.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for nodeinit pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector |
 | nodeinit.podAnnotations | object | `{}` | Annotations to be added to node-init pods. |
 | nodeinit.podLabels | object | `{}` | Labels to be added to node-init pods. |

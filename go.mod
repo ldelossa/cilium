@@ -23,7 +23,7 @@ require (
 	github.com/cilium/deepequal-gen v0.0.0-20231116094812-0d6c075c335f
 	github.com/cilium/dns v1.1.51-0.20231120140355-729345173dc3
 	github.com/cilium/ebpf v0.13.2
-	github.com/cilium/endpointslice-controller v0.0.0-20240122133006-4c5454d11b81
+	github.com/cilium/endpointslice-controller v0.0.0-20240226121631-ec12c50bcaeb
 	github.com/cilium/fake v0.6.1
 	github.com/cilium/linters v0.0.0-20240312194838-dd5dd9ef338b
 	github.com/cilium/lumberjack/v2 v2.3.0
@@ -120,6 +120,8 @@ require (
 	k8s.io/apimachinery v0.29.2
 	k8s.io/client-go v0.29.2
 	k8s.io/code-generator v0.29.2
+	k8s.io/component-base v0.29.2
+	k8s.io/endpointslice v0.29.2
 	k8s.io/klog/v2 v2.120.0
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/controller-runtime v0.16.3
@@ -208,7 +210,7 @@ require (
 	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/ishidawataru/sctp v0.0.0-20210707070123-9a39160e9062 // indirect
+	github.com/ishidawataru/sctp v0.0.0-20230406120618-7ff4192f6ff2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/josharian/native v1.1.0 // indirect
@@ -276,7 +278,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.0 // indirect
 	k8s.io/apiserver v0.29.2 // indirect
-	k8s.io/component-base v0.29.2 // indirect
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
 	k8s.io/kube-openapi v0.0.0-20240105020646-a37d4de58910 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

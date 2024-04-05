@@ -75,7 +75,7 @@ func NewDefaultClientWithTimeout(timeout time.Duration) (*Client, error) {
 	for {
 		select {
 		case <-timeoutAfter:
-			return nil, fmt.Errorf("failed to create cilium agent client after %f seconds timeout: %s", timeout.Seconds(), err)
+			return nil, fmt.Errorf("failed to create cilium agent client after %f seconds timeout: %w", timeout.Seconds(), err)
 		default:
 		}
 
@@ -88,7 +88,7 @@ func NewDefaultClientWithTimeout(timeout time.Duration) (*Client, error) {
 		for {
 			select {
 			case <-timeoutAfter:
-				return nil, fmt.Errorf("failed to create cilium agent client after %f seconds timeout: %s", timeout.Seconds(), err)
+				return nil, fmt.Errorf("failed to create cilium agent client after %f seconds timeout: %w", timeout.Seconds(), err)
 			default:
 			}
 			// This is an API call that we do to the cilium-agent to check
@@ -325,7 +325,7 @@ func FormatStatusResponse(w io.Writer, sr *models.StatusResponse, sd StatusDetai
 	}
 	if sr.KubeProxyReplacement != nil {
 		devices := ""
-		if sr.KubeProxyReplacement.Mode != models.KubeProxyReplacementModeDisabled {
+		if sr.KubeProxyReplacement.Mode != models.KubeProxyReplacementModeFalse {
 			for i, dev := range sr.KubeProxyReplacement.DeviceList {
 				kubeProxyDevices += fmt.Sprintf("%s %s", dev.Name, strings.Join(dev.IP, " "))
 				if dev.Name == sr.KubeProxyReplacement.DirectRoutingDevice {

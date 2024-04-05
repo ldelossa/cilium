@@ -70,7 +70,7 @@ type linuxNodeHandler struct {
 	neighByNextHop         map[string]*netlink.Neigh // key = string(net.IP)
 	neighLastPingByNextHop map[string]time.Time      // key = string(net.IP)
 
-	nodeMap nodemap.Map
+	nodeMap nodemap.MapV2
 	// Pool of available IDs for nodes.
 	nodeIDs *idpool.IDPool
 	// Node-scoped unique IDs for the nodes.
@@ -97,7 +97,7 @@ var (
 func NewNodeHandler(
 	datapathConfig DatapathConfiguration,
 	nodeAddressing datapath.NodeAddressing,
-	nodeMap nodemap.Map,
+	nodeMap nodemap.MapV2,
 	mtu datapath.MTUConfiguration,
 	nbq datapath.NodeNeighborEnqueuer,
 ) *linuxNodeHandler {
@@ -275,7 +275,7 @@ func createDirectRouteSpec(CIDR *cidr.CIDR, nodeIP net.IP) (routeSpec *netlink.R
 
 		routes, err = netlink.RouteListFiltered(family, filter, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
 		if err != nil {
-			err = fmt.Errorf("unable to find local route for destination %s: %s", nodeIP, err)
+			err = fmt.Errorf("unable to find local route for destination %s: %w", nodeIP, err)
 			return
 		}
 
@@ -944,7 +944,7 @@ func (n *linuxNodeHandler) nodeUpdate(oldNode, newNode *nodeTypes.Node, firstAdd
 		oldKey, newKey                           uint8
 		isLocalNode                              = false
 	)
-	remoteNodeID, err := n.allocateIDForNode(newNode)
+	remoteNodeID, err := n.allocateIDForNode(oldNode, newNode)
 	if err != nil {
 		errs = errors.Join(errs, fmt.Errorf("failed to allocate ID for node %s: %w", newNode.Name, err))
 	}
@@ -1085,10 +1085,10 @@ func (n *linuxNodeHandler) nodeDelete(oldNode *nodeTypes.Node) error {
 	var errs error
 	if n.nodeConfig.EnableAutoDirectRouting && !n.enableEncapsulation(oldNode) {
 		if err := n.deleteDirectRoute(oldNode.IPv4AllocCIDR, oldIP4); err != nil {
-			errs = errors.Join(errs, fmt.Errorf("failed to remove old direct routing: deleting old routes %w", err))
+			errs = errors.Join(errs, fmt.Errorf("failed to remove old direct routing: deleting old routes: %w", err))
 		}
 		if err := n.deleteDirectRoute(oldNode.IPv6AllocCIDR, oldIP6); err != nil {
-			errs = errors.Join(errs, fmt.Errorf("failed to remove old direct routing: deleting old routes %w", err))
+			errs = errors.Join(errs, fmt.Errorf("failed to remove old direct routing: deleting old routes: %w", err))
 		}
 	}
 
@@ -1243,8 +1243,7 @@ func (n *linuxNodeHandler) NodeConfigurationChanged(newConfig datapath.LocalNode
 				ipv4CIDRs := info.GetIPv4CIDRs()
 				ipv4PodSubnets := make([]*net.IPNet, 0, len(ipv4CIDRs))
 				for _, c := range ipv4CIDRs {
-					cidr := c // create a copy to be able to take a reference
-					ipv4PodSubnets = append(ipv4PodSubnets, &cidr)
+					ipv4PodSubnets = append(ipv4PodSubnets, &c)
 				}
 				n.nodeConfig.IPv4PodSubnets = ipv4PodSubnets
 			}
@@ -1497,7 +1496,8 @@ func (n *linuxNodeHandler) NodeCleanNeighbors(migrateOnly bool) {
 		if err != nil {
 			// If the link is not found we don't need to keep retrying cleaning
 			// up the neihbor entries so we can keep successClean=true
-			if _, ok := err.(netlink.LinkNotFoundError); !ok {
+			var linkNotFoundError netlink.LinkNotFoundError
+			if !errors.As(err, &linkNotFoundError) {
 				log.WithError(err).WithFields(logrus.Fields{
 					logfields.Device: linkName,
 				}).Error("Unable to remove PERM neighbor entries of network device")

@@ -104,7 +104,7 @@ func (n *Node) CreateInterface(ctx context.Context, allocation *ipam.AllocationA
 	n.mutex.RUnlock()
 
 	// Must allocate secondary ENI IPs as needed, up to ENI instance limit
-	toAllocate := math.IntMin(allocation.MaxIPsToAllocate, l.IPv4)
+	toAllocate := math.IntMin(allocation.IPv4.MaxIPsToAllocate, l.IPv4)
 	toAllocate = math.IntMin(maxENIIPCreate, toAllocate) // in first alloc no more than 10
 	// Validate whether request has already been fulfilled in the meantime
 	if toAllocate == 0 {
@@ -128,7 +128,7 @@ func (n *Node) CreateInterface(ctx context.Context, allocation *ipam.AllocationA
 	if err != nil {
 		return 0,
 			unableToGetSecurityGroups,
-			fmt.Errorf("%s %s", errUnableToGetSecurityGroups, err)
+			fmt.Errorf("%s: %w", errUnableToGetSecurityGroups, err)
 	}
 
 	scopedLog = scopedLog.WithFields(logrus.Fields{
@@ -149,7 +149,7 @@ func (n *Node) CreateInterface(ctx context.Context, allocation *ipam.AllocationA
 	eniID, eni, err := n.manager.api.CreateNetworkInterface(ctx, toAllocate-1, bestSubnet.ID, securityGroupIDs,
 		utils.FillTagWithENIIndex(map[string]string{}, index))
 	if err != nil {
-		return 0, unableToCreateENI, fmt.Errorf("%s %s", errUnableToCreateENI, err)
+		return 0, unableToCreateENI, fmt.Errorf("%s: %w", errUnableToCreateENI, err)
 	}
 
 	scopedLog = scopedLog.WithField(fieldENIID, eniID)
@@ -165,7 +165,7 @@ func (n *Node) CreateInterface(ctx context.Context, allocation *ipam.AllocationA
 		if err2 != nil {
 			scopedLog.Errorf("Failed to release ENI after failure to attach, %s", err2.Error())
 		}
-		return 0, unableToAttachENI, fmt.Errorf("%s %s", errUnableToAttachENI, err)
+		return 0, unableToAttachENI, fmt.Errorf("%s: %w", errUnableToAttachENI, err)
 	}
 	_, err = n.manager.api.WaitENIAttached(ctx, eniID)
 	if err != nil {
@@ -173,7 +173,7 @@ func (n *Node) CreateInterface(ctx context.Context, allocation *ipam.AllocationA
 		if err2 != nil {
 			scopedLog.Errorf("Failed to release ENI after failure to attach, %s", err2.Error())
 		}
-		return 0, unableToAttachENI, fmt.Errorf("%s %s", errUnableToAttachENI, err)
+		return 0, unableToAttachENI, fmt.Errorf("%s: %w", errUnableToAttachENI, err)
 	}
 
 	n.enis[eniID] = *eni
@@ -273,7 +273,7 @@ func (n *Node) PrepareIPAllocation(scopedLog *logrus.Entry) (*ipam.AllocationAct
 		if availableOnENI <= 0 {
 			continue
 		} else {
-			a.InterfaceCandidates++
+			a.IPv4.InterfaceCandidates++
 		}
 
 		scopedLog.WithFields(logrus.Fields{
@@ -290,7 +290,7 @@ func (n *Node) PrepareIPAllocation(scopedLog *logrus.Entry) (*ipam.AllocationAct
 
 				a.InterfaceID = key
 				a.PoolID = ipamTypes.PoolID(subnet.ID)
-				a.AvailableForAllocation = math.IntMin(subnet.AvailableAddresses, availableOnENI)
+				a.IPv4.AvailableForAllocation = math.IntMin(subnet.AvailableAddresses, availableOnENI)
 			}
 		}
 	}
@@ -300,7 +300,7 @@ func (n *Node) PrepareIPAllocation(scopedLog *logrus.Entry) (*ipam.AllocationAct
 
 // AllocateIPs performs the ENI allocation operation
 func (n *Node) AllocateIPs(ctx context.Context, a *ipam.AllocationAction) error {
-	_, err := n.manager.api.AssignPrivateIPAddresses(ctx, a.InterfaceID, a.AvailableForAllocation)
+	_, err := n.manager.api.AssignPrivateIPAddresses(ctx, a.InterfaceID, a.IPv4.AvailableForAllocation)
 	return err
 }
 

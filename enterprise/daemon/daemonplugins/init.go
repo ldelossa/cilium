@@ -77,7 +77,7 @@ func AddFlags(vp *viper.Viper, root *cobra.Command, list plugins.Instances) erro
 
 	// re-bind pflags to viper after all the plugins had a go
 	if err := vp.BindPFlags(root.Flags()); err != nil {
-		return fmt.Errorf("failed to bind pflags to viper: %v", err)
+		return fmt.Errorf("failed to bind pflags to viper: %w", err)
 	}
 
 	return nil
@@ -106,7 +106,7 @@ func InjectDependencies(list plugins.Instances) error {
 	for _, i := range list {
 		if da, ok := i.(plugins.DepAcceptor); ok {
 			if err := da.AcceptDeps(list); err != nil {
-				return fmt.Errorf("failed to inject deps: %v", err)
+				return fmt.Errorf("failed to inject deps: %w", err)
 			}
 		}
 	}

@@ -122,7 +122,7 @@ jobs:
             --helm-set=routingMode=native \
             --helm-set=endpointRoutes.enabled=true \
             --helm-set-string=extraConfig.enable-local-node-route=false \
-            --helm-set=kubeProxyReplacement=strict \
+            --helm-set=kubeProxyReplacement=true \
             --helm-set=bpf.masquerade=true \
             --helm-set=devices='{eth+}' \
             --helm-set=ipv4NativeRoutingCIDR=10.0.0.0/8 \

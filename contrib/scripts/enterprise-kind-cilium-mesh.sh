@@ -66,7 +66,7 @@ install_cluster() {
 			--helm-set=debug.enabled=true \
 			--helm-set=ipv4.enabled=true \
 			--helm-set=ipv6.enabled=false \
-			--helm-set=kubeProxyReplacement=strict \
+			--helm-set=kubeProxyReplacement=true \
 			--helm-set=image.repository=${DOCKER_REGISTRY}/${DOCKER_DEV_ACCOUNT}/cilium-dev \
 			--helm-set=image.useDigest=false \
 			--helm-set=image.tag=${LOCAL_IMAGE_TAG} \

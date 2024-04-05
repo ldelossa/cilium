@@ -84,14 +84,14 @@ func newPool(conf poolConfig) (LocatorPool, error) {
 func validatePool(conf poolConfig) error {
 	// validate prefix is IPv6
 	if !conf.prefix.Addr().Is6() {
-		return fmt.Errorf("prefix %q: %s", conf.prefix, ErrInvalidPrefix)
+		return fmt.Errorf("prefix %q: %w", conf.prefix, ErrInvalidPrefix)
 	}
 
 	// Validate prefix is byte aligned, SID structure needs to be byte aligned.
 	// This is implementation limitation.
 	// https://github.com/isovalent/cilium/blob/9eaa0c516b3d44374bf3addd0e23398767f52c3c/enterprise/pkg/srv6/types/sid.go#L226-L237
 	if conf.prefix.Bits()%8 != 0 {
-		return fmt.Errorf("prefix %q: %s", conf.prefix, ErrPrefixNotByteAligned)
+		return fmt.Errorf("prefix %q: %w", conf.prefix, ErrPrefixNotByteAligned)
 	}
 
 	// validate  LocB + LocN  > prefix length
@@ -180,7 +180,7 @@ func (p *pool) Allocate(nodeLocator *LocatorInfo) error {
 func (p *pool) AllocateNext() (*LocatorInfo, error) {
 	nodeID, ok, err := p.allocator.AllocateNext()
 	if err != nil || !ok {
-		return nil, fmt.Errorf("%s: %v", ErrLocatorPoolExhausted, err)
+		return nil, fmt.Errorf("%w: %w", ErrLocatorPoolExhausted, err)
 	}
 
 	loc, err := types.NewLocator(

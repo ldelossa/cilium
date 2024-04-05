@@ -151,6 +151,8 @@ func defaultCommands(confDir string, cmdDir string, k8sPods []string) []string {
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_capture6_rules", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_nodeport_neigh4", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_nodeport_neigh6", bpffsMountpoint),
+			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_node_map", bpffsMountpoint),
+			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_node_map_v2", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_lb4_source_range", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_lb6_source_range", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_lb4_maglev", bpffsMountpoint),
@@ -234,17 +236,17 @@ func defaultCommands(confDir string, cmdDir string, k8sPods []string) []string {
 func save(c *BugtoolConfiguration, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
-		return fmt.Errorf("Failed to open file %s for writing: %s", path, err)
+		return fmt.Errorf("Failed to open file %s for writing: %w", path, err)
 	}
 	defer f.Close()
 
 	data, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
-		return fmt.Errorf("Cannot marshal config %s", err)
+		return fmt.Errorf("Cannot marshal config: %w", err)
 	}
 	err = os.WriteFile(path, data, 0644)
 	if err != nil {
-		return fmt.Errorf("Cannot write config %s", err)
+		return fmt.Errorf("Cannot write config: %w", err)
 	}
 	return nil
 }
@@ -268,7 +270,7 @@ func loadConfigFile(path string) (*BugtoolConfiguration, error) {
 func tcInterfaceCommands() ([]string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return nil, fmt.Errorf("could not list network interfaces: %v", err)
+		return nil, fmt.Errorf("could not list network interfaces: %w", err)
 	}
 	commands := []string{}
 	for _, iface := range ifaces {

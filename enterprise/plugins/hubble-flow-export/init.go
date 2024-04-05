@@ -13,6 +13,7 @@ package export
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"time"
@@ -115,7 +116,7 @@ func parseFilterList(filters string) ([]*flowpb.FlowFilter, error) {
 	for {
 		var result flowpb.FlowFilter
 		if err := dec.Decode(&result); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, err
