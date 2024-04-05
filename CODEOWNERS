@@ -681,6 +681,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/operator/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/annotation/ @isovalent/sig-k8s
+/enterprise/pkg/bfd/ @isovalent/traffic-engineering
 /enterprise/pkg/bgpv1/ @isovalent/traffic-engineering
 /enterprise/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
