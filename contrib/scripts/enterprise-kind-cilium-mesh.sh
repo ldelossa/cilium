@@ -67,11 +67,11 @@ install_cluster() {
 			--helm-set=ipv4.enabled=true \
 			--helm-set=ipv6.enabled=false \
 			--helm-set=kubeProxyReplacement=true \
-			--helm-set=image.repository=${DOCKER_REGISTRY}/${DOCKER_DEV_ACCOUNT}/cilium-dev \
+			--helm-set=image.repository=${DOCKER_REGISTRY_CILIUM_MESH}/${DOCKER_DEV_ACCOUNT}/cilium-dev \
 			--helm-set=image.useDigest=false \
 			--helm-set=image.tag=${LOCAL_IMAGE_TAG} \
 			--helm-set=image.pullPolicy=Never \
-			--helm-set=operator.image.repository=${DOCKER_REGISTRY}/${DOCKER_DEV_ACCOUNT}/operator \
+			--helm-set=operator.image.repository=${DOCKER_REGISTRY_CILIUM_MESH}/${DOCKER_DEV_ACCOUNT}/operator \
 			--helm-set=operator.image.suffix="" \
 			--helm-set=operator.image.tag=${LOCAL_IMAGE_TAG} \
 			--helm-set=operator.image.useDigest=false \
@@ -86,12 +86,12 @@ install_cluster() {
 			--helm-set=devices=eth+ \
 			--helm-set=hubble.enabled=true \
 			--helm-set=hubble.relay.enabled=true \
-			--helm-set=hubble.relay.image.override=${DOCKER_REGISTRY}/${DOCKER_DEV_ACCOUNT}/hubble-relay:${LOCAL_IMAGE_TAG} \
+			--helm-set=hubble.relay.image.override=${DOCKER_REGISTRY_CILIUM_MESH}/${DOCKER_DEV_ACCOUNT}/hubble-relay:${LOCAL_IMAGE_TAG} \
 			--helm-set=hubble.relay.image.useDigest=false \
 			--helm-set=hubble.relay.image.pullPolicy=Never \
 			--helm-set=clustermesh.useAPIServer=true \
 			--helm-set=clustermesh.apiserver.kvstoremesh.enabled=false \
-			--helm-set=clustermesh.apiserver.image.override=${DOCKER_REGISTRY}/${DOCKER_DEV_ACCOUNT}/clustermesh-apiserver:${LOCAL_IMAGE_TAG} \
+			--helm-set=clustermesh.apiserver.image.override=${DOCKER_REGISTRY_CILIUM_MESH}/${DOCKER_DEV_ACCOUNT}/clustermesh-apiserver:${LOCAL_IMAGE_TAG} \
 			--helm-set=clustermesh.apiserver.image.useDigest=false \
 			--helm-set=clustermesh.apiserver.image.pullPolicy=Never \
 			--helm-set=clustermesh.config.enabled=true \

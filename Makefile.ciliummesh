@@ -48,20 +48,20 @@ kind-cilium-mesh-install-fast:
 	cilium clustermesh connect --context kind-cluster1 --destination-context kind-cluster2
 
 LOCAL_IMAGE_TAG ?= cilium-mesh
-DOCKER_REGISTRY ?= localhost:5000
+DOCKER_REGISTRY_CILIUM_MESH ?= localhost:5000
 
 # Template for kind environment for a target. Parameters are:
 # $(1) Makefile target name
 define KIND_CILIUM_MESH_ENV
 .PHONY: $(1)
-$(1): export DOCKER_REGISTRY:=$$(DOCKER_REGISTRY)
+$(1): export DOCKER_REGISTRY_CILIUM_MESH:=$$(DOCKER_REGISTRY_CILIUM_MESH)
 $(1): export DOCKER_DEV_ACCOUNT:=$$(DOCKER_DEV_ACCOUNT)
 $(1): export LOCAL_IMAGE_TAG:=$$(LOCAL_IMAGE_TAG)
-$(1): export LOCAL_AGENT_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/cilium-dev:$$(LOCAL_IMAGE_TAG)
-$(1): export LOCAL_OPERATOR_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/operator-generic:$$(LOCAL_IMAGE_TAG)
-$(1): export LOCAL_CLUSTERMESH_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/clustermesh-apiserver:$$(LOCAL_IMAGE_TAG)
-$(1): export LOCAL_KVSTOREMESH_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/kvstoremesh:$$(LOCAL_IMAGE_TAG)
-$(1): export LOCAL_HUBBLE_RELAY_IMAGE=$$(DOCKER_REGISTRY)/$$(DOCKER_DEV_ACCOUNT)/hubble-relay:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_AGENT_IMAGE=$$(DOCKER_REGISTRY_CILIUM_MESH)/$$(DOCKER_DEV_ACCOUNT)/cilium-dev:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_OPERATOR_IMAGE=$$(DOCKER_REGISTRY_CILIUM_MESH)/$$(DOCKER_DEV_ACCOUNT)/operator-generic:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_CLUSTERMESH_IMAGE=$$(DOCKER_REGISTRY_CILIUM_MESH)/$$(DOCKER_DEV_ACCOUNT)/clustermesh-apiserver:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_KVSTOREMESH_IMAGE=$$(DOCKER_REGISTRY_CILIUM_MESH)/$$(DOCKER_DEV_ACCOUNT)/kvstoremesh:$$(LOCAL_IMAGE_TAG)
+$(1): export LOCAL_HUBBLE_RELAY_IMAGE=$$(DOCKER_REGISTRY_CILIUM_MESH)/$$(DOCKER_DEV_ACCOUNT)/hubble-relay:$$(LOCAL_IMAGE_TAG)
 endef
 
 .PHONY: kind-build-cilium-mesh-images
