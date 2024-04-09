@@ -87,7 +87,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collect hubble-relay rbac policies",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				cm := "hubble-rbac-policy"
 				configMap, err := collector.Client.GetConfigMap(ctx, collector.Options.CiliumNamespace, cm, metav1.GetOptions{})
@@ -107,7 +107,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collecting Hubble Timescape Helm values",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				namespaces := []string{collector.Options.CiliumNamespace}
 				if opts.HubbleTimescapeNamespace != collector.Options.CiliumNamespace {
@@ -134,7 +134,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collecting Hubble Timescape configmaps",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				namespaces := []string{collector.Options.CiliumNamespace}
 				if opts.HubbleTimescapeNamespace != collector.Options.CiliumNamespace {
@@ -243,7 +243,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collecting DNS Proxy Daemonset",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				daemonSets, err := collector.Client.ListDaemonSet(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
 					LabelSelector: "k8s-app=cilium-dnsproxy",
@@ -260,7 +260,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collecting Hubble UI Enterprise oauth2-proxy Configmap",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				namespaces := []string{opts.HubbleUINamespace, collector.Options.CiliumNamespace}
 				var taskErr error
@@ -283,7 +283,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collecting Hubble Enterprise Configmap",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				configMap, err := collector.Client.GetConfigMap(ctx, collector.Options.CiliumNamespace, "hubble-enterprise-config", metav1.GetOptions{})
 				if err != nil {
@@ -298,7 +298,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		{
 			CreatesSubtasks: true,
 			Description:     "Collecting Hubble Enterprise Helm values",
-			Quick:           false,
+			Quick:           true,
 			Task: func(ctx context.Context) error {
 				namespaces := []string{opts.HubbleEnterpriseNamespace}
 
