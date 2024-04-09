@@ -397,7 +397,7 @@ skip_tunnel:
 	/* See IPv4 comment. */
 	if (from_proxy && info->tunnel_endpoint && encrypt_key)
 		return set_ipsec_encrypt(ctx, encrypt_key, info->tunnel_endpoint,
-					 info->sec_identity, true);
+					 info->sec_identity, true, false);
 #endif
 
 	return CTX_ACT_OK;
@@ -483,7 +483,8 @@ int tail_handle_ipv6_from_netdev(struct __ctx_buff *ctx)
 
 # ifdef ENABLE_HOST_FIREWALL
 static __always_inline int
-handle_to_netdev_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext_err)
+handle_to_netdev_ipv6(struct __ctx_buff *ctx, __u32 src_sec_identity,
+		      struct trace_ctx *trace, __s8 *ext_err)
 {
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
@@ -507,9 +508,8 @@ handle_to_netdev_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext
 			return ret;
 	}
 
-	if ((ctx->mark & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_HOST)
-		srcid = HOST_ID;
-	srcid = resolve_srcid_ipv6(ctx, ip6, srcid, &ipcache_srcid, true);
+	srcid = resolve_srcid_ipv6(ctx, ip6, src_sec_identity,
+				   &ipcache_srcid, true);
 
 	/* to-netdev is attached to the egress path of the native device. */
 	return ipv6_host_policy_egress(ctx, srcid, ipcache_srcid, ip6, trace, ext_err);
@@ -853,7 +853,7 @@ skip_tunnel:
 	/* We encrypt host to remote pod packets only if they are from proxy. */
 	if (from_proxy && info->tunnel_endpoint && encrypt_key)
 		return set_ipsec_encrypt(ctx, encrypt_key, info->tunnel_endpoint,
-					 info->sec_identity, true);
+					 info->sec_identity, true, false);
 #endif
 
 	return CTX_ACT_OK;
@@ -939,19 +939,18 @@ int tail_handle_ipv4_from_netdev(struct __ctx_buff *ctx)
 
 #ifdef ENABLE_HOST_FIREWALL
 static __always_inline int
-handle_to_netdev_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext_err)
+handle_to_netdev_ipv4(struct __ctx_buff *ctx, __u32 src_sec_identity,
+		      struct trace_ctx *trace, __s8 *ext_err)
 {
 	void *data, *data_end;
 	struct iphdr *ip4;
 	__u32 src_id = 0, ipcache_srcid = 0;
 
-	if ((ctx->mark & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_HOST)
-		src_id = HOST_ID;
-
 	if (!revalidate_data_pull(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
 
-	src_id = resolve_srcid_ipv4(ctx, ip4, src_id, &ipcache_srcid, true);
+	src_id = resolve_srcid_ipv4(ctx, ip4, src_sec_identity,
+				    &ipcache_srcid, true);
 
 	/* We need to pass the srcid from ipcache to host firewall. See
 	 * comment in ipv4_host_policy_egress() for details.
@@ -1311,9 +1310,8 @@ int cil_from_host(struct __ctx_buff *ctx)
 
 #if defined(ENABLE_ENCRYPTED_OVERLAY)
 /*
- * If the traffic is indeed overlay traffic and it should be encrypted
- * CTX_ACT_REDIRECT is returned, unless an error occurred, and the caller can
- * return this code to TC.
+ * If the traffic should be encrypted then CTX_ACT_REDIRECT is returned.
+ * Unless an error occurred, and the caller can return this code to TC.
  *
  * CTX_ACT_OK is returned if the traffic should continue normal processing.
  *
@@ -1322,22 +1320,11 @@ int cil_from_host(struct __ctx_buff *ctx)
 static __always_inline int do_encrypt_overlay(struct __ctx_buff *ctx)
 {
 	int ret = CTX_ACT_OK;
-	__u16 proto = 0;
 	struct iphdr __maybe_unused *ipv4;
 	void __maybe_unused *data, *data_end = NULL;
 
-	/* we require a valid layer 2 to proceed */
-	if (!validate_ethertype(ctx, &proto))
-		return ret;
-
-	if (proto != bpf_htons(ETH_P_IP))
-		return ret;
-
 	if (!revalidate_data(ctx, &data, &data_end, &ipv4))
 		return DROP_INVALID;
-
-	if (!vxlan_skb_is_vxlan_v4(data, data_end, ipv4, TUNNEL_PORT))
-		return ret;
 
 	if (vxlan_get_vni(data, data_end, ipv4) == ENCRYPTED_OVERLAY_ID)
 		ret = encrypt_overlay_and_redirect(ctx, data, data_end, ipv4);
@@ -1353,16 +1340,21 @@ static __always_inline int do_encrypt_overlay(struct __ctx_buff *ctx)
 __section_entry
 int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 {
+	__u32 magic = ctx->mark & MARK_MAGIC_HOST_MASK;
 	struct trace_ctx trace = {
 		.reason = TRACE_REASON_UNKNOWN,
 		.monitor = 0,
 	};
 	__u32 __maybe_unused vlan_id;
+	__u32 src_sec_identity = 0;
 	int ret = CTX_ACT_OK;
 	__s8 ext_err = 0;
 #ifdef ENABLE_HOST_FIREWALL
 	__u16 proto = 0;
 #endif
+
+	if (magic == MARK_MAGIC_HOST || magic == MARK_MAGIC_OVERLAY)
+		src_sec_identity = HOST_ID;
 
 	/* Filter allowed vlan id's and pass them back to kernel.
 	 */
@@ -1372,23 +1364,21 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 			if (allow_vlan(ctx->ifindex, vlan_id))
 				return CTX_ACT_OK;
 			else
-				return send_drop_notify_error(ctx, 0, DROP_VLAN_FILTERED,
+				return send_drop_notify_error(ctx, src_sec_identity,
+							      DROP_VLAN_FILTERED,
 							      CTX_ACT_DROP, METRIC_EGRESS);
 		}
 	}
 
 #if defined(ENABLE_L7_LB)
-	{
-		__u32 magic = ctx->mark & MARK_MAGIC_HOST_MASK;
+	if (magic == MARK_MAGIC_PROXY_EGRESS_EPID) {
+		__u32 lxc_id = get_epid(ctx);
 
-		if (magic == MARK_MAGIC_PROXY_EGRESS_EPID) {
-			__u32 lxc_id = get_epid(ctx);
-
-			ctx->mark = 0;
-			tail_call_dynamic(ctx, &POLICY_EGRESSCALL_MAP, lxc_id);
-			return send_drop_notify_error(ctx, 0, DROP_MISSED_TAIL_CALL,
-						      CTX_ACT_DROP, METRIC_EGRESS);
-		}
+		ctx->mark = 0;
+		tail_call_dynamic(ctx, &POLICY_EGRESSCALL_MAP, lxc_id);
+		return send_drop_notify_error(ctx, src_sec_identity,
+					      DROP_MISSED_TAIL_CALL,
+					      CTX_ACT_DROP, METRIC_EGRESS);
 	}
 #endif
 
@@ -1411,12 +1401,14 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 # endif
 # ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
-		ret = handle_to_netdev_ipv6(ctx, &trace, &ext_err);
+		ret = handle_to_netdev_ipv6(ctx, src_sec_identity,
+					    &trace, &ext_err);
 		break;
 # endif
 # ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP): {
-		ret = handle_to_netdev_ipv4(ctx, &trace, &ext_err);
+		ret = handle_to_netdev_ipv4(ctx, src_sec_identity,
+					    &trace, &ext_err);
 		break;
 	}
 # endif
@@ -1426,8 +1418,9 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 	}
 out:
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
-						  CTX_ACT_DROP, METRIC_EGRESS);
+		return send_drop_notify_error_ext(ctx, src_sec_identity,
+						  ret, ext_err, CTX_ACT_DROP,
+						  METRIC_EGRESS);
 
 skip_host_firewall:
 #endif /* ENABLE_HOST_FIREWALL */
@@ -1443,21 +1436,23 @@ skip_host_firewall:
 #endif
 
 #if defined(ENABLE_ENCRYPTED_OVERLAY)
-	/* Determine if this is overlay traffic that should be recirculated
-	 * to the stack for XFRM encryption.
-	 */
-	ret = do_encrypt_overlay(ctx);
-	if (ret == CTX_ACT_REDIRECT) {
-		/* we are redirecting back into the stack, so TRACE_TO_STACK
-		 * for tracepoint
+	if (ctx_is_overlay(ctx)) {
+		/* Determine if this is overlay traffic that should be recirculated
+		 * to the stack for XFRM encryption.
 		 */
-		send_trace_notify(ctx, TRACE_TO_STACK, 0, 0, 0,
-				  0, TRACE_REASON_ENCRYPT_OVERLAY, 0);
-		return ret;
+		ret = do_encrypt_overlay(ctx);
+		if (ret == CTX_ACT_REDIRECT) {
+			/* we are redirecting back into the stack, so TRACE_TO_STACK
+			 * for tracepoint
+			 */
+			send_trace_notify(ctx, TRACE_TO_STACK, 0, 0, 0,
+					  0, TRACE_REASON_ENCRYPT_OVERLAY, 0);
+			return ret;
+		}
+		if (IS_ERR(ret))
+			return send_drop_notify_error(ctx, src_sec_identity, ret,
+						      CTX_ACT_DROP, METRIC_EGRESS);
 	}
-	else if (IS_ERR(ret))
-		return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP,
-					      METRIC_EGRESS);
 #endif /* ENABLE_ENCRYPTED_OVERLAY */
 
 #ifdef ENABLE_WIREGUARD
@@ -1470,17 +1465,29 @@ skip_host_firewall:
 	 * Once the assumption is no longer true, we will need to recirculate
 	 * the packet back to the "to-netdev" section for the SNAT instead of
 	 * returning TC_ACT_REDIRECT.
+	 *
+	 * Skip redirect to the WireGuard tunnel device if the pkt has been
+	 * already encrypted.
+	 * After the packet has been encrypted, the WG tunnel device
+	 * will set the MARK_MAGIC_WG_ENCRYPTED skb mark. So, to avoid
+	 * looping forever (e.g., bpf_host@eth0 => cilium_wg0 =>
+	 * bpf_host@eth0 => ...; this happens when eth0 is used to send
+	 * encrypted WireGuard UDP packets), we check whether the mark
+	 * is set before the redirect.
 	 */
-	ret = wg_maybe_redirect_to_encrypt(ctx);
-	if (ret == CTX_ACT_REDIRECT)
-		return ret;
-	else if (IS_ERR(ret))
-		return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP,
-					      METRIC_EGRESS);
+	if ((ctx->mark & MARK_MAGIC_WG_ENCRYPTED) != MARK_MAGIC_WG_ENCRYPTED) {
+		ret = wg_maybe_redirect_to_encrypt(ctx);
+		if (ret == CTX_ACT_REDIRECT)
+			return ret;
+		else if (IS_ERR(ret))
+			return send_drop_notify_error(ctx, src_sec_identity, ret,
+						      CTX_ACT_DROP, METRIC_EGRESS);
+	}
 
 #if defined(ENCRYPTION_STRICT_MODE)
 	if (!strict_allow(ctx))
-		return send_drop_notify_error(ctx, 0, DROP_UNENCRYPTED_TRAFFIC,
+		return send_drop_notify_error(ctx, src_sec_identity,
+					      DROP_UNENCRYPTED_TRAFFIC,
 					      CTX_ACT_DROP, METRIC_EGRESS);
 #endif /* ENCRYPTION_STRICT_MODE */
 #endif /* ENABLE_WIREGUARD */
@@ -1492,7 +1499,7 @@ skip_host_firewall:
 #endif
 
 #ifdef ENABLE_NODEPORT
-	if (!ctx_snat_done(ctx)) {
+	if (!ctx_snat_done(ctx) && !ctx_is_overlay(ctx)) {
 		/*
 		 * handle_nat_fwd tail calls in the majority of cases,
 		 * so control might never return to this program.
@@ -1507,7 +1514,7 @@ skip_host_firewall:
 exit:
 #endif
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+		return send_drop_notify_error_ext(ctx, src_sec_identity, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
 	send_trace_notify(ctx, TRACE_TO_NETWORK, 0, 0, 0,
 			  0, trace.reason, trace.monitor);

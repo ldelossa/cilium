@@ -1036,18 +1036,6 @@ func (e *etcdClient) statusChecker() {
 
 		quorumError := e.isConnectedAndHasQuorum(ctx)
 
-		endpoints := e.client.Endpoints()
-		for _, ep := range endpoints {
-			st, err := e.determineEndpointStatus(ctx, ep)
-			if err == nil {
-				ok++
-			}
-
-			newStatus = append(newStatus, st)
-		}
-
-		allConnected := len(endpoints) == ok
-
 		e.RWMutex.RLock()
 		lastHeartbeat := e.lastHeartbeat
 		e.RWMutex.RUnlock()
@@ -1056,6 +1044,26 @@ func (e *etcdClient) statusChecker() {
 			recordQuorumError("no event received")
 			quorumError = fmt.Errorf("%s since last heartbeat update has been received", heartbeatDelta)
 		}
+
+		endpoints := e.client.Endpoints()
+		if e.extraOptions != nil && e.extraOptions.NoEndpointStatusChecks {
+			newStatus = append(newStatus, "endpoint status checks are disabled")
+
+			if quorumError == nil {
+				ok = len(endpoints)
+			}
+		} else {
+			for _, ep := range endpoints {
+				st, err := e.determineEndpointStatus(ctx, ep)
+				if err == nil {
+					ok++
+				}
+
+				newStatus = append(newStatus, st)
+			}
+		}
+
+		allConnected := len(endpoints) == ok
 
 		quorumString := "true"
 		if quorumError != nil {
@@ -1079,7 +1087,7 @@ func (e *etcdClient) statusChecker() {
 		default:
 			e.latestErrorStatus = nil
 			e.latestStatusSnapshot = fmt.Sprintf("etcd: %d/%d connected, leases=%d, lock leases=%d, has-quorum=%s: %s",
-				ok, len(endpoints), e.leaseManager.TotalLeases(), e.leaseManager.TotalLeases(), quorumString, strings.Join(newStatus, "; "))
+				ok, len(endpoints), e.leaseManager.TotalLeases(), e.lockLeaseManager.TotalLeases(), quorumString, strings.Join(newStatus, "; "))
 		}
 
 		e.statusLock.Unlock()

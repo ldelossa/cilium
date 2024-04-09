@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '39 0 * * *'
 
+# For testing uncomment following lines:
+#  push:
+#    branches:
+#      - your_branch_name
+
 permissions:
   # To be able to access the repository with actions/checkout
   contents: read
@@ -31,7 +36,7 @@ concurrency:
 
 env:
   # renovate: datasource=golang-version depName=go
-  go_version: 1.22.1
+  go_version: 1.22.2
   # Adding k8s.local to the end makes kops happy-
   # has stricter DNS naming requirements.
   test_name: node-throughput
@@ -173,6 +178,7 @@ jobs:
         run: |
           mkdir ./report
           echo POD_STARTUP_LATENCY_THRESHOLD: 60s >> ./testoverrides.yaml
+          echo POD_COUNT: 98 >> ./testoverrides.yaml
           go run ./cmd/clusterloader.go \
             -v=4 \
             --testconfig=./testing/node-throughput/config.yaml \
