@@ -64,6 +64,9 @@ jobs:
           - name: docker-plugin
             dockerfile: ./images/cilium-docker-plugin/Dockerfile
 
+          - name: cilium-dnsproxy
+            dockerfile: ./enterprise/fqdn-proxy/images/cilium-dnsproxy/Dockerfile
+
     steps:
       - name: Checkout default branch (trusted)
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1

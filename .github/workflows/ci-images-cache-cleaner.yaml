@@ -38,6 +38,8 @@ jobs:
 
           - name: docker-plugin
 
+          - name: cilium-dnsproxy
+
     steps:
       # Fetch the source code so that we can get the right cache key
       - name: Checkout Source Code
