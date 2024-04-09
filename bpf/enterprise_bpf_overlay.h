@@ -14,7 +14,7 @@ overlay_ingress_policy_hook(struct __ctx_buff *ctx __maybe_unused,
 			    __s8 *ext_err __maybe_unused)
 {
 #if defined(CILIUM_MESH)
-	return cilium_mesh_overlay_ingress_policy(ctx, ip4, dst_id, ext_err);
+	return cilium_mesh_policy_ingress(ctx, ip4, dst_id, ext_err);
 #endif
 
 	return CTX_ACT_OK;

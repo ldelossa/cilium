@@ -116,9 +116,9 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 }
 
 static __always_inline int
-cilium_mesh_overlay_ingress_policy(struct __ctx_buff *ctx,
-				   struct iphdr *ip4,
-				   __u32 dst_id, __s8 *ext_err)
+cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
+			   struct iphdr *ip4,
+			   __u32 dst_id, __s8 *ext_err)
 {
 	__u8 policy_match_type = 0;
 	__u16 proxy_port = 0;
