@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/cilium/enterprise/api/v1/server"
 	"github.com/cilium/cilium/enterprise/featurelist"
 	"github.com/cilium/cilium/enterprise/pkg/api"
+	"github.com/cilium/cilium/enterprise/pkg/bfd"
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/features"
@@ -65,6 +66,7 @@ var (
 		sidmanager.SIDManagerCell,
 		srv6manager.Cell,
 		bgpv1.Cell,
+		bfd.Cell,
 		egressmapha.Cell,
 		egressgatewayha.Cell,
 		egressgatewayha.PolicyCell,

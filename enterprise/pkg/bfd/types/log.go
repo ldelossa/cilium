@@ -11,6 +11,15 @@
 package types
 
 const (
+	// PeerNameField is the log field key used for BFD peer logical name.
+	PeerNameField = "peer_name"
+
+	// ProfileNameField is the log field key used for BFD profile name.
+	ProfileNameField = "profile_name"
+
+	// NodeConfigNameField is the log field key used for BFD node config CRD object.
+	NodeConfigNameField = "nodeconfig_name"
+
 	// ListenAddressField is the log field key used for BFD listen address.
 	ListenAddressField = "listen_address"
 
