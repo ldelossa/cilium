@@ -16,6 +16,9 @@ srv6-locator-pool-enabled: {{ .Values.enterprise.srv6.locatorPoolEnabled | defau
 # Service health-checking integration in BGP control plane
 enable-bgp-svc-health-checking: {{ .Values.enterprise.bgpControlPlane.enableServiceHealthChecking | default "false" | quote }}
 
+# BFD subsystem
+enable-bfd: {{ .Values.enterprise.bfd.enabled | default "false" | quote }}
+
 # Configuration options to enable multicast support
 multicast-enabled: {{ .Values.enterprise.multicast.enabled | default "false" | quote }}
 

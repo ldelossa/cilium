@@ -33,6 +33,7 @@ cilium-agent hive [flags]
       --egress-gateway-reconciliation-trigger-interval duration      Time between triggers of egress gateway state reconciliations (default 1s)
       --enable-bandwidth-manager                                     Enable BPF bandwidth manager
       --enable-bbr                                                   Enable BBR for the bandwidth manager
+      --enable-bfd                                                   Enables BFD subsystem
       --enable-bgp-svc-health-checking                               Enables BGP integration with service health-checking
       --enable-cilium-api-server-access strings                      List of cilium API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-enterprise-api-server-access strings           List of cilium enterprise API APIs which are administratively enabled. Supports '*'. (default [*])
