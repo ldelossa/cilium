@@ -8,32 +8,18 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package reconciler
+package bfd
 
-import (
-	"github.com/cilium/hive/cell"
-	"github.com/cilium/statedb"
+const (
+	// BGPClusterConfigField is the log field key used for a IsovalentBGPClusterConfig resource name.
+	BGPClusterConfigField = "bgp_cluster_config"
 
-	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
-	"github.com/cilium/cilium/pkg/k8s"
-)
+	// NodeNameField is the log field key used for a cilium node name.
+	NodeNameField = "node_name"
 
-var Cell = cell.Module(
-	"bfd-reconciler",
-	"BFD configuration reconciler",
+	// PeerAddressField is the log field key used for BFD peer IP address.
+	PeerAddressField = "peer_address"
 
-	cell.Provide(
-		types.NewBFDPeersTable,
-		statedb.RWTable[*types.BFDPeerStatus].ToTable,
-	),
-	cell.Invoke(statedb.RegisterTable[*types.BFDPeerStatus]),
-
-	cell.ProvidePrivate(
-		k8s.IsovalentBFDProfileResource,
-		k8s.IsovalentBFDNodeConfigResource,
-	),
-
-	cell.Invoke(func(p bfdReconcilerParams) {
-		newBFDReconciler(p)
-	}),
+	// NodeConfigNameField is the log field key used for BFD node config CRD object.
+	NodeConfigNameField = "node_config_name"
 )

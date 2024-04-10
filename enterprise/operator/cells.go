@@ -15,6 +15,7 @@ import (
 
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	"github.com/cilium/cilium/enterprise/operator/dnsresolver"
+	"github.com/cilium/cilium/enterprise/operator/pkg/bfd"
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2"
 	"github.com/cilium/cilium/enterprise/operator/pkg/ciliummesh"
 	"github.com/cilium/cilium/enterprise/operator/pkg/multinetwork"
@@ -53,6 +54,7 @@ var (
 
 			multinetwork.Cell,
 			bgpv2.Cell,
+			bfd.Cell,
 		),
 	)
 )

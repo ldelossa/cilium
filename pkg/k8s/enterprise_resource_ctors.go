@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
+	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -81,4 +82,37 @@ func IsovalentBGPNodeConfigOverrideResource(lc cell.Lifecycle, c client.Clientse
 		lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentBGPNodeConfigOverrideList](
 			c.IsovalentV1alpha1().IsovalentBGPNodeConfigOverrides(),
 		), resource.WithMetric("IsovalentBGPNodeConfigOverride"))
+}
+
+func IsovalentBFDProfileResource(lc cell.Lifecycle, c client.Clientset, cfg types.BFDConfig) resource.Resource[*isovalent_api_v1alpha1.IsovalentBFDProfile] {
+	if !cfg.BFDEnabled {
+		return nil
+	}
+
+	return resource.New[*isovalent_api_v1alpha1.IsovalentBFDProfile](
+		lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentBFDProfileList](
+			c.IsovalentV1alpha1().IsovalentBFDProfiles(),
+		), resource.WithMetric("IsovalentBFDProfile"))
+}
+
+func IsovalentBFDNodeConfigResource(lc cell.Lifecycle, c client.Clientset, cfg types.BFDConfig) resource.Resource[*isovalent_api_v1alpha1.IsovalentBFDNodeConfig] {
+	if !cfg.BFDEnabled {
+		return nil
+	}
+
+	return resource.New[*isovalent_api_v1alpha1.IsovalentBFDNodeConfig](
+		lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentBFDNodeConfigList](
+			c.IsovalentV1alpha1().IsovalentBFDNodeConfigs(),
+		), resource.WithMetric("IsovalentBFDNodeConfig"))
+}
+
+func IsovalentBFDNodeConfigOverrideResource(lc cell.Lifecycle, c client.Clientset, cfg types.BFDConfig) resource.Resource[*isovalent_api_v1alpha1.IsovalentBFDNodeConfigOverride] {
+	if !cfg.BFDEnabled {
+		return nil
+	}
+
+	return resource.New[*isovalent_api_v1alpha1.IsovalentBFDNodeConfigOverride](
+		lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentBFDNodeConfigOverrideList](
+			c.IsovalentV1alpha1().IsovalentBFDNodeConfigOverrides(),
+		), resource.WithMetric("IsovalentBFDNodeConfigOverride"))
 }

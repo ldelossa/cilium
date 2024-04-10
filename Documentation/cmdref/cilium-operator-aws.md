@@ -46,6 +46,7 @@ cilium-operator-aws [flags]
       --ec2-api-endpoint string                                      AWS API endpoint for the EC2 service
       --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 2s)
+      --enable-bfd                                                   Enables BFD subsystem
       --enable-cilium-endpoint-slice                                 If set to true, the CiliumEndpointSlice feature is enabled. If any CiliumEndpoints resources are created, updated, or deleted in the cluster, all those changes are broadcast as CiliumEndpointSlice updates to all of the Cilium agents.
       --enable-cilium-mesh                                           Enable Cilium Mesh feature
       --enable-cilium-operator-server-access strings                 List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])

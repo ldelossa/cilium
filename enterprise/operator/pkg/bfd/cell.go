@@ -8,11 +8,10 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package reconciler
+package bfd
 
 import (
 	"github.com/cilium/hive/cell"
-	"github.com/cilium/statedb"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	"github.com/cilium/cilium/pkg/k8s"
@@ -22,18 +21,11 @@ var Cell = cell.Module(
 	"bfd-reconciler",
 	"BFD configuration reconciler",
 
-	cell.Provide(
-		types.NewBFDPeersTable,
-		statedb.RWTable[*types.BFDPeerStatus].ToTable,
-	),
-	cell.Invoke(statedb.RegisterTable[*types.BFDPeerStatus]),
-
 	cell.ProvidePrivate(
-		k8s.IsovalentBFDProfileResource,
 		k8s.IsovalentBFDNodeConfigResource,
+		k8s.IsovalentBFDNodeConfigOverrideResource,
 	),
 
-	cell.Invoke(func(p bfdReconcilerParams) {
-		newBFDReconciler(p)
-	}),
+	cell.Config(types.BFDConfig{}),
+	cell.Invoke(registerBFDReconciler),
 )
