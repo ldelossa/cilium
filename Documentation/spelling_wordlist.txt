@@ -181,6 +181,7 @@ battlestation
 bcc
 behaviour
 benchmarking
+bfd
 bgp
 blockedConfigOverrides
 bnxt

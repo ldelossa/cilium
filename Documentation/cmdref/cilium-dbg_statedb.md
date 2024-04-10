@@ -22,6 +22,7 @@ Inspect StateDB
 
 * [cilium-dbg](cilium-dbg.md)	 - CLI
 * [cilium-dbg statedb bandwidth-qdiscs](cilium-dbg_statedb_bandwidth-qdiscs.md)	 - Show contents of table "bandwidth-qdiscs"
+* [cilium-dbg statedb bfd-peers](cilium-dbg_statedb_bfd-peers.md)	 - Show contents of table "bfd-peers"
 * [cilium-dbg statedb devices](cilium-dbg_statedb_devices.md)	 - Show contents of table "devices"
 * [cilium-dbg statedb dump](cilium-dbg_statedb_dump.md)	 - Dump StateDB contents as JSON
 * [cilium-dbg statedb health](cilium-dbg_statedb_health.md)	 - Show contents of table "health"
