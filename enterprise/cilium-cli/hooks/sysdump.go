@@ -297,6 +297,41 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		},
 		{
 			CreatesSubtasks: true,
+			Description:     "Collect hubble-enterprise fluentd-export configmap",
+			Quick:           true,
+			Task: func(ctx context.Context) error {
+				namespaces := []string{opts.HubbleEnterpriseNamespace}
+
+				var taskErr error
+				for _, ns := range namespaces {
+					cm := "hubble-enterprise-export-fluentd"
+					configMap, err := collector.Client.GetConfigMap(ctx, ns, cm, metav1.GetOptions{})
+					if kerrors.IsNotFound(err) {
+						// Ignore not found. Might not be enabled or we're looking at the wrong namespace
+						return nil
+					}
+					if err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect %s configmap from namespace %q: %w", cm, ns, err))
+						continue
+					}
+
+					// DeepCopy before mutating
+					configMap = configMap.DeepCopy()
+					// Sanitize any potentially hardcoded AWS creds in the Config
+					for k, v := range configMap.Data {
+						configMap.Data[k] = sanitizeHardcodedFluentdS3Creds(v)
+					}
+					if err := collector.WriteYAML(fmt.Sprintf("%s-configmap-<ts>.yaml", cm), configMap); err != nil {
+						taskErr = errors.Join(taskErr, fmt.Errorf("failed to collect %s configmap from namespace %q: %w", cm, ns, err))
+						continue
+					}
+					return nil
+				}
+				return nil
+			},
+		},
+		{
+			CreatesSubtasks: true,
 			Description:     "Collecting Hubble Enterprise Helm values",
 			Quick:           true,
 			Task: func(ctx context.Context) error {
@@ -787,9 +822,14 @@ func sanitizeFluentdAWSCreds(data map[string]any) {
 		fluentdOutput = outputStr
 	}
 
-	for _, re := range []*regexp.Regexp{fluentdAWSKeyIDRegexp, fluentdAWSSecretKeyRegexp} {
-		fluentdOutput = re.ReplaceAllString(fluentdOutput, "$1 xxx")
-	}
+	fluentdOutput = sanitizeHardcodedFluentdS3Creds(fluentdOutput)
 
 	setMapValueIfExists(data, "export.fluentd.output", fluentdOutput)
+}
+
+func sanitizeHardcodedFluentdS3Creds(s string) string {
+	for _, re := range []*regexp.Regexp{fluentdAWSKeyIDRegexp, fluentdAWSSecretKeyRegexp} {
+		s = re.ReplaceAllString(s, "$1 xxx")
+	}
+	return s
 }
