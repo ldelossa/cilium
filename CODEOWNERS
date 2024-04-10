@@ -664,6 +664,7 @@ Vagrantfile @cilium/ci-structure
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
+/cilium-dbg/cmd/enterprise_* @isovalent/cli
 /daemon/cmd/enterprise_fqdn_relay.go @isovalent/dns-proxy
 /Documentation/cmdref/
 /renovate.json5 @isovalent/infrastructure
@@ -677,6 +678,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-cli/hooks/connectivity/tests/phantom.go @isovalent/clustermesh
 /enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
+/enterprise/cilium-dbg/cmd/*bfd_* @isovalent/traffic-engineering
 /enterprise/operator/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/operator/pkg/multinetwork/ @isovalent/multi-network
