@@ -52,11 +52,6 @@ to do review on a PR.)
 
         git rm -r enterprise/cilium-cli
 
-## Update Hubble enterprise CLI version
-- [ ] Make sure that `images/cilium/download-hubble-enterprise.sh` has the
-      newest version of Hubble enterprise CLI set. (Check them on
-      https://github.com/isovalent/hubble-releases/releases/)
-
 ## Forward port Workflows with pull_request targets
 
 Most of the GitHub workflow definitions can live in the `default` branch, but
