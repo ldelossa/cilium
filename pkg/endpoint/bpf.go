@@ -87,6 +87,9 @@ func (e *Endpoint) writeInformationalComments(w io.Writer) error {
 		var verBase64 string
 		verBase64, err = version.Base64()
 		if err == nil {
+			// Current versions ignore the comment, but we need to retain it
+			// so that downgrades work.
+			fmt.Fprintln(fw, " * The line below is retained for backwards compatibility only.")
 			fmt.Fprintf(fw, " * %s%s:%s\n * \n", ciliumCHeaderPrefix,
 				verBase64, epStr64)
 		}
@@ -141,9 +144,26 @@ func (e *Endpoint) writeHeaderfile(prefix string) error {
 		logfields.Path: headerPath,
 	}).Debug("writing header file")
 
-	// Write new contents to a temporary file which will be atomically renamed to the
-	// real file at the end of this function. This will make sure we never end up with
-	// corrupted header files on the filesystem.
+	// Write state as a plain JSON.
+	jsonState, err := e.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("failed to serialize state: %w", err)
+	}
+
+	state, err := renameio.TempFile(prefix, filepath.Join(prefix, common.EndpointStateFileName))
+	if err != nil {
+		return fmt.Errorf("failed to open temporary file: %w", err)
+	}
+	defer state.Cleanup()
+
+	if _, err := state.Write(jsonState); err != nil {
+		return err
+	}
+
+	if err := state.CloseAtomicallyReplace(); err != nil {
+		return err
+	}
+
 	f, err := renameio.TempFile(prefix, headerPath)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary file: %w", err)
@@ -1162,7 +1182,7 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 
 	e.PolicyDebug(nil, "ApplyPolicyMapChanges")
 
-	changed, err := e.applyPolicyMapChanges()
+	err := e.applyPolicyMapChanges()
 	if err != nil {
 		return err
 	}
@@ -1172,7 +1192,13 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 	// cause an envoy redirect to appear or disappear. It only allows for
 	// incremental updates. Thus, we don't need to worry about stale
 	// policy not being cleaned up.
-	if changed && (e.desiredPolicy.L4Policy.HasEnvoyRedirect() || e.isIngress) {
+	//
+	// Note: we must always do this, even if there are no pending incremental changes, because
+	// the incremental changes may have been already applied by `e.applyPolicyMapChanges()` during
+	// a regeneration, but not yet applied to Envoy. If there were pending policymap changes, we will
+	// *always* get a corresponding call to `.ApplyPolicyMapChanges()`, so callers depend on this
+	// to push changes to Envoy.
+	if e.desiredPolicy.L4Policy.HasEnvoyRedirect() || e.isIngress {
 		// Ignoring the revertFunc; keep all successful changes even if some fail.
 		e.getLogger().Debug("Endpoint has envoy redirects, applying changes to Envoy")
 		err, _ = e.updateNetworkPolicy(proxyWaitGroup)
@@ -1185,8 +1211,7 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 
 // applyPolicyMapChanges applies any incremental policy map changes
 // collected on the desired policy.
-// Returns true if any changes were applied
-func (e *Endpoint) applyPolicyMapChanges() (bool, error) {
+func (e *Endpoint) applyPolicyMapChanges() error {
 	errors := 0
 
 	e.PolicyDebug(nil, "applyPolicyMapChanges")
@@ -1247,17 +1272,16 @@ func (e *Endpoint) applyPolicyMapChanges() (bool, error) {
 	}
 
 	if errors > 0 {
-		return true, fmt.Errorf("updating desired PolicyMap state failed")
+		return fmt.Errorf("updating desired PolicyMap state failed")
 	}
 	if len(adds)+len(deletes) > 0 {
 		e.getLogger().WithFields(logrus.Fields{
 			logfields.AddedPolicyID:   adds,
 			logfields.DeletedPolicyID: deletes,
 		}).Debug("Applied policy map updates due identity changes")
-		return true, nil
 	}
 
-	return false, nil
+	return nil
 }
 
 // syncPolicyMap updates the bpf policy map state based on the
@@ -1266,7 +1290,7 @@ func (e *Endpoint) applyPolicyMapChanges() (bool, error) {
 func (e *Endpoint) syncPolicyMap() error {
 	// Apply pending policy map changes first so that desired map is up-to-date before
 	// we diff the maps below.
-	_, err := e.applyPolicyMapChanges()
+	err := e.applyPolicyMapChanges()
 	if err != nil {
 		return err
 	}
@@ -1374,7 +1398,7 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 
 	// Apply pending policy map changes first so that desired map is up-to-date before
 	// we diff the maps below.
-	_, err := e.applyPolicyMapChanges()
+	err := e.applyPolicyMapChanges()
 	if err != nil {
 		return err
 	}

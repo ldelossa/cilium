@@ -55,9 +55,18 @@ concurrency:
 
 env:
   # renovate: datasource=golang-version depName=go
-  go-version: 1.22.1
+  go-version: 1.22.2
 
 jobs:
+  echo-inputs:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Echo Workflow Dispatch Inputs
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Echo Workflow Dispatch Inputs
+        run: |
+          echo '${{ tojson(inputs) }}'
+
   commit-status-start:
     if: ${{ github.event_name != 'push' }}
     name: Commit Status Start
@@ -118,7 +127,7 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.22.1
+          go-version: 1.22.2
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
@@ -221,11 +230,6 @@ jobs:
           - focus: "datapath"
             cliFocus: "RuntimeDatapathConntrackInVethModeTest|RuntimeDatapathMonitorTest"
 
-          ###
-          # RuntimeDatapathPrivilegedUnitTests Run Tests
-          - focus: "privileged"
-            cliFocus: "RuntimeDatapathPrivilegedUnitTests"
-
     timeout-minutes: 40
     steps:
       - name: Checkout context ref (trusted)
@@ -280,7 +284,7 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.22.1
+          go-version: 1.22.2
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}

@@ -597,7 +597,7 @@ lb6_to_lb4_service(const struct lb6_service *svc __maybe_unused)
 
 static __always_inline
 struct lb6_service *lb6_lookup_service(struct lb6_key *key,
-	   const bool scope_switch, const bool check_svc_backends)
+				       const bool scope_switch)
 {
 	struct lb6_service *svc;
 
@@ -606,16 +606,12 @@ struct lb6_service *lb6_lookup_service(struct lb6_key *key,
 	svc = map_lookup_elem(&LB6_SERVICES_MAP_V2, key);
 	if (svc) {
 		if (!scope_switch || !lb6_svc_is_two_scopes(svc))
-			/* Packets for L7 LB are redirected even when there are no backends. */
-			return (svc->count || !check_svc_backends ||
-				lb6_svc_is_l7loadbalancer(svc)) ? svc : NULL;
+			return svc;
 		key->scope = LB_LOOKUP_SCOPE_INT;
 		svc = map_lookup_elem(&LB6_SERVICES_MAP_V2, key);
-		if (svc && (svc->count || !check_svc_backends || lb6_svc_is_l7loadbalancer(svc)))
-			return svc;
 	}
 
-	return NULL;
+	return svc;
 }
 
 static __always_inline struct lb6_backend *__lb6_lookup_backend(__u32 backend_id)
@@ -874,8 +870,6 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 
 	ipv6_addr_copy(&client_id.client_ip, &tuple->saddr);
 #endif
-	if (unlikely(svc->count == 0))
-		return DROP_NO_SERVICE;
 
 	state->rev_nat_index = svc->rev_nat_index;
 
@@ -884,6 +878,9 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 			      SCOPE_REVERSE, CT_ENTRY_SVC, state, &monitor);
 	switch (ret) {
 	case CT_NEW:
+		if (unlikely(svc->count == 0))
+			goto no_service;
+
 #ifdef ENABLE_SESSION_AFFINITY
 		if (lb6_svc_is_affinity(svc)) {
 			backend_id = lb6_affinity_backend_id_by_addr(svc, &client_id);
@@ -902,8 +899,6 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 		}
 
 		state->backend_id = backend_id;
-		state->proxy_redirect = false;
-		state->from_l7lb = false;
 
 		ret = ct_create6(map, NULL, tuple, ctx, CT_SERVICE, state, ext_err);
 		/* Fail closed, if the conntrack entry create fails drop
@@ -928,9 +923,9 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 			if (backend && !state->syn)
 				break;
 
-			svc = lb6_lookup_service(key, false, true);
-			if (!svc)
+			if (unlikely(svc->count == 0))
 				goto no_service;
+
 			backend_id = lb6_select_backend_id(ctx, key, tuple, svc);
 			backend = lb6_lookup_backend(ctx, backend_id);
 			if (!backend)
@@ -1010,7 +1005,7 @@ static __always_inline void lb6_ctx_restore_state(struct __ctx_buff *ctx,
  */
 static __always_inline
 struct lb6_service *lb6_lookup_service(struct lb6_key *key __maybe_unused,
-	   const bool scope_switch __maybe_unused, const bool check_svc_backends __maybe_unused)
+				       const bool scope_switch __maybe_unused)
 {
 	return NULL;
 }
@@ -1222,7 +1217,7 @@ lb4_to_lb6_service(const struct lb4_service *svc __maybe_unused)
 
 static __always_inline
 struct lb4_service *lb4_lookup_service(struct lb4_key *key,
-				  const bool scope_switch, const bool check_svc_backends)
+				       const bool scope_switch)
 {
 	struct lb4_service *svc;
 
@@ -1231,16 +1226,12 @@ struct lb4_service *lb4_lookup_service(struct lb4_key *key,
 	svc = map_lookup_elem(&LB4_SERVICES_MAP_V2, key);
 	if (svc) {
 		if (!scope_switch || !lb4_svc_is_two_scopes(svc))
-			/* Packets for L7 LB are redirected even when there are no backends. */
-			return (svc->count || !check_svc_backends || lb4_to_lb6_service(svc) ||
-				lb4_svc_is_l7loadbalancer(svc)) ? svc : NULL;
+			return svc;
 		key->scope = LB_LOOKUP_SCOPE_INT;
 		svc = map_lookup_elem(&LB4_SERVICES_MAP_V2, key);
-		if (svc && (svc->count || !check_svc_backends || lb4_svc_is_l7loadbalancer(svc)))
-			return svc;
 	}
 
-	return NULL;
+	return svc;
 }
 
 static __always_inline struct lb4_backend *__lb4_lookup_backend(__u32 backend_id)
@@ -1522,8 +1513,6 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 		.client_ip = saddr,
 	};
 #endif
-	if (unlikely(svc->count == 0))
-		return DROP_NO_SERVICE;
 
 	state->rev_nat_index = svc->rev_nat_index;
 
@@ -1531,6 +1520,9 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 			      CT_SERVICE, SCOPE_REVERSE, CT_ENTRY_SVC, state, &monitor);
 	switch (ret) {
 	case CT_NEW:
+		if (unlikely(svc->count == 0))
+			goto no_service;
+
 #ifdef ENABLE_SESSION_AFFINITY
 		if (lb4_svc_is_affinity(svc)) {
 			backend_id = lb4_affinity_backend_id_by_addr(svc, &client_id);
@@ -1550,8 +1542,6 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 		}
 
 		state->backend_id = backend_id;
-		state->proxy_redirect = false;
-		state->from_l7lb = false;
 
 		ret = ct_create4(map, NULL, tuple, ctx, CT_SERVICE, state, ext_err);
 		/* Fail closed, if the conntrack entry create fails drop
@@ -1576,9 +1566,9 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 			if (backend && !state->syn)
 				break;
 
-			svc = lb4_lookup_service(key, false, true);
-			if (!svc)
+			if (unlikely(svc->count == 0))
 				goto no_service;
+
 			backend_id = lb4_select_backend_id(ctx, key, tuple, svc);
 			backend = lb4_lookup_backend(ctx, backend_id);
 			if (!backend)
