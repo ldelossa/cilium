@@ -26,6 +26,7 @@ import (
 	"github.com/cilium/cilium/pkg/proxy"
 	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/u8proto"
 
 	fqdnpb "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy"
 )
@@ -71,12 +72,16 @@ type RemoteFQDNProxy struct {
 // uniquely identify each update without generating string based
 // hashes that may lead to excessive memory pressure.
 type fqdnRuleKey struct {
-	endpointID uint64
-	destPort   uint32
+	endpointID    uint64
+	destPortProto uint32
 }
 
 func msgKey(msg *fqdnpb.FQDNRules) fqdnRuleKey {
-	return fqdnRuleKey{msg.EndpointID, msg.DestPort}
+	pp := restore.PortProto(msg.DestPort)
+	if msg.DestProto != 0 {
+		pp = restore.MakeV2PortProto(uint16(msg.DestPort), uint8(msg.DestProto))
+	}
+	return fqdnRuleKey{msg.EndpointID, uint32(pp)}
 }
 
 func newRemoteFQDNProxy() *RemoteFQDNProxy {
@@ -155,10 +160,15 @@ func (r *RemoteFQDNProxy) RemoveRestoredRules(endpointID uint16) {
 	r.client.RemoveRestoredRules(context.TODO(), &fqdnpb.EndpointID{EndpointID: uint32(endpointID)})
 }
 
-func (r *RemoteFQDNProxy) UpdateAllowed(endpointID uint64, destPort restore.PortProto, newRules policy.L7DataMap) error {
+func (r *RemoteFQDNProxy) UpdateAllowed(endpointID uint64, destPortProto restore.PortProto, newRules policy.L7DataMap) error {
+	// Filter out protocols that cannot apply to DNS.
+	if proto := destPortProto.Protocol(); proto != uint8(u8proto.UDP) && proto != uint8(u8proto.TCP) {
+		return nil
+	}
 	msg := &fqdnpb.FQDNRules{
 		EndpointID: endpointID,
-		DestPort:   uint32(destPort.Port()),
+		DestPort:   uint32(destPortProto.Port()),
+		DestProto:  uint32(destPortProto.Protocol()),
 	}
 
 	msg.Rules = &fqdnpb.L7Rules{
@@ -273,7 +283,7 @@ func (r *RemoteFQDNProxy) resetClient() {
 
 func rulesFromProtobufMsg(rules *fqdnpb.RestoredRules) restore.DNSRules {
 	result := restore.DNSRules{}
-	for port, msgIpRules := range rules.Rules {
+	for portProto, msgIpRules := range rules.Rules {
 		ipRules := make(restore.IPRules, 0, len(msgIpRules.List))
 
 		for _, msgIpRule := range msgIpRules.List {
@@ -291,7 +301,7 @@ func rulesFromProtobufMsg(rules *fqdnpb.RestoredRules) restore.DNSRules {
 			ipRules = append(ipRules, ipRule)
 		}
 
-		result[(restore.PortProto)(port)] = ipRules
+		result[restore.PortProto(portProto)] = ipRules
 	}
 	return result
 }

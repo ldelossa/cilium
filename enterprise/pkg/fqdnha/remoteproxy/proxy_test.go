@@ -26,6 +26,7 @@ import (
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/u8proto"
 )
 
 type mockFQDNProxyClient struct {
@@ -57,27 +58,28 @@ func (m *mockFQDNProxyClient) GetRules(
 }
 
 func TestUpdateAllowedOrdering(t *testing.T) {
+	portProto := uint32(restore.MakeV2PortProto(8080, uint8(u8proto.UDP)))
 	re.InitRegexCompileLRU(1000)
 	updates := []fqdnRuleKey{
 		{
-			endpointID: 1,
-			destPort:   8080,
+			endpointID:    1,
+			destPortProto: portProto,
 		},
 		{
-			endpointID: 2,
-			destPort:   8080,
+			endpointID:    2,
+			destPortProto: portProto,
 		},
 		{
-			endpointID: 3,
-			destPort:   8080,
+			endpointID:    3,
+			destPortProto: portProto,
 		},
 		{
-			endpointID: 4,
-			destPort:   8080,
+			endpointID:    4,
+			destPortProto: portProto,
 		},
 		{
-			endpointID: 5,
-			destPort:   8080,
+			endpointID:    5,
+			destPortProto: portProto,
 		},
 	}
 	step := 0
@@ -90,9 +92,14 @@ func TestUpdateAllowedOrdering(t *testing.T) {
 				testErrs <- fmt.Errorf("expected endpoint id %d, got %d", updates[step].endpointID, msg.EndpointID)
 				return errors.New("UpdateAllowed failed")
 			}
+			pp := restore.PortProto(updates[step].destPortProto)
+			if msg.DestPort != uint32(pp.Port()) {
+				testErrs <- fmt.Errorf("expected destination port %d, got %d", pp.Port(), msg.DestPort)
+				return errors.New("UpdateAllowed failed")
+			}
 
-			if msg.DestPort != updates[step].destPort {
-				testErrs <- fmt.Errorf("expected destination port %d, got %d", updates[step].destPort, msg.DestPort)
+			if msg.DestProto != uint32(pp.Protocol()) {
+				testErrs <- fmt.Errorf("expected destination protocol %d, got %d", pp.Protocol(), msg.DestProto)
 				return errors.New("UpdateAllowed failed")
 			}
 
@@ -121,7 +128,7 @@ func TestUpdateAllowedOrdering(t *testing.T) {
 		mockCachedSelector("foo=bar"): dnsRules,
 	}
 	for _, upd := range updates {
-		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPort), dm); err != nil {
+		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPortProto), dm); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -133,18 +140,19 @@ func TestUpdateAllowedOrdering(t *testing.T) {
 }
 
 func TestUpdateAllowedOrderingWithRetries(t *testing.T) {
+	portProto := uint32(restore.MakeV2PortProto(8080, uint8(u8proto.UDP)))
 	updates := []fqdnRuleKey{
 		{
-			endpointID: 1,
-			destPort:   8080,
+			endpointID:    1,
+			destPortProto: portProto,
 		},
 		{
-			endpointID: 2,
-			destPort:   8080,
+			endpointID:    2,
+			destPortProto: portProto,
 		},
 		{
-			endpointID: 3,
-			destPort:   8080,
+			endpointID:    3,
+			destPortProto: portProto,
 		},
 	}
 	step := 0
@@ -189,7 +197,7 @@ func TestUpdateAllowedOrderingWithRetries(t *testing.T) {
 	t.Cleanup(proxy.Cleanup)
 
 	for _, upd := range updates {
-		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPort), nil); err != nil {
+		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPortProto), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -206,8 +214,8 @@ func CheckUpdate(t *testing.T, expected fqdnRuleKey, got fqdnRuleKey) error {
 	if got.endpointID != expected.endpointID {
 		return fmt.Errorf("expected endpoint id %d, got %d", expected.endpointID, got.endpointID)
 	}
-	if got.destPort != expected.destPort {
-		return fmt.Errorf("expected destination port %d, got %d", expected.destPort, got.destPort)
+	if got.destPortProto != expected.destPortProto {
+		return fmt.Errorf("expected destination port %d, got %d", expected.destPortProto, got.destPortProto)
 	}
 	return nil
 }

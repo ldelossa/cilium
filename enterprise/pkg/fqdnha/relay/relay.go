@@ -33,6 +33,7 @@ import (
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/u8proto"
 )
 
 var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "fqdnha/relay")
@@ -170,7 +171,7 @@ func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty)
 	for endpointID, rules := range allRules {
 		msg := &pb.RestoredRules{Rules: make(map[uint32]*pb.IPRules, len(rules))}
 
-		for port, ipRules := range rules {
+		for portProto, ipRules := range rules {
 			msgRules := &pb.IPRules{
 				List: make([]*pb.IPRule, 0, len(ipRules)),
 			}
@@ -189,8 +190,15 @@ func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty)
 
 				msgRules.List = append(msgRules.List, msgRule)
 			}
-
-			msg.Rules[uint32(port)] = msgRules
+			msg.Rules[uint32(portProto)] = msgRules
+			// Add the V1 Version for older versions of FQDN Proxy.
+			// TODO: This can be removed when 1.15 is deprecated.
+			if portProto.IsPortV2() {
+				// Only add protocols that support DNS.
+				if proto := portProto.Protocol(); proto == uint8(u8proto.UDP) || proto == uint8(u8proto.TCP) {
+					msg.Rules[uint32(portProto.ToV1())] = msgRules
+				}
+			}
 		}
 		wholeMsg.Rules[endpointID] = msg
 	}

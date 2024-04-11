@@ -88,13 +88,13 @@ func (dp *DoubleProxy) RemoveRestoredRules(u uint16) {
 	dp.LocalProxy.RemoveRestoredRules(u)
 }
 
-func (dp *DoubleProxy) UpdateAllowed(endpointID uint64, destPort restore.PortProto, newRules policy.L7DataMap) error {
-	err := dp.LocalProxy.UpdateAllowed(endpointID, destPort, newRules)
+func (dp *DoubleProxy) UpdateAllowed(endpointID uint64, destPortProto restore.PortProto, newRules policy.L7DataMap) error {
+	err := dp.LocalProxy.UpdateAllowed(endpointID, destPortProto, newRules)
 	if err != nil {
 		return err
 	}
 	if dp.RemoteProxy != nil {
-		err = dp.RemoteProxy.UpdateAllowed(endpointID, destPort, newRules)
+		err = dp.RemoteProxy.UpdateAllowed(endpointID, destPortProto, newRules)
 		if err != nil {
 			return err
 		}
