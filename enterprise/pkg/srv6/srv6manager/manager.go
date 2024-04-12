@@ -34,7 +34,6 @@ import (
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
-	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/option"
@@ -42,12 +41,10 @@ import (
 )
 
 const (
-	subsys    = "srv6"
 	ownerName = "srv6-manager"
 )
 
 var (
-	log                = logging.DefaultLogger.WithField(logfields.LogSubsys, subsys)
 	legacySIDStructure = srv6Types.MustNewSIDStructure(128, 0, 0, 0)
 )
 
@@ -94,6 +91,8 @@ type SIDAllocation struct {
 // to its internal databases occur.
 type Manager struct {
 	lock.RWMutex
+
+	logger logrus.FieldLogger
 
 	// policies stores egress policies indexed by policyID
 	policies map[policyID]*EgressPolicy
@@ -151,6 +150,7 @@ type Manager struct {
 type Params struct {
 	cell.In
 
+	Logger                    logrus.FieldLogger
 	Lifecycle                 cell.Lifecycle
 	DaemonConfig              *option.DaemonConfig
 	Sig                       *signaler.BGPCPSignaler
@@ -169,6 +169,7 @@ func NewSRv6Manager(p Params) *Manager {
 	}
 
 	manager := &Manager{
+		logger:              p.Logger,
 		policies:            make(map[policyID]*EgressPolicy),
 		vrfs:                make(map[vrfID]*VRF),
 		identityAllocator:   p.CacheIdentityAllocator,
@@ -377,9 +378,9 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 			// Cilium is stopping. Release the SID to align with an
 			// actual state.
 			if err := allocator.Release(info.SID.Addr); err != nil {
-				log.WithError(err).Warn("Failed to release stale SID")
+				manager.logger.WithError(err).Warn("Failed to release stale SID")
 			} else {
-				log.WithFields(logrus.Fields{
+				manager.logger.WithFields(logrus.Fields{
 					logfields.VRF: info.MetaData,
 					logfields.SID: info.SID.String(),
 				}).Debug("Released stale SID")
@@ -391,9 +392,9 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 			// Cilium is stopping.
 			if vrf.ExportRouteTarget == "" {
 				if err := allocator.Release(info.SID.Addr); err != nil {
-					log.WithError(err).Warn("Failed to release stale SID")
+					manager.logger.WithError(err).Warn("Failed to release stale SID")
 				} else {
-					log.WithFields(logrus.Fields{
+					manager.logger.WithFields(logrus.Fields{
 						logfields.VRF: info.MetaData,
 						logfields.SID: info.SID.String(),
 					}).Debug("Released stale SID")
@@ -407,10 +408,10 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 			// stopping.
 			if vrf.LocatorPool != pool {
 				if err := allocator.Release(info.SID.Addr); err != nil {
-					log.WithError(err).Warn("Failed to release stale SID")
+					manager.logger.WithError(err).Warn("Failed to release stale SID")
 					continue
 				} else {
-					log.WithFields(logrus.Fields{
+					manager.logger.WithFields(logrus.Fields{
 						logfields.VRF: info.MetaData,
 						logfields.SID: info.SID.String(),
 					}).Debug("Released stale SID")
@@ -427,11 +428,11 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 					// each VRF, so release the SID which
 					// we are seeing now.
 					if err := allocator.Release(info.SID.Addr); err != nil {
-						log.WithError(err).Warn("Failed to release stale SID")
+						manager.logger.WithError(err).Warn("Failed to release stale SID")
 						continue
 					}
 
-					log.WithFields(logrus.Fields{
+					manager.logger.WithFields(logrus.Fields{
 						logfields.VRF: info.MetaData,
 						logfields.SID: info.SID.String(),
 					}).Warn("More than one SID allocation for the VRF observed. Releasing unnecessary allocation.")
@@ -446,7 +447,7 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 						LocatorPool:       pool,
 					}
 
-					log.WithFields(logrus.Fields{
+					manager.logger.WithFields(logrus.Fields{
 						logfields.VRF: info.MetaData,
 						logfields.SID: info.SID.String(),
 					}).Debug("Restored SID allocation")
@@ -482,7 +483,7 @@ func (manager *Manager) onAddLocator(pool string, allocator sidmanager.SIDAlloca
 
 		info, err := allocator.AllocateNext(ownerName, id.Name, manager.selectBehavior(allocator.BehaviorType()))
 		if err != nil {
-			log.WithError(err).Error("Failed to allocate SID")
+			manager.logger.WithError(err).Error("Failed to allocate SID")
 			continue
 		}
 
@@ -519,7 +520,7 @@ func (manager *Manager) onUpdateLocator(pool string, oldAllocator, newAllocator 
 			// is still ok. Allocate a brand new SID.
 			info, err = newAllocator.AllocateNext(ownerName, id.Name, behavior)
 			if err != nil {
-				log.WithError(err).Error("Failed to allocate SID")
+				manager.logger.WithError(err).Error("Failed to allocate SID")
 				continue
 			}
 		}
@@ -545,7 +546,7 @@ func (manager *Manager) onDeleteLocator(pool string, allocator sidmanager.SIDAll
 		}
 
 		if err := allocator.Release(vrf.SIDInfo.SID.Addr); err != nil {
-			log.WithError(err).Error("Failed to release SID allocated from deleted pool")
+			manager.logger.WithError(err).Error("Failed to release SID allocated from deleted pool")
 		}
 
 		vrf.SIDInfo = nil
@@ -611,7 +612,7 @@ func (manager *Manager) OnAddSRv6Policy(policy EgressPolicy) {
 	manager.Lock()
 	defer manager.Unlock()
 
-	logger := log.WithField(logfields.IsovalentSRv6EgressPolicyName, policy.id.Name)
+	logger := manager.logger.WithField(logfields.IsovalentSRv6EgressPolicyName, policy.id.Name)
 
 	if _, ok := manager.policies[policy.id]; !ok {
 		logger.Info("Added IsovalentSRv6EgressPolicy")
@@ -630,7 +631,7 @@ func (manager *Manager) OnDeleteSRv6Policy(policyID policyID) {
 	manager.Lock()
 	defer manager.Unlock()
 
-	logger := log.WithField(logfields.IsovalentSRv6EgressPolicyName, policyID.Name)
+	logger := manager.logger.WithField(logfields.IsovalentSRv6EgressPolicyName, policyID.Name)
 
 	if manager.policies[policyID] == nil {
 		logger.Warn("Can't delete IsovalentSRv6EgressPolicy: policy not found")
@@ -650,7 +651,7 @@ func (manager *Manager) OnAddSRv6VRF(vrf VRF) {
 	manager.Lock()
 	defer manager.Unlock()
 
-	logger := log.WithField(logfields.IsovalentVRFName, vrf.id.Name)
+	logger := manager.logger.WithField(logfields.IsovalentVRFName, vrf.id.Name)
 
 	if _, ok := manager.vrfs[vrf.id]; !ok {
 		logger.Info("Added IsovalentVRF")
@@ -668,7 +669,7 @@ func (manager *Manager) OnDeleteSRv6VRF(vrfID vrfID) {
 	manager.Lock()
 	defer manager.Unlock()
 
-	logger := log.WithField(logfields.IsovalentVRFName, vrfID.Name)
+	logger := manager.logger.WithField(logfields.IsovalentVRFName, vrfID.Name)
 
 	if manager.vrfs[vrfID] == nil {
 		logger.Warn("Can't delete IsovalentVRF: policy not found")
@@ -727,7 +728,7 @@ func (manager *Manager) addMissingSRv6PolicyRules() {
 
 			err = srv6map.GetPolicyMap(policyKey).Update(policyKey, policy.SID)
 
-			logger := log.WithFields(logrus.Fields{
+			logger := manager.logger.WithFields(logrus.Fields{
 				logfields.VRF:             policy.VRFID,
 				logfields.DestinationCIDR: *dstCIDR,
 				logfields.SID:             policy.SID,
@@ -779,7 +780,7 @@ nextPolicyKey:
 			}
 		}
 
-		logger := log.WithFields(logrus.Fields{
+		logger := manager.logger.WithFields(logrus.Fields{
 			logfields.VRF:             policyKey.VRFID,
 			logfields.DestinationCIDR: policyKey.DestCIDR,
 		})
@@ -798,7 +799,7 @@ func (manager *Manager) addMissingSRv6SIDs() {
 			continue
 		}
 		if err := manager.updateSIDMap(vrf.SIDInfo.SID, vrf.VRFID); err != nil {
-			log.WithField("VRF", vrf.id.Name).WithError(err).Error("VRF has SID allocation and SIDMap entry is missing, but failed to update")
+			manager.logger.WithField("VRF", vrf.id.Name).WithError(err).Error("VRF has SID allocation and SIDMap entry is missing, but failed to update")
 			continue
 		}
 	}
@@ -821,7 +822,7 @@ nextSIDKey:
 			}
 		}
 
-		logger := log.WithFields(logrus.Fields{
+		logger := manager.logger.WithFields(logrus.Fields{
 			logfields.SID: sidKey.SID,
 		})
 
@@ -847,7 +848,7 @@ func (m *Manager) reconcileVRFEgressPath() {
 		value *srv6map.VRFValue
 	}
 	var (
-		l = log.WithFields(
+		l = m.logger.WithFields(
 			logrus.Fields{
 				"component": "srv6.Manager.reconcileVRFEgressPath",
 			},
@@ -855,7 +856,7 @@ func (m *Manager) reconcileVRFEgressPath() {
 		srv6VRFs = map[string]keyEntry{}
 	)
 
-	log.Info("Reconciling egress datapath for encapsulation.")
+	m.logger.Info("Reconciling egress datapath for encapsulation.")
 
 	// populate srv6VRFs map
 	srv6map.SRv6VRFMap4.IterateWithCallback4(
@@ -925,7 +926,7 @@ nextVRFKey:
 // create or remove both according to the Manager's state.
 func (m *Manager) reconcileVRFIngressPath() {
 	var (
-		l = log.WithFields(
+		l = m.logger.WithFields(
 			logrus.Fields{
 				"component": "srv6.Manager.reconcileVRFIngressPath",
 			},
@@ -1119,7 +1120,7 @@ func (m *Manager) deleteSIDMap(sid srv6Types.SID) error {
 // 2. Writing this SID and its associated VRF ID to the SRv6SIDMap //TODO: checking spelling
 // 3. Store the allocated SID wihin the Manager's memory.
 func (m *Manager) createIngressPathVRFs(vrfs []*VRF) {
-	l := log.WithFields(
+	l := m.logger.WithFields(
 		logrus.Fields{
 			"component": "srv6.Manager.createIngressPathVRFs",
 		},
@@ -1177,7 +1178,7 @@ func (m *Manager) createIngressPathVRFs(vrfs []*VRF) {
 }
 
 func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
-	l := log.WithFields(
+	l := m.logger.WithFields(
 		logrus.Fields{
 			"component": "srv6.Manager.updateIngressPaths",
 		},
@@ -1266,7 +1267,7 @@ func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
 // if an error occurs in any of the operations involved with removing a SID
 // allocation the removal will be tried again on next reconciliation.
 func (m *Manager) removeIngressPathVRFs(allocs []*SIDAllocation) {
-	l := log.WithFields(
+	l := m.logger.WithFields(
 		logrus.Fields{
 			"component": "srv6.Manager.removeIngressPaths",
 		},
@@ -1312,7 +1313,7 @@ func (manager *Manager) reconcilePoliciesAndSIDs() {
 // Whenever it encounters an error, it will just log it and move to the next
 // item, in order to reconcile as many states as possible.
 func (manager *Manager) reconcileVRF() {
-	l := log.WithFields(
+	l := manager.logger.WithFields(
 		logrus.Fields{
 			"component": "srv6.Manager.reconcileVRF",
 		},

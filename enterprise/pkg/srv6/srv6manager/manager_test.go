@@ -44,7 +44,6 @@ import (
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 	"github.com/cilium/cilium/pkg/types"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -362,8 +361,6 @@ func allocateIdentity(t *testing.T, identityAllocator cache.IdentityAllocator, e
 
 func TestSRv6Manager(t *testing.T) {
 	testutils.PrivilegedTest(t)
-
-	log.Logger.SetLevel(logrus.DebugLevel)
 
 	// Fixtures
 	endpoint1 := &v2.CiliumEndpoint{
@@ -961,8 +958,6 @@ func eventually(t *testing.T, f func() bool) {
 func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	testutils.PrivilegedTest(t)
 
-	log.Logger.SetLevel(logrus.DebugLevel)
-
 	vrf0 := &v1alpha1.IsovalentVRF{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "vrf0",
@@ -1214,8 +1209,6 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 
 func TestSIDManagerSIDRestoration(t *testing.T) {
 	testutils.PrivilegedTest(t)
-
-	log.Logger.SetLevel(logrus.DebugLevel)
 
 	tests := []struct {
 		name                string

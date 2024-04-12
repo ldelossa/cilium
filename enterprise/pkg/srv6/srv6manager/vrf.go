@@ -53,7 +53,7 @@ type VRF struct {
 // if a provided endpoint matches a rule a srv6map.VRFKey will be created for
 // each of the endpoint's IPv6 addresses and appended to the returned slice.
 func (m *Manager) getVRFKeysFromMatchingEndpoint(vrf *VRF) []srv6map.VRFKey {
-	logger := log.WithFields(logrus.Fields{
+	logger := m.logger.WithFields(logrus.Fields{
 		logfields.VRF: vrf.id,
 	})
 	keys := []srv6map.VRFKey{}
@@ -171,7 +171,6 @@ func ParseVRF(csrvrf *v1alpha1.IsovalentVRF) (*VRF, error) {
 		for _, cidrString := range rule.DestinationCIDRs {
 			_, cidr, err := net.ParseCIDR(string(cidrString))
 			if err != nil {
-				log.WithError(err).WithFields(logrus.Fields{logfields.IsovalentVRFName: name}).Warn("Error parsing CIDR.")
 				return nil, err
 			}
 			dstCidrList = append(dstCidrList, cidr)

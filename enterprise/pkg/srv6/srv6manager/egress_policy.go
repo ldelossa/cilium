@@ -14,11 +14,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"github.com/cilium/cilium/pkg/logging/logfields"
 	ciliumTypes "github.com/cilium/cilium/pkg/types"
 )
 
@@ -73,7 +71,6 @@ func ParsePolicy(csrep *v1alpha1.IsovalentSRv6EgressPolicy) (*EgressPolicy, erro
 	for _, cidrString := range csrep.Spec.DestinationCIDRs {
 		_, cidr, err := net.ParseCIDR(string(cidrString))
 		if err != nil {
-			log.WithError(err).WithFields(logrus.Fields{logfields.IsovalentSRv6EgressPolicyName: name}).Warn("Error parsing CIDR.")
 			return nil, err
 		}
 		dstCidrList = append(dstCidrList, cidr)
