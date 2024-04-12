@@ -50,32 +50,6 @@ var (
 	legacySIDStructure = srv6Types.MustNewSIDStructure(128, 0, 0, 0)
 )
 
-// ErrSIDAlloc indicates an issue allocating a SID from the Manager's SID
-// allocator.
-//
-// ErrSIDAlloc is capable of wrapping any errors exported by the implementation
-// of a SID Allocator.
-type ErrSIDAlloc struct {
-	e error
-}
-
-func (e *ErrSIDAlloc) Error() string {
-	return "failed to allocate SID: " + e.e.Error()
-}
-
-func (e *ErrSIDAlloc) Unwrap() error {
-	return e.e
-}
-
-// BGPSignaler is an interface which exposes a method for notifying the BGP
-// control plane of SRv6Manager state changes.
-//
-// The BGP control plane understands how to query the SRv6Mananger so no arguments
-// are required.
-type BGPSignaler interface {
-	Event(_ interface{})
-}
-
 // SIDAllocation is a bookkeeping structure for locally allocated SIDs.
 // These SID allocations serve as SRV6 VRF locators.
 type SIDAllocation struct {
@@ -125,10 +99,8 @@ type Manager struct {
 	// determine if SID allocation/deallocation is necessary on VRF reconciliation.
 	allocatedSIDs map[uint32]*SIDAllocation
 
-	// bgp is a handle to an instantiated BGPSignaler interface.
-	// this interface informs the BGP control plane that the SRv6Manager's state
-	// has changed.
-	bgp BGPSignaler
+	// BGP Control Plane signaler
+	bgp *signaler.BGPCPSignaler
 
 	// sidAlloc is an IPv6Allocator used to allocate L3VPN service SID's on VRF
 	// creation.
