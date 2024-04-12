@@ -29,7 +29,6 @@ import (
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipam"
-	"github.com/cilium/cilium/pkg/k8s"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
@@ -156,7 +155,6 @@ type Params struct {
 	DaemonConfig              *option.DaemonConfig
 	Sig                       *signaler.BGPCPSignaler
 	CacheIdentityAllocator    identityCache.IdentityAllocator
-	CacheStatus               k8s.CacheStatus
 	DaemonPromise             promise.Promise[daemon]
 	SIDManagerPromise         promise.Promise[sidmanager.SIDManager]
 	CiliumEndpointResource    resource.Resource[*k8sTypes.CiliumEndpoint]

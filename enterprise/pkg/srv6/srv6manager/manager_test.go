@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/hivetest"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipam"
@@ -45,8 +45,11 @@ import (
 	"github.com/cilium/cilium/pkg/types"
 
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	k8sTesting "k8s.io/client-go/testing"
 )
 
 type fakeSIDAllocator struct {
@@ -120,6 +123,8 @@ func (fsm *fakeSIDManager) Observe(ctx context.Context, next func(sidmanager.Eve
 			})
 		}
 		next(sidmanager.Event{Kind: sidmanager.Sync})
+		<-ctx.Done()
+		complete(ctx.Err())
 	}()
 }
 
@@ -267,6 +272,87 @@ func (fd *fakeDaemon) GetIPv6Allocator() ipam.Allocator {
 	return fd.a
 }
 
+type fixture struct {
+	watching chan struct{}
+	hive     *hive.Hive
+}
+
+func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
+	fixture := &fixture{
+		watching: make(chan struct{}),
+	}
+
+	cells := []cell.Cell{}
+
+	if useRealSIDManager {
+		cells = append(cells, sidmanager.SIDManagerCell)
+	} else {
+		cells = append(cells,
+			cell.Provide(
+				func() (promise.Promise[sidmanager.SIDManager], *fakeSIDManager) {
+					smResolver, smPromise := promise.New[sidmanager.SIDManager]()
+					fsm := &fakeSIDManager{
+						pools: map[string]sidmanager.SIDAllocator{},
+					}
+					smResolver.Resolve(fsm)
+					return smPromise, fsm
+				},
+			),
+		)
+	}
+
+	cells = append(cells,
+		cell.Provide(
+			func() *option.DaemonConfig {
+				return &option.DaemonConfig{
+					EnableSRv6: true,
+				}
+			},
+			func() (promise.Promise[daemon], *fakeIPAMAllocator) {
+				fia := &fakeIPAMAllocator{}
+				fd := &fakeDaemon{a: fia}
+				daemonResolver, daemonPromise := promise.New[daemon]()
+				daemonResolver.Resolve(fd)
+				return daemonPromise, fia
+			},
+			func() cache.IdentityAllocator {
+				return testidentity.NewMockIdentityAllocator(nil)
+			},
+			NewSRv6Manager,
+			node.NewLocalNodeStore,
+			client.NewFakeClientset,
+			newIsovalentVRFResource,
+			signaler.NewBGPCPSignaler,
+			k8s.CiliumSlimEndpointResource,
+			newIsovalentSRv6EgressPolicyResource,
+		),
+		cell.Invoke(
+			invokeFn,
+
+			// This is a workaround for https://github.com/cilium/cilium/pull/31010. We should
+			// have the same issue here.
+			func(fcs *client.FakeClientset) {
+				var once sync.Once
+				fcs.CiliumFakeClientset.PrependWatchReactor("*", func(action k8sTesting.Action) (handled bool, ret watch.Interface, err error) {
+					w := action.(k8sTesting.WatchAction)
+					gvr := w.GetResource()
+					ns := w.GetNamespace()
+					watch, err := fcs.CiliumFakeClientset.Tracker().Watch(gvr, ns)
+					if err != nil {
+						return false, nil, err
+					}
+					once.Do(func() { close(fixture.watching) })
+					return true, watch, nil
+				})
+			},
+		),
+	)
+
+	fixture.hive = hive.New(cells...)
+
+	return fixture
+}
+
 func allocateIdentity(t *testing.T, identityAllocator cache.IdentityAllocator, ep *v2.CiliumEndpoint) {
 	labels := labels.NewLabelsFromModel(ep.Status.Identity.Labels)
 	id, _, err := identityAllocator.AllocateIdentity(context.TODO(), labels, false, identity.NumericIdentity(ep.Status.Identity.ID))
@@ -311,7 +397,6 @@ func TestSRv6Manager(t *testing.T) {
 	sid1IP := net.ParseIP("fd00:0:0:1::")
 	sid2IP := net.ParseIP("fd00:0:1:1::")
 	sid3 := srv6Types.MustNewSID(netip.MustParseAddr("fd00:0:1:2::"))
-	structure := srv6Types.MustNewSIDStructure(32, 16, 16, 0)
 
 	vrf0 := &v1alpha1.IsovalentVRF{
 		ObjectMeta: metav1.ObjectMeta{
@@ -691,100 +776,60 @@ func TestSRv6Manager(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			srv6map.CreateMaps()
-			defer srv6map.DeleteMaps()
+			t.Cleanup(func() {
+				srv6map.DeleteMaps()
+			})
 
-			// Lifecycle for testing
-			lc := hivetest.Lifecycle(t)
+			var (
+				ia cache.IdentityAllocator
+				cs client.Clientset
+			)
 
-			// Fake DaemonConfig
-			dc := &option.DaemonConfig{
-				EnableSRv6: true,
-			}
+			fixture := newFixture(
+				t,
+				false,
+				func(
+					identityAllocator cache.IdentityAllocator,
+					clientset client.Clientset,
+					manager *Manager,
+					fia *fakeIPAMAllocator,
+					fsm *fakeSIDManager,
+				) {
+					ia = identityAllocator
+					cs = clientset
 
-			// This allocator always returns fixed SID for AllocateNext
-			allocator := &fakeSIDAllocator{
-				sid:          sid3,
-				structure:    structure,
-				behaviorType: srv6Types.BehaviorTypeBase,
-			}
-
-			fsm := &fakeSIDManager{
-				pools: map[string]sidmanager.SIDAllocator{
-					"pool1": allocator,
+					fia.sid = sid2IP
+					fsm.pools["pool1"] = &fakeSIDAllocator{
+						sid:          sid3,
+						behaviorType: srv6Types.BehaviorTypeBase,
+					}
 				},
-			}
+			)
 
-			// We can resolve SIDManager immediately because the pool is ready
-			smResolver, smPromise := promise.New[sidmanager.SIDManager]()
-			smResolver.Resolve(fsm)
-
-			// Channel to notify k8s cache sync
-			cacheStatus := make(chan struct{})
-
-			// Dummy identity allocator
-			identityAllocator := testidentity.NewMockIdentityAllocator(nil)
-
-			// Trigger global LocalNodeStore initialization. k8s.CiliumSlimEndpointResource
-			// relies on it internally.
-			_, err := node.NewLocalNodeStore(node.LocalNodeStoreParams{
-				Lifecycle: lc,
+			require.NoError(t, fixture.hive.Start(context.TODO()))
+			t.Cleanup(func() {
+				fixture.hive.Stop(context.TODO())
 			})
-			require.NoError(t, err)
 
-			// Fake k8s resources
-			fakeClientSet, cs := client.NewFakeClientset()
-			cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
-			require.NoError(t, err)
-
-			vrfResource, err := newIsovalentVRFResource(lc, dc, cs)
-			require.NoError(t, err)
-
-			policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
-			require.NoError(t, err)
-
-			// Fake Daemon
-			fd := &fakeDaemon{a: &fakeIPAMAllocator{sid: sid2IP}}
-			daemonResolver, daemonPromise := promise.New[daemon]()
-			daemonResolver.Resolve(fd)
-
-			manager := NewSRv6Manager(Params{
-				Lifecycle:                 lc,
-				DaemonConfig:              dc,
-				Sig:                       signaler.NewBGPCPSignaler(),
-				CacheIdentityAllocator:    identityAllocator,
-				CacheStatus:               cacheStatus,
-				SIDManagerPromise:         smPromise,
-				DaemonPromise:             daemonPromise,
-				CiliumEndpointResource:    cepResource,
-				IsovalentVRFResource:      vrfResource,
-				IsovalentSRv6EgressPolicy: policyResource,
-			})
+			<-fixture.watching
 
 			// Create initial CiliumEndpoints
 			for _, ep := range test.initEndpoints {
 				copied := ep.DeepCopy()
-				allocateIdentity(t, identityAllocator, copied)
-				_, err = fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
+				allocateIdentity(t, ia, copied)
+				_, err := cs.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, vrf := range test.initVRFs {
-				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf.DeepCopy(), metav1.CreateOptions{})
+				_, err := cs.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, policy := range test.initPolicies {
-				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Create(context.TODO(), policy.DeepCopy(), metav1.CreateOptions{})
+				_, err := cs.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Create(context.TODO(), policy.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
-
-			// Sync done. Close synced channel.
-			close(cacheStatus)
-
-			// Wait until the SIDAllocator is set
-			require.Eventually(t, func() bool {
-				return manager.sidAllocatorIsSet()
-			}, time.Second*3, time.Millisecond*100)
 
 			// Ensure all maps are initialized as expected
 			require.Eventually(t, func() bool {
@@ -823,18 +868,18 @@ func TestSRv6Manager(t *testing.T) {
 
 			for _, ep := range epsToAdd {
 				copied := ep.DeepCopy()
-				allocateIdentity(t, identityAllocator, copied)
-				_, err = fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
+				allocateIdentity(t, ia, copied)
+				_, err := cs.CiliumV2().CiliumEndpoints(ep.Namespace).Create(context.TODO(), copied, metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, ep := range epsToUpdate {
-				_, err := fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Update(context.TODO(), ep.DeepCopy(), metav1.UpdateOptions{})
+				_, err := cs.CiliumV2().CiliumEndpoints(ep.Namespace).Update(context.TODO(), ep.DeepCopy(), metav1.UpdateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, ep := range epsToDelete {
-				err := fakeClientSet.CiliumV2().CiliumEndpoints(ep.Namespace).Delete(context.TODO(), ep.Name, metav1.DeleteOptions{})
+				err := cs.CiliumV2().CiliumEndpoints(ep.Namespace).Delete(context.TODO(), ep.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 			}
 
@@ -842,17 +887,17 @@ func TestSRv6Manager(t *testing.T) {
 			vrfsToAdd, vrfsToUpdate, vrfsToDel := planK8sObj(test.initVRFs, test.updatedVRFs)
 
 			for _, vrf := range vrfsToAdd {
-				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf.DeepCopy(), metav1.CreateOptions{})
+				_, err := cs.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), vrf.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, vrf := range vrfsToUpdate {
-				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Update(context.TODO(), vrf.DeepCopy(), metav1.UpdateOptions{})
+				_, err := cs.IsovalentV1alpha1().IsovalentVRFs().Update(context.TODO(), vrf.DeepCopy(), metav1.UpdateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, vrf := range vrfsToDel {
-				err := fakeClientSet.IsovalentV1alpha1().IsovalentVRFs().Delete(context.TODO(), vrf.GetName(), metav1.DeleteOptions{})
+				err := cs.IsovalentV1alpha1().IsovalentVRFs().Delete(context.TODO(), vrf.GetName(), metav1.DeleteOptions{})
 				require.NoError(t, err)
 			}
 
@@ -860,17 +905,17 @@ func TestSRv6Manager(t *testing.T) {
 			policiesToAdd, policiesToUpdate, policiesToDel := planK8sObj(test.initPolicies, test.updatedPolicies)
 
 			for _, policy := range policiesToAdd {
-				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Create(context.TODO(), policy.DeepCopy(), metav1.CreateOptions{})
+				_, err := cs.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Create(context.TODO(), policy.DeepCopy(), metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, policy := range policiesToUpdate {
-				_, err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Update(context.TODO(), policy.DeepCopy(), metav1.UpdateOptions{})
+				_, err := cs.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Update(context.TODO(), policy.DeepCopy(), metav1.UpdateOptions{})
 				require.NoError(t, err)
 			}
 
 			for _, policy := range policiesToDel {
-				err := fakeClientSet.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Delete(context.TODO(), policy.GetName(), metav1.DeleteOptions{})
+				err := cs.IsovalentV1alpha1().IsovalentSRv6EgressPolicies().Delete(context.TODO(), policy.GetName(), metav1.DeleteOptions{})
 				require.NoError(t, err)
 			}
 
@@ -995,7 +1040,9 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 	}
 
 	srv6map.CreateMaps()
-	defer srv6map.DeleteMaps()
+	t.Cleanup(func() {
+		srv6map.DeleteMaps()
+	})
 
 	var (
 		c                 client.Clientset
@@ -1003,50 +1050,24 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		identityAllocator cache.IdentityAllocator
 	)
 
-	hive := hive.New(
-		sidmanager.SIDManagerCell,
-		cell.Provide(
-			func() *option.DaemonConfig {
-				return &option.DaemonConfig{
-					EnableSRv6: true,
-				}
-			},
-			func() promise.Promise[daemon] {
-				fd := &fakeDaemon{a: &fakeIPAMAllocator{}}
-				daemonResolver, daemonPromise := promise.New[daemon]()
-				daemonResolver.Resolve(fd)
-				return daemonPromise
-			},
-			func() k8s.CacheStatus {
-				return make(chan struct{})
-			},
-			func() cache.IdentityCache {
-				return cache.IdentityCache{}
-			},
-			func(c cache.IdentityCache) cache.IdentityAllocator {
-				return testidentity.NewMockIdentityAllocator(c)
-			},
-			node.NewLocalNodeStore,
-			client.NewFakeClientset,
-			k8s.CiliumSlimEndpointResource,
-			newIsovalentVRFResource,
-			newIsovalentSRv6EgressPolicyResource,
-			signaler.NewBGPCPSignaler,
-			NewSRv6Manager,
-		),
-		cell.Invoke(func(cs client.Clientset, m *Manager, ia cache.IdentityAllocator) {
+	fixture := newFixture(
+		t,
+		true,
+		func(cs client.Clientset, m *Manager, ia cache.IdentityAllocator) {
 			c = cs
 			manager = m
 			identityAllocator = ia
-		}),
+		},
 	)
 
-	err := hive.Start(context.TODO())
+	err := fixture.hive.Start(context.TODO())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		err := hive.Stop(context.TODO())
+		err := fixture.hive.Stop(context.TODO())
 		require.NoError(t, err)
 	})
+
+	<-fixture.watching
 
 	copied := ep.DeepCopy()
 	allocateIdentity(t, identityAllocator, copied)
@@ -1175,8 +1196,6 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			if len(vrfs) != 1 {
 				return false
 			}
-
-			t.Log(vrfs[0].SIDInfo)
 
 			if vrfs[0].SIDInfo != nil {
 				return false
@@ -1346,116 +1365,73 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			srv6map.CreateMaps()
-			defer srv6map.DeleteMaps()
-
-			allocator := &fakeSIDAllocator{
-				behaviorType:  test.behaviorType,
-				allocatedSIDs: test.existingAllocations,
-			}
-
-			fsm := &fakeSIDManager{
-				pools: map[string]sidmanager.SIDAllocator{
-					"pool1": allocator,
-				},
-			}
-
-			smResolver, smPromise := promise.New[sidmanager.SIDManager]()
-
-			lc := hivetest.Lifecycle(t)
-
-			dc := &option.DaemonConfig{
-				EnableSRv6: true,
-			}
-
-			// We can resolve SIDManager immediately because the pool is ready
-			smResolver.Resolve(fsm)
-
-			// Dummy channel to notify k8s cache sync
-			cacheStatus := make(chan struct{})
-
-			// Dummy identity allocator
-			identityAllocator := testidentity.NewMockIdentityAllocator(nil)
-
-			// Trigger global LocalNodeStore initialization. k8s.CiliumSlimEndpointResource
-			// relies on it internally.
-			_, err := node.NewLocalNodeStore(node.LocalNodeStoreParams{
-				Lifecycle: lc,
-			})
-			require.NoError(t, err)
-
-			// Fake k8s resources
-			_, cs := client.NewFakeClientset()
-			cepResource, err := k8s.CiliumSlimEndpointResource(lc, cs, nil)
-			require.NoError(t, err)
-
-			vrfResource, err := newIsovalentVRFResource(lc, dc, cs)
-			require.NoError(t, err)
-
-			policyResource, err := newIsovalentSRv6EgressPolicyResource(lc, dc, cs)
-			require.NoError(t, err)
-
-			// Fake Daemon
-			fd := &fakeDaemon{a: &fakeIPAMAllocator{}}
-			daemonResolver, daemonPromise := promise.New[daemon]()
-			daemonResolver.Resolve(fd)
-
-			manager := NewSRv6Manager(Params{
-				Lifecycle: lc,
-				DaemonConfig: &option.DaemonConfig{
-					EnableSRv6: true,
-				},
-				Sig:                       signaler.NewBGPCPSignaler(),
-				CacheIdentityAllocator:    identityAllocator,
-				CacheStatus:               cacheStatus,
-				SIDManagerPromise:         smPromise,
-				DaemonPromise:             daemonPromise,
-				CiliumEndpointResource:    cepResource,
-				IsovalentVRFResource:      vrfResource,
-				IsovalentSRv6EgressPolicy: policyResource,
+			t.Cleanup(func() {
+				srv6map.DeleteMaps()
 			})
 
-			// This allocator will never be used
-			manager.setSIDAllocator(&fakeIPAMAllocator{})
+			var (
+				m  *Manager
+				cs client.Clientset
+			)
+			fixture := newFixture(
+				t,
+				false,
+				func(
+					manager *Manager,
+					fsm *fakeSIDManager,
+					clientset client.Clientset,
+				) {
+					m = manager
+					cs = clientset
 
-			// Emulate an initial sync
-			if test.vrf != nil {
-				v, err := ParseVRF(test.vrf)
-				require.NoError(t, err)
-				manager.OnAddSRv6VRF(*v)
-			}
+					fsm.pools["pool1"] = &fakeSIDAllocator{
+						behaviorType:  test.behaviorType,
+						allocatedSIDs: test.existingAllocations,
+					}
 
-			// Sync done. Close synced channel.
-			close(cacheStatus)
+					// We need to create resource before Start
+					if test.vrf != nil {
+						_, err := cs.IsovalentV1alpha1().IsovalentVRFs().Create(context.TODO(), test.vrf.DeepCopy(), metav1.CreateOptions{})
+						require.NoError(t, err)
+					}
+				},
+			)
 
-			// Wait for the Subscribe call done. Restoration
-			// happpens at this point.
+			require.NoError(t, fixture.hive.Start(context.TODO()))
+			t.Cleanup(func() {
+				fixture.hive.Stop(context.TODO())
+			})
+
+			<-fixture.watching
+
+			// Wait for the SIDManager sync
 			require.Eventually(t, func() bool {
-				return manager.sidAllocatorIsSet()
+				return m.sidAllocatorIsSet()
 			}, time.Second*3, time.Millisecond*100)
 
 			require.Eventually(t, func() bool {
-				vrfs := manager.GetAllVRFs()
+				vrfs := m.GetAllVRFs()
 
 				if test.vrf != nil {
-					require.Len(t, vrfs, 1)
+					if !assert.Len(t, vrfs, 1) {
+						return false
+					}
 				} else {
-					require.Len(t, vrfs, 0)
-					return true
+					return assert.Len(t, vrfs, 0)
 				}
 
 				if test.expectedAllocation != nil {
 					info := vrfs[0].SIDInfo
 					expected := test.expectedAllocation
-					require.Equal(t, expected.Owner, info.Owner)
-					require.Equal(t, expected.MetaData, info.MetaData)
-					require.Equal(t, expected.SID, info.SID)
-					require.Equal(t, expected.BehaviorType, info.BehaviorType)
-					require.Equal(t, expected.Behavior, info.Behavior)
+					return assert.NotNil(t, info) &&
+						assert.Equal(t, expected.Owner, info.Owner) &&
+						assert.Equal(t, expected.MetaData, info.MetaData) &&
+						assert.Equal(t, expected.SID, info.SID) &&
+						assert.Equal(t, expected.BehaviorType, info.BehaviorType) &&
+						assert.Equal(t, expected.Behavior, info.Behavior)
 				} else {
-					require.Nil(t, vrfs[0].SIDInfo)
+					return assert.Nil(t, vrfs[0].SIDInfo)
 				}
-
-				return true
 			}, time.Second*3, time.Millisecond*100)
 		})
 	}
