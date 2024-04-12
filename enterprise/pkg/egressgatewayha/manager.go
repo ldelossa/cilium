@@ -275,7 +275,10 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 	p.Lifecycle.Append(cell.Hook{
 		OnStart: func(hc cell.HookContext) error {
 			wg.Add(1)
-			go manager.processEvents(ctx, &wg)
+			go func() {
+				defer wg.Done()
+				manager.processEvents(ctx)
+			}()
 
 			return nil
 		},
@@ -324,9 +327,7 @@ func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Label
 
 // processEvents spawns a goroutine that waits for the agent to
 // sync with k8s and then runs the first reconciliation.
-func (manager *Manager) processEvents(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (manager *Manager) processEvents(ctx context.Context) {
 	var policySync, endpointSync, nodeSync bool
 	maybeTriggerReconcile := func() {
 		if !policySync || !endpointSync || !nodeSync {
@@ -666,7 +667,6 @@ func (manager *Manager) removeUnusedEgressRules() {
 			egressPolicies[*key] = *val
 		})
 
-nextPolicyKey:
 	for policyKey, policyVal := range egressPolicies {
 		matchPolicy := func(endpoint *endpointMetadata, dstCIDR netip.Prefix, excludedCIDR bool, gwc *gatewayConfig) bool {
 			activeGatewayIPs, egressIP := gwc.gatewayConfigForEndpoint(manager, endpoint)
@@ -684,7 +684,7 @@ nextPolicyKey:
 		}
 
 		if manager.policyMatches(policyKey.GetSourceIP(), matchPolicy) {
-			continue nextPolicyKey
+			continue
 		}
 
 		logger := log.WithFields(logrus.Fields{
