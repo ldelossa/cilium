@@ -26,6 +26,7 @@ import (
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipam"
@@ -301,7 +302,9 @@ func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
 	}
 
 	cells = append(cells,
+		job.Cell,
 		cell.Provide(
+			cell.TestScope,
 			func() *option.DaemonConfig {
 				return &option.DaemonConfig{
 					EnableSRv6: true,

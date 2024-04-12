@@ -19,12 +19,14 @@ import (
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	srv6Types "github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
@@ -150,6 +152,8 @@ type Manager struct {
 type Params struct {
 	cell.In
 
+	Scope                     cell.Scope
+	JobRegistry               job.Registry
 	Logger                    logrus.FieldLogger
 	Lifecycle                 cell.Lifecycle
 	DaemonConfig              *option.DaemonConfig
@@ -183,176 +187,225 @@ func NewSRv6Manager(p Params) *Manager {
 		sidAllocatorSyncers: make(map[string]sidmanager.SIDAllocator),
 	}
 
-	p.Lifecycle.Append(manager)
+	jg := p.JobRegistry.NewGroup(p.Scope)
+
+	initDone := make(chan struct{})
+	vrfSyncDone := make(chan struct{})
+
+	jg.Add(
+		job.OneShot("init", func(ctx context.Context, health cell.HealthReporter) error {
+			// Wait for the IPAM to be initialized
+			d, err := manager.daemonPromise.Await(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to await on Daemon (IPAM): %w", err)
+			}
+			manager.setSIDAllocator(d.GetIPv6Allocator())
+
+			// Create Endpoints store and watch for Endpoints events
+			manager.cepStore, err = manager.cepResource.Store(ctx)
+			if err != nil {
+				return fmt.Errorf("failed creating Endpoints resource.Store: %w", err)
+			}
+
+			close(initDone)
+
+			return nil
+		}, job.WithRetry(100, workqueue.DefaultControllerRateLimiter())),
+
+		job.OneShot("cep-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+			select {
+			case <-initDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			select {
+			case <-vrfSyncDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			epSynced := false
+			for event := range manager.cepResource.Events(ctx) {
+				// reconcile upon CiliumEndpoint events
+				manager.Lock()
+				switch event.Kind {
+				case resource.Sync:
+					epSynced = true
+					manager.reconcileVRF()
+				case resource.Upsert, resource.Delete:
+					if epSynced {
+						manager.reconcileVRF()
+					}
+				}
+				manager.Unlock()
+				event.Done(nil)
+			}
+
+			return ctx.Err()
+		}),
+
+		job.OneShot("vrf-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+			select {
+			case <-initDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			for event := range manager.vrfResource.Events(ctx) {
+				// reconcile upon IsovalentVRF events
+				switch event.Kind {
+				case resource.Sync:
+					close(vrfSyncDone)
+				case resource.Upsert:
+					vrf, err := ParseVRF(event.Object)
+					if err != nil {
+						event.Done(err)
+						continue
+					}
+					manager.OnAddSRv6VRF(*vrf)
+				case resource.Delete:
+					manager.OnDeleteSRv6VRF(vrfID{
+						Namespace: event.Key.Namespace,
+						Name:      event.Key.Name,
+					})
+				}
+				event.Done(nil)
+			}
+
+			return ctx.Err()
+		}),
+
+		job.OneShot("policy-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+			select {
+			case <-initDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			select {
+			case <-vrfSyncDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			for event := range manager.policyResource.Events(ctx) {
+				// reconcile upon IsovalentSRv6EgressPolicy events
+				switch event.Kind {
+				case resource.Upsert:
+					policy, err := ParsePolicy(event.Object)
+					if err != nil {
+						event.Done(err)
+						continue
+					}
+					manager.OnAddSRv6Policy(*policy)
+				case resource.Delete:
+					manager.OnDeleteSRv6Policy(policyID{
+						Namespace: event.Key.Namespace,
+						Name:      event.Key.Name,
+					})
+				}
+				event.Done(nil)
+			}
+
+			return ctx.Err()
+		}),
+
+		job.OneShot("sidmanager-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+			select {
+			case <-initDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			// SIDManager's Start hook should already called and initial sync is
+			// running. So, it's safe to wait on it here.
+			sidManager, err := manager.sidManagerPromise.Await(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to await on SIDManager: %w", err)
+			}
+
+			// Wait for an initial k8s resource sync. This is required for
+			// VRF SID restoration after agent restart. When we subscribe
+			// to the SID manager, it calls OnAddLocator for all existing
+			// locators. Within the callback, SRv6Manager must retrieve an
+			// existing SID allocation for all VRFs. Thus, at that point,
+			// all VRFs must be synced.
+			//
+			// This needs to be asynchronous and we shouldn't block within
+			// SRv6Manager's Start hook since the Daemon depends on
+			// SRv6Manager to register it to k8s VRF event handler and it
+			// is called after this Start hook.
+			select {
+			case <-vrfSyncDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			// Subscribe to the SIDManager
+			for ev := range stream.ToChannel[sidmanager.Event](ctx, sidManager) {
+				switch ev.Kind {
+				case sidmanager.Sync:
+					manager.Lock()
+					// Now we can set sidManager since the initial sync is done.
+					// This makes sidAllocatorIsSet to return true. From now on,
+					// VRF k8s event handler can allocate SIDs from SIDManager.
+					manager.sidManager = sidManager
+					// SIDManager-related initialization is done. Kick an
+					// initial VRF reconciliation.
+					manager.reconcileVRF()
+					manager.Unlock()
+
+				case sidmanager.Upsert:
+					manager.Lock()
+
+					// Locator pool is added or updated
+					oldAllocator, found := manager.sidAllocatorSyncers[ev.PoolName]
+					if !found {
+						// Do initial allocation. This includes
+						// restoring existing allocations from
+						// the previous agent run.
+						manager.onAddLocator(ev.PoolName, ev.Allocator)
+					} else {
+						// Release existing allocations
+						// associated with the updated pool and
+						// allocate new SIDs.
+						manager.onUpdateLocator(ev.PoolName, oldAllocator, ev.Allocator)
+					}
+
+					// Update the reference
+					manager.sidAllocatorSyncers[ev.PoolName] = ev.Allocator
+
+					// Reconcile VRF
+					manager.reconcileVRF()
+
+					manager.Unlock()
+
+				case sidmanager.Delete:
+					manager.Lock()
+
+					// Locator pool is deleted
+					oldAllocator, found := manager.sidAllocatorSyncers[ev.PoolName]
+					if found {
+						// Delete existing allocations associated with the deleted pool
+						manager.onDeleteLocator(ev.PoolName, oldAllocator)
+						delete(manager.sidAllocatorSyncers, ev.PoolName)
+					}
+
+					// Reconcile VRF
+					manager.reconcileVRF()
+
+					manager.Unlock()
+				}
+			}
+
+			return ctx.Err()
+		}),
+	)
+
+	p.Lifecycle.Append(jg)
 
 	return manager
-}
-
-// Notice that this Start hook is not only the place that does an
-// initialization of SRv6Manager. Some initialization logics like k8s event
-// handlers are still relying on the legacy Daemon-based initialization.
-func (manager *Manager) Start(hookCtx cell.HookContext) error {
-	// Wait for the IPAM to be initialized
-	daemon, err := manager.daemonPromise.Await(hookCtx)
-	if err != nil {
-		return fmt.Errorf("failed to await on Daemon (IPAM)")
-	}
-	manager.setSIDAllocator(daemon.GetIPv6Allocator())
-
-	// SIDManager's Start hook should already called and initial sync is
-	// running. So, it's safe to wait on it.
-	sidManager, err := manager.sidManagerPromise.Await(hookCtx)
-	if err != nil {
-		return fmt.Errorf("failed to await on SIDManager")
-	}
-
-	// Create Endpoints store and watch for Endpoints events
-	manager.cepStore, err = manager.cepResource.Store(hookCtx)
-	if err != nil {
-		return fmt.Errorf("failed creating Endpoints resource.Store: %w", err)
-	}
-	go func() {
-		epSynced := false
-		for event := range manager.cepResource.Events(context.Background()) {
-			// reconcile upon CiliumEndpoint events
-			manager.Lock()
-			switch event.Kind {
-			case resource.Sync:
-				epSynced = true
-				manager.reconcileVRF()
-			case resource.Upsert, resource.Delete:
-				if epSynced {
-					manager.reconcileVRF()
-				}
-			}
-			manager.Unlock()
-			event.Done(nil)
-		}
-	}()
-
-	vrfSyncDone := make(chan struct{})
-	go func() {
-		for event := range manager.vrfResource.Events(context.Background()) {
-			// reconcile upon IsovalentVRF events
-			switch event.Kind {
-			case resource.Sync:
-				close(vrfSyncDone)
-			case resource.Upsert:
-				vrf, err := ParseVRF(event.Object)
-				if err != nil {
-					event.Done(err)
-					continue
-				}
-				manager.OnAddSRv6VRF(*vrf)
-			case resource.Delete:
-				manager.OnDeleteSRv6VRF(vrfID{
-					Namespace: event.Key.Namespace,
-					Name:      event.Key.Name,
-				})
-			}
-			event.Done(nil)
-		}
-	}()
-
-	go func() {
-		for event := range manager.policyResource.Events(context.Background()) {
-			// reconcile upon IsovalentSRv6EgressPolicy events
-			switch event.Kind {
-			case resource.Upsert:
-				policy, err := ParsePolicy(event.Object)
-				if err != nil {
-					manager.Unlock()
-					event.Done(err)
-					continue
-				}
-				manager.OnAddSRv6Policy(*policy)
-			case resource.Delete:
-				manager.OnDeleteSRv6Policy(policyID{
-					Namespace: event.Key.Namespace,
-					Name:      event.Key.Name,
-				})
-			}
-			event.Done(nil)
-		}
-	}()
-
-	go func() {
-		// Wait for an initial k8s resource sync. This is required for
-		// VRF SID restoration after agent restart. When we subscribe
-		// to the SID manager, it calls OnAddLocator for all existing
-		// locators. Within the callback, SRv6Manager must retrieve an
-		// existing SID allocation for all VRFs. Thus, at that point,
-		// all VRFs must be synced.
-		//
-		// This needs to be asynchronous and we shouldn't block within
-		// SRv6Manager's Start hook since the Daemon depends on
-		// SRv6Manager to register it to k8s VRF event handler and it
-		// is called after this Start hook.
-		<-vrfSyncDone
-
-		// Subscribe to the SIDManager
-		for ev := range stream.ToChannel[sidmanager.Event](context.Background(), sidManager) {
-			switch ev.Kind {
-			case sidmanager.Sync:
-				manager.Lock()
-				// Now we can set sidManager since the initial sync is done.
-				// This makes sidAllocatorIsSet to return true. From now on,
-				// VRF k8s event handler can allocate SIDs from SIDManager.
-				manager.sidManager = sidManager
-				// SIDManager-related initialization is done. Kick an
-				// initial VRF reconciliation.
-				manager.reconcileVRF()
-				manager.Unlock()
-
-			case sidmanager.Upsert:
-				manager.Lock()
-
-				// Locator pool is added or updated
-				oldAllocator, found := manager.sidAllocatorSyncers[ev.PoolName]
-				if !found {
-					// Do initial allocation. This includes
-					// restoring existing allocations from
-					// the previous agent run.
-					manager.onAddLocator(ev.PoolName, ev.Allocator)
-				} else {
-					// Release existing allocations
-					// associated with the updated pool and
-					// allocate new SIDs.
-					manager.onUpdateLocator(ev.PoolName, oldAllocator, ev.Allocator)
-				}
-
-				// Update the reference
-				manager.sidAllocatorSyncers[ev.PoolName] = ev.Allocator
-
-				// Reconcile VRF
-				manager.reconcileVRF()
-
-				manager.Unlock()
-
-			case sidmanager.Delete:
-				manager.Lock()
-
-				// Locator pool is deleted
-				oldAllocator, found := manager.sidAllocatorSyncers[ev.PoolName]
-				if found {
-					// Delete existing allocations associated with the deleted pool
-					manager.onDeleteLocator(ev.PoolName, oldAllocator)
-					delete(manager.sidAllocatorSyncers, ev.PoolName)
-				}
-
-				// Reconcile VRF
-				manager.reconcileVRF()
-
-				manager.Unlock()
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (manager *Manager) Stop(hookCtx cell.HookContext) error {
-	return nil
 }
 
 func (manager *Manager) updateVRFSIDAllocation(vrf *VRF, pool string, newInfo *sidmanager.SIDInfo) {
