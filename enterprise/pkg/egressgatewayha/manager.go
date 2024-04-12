@@ -274,7 +274,8 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.Lifecycle.Append(cell.Hook{
 		OnStart: func(hc cell.HookContext) error {
-			go manager.processEvents(ctx)
+			wg.Add(1)
+			go manager.processEvents(ctx, &wg)
 
 			return nil
 		},
@@ -323,7 +324,9 @@ func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Label
 
 // processEvents spawns a goroutine that waits for the agent to
 // sync with k8s and then runs the first reconciliation.
-func (manager *Manager) processEvents(ctx context.Context) {
+func (manager *Manager) processEvents(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	var policySync, endpointSync, nodeSync bool
 	maybeTriggerReconcile := func() {
 		if !policySync || !endpointSync || !nodeSync {
