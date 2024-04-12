@@ -19,8 +19,8 @@ import (
 
 // BFDServer manages multiple BFD peers of a system.
 type BFDServer interface {
-	// Start starts the BFD server.
-	Start() error
+	// Run starts the BFD server and keeps it running (blocks) until the provided context is cancelled.
+	Run(ctx context.Context)
 
 	// AddPeer adds a new BFD peer with the given config to the server.
 	// A new BFD session is automatically started with a network connection
@@ -40,9 +40,6 @@ type BFDServer interface {
 	// Status notification is delivered for all session state changes, as well as for changes
 	// in timer parameters on a local or remote system.
 	Observe(ctx context.Context, next func(BFDPeerStatus), complete func(error))
-
-	// Stop stops the BFD server by stopping all its BFD sessions and closing their network connections.
-	Stop()
 }
 
 // BFDPeerConfig holds configuration of a BFD peering.

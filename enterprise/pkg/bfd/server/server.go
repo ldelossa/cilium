@@ -70,9 +70,6 @@ type addrInterface struct {
 type BFDServer struct {
 	logger log.FieldLogger
 
-	// stopChan is used to stop the server processing
-	stopChan chan struct{}
-
 	// listeners mapped by the listen address + port + interface
 	listeners   map[addrPortInterface]*bfdListener
 	listenersMu lock.Mutex
@@ -90,20 +87,18 @@ type BFDServer struct {
 	statusUpdateCh chan types.BFDPeerStatus
 
 	// multicast observable allowing to observe session status updates
-	mcast       stream.Observable[types.BFDPeerStatus]
-	mcastCancel func()
+	mcast        stream.Observable[types.BFDPeerStatus]
+	mcastConnect func(ctx context.Context)
 }
 
 // NewBFDServer creates a new BFD server.
 // It does not start any listeners until a peer is added.
 func NewBFDServer(logger log.FieldLogger) *BFDServer {
 	statusUpdateCh := make(chan types.BFDPeerStatus, sessionStatusUpdateChannelSize)
-	mcast, connect := stream.ToMulticast(stream.FromChannel(statusUpdateCh))
-	ctx, mcastCancel := context.WithCancel(context.Background())
-	connect(ctx)
+	mcast, mcastConnect := stream.ToMulticast(stream.FromChannel(statusUpdateCh))
+
 	return &BFDServer{
 		logger:               logger,
-		stopChan:             make(chan struct{}),
 		listeners:            make(map[addrPortInterface]*bfdListener),
 		receivedPacketsCh:    make(chan *receivedPacket, receivedPacketsChannelSize),
 		sessionsByDiscr:      make(map[uint32]*bfdSession),
@@ -111,14 +106,17 @@ func NewBFDServer(logger log.FieldLogger) *BFDServer {
 		sessionsBySrcPort:    make(map[uint16]*bfdSession),
 		statusUpdateCh:       statusUpdateCh,
 		mcast:                mcast,
-		mcastCancel:          mcastCancel,
+		mcastConnect:         mcastConnect,
 	}
 }
 
-// Start tarts the BFD server
-func (s *BFDServer) Start() error {
-	go s.processReceivedPackets()
-	return nil
+// Run starts the BFD server and keeps it running (blocks) until the provided context is cancelled.
+func (s *BFDServer) Run(ctx context.Context) {
+	s.logger.Info("Starting BFD server")
+	defer s.logger.Info("Stopping BFD server")
+
+	s.mcastConnect(ctx)
+	s.run(ctx)
 }
 
 // AddPeer adds a new BFD peer with the given config to the server.
@@ -233,10 +231,27 @@ func (s *BFDServer) DeletePeer(cfg *types.BFDPeerConfig) error {
 	return nil
 }
 
-// Stop stops the BFD server by stopping all its BFD sessions and closing their network connections.
-func (s *BFDServer) Stop() {
-	s.logger.Info("Stopping BFD server")
+// Observe allows observing BFD peer status updates. Implements stream.Observable[BFDPeerStatus] interface.
+func (s *BFDServer) Observe(ctx context.Context, next func(types.BFDPeerStatus), complete func(error)) {
+	s.mcast.Observe(ctx, next, complete)
+}
 
+// run runs the server logic (demultiplexing of received packets) until the provided context it cancelled,
+// at which point the server is stopped.
+func (s *BFDServer) run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			s.stop()
+			return
+		case pkt := <-s.receivedPacketsCh:
+			s.demultiplexPacket(pkt)
+		}
+	}
+}
+
+// stop stops the BFD server by stopping all its BFD sessions and closing their network connections.
+func (s *BFDServer) stop() {
 	s.sessionsMu.Lock()
 	for _, sess := range s.sessionsByDiscr {
 		sess.stop()
@@ -248,13 +263,6 @@ func (s *BFDServer) Stop() {
 		l.stop()
 	}
 	s.listenersMu.Unlock()
-	s.mcastCancel()
-	close(s.stopChan)
-}
-
-// Observe allows observing BFD peer status updates. Implements stream.Observable[BFDPeerStatus] interface.
-func (s *BFDServer) Observe(ctx context.Context, next func(types.BFDPeerStatus), complete func(error)) {
-	s.mcast.Observe(ctx, next, complete)
 }
 
 func (s *BFDServer) validatePeerConfig(cfg *types.BFDPeerConfig) error {
@@ -402,18 +410,6 @@ func (s *BFDServer) getMinTTL(peerCfg *types.BFDPeerConfig) int {
 	//  Control packets that are demultiplexed to the session MAY be
 	//  discarded if the received TTL or Hop Limit is not equal to 255.
 	return 255
-}
-
-// processReceivedPackets reads packets received from the listeners and de-multiplexes them between sessions.
-func (s *BFDServer) processReceivedPackets() {
-	for {
-		select {
-		case pkt := <-s.receivedPacketsCh:
-			s.demultiplexPacket(pkt)
-		case <-s.stopChan:
-			return
-		}
-	}
 }
 
 // demultiplexPacket de-multiplexes a received packet to a matching session.

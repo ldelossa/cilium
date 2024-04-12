@@ -25,6 +25,10 @@ import (
 	"github.com/cilium/cilium/pkg/inctimer"
 )
 
+const (
+	testTimeout = 5 * time.Second
+)
+
 func Test_BFDServer(t *testing.T) {
 	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond) // 50ms to speed up the tests
 	logger := log.StandardLogger()
@@ -206,13 +210,14 @@ func Test_BFDServer(t *testing.T) {
 				t.Skip("no local IP address") // skips the IPv6 test if there is no local IPv6 address detected
 			}
 
+			testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			t.Cleanup(func() {
+				cancel()
+			})
+
 			// Start server 1
 			s1 := NewBFDServer(log.StandardLogger())
-			err := s1.Start()
-			t.Cleanup(func() {
-				s1.Stop()
-			})
-			require.NoError(t, err)
+			go s1.Run(testCtx)
 			ch1 := stream.ToChannel[types.BFDPeerStatus](context.Background(), s1)
 
 			// add server 1 peers
@@ -224,11 +229,7 @@ func Test_BFDServer(t *testing.T) {
 
 			// Start server 2
 			s2 := NewBFDServer(log.StandardLogger())
-			err = s2.Start()
-			t.Cleanup(func() {
-				s2.Stop()
-			})
-			require.NoError(t, err)
+			go s2.Run(testCtx)
 			ch2 := stream.ToChannel[types.BFDPeerStatus](context.Background(), s2)
 
 			// add server 2 peers
