@@ -29,14 +29,13 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/lock"
-	"github.com/cilium/cilium/pkg/logging"
-	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/time"
 
 	"github.com/cilium/stream"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,8 +56,6 @@ import (
 
 var (
 	SRv6SIDManagerSubsys = "srv6-sid-manager"
-
-	smLog = logging.DefaultLogger.WithField(logfields.LogSubsys, SRv6SIDManagerSubsys)
 )
 
 // SIDManager is an interface to interact with SID Manager subsystem
@@ -105,6 +102,9 @@ type Event struct {
 }
 
 type sidManager struct {
+	// Logger
+	logger logrus.FieldLogger
+
 	// PoolName => sidAllocatorSyncer mapping. We currently assume only one
 	// locator allocated from one pool.
 	allocators map[string]*sidAllocatorSyncer
@@ -134,6 +134,7 @@ type sidManager struct {
 type sidManagerParams struct {
 	cell.In
 
+	Logger   logrus.FieldLogger
 	Scope    cell.Scope
 	Registry job.Registry
 	Lc       cell.Lifecycle
@@ -198,6 +199,7 @@ func NewSIDManagerPromise(params sidManagerParams) promise.Promise[SIDManager] {
 	resolver, promise := promise.New[SIDManager]()
 
 	m := &sidManager{
+		logger:      params.Logger,
 		allocators:  make(map[string]*sidAllocatorSyncer),
 		resource:    params.Resource,
 		clientset:   params.Cs,
@@ -241,7 +243,7 @@ func (m *sidManager) Observe(ctx context.Context, next func(Event), complete fun
 }
 
 func (m *sidManager) runSpecReconciler(ctx context.Context, health cell.HealthReporter) error {
-	smLog.Info("Starting SID Manager spec reconciler")
+	m.logger.Info("Starting SID Manager spec reconciler")
 
 	restorationDone := false
 	for ev := range m.resource.Events(ctx) {
@@ -252,7 +254,7 @@ func (m *sidManager) runSpecReconciler(ctx context.Context, health cell.HealthRe
 			m.resolver.Resolve(m)
 			restorationDone = true
 		case resource.Delete:
-			smLog.Info("IsovalentSRv6SIDManager resource deleted")
+			m.logger.Info("IsovalentSRv6SIDManager resource deleted")
 			// Resource deleted. This shouldn't happen in practice
 			// because SIDManager resource is per-node and its
 			// lifecycle is aligned with the one of Node and most
@@ -290,7 +292,7 @@ func (m *sidManager) runSpecReconciler(ctx context.Context, health cell.HealthRe
 		ev.Done(nil)
 	}
 
-	smLog.Info("Stopping SID Manager spec reconciler")
+	m.logger.Info("Stopping SID Manager spec reconciler")
 
 	return nil
 }
@@ -425,7 +427,7 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 		return
 	}
 
-	smLog.Info("Restoring existing SID allocations")
+	m.logger.Info("Restoring existing SID allocations")
 
 	m.allocatorsLock.RLock()
 	defer m.allocatorsLock.RUnlock()
@@ -484,9 +486,9 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 		}
 	}
 
-	smLog.Infof("Finish restoring existing SID allocations (restored: %d, stale: %d, error: %d)", restoredSIDs, staleSIDs, errorSIDs)
+	m.logger.Infof("Finish restoring existing SID allocations (restored: %d, stale: %d, error: %d)", restoredSIDs, staleSIDs, errorSIDs)
 	if errs != nil {
-		smLog.WithError(errs).Warn("Error occurred while restoring")
+		m.logger.WithError(errs).Warn("Error occurred while restoring")
 	}
 }
 
@@ -503,7 +505,7 @@ func (m *sidManager) deleteAllAllocators(r *v1alpha1.IsovalentSRv6SIDManager) {
 }
 
 func (m *sidManager) runStatusReconciler(ctx context.Context, health cell.HealthReporter) error {
-	smLog.Info("Starting SID Manager status reconciler")
+	m.logger.Info("Starting SID Manager status reconciler")
 
 	// In case of the state synchronization failure, we retry with
 	// exponential backoff.
@@ -530,11 +532,11 @@ func (m *sidManager) runStatusReconciler(ctx context.Context, health cell.Health
 			if err := m.reconcileStatus(ctx); err != nil {
 				// Generate warning only for the first retry. Otherwise, it's too noisy.
 				if !retrying {
-					smLog.WithError(err).Warn("State synchronization failed. Retrying with backoff.")
+					m.logger.WithError(err).Warn("State synchronization failed. Retrying with backoff.")
 					retrying = true
 				} else {
 					// This is for debugging
-					smLog.WithError(err).Warn("State synchronization failed. Retrying with backoff.")
+					m.logger.WithError(err).Warn("State synchronization failed. Retrying with backoff.")
 				}
 				m.Sync()
 			} else {
@@ -548,20 +550,20 @@ func (m *sidManager) runStatusReconciler(ctx context.Context, health cell.Health
 			// If there's an outstanding sync, try its best to do sync before shutdown
 			select {
 			case <-m.stateSyncCh:
-				smLog.Info("Performing the last state sync before shutdown with 2s timeout")
+				m.logger.Info("Performing the last state sync before shutdown with 2s timeout")
 				timeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				_ = m.reconcileStatus(timeout)
 				cancel()
 			default:
 			}
-			smLog.Info("Stopping SID Manager status reconciler")
+			m.logger.Info("Stopping SID Manager status reconciler")
 			return nil
 		}
 	}
 }
 
 func (m *sidManager) reconcileStatus(ctx context.Context) error {
-	smLog.Debug("Synchronizing allocation state to k8s resource")
+	m.logger.Debug("Synchronizing allocation state to k8s resource")
 
 	status := v1alpha1.IsovalentSRv6SIDManagerStatus{
 		SIDAllocations: []*v1alpha1.IsovalentSRv6SIDAllocation{},
@@ -615,7 +617,7 @@ func (m *sidManager) reconcileStatus(ctx context.Context) error {
 		return fmt.Errorf("failed to patch resource: %w", err)
 	}
 
-	smLog.Debug("Successfully synchronized the allocation state to k8s resource")
+	m.logger.Debug("Successfully synchronized the allocation state to k8s resource")
 
 	return nil
 }
@@ -662,9 +664,9 @@ func (m *sidManager) sidInfoToResource(si *SIDInfo) *v1alpha1.IsovalentSRv6SIDIn
 func (m *sidManager) Sync() {
 	select {
 	case m.stateSyncCh <- struct{}{}:
-		smLog.Debug("Scheduled state sync")
+		m.logger.Debug("Scheduled state sync")
 	default:
-		smLog.Debug("State sync is already scheduled. Skipping.")
+		m.logger.Debug("State sync is already scheduled. Skipping.")
 	}
 }
 
