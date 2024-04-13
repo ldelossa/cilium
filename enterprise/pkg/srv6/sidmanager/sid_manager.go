@@ -17,12 +17,12 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -125,12 +125,6 @@ type sidManager struct {
 	// Resolver for the Promise for waiting an initial sync
 	resolver promise.Resolver[SIDManager]
 
-	// WaitGroup to wait for all goroutine's termination
-	wg sync.WaitGroup
-
-	// Function to cancel context shared with all goroutines
-	cancel context.CancelFunc
-
 	// Multicast
 	mcast     stream.Observable[Event]
 	next      func(Event)
@@ -140,6 +134,8 @@ type sidManager struct {
 type sidManagerParams struct {
 	cell.In
 
+	Scope    cell.Scope
+	Registry job.Registry
 	Lc       cell.Lifecycle
 	Cs       client.Clientset
 	Dc       *option.DaemonConfig
@@ -210,7 +206,14 @@ func NewSIDManagerPromise(params sidManagerParams) promise.Promise[SIDManager] {
 	}
 	m.mcast, m.next, m.completed = stream.Multicast[Event]()
 
-	params.Lc.Append(m)
+	jg := params.Registry.NewGroup(params.Scope)
+
+	jg.Add(
+		job.OneShot("spec-reconciler", m.runSpecReconciler),
+		job.OneShot("status-reconciler", m.runStatusReconciler),
+	)
+
+	params.Lc.Append(jg)
 
 	return promise
 }
@@ -237,61 +240,8 @@ func (m *sidManager) Observe(ctx context.Context, next func(Event), complete fun
 	}()
 }
 
-func (m *sidManager) Start(hookCtx cell.HookContext) error {
-	smLog.Info("Starting SRv6 SID Manager")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancel = cancel
-
-	m.wg.Add(2)
-
-	// This goroutine is responsible for watching SIDManager resource on
-	// k8s and create SIDAllocator per locator allocations.
-	go m.runSpecReconciler(ctx)
-
-	// This goroutine is responsible for synchronizing a SID allocation
-	// state to k8s resource.
-	go m.runStatusReconciler(ctx)
-
-	return nil
-}
-
-func (m *sidManager) Stop(hookCtx cell.HookContext) error {
-	smLog.Info("Stopping SRv6 SID Manager")
-
-	// This should make all goroutines cancel and yield
-	m.cancel()
-
-	// Wait for all goroutines to terminate
-	ch := make(chan struct{})
-	go func() {
-		m.wg.Wait()
-		ch <- struct{}{}
-	}()
-
-	select {
-	case <-hookCtx.Done():
-		return fmt.Errorf("stop timeout expired while waiting for goroutines to terminate")
-	case <-ch:
-		// All goroutines terminated. Go to the next stage.
-		smLog.Info("All goroutines are shutdown")
-	}
-
-	// If there's an outstanding sync, try its best to do sync before shutdown
-	select {
-	case <-m.stateSyncCh:
-		smLog.Info("Performing the last state sync before shutdown")
-		_ = m.reconcileStatus(hookCtx)
-	default:
-	}
-
-	return nil
-}
-
-func (m *sidManager) runSpecReconciler(ctx context.Context) {
+func (m *sidManager) runSpecReconciler(ctx context.Context, health cell.HealthReporter) error {
 	smLog.Info("Starting SID Manager spec reconciler")
-
-	defer m.wg.Done()
 
 	restorationDone := false
 	for ev := range m.resource.Events(ctx) {
@@ -341,6 +291,8 @@ func (m *sidManager) runSpecReconciler(ctx context.Context) {
 	}
 
 	smLog.Info("Stopping SID Manager spec reconciler")
+
+	return nil
 }
 
 // This function synchronizes internal poolName => allocator mappings to spec on the k8s resource
@@ -550,10 +502,8 @@ func (m *sidManager) deleteAllAllocators(r *v1alpha1.IsovalentSRv6SIDManager) {
 
 }
 
-func (m *sidManager) runStatusReconciler(ctx context.Context) error {
+func (m *sidManager) runStatusReconciler(ctx context.Context, health cell.HealthReporter) error {
 	smLog.Info("Starting SID Manager status reconciler")
-
-	defer m.wg.Done()
 
 	// In case of the state synchronization failure, we retry with
 	// exponential backoff.
@@ -595,6 +545,15 @@ func (m *sidManager) runStatusReconciler(ctx context.Context) error {
 				}
 			}
 		case <-ctx.Done():
+			// If there's an outstanding sync, try its best to do sync before shutdown
+			select {
+			case <-m.stateSyncCh:
+				smLog.Info("Performing the last state sync before shutdown with 2s timeout")
+				timeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				_ = m.reconcileStatus(timeout)
+				cancel()
+			default:
+			}
 			smLog.Info("Stopping SID Manager status reconciler")
 			return nil
 		}
