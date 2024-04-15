@@ -180,6 +180,9 @@ jobs:
         run: |
           # * RollOutCiliumPods ensures that Cilium agent pods are automatically
           #   restarted when the ConfigMap is updated.
+          # * We configure the maximum number of unavailable agents to 1 to slow
+          #   down the rollout process and highlight possible connection disruption
+          #   occurring in the meanwhile.
           # * We explicitly configure the sync timeout to a higher value to
           #   give enough time to the clustermesh-apiserver to restart after
           #   the upgrade/downgrade before that agents regenerate the endpoints.
@@ -202,6 +205,7 @@ jobs:
             --set encryption.enabled=${{ matrix.encryption != 'disabled' }} \
             --set encryption.type=${{ matrix.encryption }} \
             --set hostFirewall.enabled=${{ matrix.encryption != 'ipsec' }} \
+            --set updateStrategy.rollingUpdate.maxUnavailable=1 \
             --set clustermesh.useAPIServer=${{ matrix.mode != 'external' }} \
             --set clustermesh.apiserver.kvstoremesh.enabled=${{ matrix.mode == 'kvstoremesh' }} \
             --set clustermesh.config.enabled=true \
