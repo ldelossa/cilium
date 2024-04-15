@@ -193,8 +193,11 @@ jobs:
           #   a bug causing traffic matched by FQDN and L7 policies to be incorrectly
           #   dropped by Envoy after agent restart (due to wrong identity).
           #   https://isovalent.slack.com/archives/C01FJ2PLRT7/p1710153045844129
+          # * Monitor aggregation is set to medium to avoid the performance penalty
+          #   in the testing environment due to the relatively high traffic load.
           CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
             --set rollOutCiliumPods=true \
+            --set bpf.monitorAggregation=medium \
             --set ipv4.enabled=true \
             --set ipv6.enabled=true \
             --set tunnelProtocol=${{ matrix.tunnel }} \
