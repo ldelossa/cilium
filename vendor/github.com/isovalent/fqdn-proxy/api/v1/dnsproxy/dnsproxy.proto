@@ -73,6 +73,7 @@ message FQDNRules{
   uint64 endpointID = 1;
   uint32 destPort = 2;
   L7Rules rules = 3;
+  uint32 destProto = 4;
 }
 
 message L7Rules {
