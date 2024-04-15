@@ -38,8 +38,9 @@ jobs:
           REF="v${BRANCH}"
           SHA=$(git rev-parse ${REF})
           readarray workflows < <(TRIGGER="/test-backport-${BRANCH%-ce}" yq '.triggers[env(TRIGGER)].workflows[]' .github/ariane-config.yaml)
+          readarray enterprise_workflows < <(TRIGGER="/test-backport-${BRANCH%-ce}" yq '.triggers[env(TRIGGER)].workflows[]' .github/ariane-config-enterprise.yaml)
 
-          for workflow in ${workflows[@]}; do
+          for workflow in ${workflows[@]} ${enterprise_workflows[@]}; do
             echo triggering ${workflow}
             gh workflow run ${workflow} \
               --ref ${REF} \
