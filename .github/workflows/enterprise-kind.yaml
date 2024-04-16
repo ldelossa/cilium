@@ -3,6 +3,10 @@ name: EnterpriseKind
 # Any change in triggers needs to be reflected in the concurrency group.
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
     paths-ignore:
       - 'Documentation/**'
       - 'test/**'
@@ -15,7 +19,6 @@ concurrency:
 
 env:
   helm_chart_repo: oci://quay.io/isovalent-charts-dev/cilium
-  fqdn_proxy_version: v1.14.2
   kind_config: .github/kind-config.yaml
 
 jobs:
@@ -41,6 +44,14 @@ jobs:
           version=$(bash contrib/scripts/print-chart-version.sh)
           echo "version=${version}" >> $GITHUB_OUTPUT
           echo ${version}
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHA="${{ inputs.SHA }}"
+          else
+            SHA="${{ github.event.pull_request.head.sha }}"
+          fi
+
+          echo sha=${SHA} >> $GITHUB_OUTPUT
 
       - name: Create kind cluster
         uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
@@ -81,9 +92,8 @@ jobs:
 
       - name: Install FQDN proxy
         run: |
-          helm repo add isovalent https://helm.isovalent.com
-          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy \
-            --version ${{ env.fqdn_proxy_version }} \
+          helm install -n kube-system cilium-dnsproxy ./enterprise/fqdn-proxy/installation \
+            --set image.tag=${{ steps.vars.outputs.sha }} \
             --set metrics.enabled=true \
             --set debug=true
           kubectl rollout status -n kube-system ds/cilium-dnsproxy --watch
