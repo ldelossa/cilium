@@ -660,6 +660,7 @@ Vagrantfile @cilium/ci-structure
 /.github/workflows/enterprise-multicast.yaml @isovalent/traffic-engineering
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
 /.github/workflows/enterprise-*srv6*.yaml @isovalent/traffic-engineering
+/.github/workflows/enterprise-*cilium-mesh*.yaml @isovalent/cilium-mesh
 /bpf/complexity-tests/**/**/*enterprise_*.txt @isovalent/cilium-datapath
 /bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
