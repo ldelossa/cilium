@@ -36,8 +36,10 @@ func Test_BFDReconciler(t *testing.T) {
 	logging.DefaultLogger.SetLevel(logrus.DebugLevel)
 
 	var (
-		bfdPeerName = "test-peer-1"
-		bfdPeerIP   = netip.MustParseAddr("1.2.3.4")
+		bfdPeerName  = "test-peer-1"
+		bfdPeerIP    = netip.MustParseAddr("10.0.0.1")
+		bfdPeer2Name = "test-peer-2"
+		bfdPeer2IP   = netip.MustParseAddr("10.0.0.2")
 
 		bfdProfileName  = "test-profile"
 		bfdProfileSpec1 = v1alpha1.BFDProfileSpec{
@@ -280,6 +282,72 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Local:       bfdStatusProfile1,
+					},
+				},
+			},
+		},
+		{
+			description: "Update BFD node config - add 2nd peer",
+			operation:   "update",
+			bfdProfiles: nil,
+			nodeConfigs: []*v1alpha1.IsovalentBFDNodeConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testNodeName,
+					},
+					Spec: v1alpha1.BFDNodeConfigSpec{
+						NodeRef: testNodeName,
+						Peers: []*v1alpha1.BFDNodePeerConfig{
+							{
+								Name:          bfdPeerName,
+								PeerAddress:   bfdPeerIP.String(),
+								BFDProfileRef: bfdProfileName,
+							},
+							{
+								Name:          bfdPeer2Name,
+								PeerAddress:   bfdPeer2IP.String(),
+								BFDProfileRef: bfdProfileName,
+							},
+						},
+					},
+				},
+			},
+			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+				{
+					Object: &types.BFDPeerStatus{
+						PeerAddress: bfdPeer2IP,
+						Local:       bfdStatusProfile1,
+					},
+				},
+			},
+		},
+		{
+			description: "Update BFD node config - remove 2nd peer",
+			operation:   "update",
+			bfdProfiles: nil,
+			nodeConfigs: []*v1alpha1.IsovalentBFDNodeConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testNodeName,
+					},
+					Spec: v1alpha1.BFDNodeConfigSpec{
+						NodeRef: testNodeName,
+						Peers: []*v1alpha1.BFDNodePeerConfig{
+							{
+								Name:          bfdPeerName,
+								PeerAddress:   bfdPeerIP.String(),
+								BFDProfileRef: bfdProfileName,
+							},
+						},
+					},
+				},
+			},
+			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+				{
+					Deleted: true,
+					Object: &types.BFDPeerStatus{
+						PeerAddress: bfdPeer2IP,
 						Local:       bfdStatusProfile1,
 					},
 				},

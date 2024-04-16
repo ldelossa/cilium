@@ -100,6 +100,7 @@ func newBFDReconciler(p bfdReconcilerParams) *bfdReconciler {
 		bfdProfileSyncCh:    make(chan struct{}, 1),
 		bfdNodeConfigSyncCh: make(chan struct{}, 1),
 		reconcileCh:         make(chan struct{}, 1),
+		configuredPeers:     make(map[string]*peerConfig),
 	}
 
 	// initialize jobs and register them within lifecycle
@@ -213,7 +214,7 @@ func (r *bfdReconciler) triggerReconcile() {
 }
 
 func (r *bfdReconciler) reconcile(ctx context.Context) error {
-	r.Logger.Info("Starting BFD reconciliation")
+	r.Logger.Debug("Starting BFD reconciliation")
 
 	// reconcileErr will contain all reconciliation errors.
 	// Reconciliation is best-effort: if a BFD peer can not be reconciled, it continues with other peers.
@@ -272,7 +273,6 @@ func (r *bfdReconciler) reconcile(ctx context.Context) error {
 	// Add / Update / Delete peers and populate last configured state.
 	// Reconcile with the best effort - upon error (e.g. due to potential conflicts between multiple peers),
 	// log an error and continue reconciling other peers.
-	configured := make(map[string]*peerConfig)
 
 	for _, peer := range toAdd {
 		err := r.addPeer(peer)
@@ -281,7 +281,7 @@ func (r *bfdReconciler) reconcile(ctx context.Context) error {
 				Error("Failed to add BFD peer, BFD peer configuration may be inconsistent")
 			reconcileErr = errors.Join(reconcileErr, err)
 		} else {
-			configured[peer.key()] = peer
+			r.configuredPeers[peer.key()] = peer
 		}
 	}
 	for _, peer := range toUpdate {
@@ -291,7 +291,7 @@ func (r *bfdReconciler) reconcile(ctx context.Context) error {
 				Error("Failed to update BFD peer, BFD peer configuration may be inconsistent")
 			reconcileErr = errors.Join(reconcileErr, err)
 		} else {
-			configured[peer.key()] = peer
+			r.configuredPeers[peer.key()] = peer
 		}
 	}
 	for _, peer := range toDelete {
@@ -300,11 +300,10 @@ func (r *bfdReconciler) reconcile(ctx context.Context) error {
 			r.Logger.WithError(err).WithFields(peer.logFields()).
 				Error("Failed to delete BFD peer, BFD peer configuration may be inconsistent")
 			reconcileErr = errors.Join(reconcileErr, err)
-			configured[peer.key()] = peer // still configured
+		} else {
+			delete(r.configuredPeers, peer.key())
 		}
 	}
-	r.configuredPeers = configured // keep the last configured state
-
 	return reconcileErr
 }
 
