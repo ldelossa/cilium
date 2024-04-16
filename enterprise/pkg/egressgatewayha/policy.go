@@ -273,7 +273,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 				healthyGatewayIPsByAZ[nodeAZ] = append(healthyGatewayIPsByAZ[nodeAZ], nodeIP)
 			} else {
 				log.WithField(logfields.NodeName, node.Name).
-					Errorf("AZ affinity is enabled but node is missing %s label. Node will be ignored", core_v1.LabelTopologyZone)
+					Warnf("AZ affinity is enabled but node is missing %s label. Node will be ignored", core_v1.LabelTopologyZone)
 			}
 		}
 	}
