@@ -679,6 +679,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/cilium-dbg/cmd/*bfd_* @isovalent/traffic-engineering
+/enterprise/fqdn-proxy/ @isovalent/dns-proxy
 /enterprise/operator/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/operator/pkg/srv6/ @isovalent/traffic-engineering
 /enterprise/operator/pkg/multinetwork/ @isovalent/multi-network

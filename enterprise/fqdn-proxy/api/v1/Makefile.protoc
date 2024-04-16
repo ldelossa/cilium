@@ -1,0 +1,32 @@
+# Copyright 2017-2020 Authors of Cilium
+# SPDX-License-Identifier: Apache-2.0
+
+# This Makefile is expected to run inside the cilium-builder image to generate
+# the proto files. Run `make proto` on ./Makefile to invoke run this inside a
+# a container.
+
+PROTOC ?= protoc
+
+PROTO_SOURCES := \
+	./dnsproxy/dnsproxy.proto
+
+GO_TARGETS := $(PROTO_SOURCES:.proto=.pb.go) $(PROTO_SOURCES:.proto=.pb.json.go)
+
+PROTO_PATH := .
+
+PROTOC_PLUGINS := --plugin=$(GOPATH)/bin/protoc-gen-go
+PROTOC_PLUGINS += --plugin=$(GOPATH)/bin/protoc-gen-go-grpc
+PROTOC_PLUGINS += --plugin=$(GOPATH)/bin/protoc-gen-go-json
+
+.PHONY: all
+all:
+	@echo NOTE: The warning about package github.com/golang/protobuf/protoc-gen-go/generator can be ignored
+	$(QUIET)set -e; \
+	for proto in $(PROTO_SOURCES) ; do \
+		echo Generating $${proto} && \
+		$(PROTOC) $(PROTOC_PLUGINS) -I $(PROTO_PATH) \
+			--go_out=paths=source_relative:. \
+			--go-grpc_out=requireUnimplementedServers=false,paths=source_relative:. \
+			--go-json_out=orig_name:. \
+			$${proto}; \
+	done

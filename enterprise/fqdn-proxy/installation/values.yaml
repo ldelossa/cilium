@@ -1,0 +1,81 @@
+# Default values for dnsproxy.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  override: ~
+  repository: quay.io/isovalent-dev/cilium-dnsproxy-ci
+  tag: latest
+  imagePullPolicy: Always
+runPath: "/var/run/cilium"
+gke: false
+debug: false
+extraArgs: []
+extraVolumes: []
+extraVolumeMounts: []
+podSecurityContext: {}
+# -- Labels to be added to cilium-dnsproxy pods
+podLabels: {}
+# -- Explicitly enable or disable priority class.
+# .Capabilities.KubeVersion is unsettable in `helm template` calls,
+# it depends on k8s libraries version that Helm was compiled against.
+# This option allows to explicitly disable setting the priority class, which
+# is useful for rendering charts for
+enableCriticalPriorityClass: false
+# -- The priority class to use for cilium-dnsproxy pods
+priorityClassName: ""
+resources: {}
+securityContext:
+  capabilities:
+    add:
+    - NET_ADMIN
+metrics:
+  # -- Enable Prometheus metrics.
+  enabled: true
+  # -- Prometheus metrics port.
+  port: 9967
+  serviceMonitor:
+    # -- Enable service monitors.
+    # This requires the prometheus CRDs to be available (see https://github.com/prometheus-operator/prometheus-operator/blob/master/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml)
+    enabled: false
+    # -- Labels to add to cilium-dnsproxy ServiceMonitor
+    labels: {}
+    # -- Annotations to add to cilium-dnsproxy ServiceMonitor
+    annotations: {}
+    # -- Scrape interval.
+    scrapeInterval: 10s
+serviceAccount:
+  create: true
+  automount: true
+  name: cilium-dnsproxy
+  annotations: {}
+# -- Node tolerations for proxy scheduling to nodes with taints
+# ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+tolerations:
+- operator: Exists
+  # - key: "key"
+  #   operator: "Equal|Exists"
+  #   value: "value"
+  #   effect: "NoSchedule|PreferNoSchedule|NoExecute(1.6 only)"
+dnsProxy:
+  dnsRejectResponseCode: "refused"
+
+# -- Enable compatibility with older versions of cilium-agent.
+# This enables additional logic to ensure compatibility with the specified
+# version of cilium-agent. This can be disabled (via empty string) if you are
+# are running with matching versions for cilium-dnsproxy and cilium-agent.
+# Supported values: "", "1.13"
+upgradeCompatibility: "1.13"
+
+# -- iptables container used for upgrade compatibility
+iptables:
+  image:
+    override: ~
+    repository: registry.k8s.io/build-image/distroless-iptables
+    tag: v0.4.1@sha256:6b7fef6529c4f47e40b38eb07f3de832f1c8a808ed0a895408053d00c34b6c86
+    imagePullPolicy: IfNotPresent
+  securityContext:
+    capabilities:
+      add:
+        - NET_ADMIN
+        - SYS_MODULE
