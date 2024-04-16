@@ -15,11 +15,10 @@
 package main
 
 import (
-	"sync"
-
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
+	"github.com/cilium/cilium/pkg/lock"
 )
 
 // AgentDataCache is a cache which stores data retrieved from agent by
@@ -29,7 +28,7 @@ type AgentDataCache struct {
 	identityByIP map[string]ipcache.Identity
 	ipBySecID    map[identity.NumericIdentity][]string
 
-	lock sync.RWMutex
+	lock lock.RWMutex
 }
 
 func NewCache() AgentDataCache {

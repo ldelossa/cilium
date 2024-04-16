@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	"github.com/cilium/dns"
 	"github.com/cilium/workerpool"
@@ -56,6 +55,7 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/pprof"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
 	"github.com/cilium/cilium/pkg/version"
 )
