@@ -388,7 +388,6 @@ func manageConnection() {
 		// has really changed after resetting the client
 		curConnStatus := client().conn.GetState()
 		if curConnStatus != prevConnStatus {
-			prevConnStatus = curConnStatus
 			log.Infof("new grpc client connection status: %v", curConnStatus)
 		}
 		time.Sleep(30 * time.Second)
@@ -473,7 +472,7 @@ func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, error) {
 		endpoint, ok := cache.endpointByIP[ip.String()]
 		cache.lock.RUnlock()
 		if !ok {
-			return nil, fmt.Errorf("could not lookup endpoint for ip %s: %v", ip, err)
+			return nil, fmt.Errorf("could not lookup endpoint for ip %s: %w", ip, err)
 		}
 		LogWarningTrigger.TriggerWithReason(fmt.Sprintf("endpoint retrieved from cache: %s", err))
 		return endpoint, nil
