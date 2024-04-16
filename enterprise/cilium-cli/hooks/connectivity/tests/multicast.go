@@ -40,7 +40,6 @@ const (
 var (
 	testOutputFile       = "/tmp/group_%s_test"
 	testMulticastUDPPort = 6789
-	testGroupStartAddr   = netip.MustParseAddr("229.0.0.0")
 	testTimeout          = 30 * time.Second
 )
 
@@ -331,8 +330,8 @@ type Subscriber struct {
 
 // multicast BPF data will be in this format
 type subscriberData struct {
-	GroupAddr   netip.Addr
-	Subscribers []Subscriber
+	GroupAddr   netip.Addr   `json:"group_address"`
+	Subscribers []Subscriber `json:"subscribers"`
 }
 
 func waitForBpfEntries(ctx context.Context, f func() error) error {
@@ -410,7 +409,7 @@ func validateBpfSubscriberEntries(ctx context.Context, t *check.Test, subscriber
 }
 
 func getGroupMapEntries(ctx context.Context, t *check.Test, ciliumPod check.Pod) ([]string, error) {
-	cmd := strings.Split("cilium bpf multicast group list all -o json", " ")
+	cmd := strings.Split("cilium bpf multicast group list -o json", " ")
 	stdout, err := ciliumPod.K8sClient.ExecInPod(ctx, ciliumPod.Pod.Namespace, ciliumPod.Pod.Name, defaults.AgentContainerName, cmd)
 	if err != nil {
 		t.Fatal("failed to run cilium bpf multicast group list command: %w", err)
