@@ -23,20 +23,8 @@ How to Publish a New Version
 The following files contain references to the semantic version of the codebase and should
 be up to date before the image or helm chart is published:
 
-- ./VERSION
 - ./installation/Chart.yaml
-- ./installation/values.yaml
 - ./installation/README.md (run `./installation/test.sh` to generate this file).
-
-### Build and Publish the Container Image and Helm Chart
-
-The following steps will automatically build and publish the container image
-and Helm chart of FQDN-Proxy:
-
-1. [Create a new github release](https://github.com/isovalent/fqdn-proxy/releases/new).
-2. Choose the branch you would like to release.
-3. Create a new tag conforming to the semantic version that you are releasing ("v1.13.0", for example).
-4. Make sure to click "Generate release notes", then "Publish release". 
 
 ### Run Compatibility Tests
 
