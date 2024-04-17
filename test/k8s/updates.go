@@ -136,7 +136,7 @@ var _ = Describe("K8sUpdates", func() {
 			InstallAndValidateCiliumUpgrades(
 				kubectl,
 				helpers.CiliumStableHelmChartVersion,
-				helpers.CiliumStableVersion,
+				helpers.CiliumStableImageVersion,
 				helpers.CiliumLatestHelmChartVersion,
 				helpers.GetLatestImageVersion(),
 			)
@@ -163,7 +163,15 @@ func InstallAndValidateCiliumUpgrades(kubectl *helpers.Kubectl, oldHelmChartVers
 		timeout = 5 * time.Minute
 	)
 
-	canRun, err := helpers.CanRunK8sVersion(oldImageVersion, helpers.GetCurrentK8SEnv())
+	// Enterprise-specific hack. The image version format v1.X-ce is not compliant
+	// with semver library because shortened version cannot contain a -ce suffix.
+	// Workaround this by inserting .0 before -ce and make it a valid semver.
+	var oldImageVersionSemver string
+	if strings.HasSuffix(oldImageVersion, "-ce") {
+		oldImageVersionSemver = strings.ReplaceAll(oldImageVersion, "-ce", ".0-ce")
+	}
+
+	canRun, err := helpers.CanRunK8sVersion(oldImageVersionSemver, helpers.GetCurrentK8SEnv())
 	ExpectWithOffset(1, err).To(BeNil(), "Unable to get k8s constraints for %s", oldImageVersion)
 	if !canRun {
 		Skip(fmt.Sprintf(

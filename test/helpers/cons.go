@@ -178,6 +178,10 @@ const (
 	// to the v1.X branch
 	CiliumStableHelmChartVersion = "1.15"
 	CiliumStableVersion          = "v" + CiliumStableHelmChartVersion
+	// We need to separate image version and helm chart version because
+	// the image version contains the "-ce" suffix, but the helm chart
+	// version does not.
+	CiliumStableImageVersion     = CiliumStableVersion + "-ce"
 	CiliumLatestHelmChartVersion = "1.16.0-dev"
 
 	MonitorLogFileName = "monitor.log"
