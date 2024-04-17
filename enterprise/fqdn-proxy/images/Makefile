@@ -12,39 +12,31 @@ ifeq ($(PUSH),true)
 OUTPUT := "type=registry,push=true"
 endif
 
+PLATFORMS=linux/amd64,linux/arm64
+
+SCRIPTS=../../../images/scripts
+
 all-images: cilium-dnsproxy-image
 
 lint:
-	scripts/lint.sh
+	$(SCRIPTS)/lint.sh
 
 .buildx_builder:
 	# see https://github.com/docker/buildx/issues/308
 	mkdir -p ../.buildx
-	docker buildx create --platform linux/amd64,linux/arm64 --buildkitd-flags '--debug' > $@
-
-update-golang-image:
-	scripts/update-golang-image.sh
-
-update-alpine-image:
-	scripts/update-alpine-image.sh
-
-runtime-image: .buildx_builder
-	TEST=true scripts/build-image.sh cilium-runtime-dev images/runtime linux/amd64,linux/arm64 $(OUTPUT) "$$(cat .buildx_builder)" $(REGISTRIES)
+	docker buildx create --platform $(PLATFORMS) --buildkitd-flags '--debug' > $@
 
 update-runtime-image:
-	scripts/update-cilium-runtime-image.sh
+	$(SCRIPTS)/update-cilium-runtime-image.sh
 
 check-runtime-image:
-	CHECK=true scripts/update-cilium-runtime-image.sh
-
-builder-image: .buildx_builder
-	TEST=true scripts/build-image.sh cilium-builder-dev images/builder linux/amd64 $(OUTPUT) "$$(cat .buildx_builder)" $(REGISTRIES)
+	CHECK=true $(SCRIPTS)/update-cilium-runtime-image.sh
 
 update-builder-image:
-	scripts/update-cilium-builder-image.sh
+	$(SCRIPTS)/update-cilium-builder-image.sh
 
 check-builder-image:
-	CHECK=true scripts/update-cilium-builder-image.sh
+	CHECK=true $(SCRIPTS)/update-cilium-builder-image.sh
 
 cilium-dnsproxy-image: .buildx_builder
-	ROOT_CONTEXT=true scripts/build-image.sh cilium-dnsproxy enterprise/fqdn-proxy/images/cilium-dnsproxy linux/amd64,linux/arm64 $(OUTPUT) "$$(cat .buildx_builder)" $(REGISTRIES)
+	ROOT_CONTEXT=true $(SCRIPTS)/build-image.sh cilium-dnsproxy enterprise/fqdn-proxy/images/cilium-dnsproxy $(PLATFORMS) $(OUTPUT) "$$(cat .buildx_builder)" $(REGISTRIES)
