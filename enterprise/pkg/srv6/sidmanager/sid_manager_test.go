@@ -357,7 +357,8 @@ func TestSIDManagerStatusReconciliation(t *testing.T) {
 			sm, err := c.Get(context.TODO(), sidmanager.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 
-			return assert.Len(t, sm.Status.SIDAllocations, 1, "Invalid SIDAllocations length") &&
+			return assert.NotNil(t, sm.Status, "Status is nil") &&
+				assert.Len(t, sm.Status.SIDAllocations, 1, "Invalid SIDAllocations length") &&
 				assert.Equal(t, poolName1, sm.Status.SIDAllocations[0].PoolRef,
 					"Pool name mismatched between status and allocation") &&
 				assert.Len(t, sm.Status.SIDAllocations[0].SIDs, 1,
@@ -377,7 +378,8 @@ func TestSIDManagerStatusReconciliation(t *testing.T) {
 		eventually(t, func() bool {
 			sm, err := c.Get(context.TODO(), sidmanager.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			return assert.Len(t, sm.Status.SIDAllocations, 0, "SIDAllocations still exists")
+			return assert.NotNil(t, sm.Status, "Status is nil") &&
+				assert.Len(t, sm.Status.SIDAllocations, 0, "SIDAllocations still exists")
 		})
 	})
 }
@@ -518,8 +520,9 @@ func TestSIDManagerRestoration(t *testing.T) {
 				eventually(t, func() bool {
 					sm, err := c.Get(context.TODO(), sidmanager.Name, metav1.GetOptions{})
 					require.NoError(t, err)
-					return assert.Len(t, sm.Status.SIDAllocations, 0,
-						"Stale allocation restored to the status")
+					return assert.NotNil(t, sm.Status, "Status is nil") &&
+						assert.Len(t, sm.Status.SIDAllocations, 0,
+							"Stale allocation restored to the status")
 				})
 			}
 		})

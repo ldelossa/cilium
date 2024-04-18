@@ -1092,6 +1092,9 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			if err != nil {
 				return false
 			}
+			if sm.Status == nil {
+				return false
+			}
 			if len(sm.Status.SIDAllocations) != 1 {
 				return false
 			}
