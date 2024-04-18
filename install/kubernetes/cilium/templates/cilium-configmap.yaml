@@ -728,6 +728,9 @@ data:
 {{- if hasKey .Values.nodePort "range" }}
   node-port-range: {{ get .Values.nodePort "range" | quote }}
 {{- end }}
+{{- if hasKey .Values.nodePort "addresses" }}
+  nodeport-addresses: {{ get .Values.nodePort "addresses" | join "," | quote }}
+{{- end }}
 {{- if hasKey .Values.nodePort "directRoutingDevice" }}
   direct-routing-device: {{ .Values.nodePort.directRoutingDevice | quote }}
 {{- end }}
@@ -1130,6 +1133,10 @@ data:
 {{- if .Values.bpf.vlanBypass }}
   # A space separated list of explicitly allowed vlan id's
   vlan-bpf-bypass: {{ .Values.bpf.vlanBypass | join " " | quote }}
+{{- end }}
+
+{{- if .Values.bpf.disableExternalIPMitigation }}
+  disable-external-ip-mitigation: {{ .Values.bpf.disableExternalIPMitigation | quote }}
 {{- end }}
 
 {{- if .Values.enableCiliumEndpointSlice }}

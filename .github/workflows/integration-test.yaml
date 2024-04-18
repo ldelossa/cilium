@@ -142,15 +142,24 @@ jobs:
           # renovate: datasource=golang-version depName=go
           go-version: 1.22.2
 
+      - name: Set clang directory
+        id: set_clang_dir
+        run: echo "clang_dir=$HOME/.clang" >> $GITHUB_OUTPUT
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@8b37482c5a2997a3ab5dbf6561f8109e2eaa7d3b # v2.0.2
+        with:
+          version: "17.0.6"
+          directory: ${{ steps.set_clang_dir.outputs.clang_dir }}
+
       - name: Prepare environment
         timeout-minutes: 15
         run: |
-          ./.github/actions/unit-tests/prepare.sh
+          go install github.com/mfridman/tparse@28967170dce4f9f13de77ec857f7aed4c4294a5f # v0.12.3 (main) with -progress
 
       - name: Run integration tests
         timeout-minutes: 60
         run: |
-          export PATH=/usr/local/clang/bin:$PATH
           export V=0
           export DOCKER_BUILD_FLAGS=--quiet
           ./.github/actions/unit-tests/build.sh

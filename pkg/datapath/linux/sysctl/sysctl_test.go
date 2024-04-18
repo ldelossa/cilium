@@ -158,7 +158,6 @@ func TestSysctl(t *testing.T) {
 				newReconcilerConfig,
 				newOps,
 			),
-			cell.Invoke(reconciler.Register[*tables.Sysctl]),
 		),
 
 		cell.Invoke(func(s Sysctl) {
@@ -227,7 +226,7 @@ func TestSysctl(t *testing.T) {
 	for _, s := range batch {
 		val, err := sysctl.Read(s.Name)
 		assert.NoError(t, err)
-		assert.Equal(t, s.Val, val, "unexpected value for parameter %q", s)
+		assert.Equal(t, s.Val, val, "unexpected value %q for parameter %q", val, s.Name)
 	}
 
 	assert.NoError(t, hive.Stop(context.Background()))
@@ -262,7 +261,6 @@ func TestSysctlIgnoreErr(t *testing.T) {
 				newReconcilerConfig,
 				newOps,
 			),
-			cell.Invoke(reconciler.Register[*tables.Sysctl]),
 		),
 
 		cell.Invoke(func(s Sysctl) {

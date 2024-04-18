@@ -380,6 +380,7 @@ type ServiceUpsertNotification = flow.ServiceUpsertNotification
 type ServiceDeleteNotification = flow.ServiceDeleteNotification
 type NetworkInterface = flow.NetworkInterface
 type DebugEvent = flow.DebugEvent
+type FlowFilter_Experimental = flow.FlowFilter_Experimental
 
 // Deprecated. Use isovalent.flow.aggregation.StateChange instead.
 //

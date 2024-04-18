@@ -30,24 +30,16 @@ jobs:
         id: set_clang_dir
         run: echo "clang_dir=$HOME/.clang" >> $GITHUB_OUTPUT
 
-      - name: Cache LLVM and Clang
-        id: cache-llvm
-        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
-        with:
-          path: ${{ steps.set_clang_dir.outputs.clang_dir }}
-          key: llvm-10.0
-
       - name: Install LLVM and Clang prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libtinfo5
 
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@dec985c8d7b46a2f363ea1a78f660c946a3349ea # v2.0.1
+        uses: KyleMayes/install-llvm-action@8b37482c5a2997a3ab5dbf6561f8109e2eaa7d3b # v2.0.2
         with:
-          version: "10.0"
+          version: "17.0.6"
           directory: ${{ steps.set_clang_dir.outputs.clang_dir }}
-          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
       - name: Install ginkgo
         run: |
@@ -68,7 +60,7 @@ jobs:
             ${{ github.event.pull_request.commits_url }})
           PR_FIRST_SHA=$(echo "$PR_COMMITS_API_JSON" | jq -r ".[0].sha")
           PR_PARENT_SHA=$(git rev-parse "${PR_FIRST_SHA}^")
-          git rebase --exec "make build -j $(nproc)" $PR_PARENT_SHA
+          git rebase --exec "contrib/scripts/builder.sh make build -j $(nproc)" $PR_PARENT_SHA
 
       - name: Check bpf code changes
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -88,7 +80,7 @@ jobs:
             ${{ github.event.pull_request.commits_url }})
           PR_FIRST_SHA=$(echo "$PR_COMMITS_API_JSON" | jq -r ".[0].sha")
           PR_PARENT_SHA=$(git rev-parse "${PR_FIRST_SHA}^")
-          git rebase --exec "make -C bpf build_all -j $(nproc)" $PR_PARENT_SHA
+          git rebase --exec "contrib/scripts/builder.sh make -C bpf build_all -j $(nproc)" $PR_PARENT_SHA
 
       - name: Check test code changes
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -109,7 +101,7 @@ jobs:
             ${{ github.event.pull_request.commits_url }})
           PR_FIRST_SHA=$(echo "$PR_COMMITS_API_JSON" | jq -r ".[0].sha")
           PR_PARENT_SHA=$(git rev-parse "${PR_FIRST_SHA}^")
-          git rebase --exec "make -C test build -j $(nproc) && make -C test build-darwin" $PR_PARENT_SHA
+          git rebase --exec "make -C test build -j $(nproc) && make -C test build-darwin -j $(nproc)" $PR_PARENT_SHA
 
       - name: Failed commit during the build
         if: ${{ failure() }}

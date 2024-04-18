@@ -31,6 +31,7 @@ cilium-agent hive dot-graph [flags]
       --cni-external-routing                                         Whether the chained CNI plugin handles routing on the node
       --cni-log-file string                                          Path where the CNI plugin should write logs (default "/var/run/cilium/cilium-cni.log")
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
+      --devices strings                                              List of devices facing cluster/external network (used for BPF NodePort, BPF masquerading and host firewall); supports '+' as wildcard in device name, e.g. 'eth+'
       --disable-envoy-version-check                                  Do not perform Envoy version check
       --disable-iptables-feeder-rules strings                        Chains to ignore when installing feeder rules.
       --egress-gateway-ha-policy-map-max int                         Maximum number of entries in egress gatewa HA policy map (default 16384)
@@ -117,6 +118,7 @@ cilium-agent hive dot-graph [flags]
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
       --tunnel-port uint16                                           Tunnel port (default 8472 for "vxlan" and 6081 for "geneve")
       --tunnel-protocol string                                       Encapsulation protocol to use for the overlay ("vxlan" or "geneve") (default "vxlan")
+      --use-full-tls-context                                         If enabled, persist ca.crt keys into the Envoy config even in a terminatingTLS block on an L7 Cilium Policy. This is to enable compatibility with previously buggy behaviour. This flag is deprecated and will be removed in a future release.
       --write-cni-conf-when-ready string                             Write the CNI configuration to the specified path when agent is ready
 ```
 
