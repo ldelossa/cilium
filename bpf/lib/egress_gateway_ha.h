@@ -4,8 +4,6 @@
 #ifndef __LIB_EGRESS_GATEWAY_HA_H_
 #define __LIB_EGRESS_GATEWAY_HA_H_
 
-#include "lib/fib.h"
-#include "lib/identity.h"
 #include "lib/overloadable.h"
 
 #include "maps.h"
