@@ -69,26 +69,14 @@ bool egress_gw_ha_policy_entry_is_excluded_cidr(const struct egress_gw_ha_policy
 }
 #endif /* ENABLE_EGRESS_GATEWAY_HA */
 
-static __always_inline
-bool egress_gw_ha_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
-					 int ct_status __maybe_unused,
-					 __u32 *tunnel_endpoint __maybe_unused)
+static __always_inline int
+egress_gw_ha_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
+				    int ct_status __maybe_unused,
+				    __be32 *gateway_ip __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY_HA)
-	struct ipv4_ct_tuple ct_key;
-	struct egress_gw_ha_ct_entry *egress_ct;
-
 	struct egress_gw_ha_policy_entry *egress_gw_policy;
-	struct endpoint_info *gateway_node_ep;
-	__be32 gateway_ip;
-
-	/* If the packet is a reply or is related, it means that outside
-	 * has initiated the connection, and so we should skip egress
-	 * gateway, since an egress policy is only matching connections
-	 * originating from a pod.
-	 */
-	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
-		return false;
+	struct ipv4_ct_tuple ct_key;
 
 	/* The first iteration of egress_gw_ha_request_needs_redirect() would
 	 * receive the full IPv4 header as parameter, extract the source and
@@ -112,14 +100,14 @@ bool egress_gw_ha_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_un
 
 	/* Established connection should have its gateway in the EgressCT map: */
 	if (ct_status == CT_ESTABLISHED) {
-		egress_ct = lookup_ip4_egress_ct(&ct_key);
+		struct egress_gw_ha_ct_entry *egress_ct = lookup_ip4_egress_ct(&ct_key);
+
 		if (egress_ct) {
 			/* If there's an entry, extract the IP of the gateway node from
 			 * the egress_ct struct and forward the packet to the gateway
 			 */
-			gateway_ip = egress_ct->gateway_ip;
-
-			goto do_egress_gateway_redirect;
+			*gateway_ip = egress_ct->gateway_ip;
+			return CTX_ACT_REDIRECT;
 		}
 	}
 
@@ -127,44 +115,29 @@ bool egress_gw_ha_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_un
 	egress_gw_policy = lookup_ip4_egress_gw_ha_policy(ipv4_ct_reverse_tuple_saddr(rtuple),
 							  ipv4_ct_reverse_tuple_daddr(rtuple));
 	if (!egress_gw_policy)
-		return false;
+		return CTX_ACT_OK;
 
 	if (!egress_gw_policy->size) {
-		/* If no gateway is found we return that the connection is
-		 * "redirected" and the caller will handle this special case
-		 * and drop the traffic.
-		 */
-		*tunnel_endpoint = EGRESS_GATEWAY_NO_GATEWAY;
-		return true;
+		/* If no gateway is found, drop the packet. */
+		return DROP_NO_EGRESS_GATEWAY;
 	}
 
 	/* If this is an excluded CIDR, skip redirection */
 	if (egress_gw_ha_policy_entry_is_excluded_cidr(egress_gw_policy))
-		return false;
+		return CTX_ACT_OK;
 
 	/* Otherwise encap and redirect the packet to egress gateway
 	 * node through a tunnel.
 	 */
-	gateway_ip = pick_egress_gateway(egress_gw_policy);
+	*gateway_ip = pick_egress_gateway(egress_gw_policy);
 
 	/* And add an egress CT entry to pin the selected gateway node
 	 * for the connection
 	 */
-	update_egress_gw_ha_ct_entry(&ct_key, gateway_ip);
-
-do_egress_gateway_redirect:
-	/* If the gateway node is the local node, then just let the
-	 * packet go through, as it will be SNATed later on by
-	 * handle_nat_fwd().
-	 */
-	gateway_node_ep = __lookup_ip4_endpoint(gateway_ip);
-	if (gateway_node_ep && (gateway_node_ep->flags & ENDPOINT_F_HOST))
-		return false;
-
-	*tunnel_endpoint = gateway_ip;
-	return true;
+	update_egress_gw_ha_ct_entry(&ct_key, *gateway_ip);
+	return CTX_ACT_REDIRECT;
 #else
-	return false;
+	return CTX_ACT_OK;
 #endif /* ENABLE_EGRESS_GATEWAY_HA */
 }
 
