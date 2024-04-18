@@ -87,18 +87,12 @@ func (k *EgressGatewayOperatorTestSuite) updatePolicyMaxGatewayNodes(c *C, polic
 }
 
 func (k *EgressGatewayOperatorTestSuite) makeNodesHealthy(nodes ...string) {
-	for _, n := range nodes {
-		k.healthcheckerMock.nodes[n] = struct{}{}
-	}
-
+	k.healthcheckerMock.addNodes(nodes...)
 	k.manager.reconciliationTrigger.Trigger()
 }
 
 func (k *EgressGatewayOperatorTestSuite) makeNodesUnhealthy(nodes ...string) {
-	for _, n := range nodes {
-		delete(k.healthcheckerMock.nodes, n)
-	}
-
+	k.healthcheckerMock.deleteNodes(nodes...)
 	k.manager.reconciliationTrigger.Trigger()
 }
 

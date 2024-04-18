@@ -26,6 +26,7 @@ import (
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy/api"
@@ -184,6 +185,8 @@ func addNode(tb testing.TB, nodes fakeResource[*cilium_api_v2.CiliumNode], node 
 }
 
 type healthcheckerMock struct {
+	lock.RWMutex
+
 	nodes  map[string]struct{}
 	events chan healthcheck.Event
 }
@@ -192,12 +195,33 @@ func (h *healthcheckerMock) UpdateNodeList(nodes map[string]nodeTypes.Node) {
 }
 
 func (h *healthcheckerMock) NodeIsHealthy(nodeName string) bool {
+	h.Lock()
+	defer h.Unlock()
+
 	_, ok := h.nodes[nodeName]
 	return ok
 }
 
 func (h *healthcheckerMock) Events() chan healthcheck.Event {
 	return h.events
+}
+
+func (h *healthcheckerMock) addNodes(nodes ...string) {
+	h.Lock()
+	defer h.Unlock()
+
+	for _, n := range nodes {
+		h.nodes[n] = struct{}{}
+	}
+}
+
+func (h *healthcheckerMock) deleteNodes(nodes ...string) {
+	h.Lock()
+	defer h.Unlock()
+
+	for _, n := range nodes {
+		delete(h.nodes, n)
+	}
 }
 
 func newHealthcheckerMock() *healthcheckerMock {
