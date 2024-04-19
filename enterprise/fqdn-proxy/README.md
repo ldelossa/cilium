@@ -23,7 +23,7 @@ How to Publish a New Version
 The following files contain references to the semantic version of the codebase and should
 be up to date before the image or helm chart is published:
 
-- ./installation/Chart.yaml
+- ./installation/Chart.yaml (run `make -C installation update-chart to update it base on the `VERSION` file in the root directory of the repository)
 - ./installation/README.md (run `./installation/test.sh` to generate this file).
 
 ### Run Compatibility Tests

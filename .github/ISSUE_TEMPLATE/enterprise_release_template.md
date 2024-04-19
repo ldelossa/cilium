@@ -54,6 +54,7 @@ _If you need help: ask in #enterprise-release._
         - [ ] `VERSION` file
         - [ ] `git checkout --ours install/kubernetes/cilium/{Chart.yaml,README.md,values.yaml}`
         - [ ] `make -C install/kubernetes`
+        - [ ] `make -C enterprise/fqdn-proxy/installation`
         - [ ] for `<v1.14-ce`:
           - [ ] run `make -C install/kubernetes MAKEFILE_VALUES=Makefile.enterprise.values cilium/values.yaml` and make sure the values.yaml points to the correct image tags.
         - [ ] run `make -C Documentation update-helm-values`
