@@ -184,7 +184,7 @@ func newHive(t *testing.T, invoke ...any) *hive.Hive {
 }
 
 func eventually(t *testing.T, f func() bool) {
-	require.Eventually(t, f, time.Second*3, time.Millisecond*200)
+	require.Eventually(t, f, time.Second*3, time.Millisecond*10)
 }
 
 func TestSIDManagerSpecReconciliation(t *testing.T) {

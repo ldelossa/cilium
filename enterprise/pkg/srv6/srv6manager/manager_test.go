@@ -363,6 +363,10 @@ func allocateIdentity(t *testing.T, identityAllocator cache.IdentityAllocator, e
 	ep.Status.Identity.ID = int64(id.ID)
 }
 
+func eventually(t *testing.T, f func() bool) {
+	require.Eventually(t, f, time.Second*3, time.Millisecond*10)
+}
+
 func TestSRv6Manager(t *testing.T) {
 	testutils.PrivilegedTest(t)
 
@@ -834,7 +838,7 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			// Ensure all maps are initialized as expected
-			require.Eventually(t, func() bool {
+			eventually(t, func() bool {
 				currentVRFMapEntries := []*vrfKV{}
 				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
 					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
@@ -863,7 +867,7 @@ func TestSRv6Manager(t *testing.T) {
 				}
 
 				return true
-			}, time.Second*3, time.Millisecond*100)
+			})
 
 			// Do CRUD for Endpoints
 			epsToAdd, epsToUpdate, epsToDelete := planK8sObj(test.initEndpoints, test.updatedEndpoints)
@@ -922,7 +926,7 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			// Make sure all maps are updated as expected
-			require.Eventually(t, func() bool {
+			eventually(t, func() bool {
 				currentVRFMapEntries := []*vrfKV{}
 				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
 					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
@@ -951,13 +955,9 @@ func TestSRv6Manager(t *testing.T) {
 				}
 
 				return true
-			}, time.Second*3, time.Millisecond*100)
+			})
 		})
 	}
-}
-
-func eventually(t *testing.T, f func() bool) {
-	require.Eventually(t, f, time.Second*3, time.Millisecond*200)
 }
 
 func TestSRv6ManagerWithSIDManager(t *testing.T) {
@@ -1408,11 +1408,11 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			<-fixture.watching
 
 			// Wait for the SIDManager sync
-			require.Eventually(t, func() bool {
+			eventually(t, func() bool {
 				return m.sidAllocatorIsSet()
-			}, time.Second*3, time.Millisecond*100)
+			})
 
-			require.Eventually(t, func() bool {
+			eventually(t, func() bool {
 				vrfs := m.GetAllVRFs()
 
 				if test.vrf != nil {
@@ -1435,7 +1435,7 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 				} else {
 					return assert.Nil(t, vrfs[0].SIDInfo)
 				}
-			}, time.Second*3, time.Millisecond*100)
+			})
 		})
 	}
 }
