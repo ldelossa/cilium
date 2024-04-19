@@ -238,6 +238,22 @@ jobs:
             --set endpointRoutes.enabled=false \
           "
 
+          # Cilium is currently affected by a bug breaking Pod to NodePort traffic
+          # through an intermediate node in tunnel mode, when host-firewall is
+          # enabled, KPR is enabled but SocketLB does not take effect. This matches
+          # the "5" and "6" matrix entries. In these cases, let's ensure that the
+          # clustermesh-apiserver gets scheduled on the same node that we target
+          # through the NodePort as a temporary workaround until it gets fixed.
+          # https://isovalent.slack.com/archives/C01FCTUUYN9/p1713535087952649
+          if [ "${{ matrix.name }}" == "5" ] || [ "${{ matrix.name }}" == "6" ]; then
+            CILIUM_INSTALL_CLUSTER1="$CILIUM_INSTALL_CLUSTER1 \
+              --set 'clustermesh.apiserver.nodeSelector.kubernetes\.io/hostname=${{ env.clusterName1 }}-worker' \
+            "
+            CILIUM_INSTALL_CLUSTER2="$CILIUM_INSTALL_CLUSTER2 \
+              --set 'clustermesh.apiserver.nodeSelector.kubernetes\.io/hostname=${{ env.clusterName2 }}-worker' \
+            "
+          fi
+
           echo cilium_install_cluster1=$CILIUM_INSTALL_CLUSTER1 >> $GITHUB_OUTPUT
           echo cilium_install_cluster2=$CILIUM_INSTALL_CLUSTER2 >> $GITHUB_OUTPUT
 
