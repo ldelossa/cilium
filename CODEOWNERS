@@ -677,6 +677,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-cli/hooks/connectivity/tests/external_dns_proxy*.go @isovalent/dns-proxy
 /enterprise/cilium-cli/hooks/connectivity/tests/hubble-cli-version.go @isovalent/hubble
 /enterprise/cilium-cli/hooks/connectivity/tests/mixedrouting.go @isovalent/clustermesh
+/enterprise/cilium-cli/hooks/connectivity/tests/multicast.go @isovalent/traffic-engineering
 /enterprise/cilium-cli/hooks/connectivity/tests/phantom.go @isovalent/clustermesh
 /enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
