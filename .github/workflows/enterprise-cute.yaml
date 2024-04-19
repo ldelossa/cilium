@@ -480,7 +480,7 @@ jobs:
           slack-message: '${{ steps.notify_message.outputs.message }}'
 
       - name: Collect sysdumps
-        if: ${{ !success() && (steps.cute_upgrade.outcome != 'skipped' || steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        if: ${{ !success() && steps.create.outcome != 'skipped' }}
         shell: bash
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
@@ -492,7 +492,7 @@ jobs:
           cilium sysdump --output-filename ${{ env.upload_dir }}/cilium-sysdumps/cilium-sysdump-final
 
       - name: Collect metrics and logs
-        if: ${{ !success() && (steps.cute_upgrade.outcome != 'skipped' || steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        if: ${{ !success() && steps.create.outcome != 'skipped' }}
         shell: bash
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
@@ -514,7 +514,7 @@ jobs:
       # This is to work around the fact that relative paths in actions/upload-artifact@v3 are rooted
       # against the workspace, which causes an "Invalid pattern" if the CuTE repo dir is ".".
       - name: Prepare upload
-        if: ${{ always() && (steps.cute_upgrade.outcome != 'skipped' || steps.tests.outcome != 'skipped' || steps.ipsec_tests.outcome != 'skipped') }}
+        if: always() && steps.create.outcome != 'skipped'
         id: upload_prep
         run: |
           if test -d ./cute/${{ steps.vars.outputs.cute_dir }}/${{ env.upload_dir }}; then
@@ -524,7 +524,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        if: always() && steps.upload_prep.outcome != 'skipped'
+        if: always() && steps.create.outcome != 'skipped'
         uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: output
