@@ -73,11 +73,11 @@ func (e *export) OnServerInit(_ observeroption.Server) error {
 		e.rateLimiter = newRateLimiter(1*time.Minute, conf.rateLimit, e)
 	}
 	var err error
-	if e.allowlist, err = buildFilterFuncs(conf.flowAllowlist); err != nil {
+	if e.allowlist, err = buildFilterFuncs(e.logger, conf.flowAllowlist); err != nil {
 		e.logger.WithError(err).WithField("allowlist", conf.flowAllowlist).Warn("Failed to build allowlist filter functions")
 		return err
 	}
-	if e.denylist, err = buildFilterFuncs(conf.flowDenylist); err != nil {
+	if e.denylist, err = buildFilterFuncs(e.logger, conf.flowDenylist); err != nil {
 		e.logger.WithError(err).WithField("denylist", conf.flowDenylist).Warn("Failed to build denylist filter functions")
 		return err
 	}

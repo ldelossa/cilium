@@ -33,7 +33,6 @@ import (
 	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
-	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
@@ -248,6 +247,7 @@ func (a *Agent) Init(ipcache *ipcache.IPCache, mtuConfig mtu.MTU) error {
 			return fmt.Errorf("failed to add WireGuard device: %w", err)
 		}
 
+		// TODO: Remove this userspace fallback in Cilum v1.17
 		if !option.Config.EnableWireguardUserspaceFallback {
 			return fmt.Errorf("WireGuard not supported by the Linux kernel (netlink: %w). "+
 				"Please upgrade your kernel, manually install the kernel module "+
@@ -293,11 +293,6 @@ func (a *Agent) Init(ipcache *ipcache.IPCache, mtuConfig mtu.MTU) error {
 	for _, peer := range dev.Peers {
 		a.restoredPubKeys[peer.PublicKey] = struct{}{}
 	}
-
-	// Delete IP rules and routes installed by the agent to steer a traffic from
-	// a pod into the WireGuard tunnel device. The rules were used in Cilium
-	// versions < 1.13.
-	deleteObsoleteIPRules()
 
 	// this is read by the defer statement above
 	addIPCacheListener = true
@@ -698,38 +693,4 @@ func (p *peerConfig) insertAllowedIP(ip net.IPNet) (updated bool) {
 
 	p.allowedIPs = append(p.allowedIPs, ip)
 	return true
-}
-
-// Removes < v1.13 IP rules and routes.
-func deleteObsoleteIPRules() {
-	rule := route.Rule{
-		Priority: linux_defaults.RulePriorityWireguard,
-		Mark:     linux_defaults.RouteMarkEncrypt,
-		Mask:     linux_defaults.RouteMarkMask,
-		Table:    linux_defaults.RouteTableWireguard,
-	}
-	rt := route.Route{
-		Device: types.IfaceName,
-		Table:  linux_defaults.RouteTableWireguard,
-	}
-	if option.Config.EnableIPv4 {
-		route.DeleteRule(netlink.FAMILY_V4, rule)
-
-		subnet := net.IPNet{
-			IP:   net.IPv4zero,
-			Mask: net.CIDRMask(0, 8*net.IPv4len),
-		}
-		rt.Prefix = subnet
-		route.Delete(rt)
-	}
-	if option.Config.EnableIPv6 {
-		route.DeleteRule(netlink.FAMILY_V6, rule)
-
-		subnet := net.IPNet{
-			IP:   net.IPv6zero,
-			Mask: net.CIDRMask(0, 8*net.IPv6len),
-		}
-		rt.Prefix = subnet
-		route.Delete(rt)
-	}
 }

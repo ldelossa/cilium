@@ -75,7 +75,8 @@ versionwarning_api_url = "https://docs.cilium.io/"
 
 # The version of Go used to compile Cilium
 go_mod = open("../go.mod", "r").readlines()
-go_release = [line.rstrip()[len("go "):] for line in go_mod if line.startswith("go ")][0]
+go_release = [line.rstrip()[len("go "):]
+              for line in go_mod if line.startswith("go ")][0]
 
 # The image tag for Cilium docker images
 image_tag = 'v' + release
@@ -114,7 +115,7 @@ github_repo = 'https://github.com/cilium/cilium/'
 archive_filename = archive_name + '.tar.gz'
 archive_link = github_repo + 'archive/' + archive_filename
 archive_name = 'cilium-' + archive_name.strip('v')
-project_link = github_repo + 'projects?query=is:open+' + next_release
+project_link = github_repo + 'projects?type=classic&query=is:open+' + next_release
 backport_format = github_repo + \
     'pulls?q=is:open+is:pr+-label:backport/author+label:%s/' + current_release
 
@@ -215,7 +216,7 @@ htmlhelp_basename = 'Ciliumdoc'
 # -- Options for Last Page Edit -------------------------------------------
 # If not None, a 'Last updated on:' timestamp is inserted at every page
 # bottom, using the given strftime format.
-# The empty string is equivalent to '%b %d, %Y'. 
+# The empty string is equivalent to '%b %d, %Y'.
 html_last_updated_fmt = '%b %d, %Y'
 
 
@@ -299,6 +300,7 @@ linkcheck_anchors = False
 linkcheck_retries = 5
 
 tls_verify = False
+
 
 def setup(app):
     app.add_css_file('parsed-literal.css')

@@ -150,21 +150,29 @@ jobs:
           CILIUM_DOWNGRADE_VERSION=$(contrib/scripts/print-downgrade-version.sh stable)
           echo "downgrade_version=${CILIUM_DOWNGRADE_VERSION}" >> $GITHUB_OUTPUT
 
-          # * Hubble is disabled to avoid the performance penalty in the testing
-          #   environment due to the relatively high traffic load.
+          # * Monitor aggregation is set to medium to avoid the performance penalty
+          #   in the testing environment due to the relatively high traffic load.
+          # * We explicitly configure the IPAM mode to prevent it from being
+          #   reset to the default value on upgrade/downgrade due to --reset-values.
           # * We explicitly configure the sync timeout to a higher value to
           #   give enough time to the clustermesh-apiserver to restart after
           #   the upgrade/downgrade before that agents regenerate the endpoints.
+          # * We configure the maximum number of unavailable agents to 1 to slow
+          #   down the rollout process and highlight possible connection disruption
+          #   occurring in the meanwhile.
           CILIUM_INSTALL_DEFAULTS=" \
             --set=debug.enabled=true \
-            --set=bpf.monitorAggregation=none \
-            --set=hubble.enabled=false \
+            --set=bpf.monitorAggregation=medium \
+            --set=hubble.enabled=true \
             --set=routingMode=tunnel \
             --set=tunnelProtocol=vxlan \
             --set=ipv4.enabled=true \
             --set=ipv6.enabled=true \
             --set=kubeProxyReplacement=${{ matrix.kube-proxy == 'none' }} \
             --set=bpf.masquerade=${{ matrix.kube-proxy == 'none' }} \
+            --set=ipam.mode=kubernetes \
+            --set=operator.replicas=1 \
+            --set=updateStrategy.rollingUpdate.maxUnavailable=1 \
             --set=clustermesh.useAPIServer=${{ !matrix.external-kvstore }} \
             --set=clustermesh.maxConnectedClusters=${{ matrix.max-connected-clusters }} \
             --set=clustermesh.config.enabled=true \
@@ -186,7 +194,7 @@ jobs:
             --test='allow-all-except-world/' \
             --test='client-ingress/' \
             --test='client-egress/' \
-            --test='cluster-entity-multicluster/' \
+            --test='cluster-entity-multi-cluster/' \
             --test='!/pod-to-world' \
             --test='!/pod-to-cidr' \
             --collect-sysdump-on-failure"
@@ -369,7 +377,7 @@ jobs:
         timeout-minutes: 10
         shell: bash
         run: |
-          for image in cilium-ci operator-generic-ci hubble-relay-ci clustermesh-apiserver-ci ; do
+          for image in cilium-ci operator-generic-ci clustermesh-apiserver-ci ; do
             until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.newest-vars.outputs.sha }} &> /dev/null; do sleep 45s; done
           done
 
@@ -377,7 +385,7 @@ jobs:
         timeout-minutes: 10
         shell: bash
         run: |
-          for image in cilium-ci operator-generic-ci hubble-relay-ci clustermesh-apiserver-ci ; do
+          for image in cilium-ci operator-generic-ci clustermesh-apiserver-ci ; do
             until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.downgrade-vars.outputs.sha }} &> /dev/null; do sleep 45s; done
           done
 

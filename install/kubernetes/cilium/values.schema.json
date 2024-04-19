@@ -512,6 +512,9 @@
             "integer"
           ]
         },
+        "disableExternalIPMitigation": {
+          "type": "boolean"
+        },
         "events": {
           "properties": {
             "drop": {
@@ -793,6 +796,26 @@
                   "type": "object"
                 },
                 "securityContext": {
+                  "properties": {
+                    "allowPrivilegeEscalation": {
+                      "type": "boolean"
+                    },
+                    "capabilities": {
+                      "properties": {
+                        "drop": {
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
                   "type": "object"
                 }
               },
@@ -1043,6 +1066,20 @@
               "type": "object"
             },
             "podSecurityContext": {
+              "properties": {
+                "fsGroup": {
+                  "type": "integer"
+                },
+                "runAsGroup": {
+                  "type": "integer"
+                },
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "runAsUser": {
+                  "type": "integer"
+                }
+              },
               "type": "object"
             },
             "priorityClassName": {
@@ -1058,6 +1095,26 @@
               "type": "object"
             },
             "securityContext": {
+              "properties": {
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                },
+                "capabilities": {
+                  "properties": {
+                    "drop": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
               "type": "object"
             },
             "service": {
@@ -1291,14 +1348,6 @@
     },
     "conntrackGCMaxInterval": {
       "type": "string"
-    },
-    "containerRuntime": {
-      "properties": {
-        "integration": {
-          "type": "string"
-        }
-      },
-      "type": "object"
     },
     "crdWaitTimeout": {
       "type": "string"
@@ -4032,6 +4081,13 @@
     },
     "nodePort": {
       "properties": {
+        "addresses": {
+          "type": [
+            "null",
+            "string",
+            "array"
+          ]
+        },
         "autoProtectPortRange": {
           "type": "boolean"
         },

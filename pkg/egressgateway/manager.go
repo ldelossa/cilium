@@ -246,8 +246,11 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.Lifecycle.Append(cell.Hook{
 		OnStart: func(hc cell.HookContext) error {
-
-			go manager.processEvents(ctx)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				manager.processEvents(ctx)
+			}()
 
 			return nil
 		},
@@ -645,7 +648,6 @@ func (manager *Manager) removeUnusedEgressRules() {
 			egressPolicies[*key] = *val
 		})
 
-nextPolicyKey:
 	for policyKey, policyVal := range egressPolicies {
 		matchPolicy := func(endpointIP netip.Addr, dstCIDR netip.Prefix, excludedCIDR bool, gwc *gatewayConfig) bool {
 			gatewayIP := gwc.gatewayIP
@@ -657,7 +659,7 @@ nextPolicyKey:
 		}
 
 		if manager.policyMatches(policyKey.GetSourceIP(), matchPolicy) {
-			continue nextPolicyKey
+			continue
 		}
 
 		logger := log.WithFields(logrus.Fields{

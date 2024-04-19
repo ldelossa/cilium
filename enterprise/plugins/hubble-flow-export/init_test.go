@@ -13,6 +13,7 @@ package export
 import (
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
@@ -81,7 +82,7 @@ func Test_parseFilterList(t *testing.T) {
 }
 
 func Test_buildFilterFuncs(t *testing.T) {
-	filterFuncs, err := buildFilterFuncs(`{"reply":[true]}`)
+	filterFuncs, err := buildFilterFuncs(logrus.New(), `{"reply":[true]}`)
 	assert.NoError(t, err)
 	// allowlist
 	assert.True(t, filters.Apply(filterFuncs, nil, &v1.Event{Event: &pb.Flow{IsReply: &wrapperspb.BoolValue{Value: true}}}))

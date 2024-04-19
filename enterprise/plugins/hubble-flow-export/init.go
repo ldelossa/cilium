@@ -102,12 +102,12 @@ func (e *export) AddAgentFlags() *pflag.FlagSet {
 	return fs
 }
 
-func buildFilterFuncs(f string) (filters.FilterFuncs, error) {
+func buildFilterFuncs(log logrus.FieldLogger, f string) (filters.FilterFuncs, error) {
 	filterFuncs, err := parseFilterList(f)
 	if err != nil {
 		return nil, err
 	}
-	return filters.BuildFilterList(context.Background(), filterFuncs, filters.DefaultFilters)
+	return filters.BuildFilterList(context.Background(), filterFuncs, filters.DefaultFilters(log))
 }
 
 func parseFilterList(filters string) ([]*flowpb.FlowFilter, error) {

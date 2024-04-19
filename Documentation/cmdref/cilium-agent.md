@@ -85,6 +85,7 @@ cilium-agent [flags]
       --direct-routing-device string                                 Device name used to connect nodes in direct routing mode (used by BPF NodePort, BPF host routing; if empty, automatically set to a device with k8s InternalIP/ExternalIP or with a default route)
       --disable-endpoint-crd                                         Disable use of CiliumEndpoint CRD
       --disable-envoy-version-check                                  Do not perform Envoy version check
+      --disable-external-ip-mitigation                               Disable ExternalIP mitigation (CVE-2020-8554, default false)
       --disable-iptables-feeder-rules strings                        Chains to ignore when installing feeder rules.
       --dns-max-ips-per-restored-rule int                            Maximum number of IPs to maintain for each restored DNS rule (default 1000)
       --dns-policy-unload-on-shutdown                                Unload DNS policy rules on graceful shutdown
@@ -174,7 +175,6 @@ cilium-agent [flags]
       --enable-vtep                                                  Enable  VXLAN Tunnel Endpoint (VTEP) Integration (beta)
       --enable-well-known-identities                                 Enable well-known identities for known Kubernetes components (default true)
       --enable-wireguard                                             Enable WireGuard
-      --enable-wireguard-userspace-fallback                          Enable fallback to the WireGuard userspace implementation
       --enable-xdp-prefilter                                         Enable XDP prefiltering
       --enable-xt-socket-fallback                                    Enable fallback for missing xt_socket module (default true)
       --encrypt-interface string                                     Transparent encryption interface
@@ -371,6 +371,7 @@ cilium-agent [flags]
       --trace-sock                                                   Enable tracing for socket-based LB (default true)
       --tunnel-port uint16                                           Tunnel port (default 8472 for "vxlan" and 6081 for "geneve")
       --tunnel-protocol string                                       Encapsulation protocol to use for the overlay ("vxlan" or "geneve") (default "vxlan")
+      --use-full-tls-context                                         If enabled, persist ca.crt keys into the Envoy config even in a terminatingTLS block on an L7 Cilium Policy. This is to enable compatibility with previously buggy behaviour. This flag is deprecated and will be removed in a future release.
       --version                                                      Print version information
       --vlan-bpf-bypass strings                                      List of explicitly allowed VLAN IDs, '0' id will allow all VLAN IDs
       --vtep-cidr strings                                            List of VTEP CIDRs that will be routed towards VTEPs for traffic cluster egress

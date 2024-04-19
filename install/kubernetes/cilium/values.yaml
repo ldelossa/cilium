@@ -39,7 +39,7 @@ imagePullSecrets: []
 # -- (string) Kubernetes config path
 # @default -- `"~/.kube/config"`
 kubeConfigPath: ""
-# -- (string) Kubernetes service host
+# -- (string) Kubernetes service host - use "auto" for automatic lookup from the cluster-info ConfigMap (kubeadm-based clusters only)
 k8sServiceHost: ""
 # @schema
 # type: [string, integer]
@@ -530,6 +530,9 @@ bpf:
   # [0] will allow all VLAN id's without any filtering.
   # @default -- `[]`
   vlanBypass: ~
+  # -- (bool) Disable ExternalIP mitigation (CVE-2020-8554)
+  # @default -- `false`
+  disableExternalIPMitigation: false
 # -- Enable BPF clock source probing for more efficient tick retrieval.
 bpfClockProbe: false
 # -- Clean all eBPF datapath state from the initContainer of the cilium-agent
@@ -623,14 +626,6 @@ conntrackGCInterval: ""
 # and has no effect when 'conntrackGCInterval' is set. This can be set to more frequently
 # clean up unused identities created from ToFQDN policies.
 conntrackGCMaxInterval: ""
-# -- Configure container runtime specific integration.
-# Deprecated in favor of bpf.autoMount.enabled. To be removed in 1.15.
-containerRuntime:
-  # -- Enables specific integrations for container runtimes.
-  # Supported values:
-  # - crio
-  # - none
-  integration: none
 # -- (string) Configure timeout in which Cilium will exit if CRDs are not available
 # @default -- `"5m"`
 crdWaitTimeout: ""
@@ -871,7 +866,7 @@ encryption:
     # -- Enable IPSec encrypted overlay
     encryptedOverlay: false
   wireguard:
-    # -- Enables the fallback to the user-space implementation.
+    # -- Enables the fallback to the user-space implementation (deprecated).
     userspaceFallback: false
     # -- Controls Wireguard PersistentKeepalive option. Set 0s to disable.
     persistentKeepalive: 0s
@@ -962,8 +957,8 @@ certgen:
     # @schema
     override: ~
     repository: "quay.io/cilium/certgen"
-    tag: "v0.1.9"
-    digest: "sha256:89a0847753686444daabde9474b48340993bd19c7bea66a46e45b2974b82041f"
+    tag: "v0.1.11"
+    digest: "sha256:5586de5019abc104637a9818a626956cd9b1e827327b958186ec412ae3d5dea6"
     useDigest: true
     pullPolicy: "Always"
   # -- Seconds after which the completed job pod will be deleted
@@ -1988,6 +1983,17 @@ nodePort:
   # -- Port range to use for NodePort services.
   # range: "30000,32767"
 
+  # @schema
+  # type: [null, string, array]
+  # @schema
+  # -- List of CIDRs for choosing which IP addresses assigned to native devices are used for NodePort load-balancing.
+  # By default this is empty and the first suitable, preferably private, IPv4 and IPv6 address assigned to each device is used.
+  #
+  # Example:
+  #
+  #   addresses: ["192.168.1.0/24", "2001::/64"]
+  #
+  addresses: ~
   # -- Set to true to prevent applications binding to service ports.
   bindProtection: true
   # -- Append NodePort range to ip_local_reserved_ports if clash with ephemeral
@@ -2106,9 +2112,9 @@ envoy:
     # @schema
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.28.1-e0e7a3935cd18757f05f20760674617c7f7ed344"
+    tag: "v1.28.2-b26890d42321dd1ee126ee7e38274f3a675c9a23"
     pullPolicy: "Always"
-    digest: "sha256:413a5650ccf6fe512a1d49f255cda5051f1057bc612e4ca31a00c50b61a5018f"
+    digest: "sha256:d53a3d10f56d5d629dd2871a6600398d56c3f6040fda5ded8681ff6dbefb4213"
     useDigest: true
   # -- Additional containers added to the cilium Envoy DaemonSet.
   extraContainers: []
@@ -2963,7 +2969,11 @@ clustermesh:
       #     memory: 256Mi
 
       # -- Security context to be added to clustermesh-apiserver etcd containers
-      securityContext: {}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
       # -- lifecycle setting for the etcd container
       lifecycle: {}
       init:
@@ -3056,9 +3066,17 @@ clustermesh:
     # -- Additional clustermesh-apiserver volumeMounts.
     extraVolumeMounts: []
     # -- Security context to be added to clustermesh-apiserver containers
-    securityContext: {}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
     # -- Security context to be added to clustermesh-apiserver pods
-    podSecurityContext: {}
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      fsGroup: 65532
     # -- Annotations to be added to clustermesh-apiserver pods
     podAnnotations: {}
     # -- Labels to be added to clustermesh-apiserver pods
