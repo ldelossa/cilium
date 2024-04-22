@@ -1,5 +1,5 @@
-cilium-operator
-cilium-operator-aws
-cilium-operator-azure
-cilium-operator-alibabacloud
-cilium-operator-generic
+/cilium-operator
+/cilium-operator-aws
+/cilium-operator-azure
+/cilium-operator-alibabacloud
+/cilium-operator-generic
