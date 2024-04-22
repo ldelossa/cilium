@@ -27,6 +27,6 @@ all:
 		$(PROTOC) $(PROTOC_PLUGINS) -I $(PROTO_PATH) \
 			--go_out=paths=source_relative:. \
 			--go-grpc_out=paths=source_relative:. \
-			--go-json_out=orig_name=true:. \
+			--go-json_out=paths=source_relative:. \
 			$${proto}; \
 	done

@@ -15,7 +15,7 @@ import "google/protobuf/timestamp.proto";
 
 package dnsproxy;
 
-option go_package = "github.com/isovalent/fqdn-proxy/api/v1/dnsproxy";
+option go_package = "github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy";
 
 service FQDNProxyAgent {
 
