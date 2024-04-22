@@ -104,7 +104,8 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
   - [ ] Create a PR which updates the toplevel VERSION file to your newly released version. Target the PR at the `X.Y` branch. If there is no such branch, and you are releasing the latest minor, target `master`. Update the version compatibility matrix CSV files (`operations-guide/releases/X.Y.Z-versions.csv`) with the proper supported software versions (ex: what version of Hubble-Enterprise works with this version of Cilium)
 - [ ] Prepare artifacts for Azure Marketplace build
   - [ ] Only one release is currently supported on Azure Marketplace. The release series is listed in the `CILIUM_VERSION` file in [Azure Marketplace CNAB]. Ignore these steps if the X.Y versions do not match. Follow the instructions in the [README.md](https://github.com/isovalent/external-azure-marketplace-cnab/blob/main/README.md) to create artifacts for the new release.
-- [ ] Ask Michi to generate release notes. There is a rumor he's working on automating the process in https://github.com/isovalent/cilium/issues/2872.
+- [ ] Follow https://github.com/isovalent/cilium-enterprise-docs/blob/main/scripts/release-notes/README.md
+      to generate release notes.
 - [ ] Update https://isogo.to/releases
   - [ ] Move the entry for the current release from planned to past.
   - [ ] Add an entry for the next release and its planned date.
