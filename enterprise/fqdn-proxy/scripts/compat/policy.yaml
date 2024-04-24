@@ -1,0 +1,27 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: client-egress-to-fqdns-cilium-io
+  namespace: cilium-test
+spec:
+  egress:
+  - toFQDNs:
+    - matchName: cilium.io
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: coredns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: ANY
+      rules:
+        dns:
+        - matchPattern: '*'
+        - matchPattern: '*.-name.com'
+  endpointSelector:
+    matchLabels:
+      any:kind: client

@@ -1,0 +1,2 @@
+extraConfig:
+  external-dns-proxy: "true"

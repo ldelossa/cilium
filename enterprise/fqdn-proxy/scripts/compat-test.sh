@@ -13,7 +13,7 @@ function check_bash_version() {
 
 function deploy_cilium() {
     helm upgrade --install cilium-enterprise isovalent/cilium --version "${1}" --namespace kube-system \
-    -f ../.github/cilium-enterprise-values.yaml --wait
+    -f ./compat/cilium-enterprise-values.yaml --wait
 }
 
 function deploy_dnsproxy() {
@@ -21,7 +21,7 @@ function deploy_dnsproxy() {
 }
 
 function apply_policy() {
-    kubectl apply -f ../.github/policy.yaml
+    kubectl apply -f ./compat/policy.yaml
 }
 
 function remove_policy() {
@@ -164,7 +164,7 @@ it_ec=0
 cmd_ec=0
 mismatch_versions=()
 
-kind create cluster --config=../.github/kind-config.yaml
+kind create cluster --config=./compat/kind-config.yaml
 fv="${fqdn_versions[-1]}"
 for cv in "${cilium_versions[@]}"; do
     deploy_cilium "v${cv}"
@@ -180,7 +180,7 @@ for cv in "${cilium_versions[@]}"; do
 done
 kind delete cluster
 
-kind create cluster --config=../.github/kind-config.yaml
+kind create cluster --config=./compat/kind-config.yaml
 cv="${cilium_versions[-1]}"
 for fv in "${fqdn_versions[@]}"; do
     deploy_cilium "v${cv}"
