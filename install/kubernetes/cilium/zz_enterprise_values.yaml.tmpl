@@ -79,6 +79,9 @@ hubble:
     # -- Enables hubble-rbac by running it as a sidecar in hubble-relay.
     enabled: false
     image:
+      # @schema
+      # type: [null, string]
+      # @schema
       override: ~
       repository: quay.io/isovalent/hubble-rbac
       tag: v1.5.2
@@ -107,10 +110,19 @@ hubble:
 
     auth:
       oidc:
+        # @schema
+        # type: [null, string]
+        # @schema
         issuerUrl: ~
+        # @schema
+        # type: [null, string]
+        # @schema
         clientID: ~
         ca:
           configMap:
+            # @schema
+            # type: [null, string]
+            # @schema
             name: ~
             key: "ca.crt"
 
