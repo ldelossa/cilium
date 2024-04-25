@@ -52,6 +52,8 @@ func (fd *fakeNodeDownstream) NodeDeleted(node nodeTypes.Node) {
 	fd.ops = append(fd.ops, fakeNodeEntry{opDelete, node})
 }
 
+func (fd *fakeNodeDownstream) NodeSync() {}
+
 type fakeEPMapper map[string]routingModeType
 
 func newFakeEPMapper() fakeEPMapper                                     { return make(map[string]routingModeType) }

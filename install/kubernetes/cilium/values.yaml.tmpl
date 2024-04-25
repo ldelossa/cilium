@@ -1809,8 +1809,6 @@ egressGateway:
   # -- Enables egress gateway to redirect and SNAT the traffic that leaves the
   # cluster.
   enabled: false
-  # -- Deprecated without a replacement necessary.
-  installRoutes: false
   # -- Time between triggers of egress gateway state reconciliations
   reconciliationTriggerInterval: 1s
   # -- Maximum number of entries in egress gateway policy map
@@ -2515,6 +2513,8 @@ operator:
   extraVolumeMounts: []
   # -- Annotations to be added to all top-level cilium-operator objects (resources under templates/cilium-operator)
   annotations: {}
+  # -- HostNetwork setting
+  hostNetwork: true
   # -- Security context to be added to cilium-operator pods
   podSecurityContext: {}
   # -- Annotations to be added to cilium-operator pods

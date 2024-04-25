@@ -56,13 +56,13 @@ func (c *binaryCheck) Run() (checkResult, string) {
 
 	output, err := exec.Command(path, c.versionArgs...).CombinedOutput()
 	if err != nil {
-		return checkFailed, err.Error()
+		return checkFailed, fmt.Sprintf("failed to run %s: %s\n%s", path, err, string(output))
 	}
 
 	version := output
 	if c.versionRegexp != nil {
 		match := c.versionRegexp.FindSubmatch(version)
-		if len(match) != 2 {
+		if len(match) < 2 {
 			return checkFailed, fmt.Sprintf("found %s, could not parse version from %s", path, version)
 		}
 		version = match[1]

@@ -1466,9 +1466,6 @@
         "enabled": {
           "type": "boolean"
         },
-        "installRoutes": {
-          "type": "boolean"
-        },
         "reconciliationTriggerInterval": {
           "type": "string"
         }
@@ -4388,6 +4385,9 @@
         "extraVolumes": {
           "items": {},
           "type": "array"
+        },
+        "hostNetwork": {
+          "type": "boolean"
         },
         "identityGCInterval": {
           "type": "string"

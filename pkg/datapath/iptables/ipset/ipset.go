@@ -9,12 +9,18 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"runtime/pprof"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/job"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/statedb/reconciler"
 )
@@ -31,10 +37,27 @@ const (
 	INet6Family Family = "inet6"
 )
 
+type AddrSet = sets.Set[netip.Addr]
+
 // Manager handles the kernel IP sets configuration
 type Manager interface {
+	NewInitializer() Initializer
 	AddToIPSet(name string, family Family, addrs ...netip.Addr)
 	RemoveFromIPSet(name string, addrs ...netip.Addr)
+}
+
+type Initializer interface {
+	InitDone()
+}
+
+type initializer struct {
+	once sync.Once
+	wg   *lock.StoppableWaitGroup
+}
+
+func (i *initializer) InitDone() {
+	// further calls to InitDone will be a no-op
+	i.once.Do(i.wg.Done)
 }
 
 type manager struct {
@@ -42,86 +65,132 @@ type manager struct {
 	enabled bool
 
 	db    *statedb.DB
-	table statedb.RWTable[*tables.IPSet]
+	table statedb.RWTable[*tables.IPSetEntry]
 
 	ipset *ipset
+
+	reconciler reconciler.Reconciler[*tables.IPSetEntry]
+	ops        *ops
+
+	started   atomic.Bool
+	startedWG *lock.StoppableWaitGroup
+}
+
+func (m *manager) NewInitializer() Initializer {
+	if m.started.Load() {
+		panic("an initializer to the ipset manager cannot be taken after the manager started")
+	}
+	m.startedWG.Add()
+	return &initializer{wg: m.startedWG}
 }
 
 // AddToIPSet adds the addresses to the ipset with given name and family.
 // It creates the ipset if it doesn't already exist and doesn't error out
 // if either the ipset or the IP already exist.
 func (m *manager) AddToIPSet(name string, family Family, addrs ...netip.Addr) {
-	if !m.enabled || len(addrs) == 0 {
+	if !m.enabled {
 		return
 	}
 
 	txn := m.db.WriteTxn(m.table)
 	defer txn.Abort()
 
-	var (
-		obj   *tables.IPSet
-		found bool
-	)
-
-	obj, _, found = m.table.First(txn, tables.IPSetNameIndex.Query(name))
-	if !found {
-		obj = &tables.IPSet{
+	for _, addr := range addrs {
+		key := tables.IPSetEntryKey{
+			Name: name,
+			Addr: addr,
+		}
+		if _, _, found := m.table.First(txn, tables.IPSetEntryIndex.Query(key)); found {
+			continue
+		}
+		_, _, _ = m.table.Insert(txn, &tables.IPSetEntry{
 			Name:   name,
 			Family: string(family),
-			Addrs:  tables.NewAddrSet(addrs...),
+			Addr:   addr,
 			Status: reconciler.StatusPending(),
-		}
-	} else {
-		obj = obj.WithAddrs(addrs...) // clone object to avoid mutating the one returned by First
-		obj.Status = reconciler.StatusPending()
+		})
 	}
-	_, _, _ = m.table.Insert(txn, obj)
+
 	txn.Commit()
 }
 
-// RemoveFromBodeIPSet removes the addresses from the specified ipset.
+// RemoveFromIPSet removes the addresses from the specified ipset.
 func (m *manager) RemoveFromIPSet(name string, addrs ...netip.Addr) {
-	if !m.enabled || len(addrs) == 0 {
+	if !m.enabled {
 		return
 	}
 
 	txn := m.db.WriteTxn(m.table)
 	defer txn.Abort()
 
-	obj, _, found := m.table.First(txn, tables.IPSetNameIndex.Query(name))
-	if !found {
-		return
+	for _, addr := range addrs {
+		key := tables.IPSetEntryKey{
+			Name: name,
+			Addr: addr,
+		}
+		obj, _, found := m.table.First(txn, tables.IPSetEntryIndex.Query(key))
+		if !found {
+			continue
+		}
+		m.table.Insert(txn, obj.WithStatus(reconciler.StatusPendingDelete()))
 	}
-	obj = obj.WithoutAddrs(addrs...) // clone object to avoid mutating the one returned by First
-	obj.Status = reconciler.StatusPending()
-	_, _, _ = m.table.Insert(txn, obj)
+
 	txn.Commit()
 }
 
 func newIPSetManager(
-	lc cell.Lifecycle,
 	logger logrus.FieldLogger,
+	lc cell.Lifecycle,
+	jobRegistry job.Registry,
+	scope cell.Scope,
 	db *statedb.DB,
-	table statedb.RWTable[*tables.IPSet],
+	table statedb.RWTable[*tables.IPSetEntry],
 	cfg config,
 	ipset *ipset,
-	_ reconciler.Reconciler[*tables.IPSet], // needed to enforce the correct hive ordering
+	reconciler reconciler.Reconciler[*tables.IPSetEntry],
+	ops *ops,
 ) Manager {
-	db.RegisterTable(table)
 	mgr := &manager{
-		logger:  logger,
-		enabled: cfg.NodeIPSetNeeded,
-		db:      db,
-		table:   table,
-		ipset:   ipset,
+		logger:     logger,
+		enabled:    cfg.NodeIPSetNeeded,
+		db:         db,
+		table:      table,
+		ipset:      ipset,
+		reconciler: reconciler,
+		ops:        ops,
+		startedWG:  lock.NewStoppableWaitGroup(),
 	}
 
-	lc.Append(cell.Hook{OnStart: mgr.onStart})
+	lc.Append(cell.Hook{
+		OnStart: func(ctx cell.HookContext) error {
+			if !cfg.NodeIPSetNeeded {
+				return nil
+			}
+
+			// When NodeIPSetNeeded is set, node ipsets must be created even if empty,
+			// to avoid failures when referencing them in iptables masquerading rules.
+			if err := ipset.create(ctx, CiliumNodeIPSetV4, string(INetFamily)); err != nil {
+				return fmt.Errorf("error while creating ipset %s", CiliumNodeIPSetV4)
+			}
+			if err := ipset.create(ctx, CiliumNodeIPSetV6, string(INet6Family)); err != nil {
+				return fmt.Errorf("error while creating ipset %s", CiliumNodeIPSetV6)
+			}
+			return nil
+		},
+	})
+
+	jg := jobRegistry.NewGroup(
+		scope,
+		job.WithLogger(logger),
+		job.WithPprofLabels(pprof.Labels("cell", "ipset")),
+	)
+	jg.Add(job.OneShot("ipset-init-finalizer", mgr.init))
+	lc.Append(jg)
 
 	return mgr
 }
 
-func (m *manager) onStart(ctx cell.HookContext) error {
+func (m *manager) init(ctx context.Context, _ cell.HealthReporter) error {
 	if !m.enabled {
 		// If node ipsets are not needed, clear the Cilium managed ones to remove possible stale entries.
 		for _, ciliumNodeIPSet := range []string{CiliumNodeIPSetV4, CiliumNodeIPSetV6} {
@@ -133,33 +202,20 @@ func (m *manager) onStart(ctx cell.HookContext) error {
 		return nil
 	}
 
-	// When NodeIPSetNeeded is set, node ipsets must be created even if empty,
-	// to avoid failures when referencing them in iptables masquerading rules.
+	// no further initializers after manager started
+	m.started.Store(true)
+	m.startedWG.Stop()
 
-	txn := m.db.WriteTxn(m.table)
-	defer txn.Abort()
+	// wait for all existing initializers to complete before finalizing manager
+	// initialization and allowing prune operations in the ipset reconciler
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-m.startedWG.WaitChannel():
+	}
 
-	if _, _, found := m.table.First(txn, tables.IPSetNameIndex.Query(CiliumNodeIPSetV4)); !found {
-		if _, _, err := m.table.Insert(txn, &tables.IPSet{
-			Name:   CiliumNodeIPSetV4,
-			Family: string(INetFamily),
-			Addrs:  tables.NewAddrSet(),
-			Status: reconciler.StatusPending(),
-		}); err != nil {
-			return fmt.Errorf("error while inserting ipset %s entry in stateDB table", CiliumNodeIPSetV4)
-		}
-	}
-	if _, _, found := m.table.First(txn, tables.IPSetNameIndex.Query(CiliumNodeIPSetV6)); !found {
-		if _, _, err := m.table.Insert(txn, &tables.IPSet{
-			Name:   CiliumNodeIPSetV6,
-			Family: string(INet6Family),
-			Addrs:  tables.NewAddrSet(),
-			Status: reconciler.StatusPending(),
-		}); err != nil {
-			return fmt.Errorf("error while inserting ipset %s entry in stateDB table", CiliumNodeIPSetV6)
-		}
-	}
-	txn.Commit()
+	m.ops.enablePrune()
+	m.reconciler.TriggerFullReconciliation()
 
 	return nil
 }
@@ -188,13 +244,13 @@ func (i *ipset) remove(ctx context.Context, name string) error {
 	return nil
 }
 
-func (i *ipset) list(ctx context.Context, name string) (tables.AddrSet, error) {
+func (i *ipset) list(ctx context.Context, name string) (AddrSet, error) {
 	out, err := i.run(ctx, "list", name)
 	if err != nil {
-		return tables.AddrSet{}, fmt.Errorf("failed to list ipset %s: %w", name, err)
+		return AddrSet{}, fmt.Errorf("failed to list ipset %s: %w", name, err)
 	}
 
-	addrs := tables.NewAddrSet()
+	addrs := AddrSet{}
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -205,28 +261,36 @@ func (i *ipset) list(ctx context.Context, name string) (tables.AddrSet, error) {
 		addrs = addrs.Insert(addr)
 	}
 	if err := scanner.Err(); err != nil {
-		return tables.AddrSet{}, fmt.Errorf("failed to scan ipset %s: %w", name, err)
+		return AddrSet{}, fmt.Errorf("failed to scan ipset %s: %w", name, err)
 	}
 	return addrs, nil
 }
 
-func (i *ipset) add(ctx context.Context, name string, addr netip.Addr) error {
-	if _, err := i.run(ctx, "add", name, addr.String(), "-exist"); err != nil {
-		return fmt.Errorf("failed to add %s to ipset %s: %w", addr, name, err)
+func (i *ipset) addBatch(ctx context.Context, batch map[string][]netip.Addr) error {
+	b := strings.Builder{}
+	for name, addrs := range batch {
+		for _, addr := range addrs {
+			fmt.Fprintf(&b, "add %s %s -exist\n", name, addr)
+		}
 	}
-	return nil
+	_, err := i.exec(ctx, "ipset", b.String(), "restore")
+	return err
 }
 
-func (i *ipset) del(ctx context.Context, name string, addr netip.Addr) error {
-	if _, err := i.run(ctx, "del", name, addr.String(), "-exist"); err != nil {
-		return fmt.Errorf("failed to del %s to ipset %s: %w", addr, name, err)
+func (i *ipset) delBatch(ctx context.Context, batch map[string][]netip.Addr) error {
+	b := strings.Builder{}
+	for name, addrs := range batch {
+		for _, addr := range addrs {
+			fmt.Fprintf(&b, "del %s %s -exist\n", name, addr)
+		}
 	}
-	return nil
+	_, err := i.exec(ctx, "ipset", b.String(), "restore")
+	return err
 }
 
 func (i *ipset) run(ctx context.Context, args ...string) ([]byte, error) {
 	i.log.Debugf("Running command %s", i.fullCommand(args...))
-	return i.exec(ctx, "ipset", args...)
+	return i.exec(ctx, "ipset", "", args...)
 }
 
 func (i *ipset) fullCommand(args ...string) string {
@@ -235,11 +299,11 @@ func (i *ipset) fullCommand(args ...string) string {
 
 // useful to ease the creation of a mock ipset command for testing purposes
 type executable interface {
-	exec(ctx context.Context, name string, arg ...string) ([]byte, error)
+	exec(ctx context.Context, name string, stdin string, arg ...string) ([]byte, error)
 }
 
-type funcExecutable func(ctx context.Context, name string, arg ...string) ([]byte, error)
+type funcExecutable func(ctx context.Context, name string, stdin string, arg ...string) ([]byte, error)
 
-func (f funcExecutable) exec(ctx context.Context, name string, arg ...string) ([]byte, error) {
-	return f(ctx, name, arg...)
+func (f funcExecutable) exec(ctx context.Context, name string, stdin string, arg ...string) ([]byte, error) {
+	return f(ctx, name, stdin, arg...)
 }

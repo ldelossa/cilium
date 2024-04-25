@@ -6,12 +6,14 @@ package ipset
 import (
 	"context"
 	"os/exec"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/statedb/reconciler"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -35,14 +37,16 @@ var Cell = cell.Module(
 	cell.ProvidePrivate(
 		tables.NewIPSetTable,
 
-		reconciler.New[*tables.IPSet],
+		reconciler.New[*tables.IPSetEntry],
 		newReconcilerConfig,
 		newOps,
 	),
 	cell.ProvidePrivate(func(logger logrus.FieldLogger) *ipset {
 		return &ipset{
-			executable: funcExecutable(func(ctx context.Context, name string, arg ...string) ([]byte, error) {
-				return exec.CommandContext(ctx, name, arg...).Output()
+			executable: funcExecutable(func(ctx context.Context, name string, stdin string, arg ...string) ([]byte, error) {
+				cmd := exec.CommandContext(ctx, name, arg...)
+				cmd.Stdin = strings.NewReader(stdin)
+				return cmd.Output()
 			}),
 			log: logger,
 		}
@@ -56,16 +60,22 @@ type config struct {
 	NodeIPSetNeeded bool
 }
 
-func newReconcilerConfig(
-	ops reconciler.Operations[*tables.IPSet],
-) reconciler.Config[*tables.IPSet] {
-	return reconciler.Config[*tables.IPSet]{
-		FullReconcilationInterval: 10 * time.Second,
+func newReconcilerConfig(ops *ops) reconciler.Config[*tables.IPSetEntry] {
+	return reconciler.Config[*tables.IPSetEntry]{
+		FullReconcilationInterval: 30 * time.Minute,
 		RetryBackoffMinDuration:   100 * time.Millisecond,
 		RetryBackoffMaxDuration:   5 * time.Second,
-		IncrementalRoundSize:      100,
-		GetObjectStatus:           (*tables.IPSet).GetStatus,
-		WithObjectStatus:          (*tables.IPSet).WithStatus,
+		GetObjectStatus:           (*tables.IPSetEntry).GetStatus,
+		WithObjectStatus:          (*tables.IPSetEntry).WithStatus,
 		Operations:                ops,
+		BatchOperations:           ops,
+
+		// Set the maximum batch size to 100, and limit the incremental
+		// reconciliation to once every 10ms, giving us maximum throughput
+		// of 1000/10 * 100 = 10000 per second.
+		IncrementalRoundSize: 100,
+
+		// Set the rate limiter to accumulate a batch of entries to reconcile.
+		RateLimiter: rate.NewLimiter(10*time.Millisecond, 1),
 	}
 }

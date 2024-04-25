@@ -96,6 +96,11 @@ jobs:
         - crd-channel: experimental
           conformance-profile: true
     steps:
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@94c3c3d9567a0205de6da68a76c428ce4e769af1 # v2.0.0
+        with:
+          comment_on_pr: false
+
       - name: Checkout context ref (trusted)
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
@@ -279,7 +284,7 @@ jobs:
           fi
 
       - name: Upload report artifacts
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: report-${{ matrix.conformance-profile }}-${{ matrix.crd-channel }}.yaml
           path: operator/pkg/gateway-api/report.yaml
@@ -296,7 +301,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        uses: actions/upload-artifact@1746f4ab65b179e0ea60a494b83293b640dd5bba # v4.3.2
         with:
           name: cilium-sysdump-out-${{ matrix.conformance-profile }}-${{ matrix.crd-channel }}
           path: cilium-sysdump-out-*.zip

@@ -284,7 +284,6 @@ contributors across the globe, there is almost always someone available to help.
 | dnsProxy.proxyPort | int | `0` | Global port on which the in-agent DNS proxy should listen. Default 0 is a OS-assigned port. |
 | dnsProxy.proxyResponseMaxDelay | string | `"100ms"` | The maximum time the DNS proxy holds an allowed DNS response before sending it along. Responses are sent as soon as the datapath is updated with the new IP information. |
 | egressGateway.enabled | bool | `false` | Enables egress gateway to redirect and SNAT the traffic that leaves the cluster. |
-| egressGateway.installRoutes | bool | `false` | Deprecated without a replacement necessary. |
 | egressGateway.reconciliationTriggerInterval | string | `"1s"` | Time between triggers of egress gateway state reconciliations |
 | enableCiliumEndpointSlice | bool | `false` | Enable CiliumEndpointSlice feature. |
 | enableCriticalPriorityClass | bool | `true` | Explicitly enable or disable priority class. .Capabilities.KubeVersion is unsettable in `helm template` calls, it depends on k8s libraries version that Helm was compiled against. This option allows to explicitly disable setting the priority class, which is useful for rendering charts for gke clusters in advance. |
@@ -358,7 +357,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:d53a3d10f56d5d629dd2871a6600398d56c3f6040fda5ded8681ff6dbefb4213","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.28.2-b26890d42321dd1ee126ee7e38274f3a675c9a23","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:40a69964865ac7005488e5b4263894221c24cdb1b2e10da5193bd2e460ce6529","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.3-2c7164c53e26902bba2ab8ba25ae365460d48a58","useDigest":true}` | Envoy container image. |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. |
@@ -718,6 +717,7 @@ contributors across the globe, there is almost always someone available to help.
 | operator.extraHostPathMounts | list | `[]` | Additional cilium-operator hostPath mounts. |
 | operator.extraVolumeMounts | list | `[]` | Additional cilium-operator volumeMounts. |
 | operator.extraVolumes | list | `[]` | Additional cilium-operator volumes. |
+| operator.hostNetwork | bool | `true` | HostNetwork setting |
 | operator.identityGCInterval | string | `"15m0s"` | Interval for identity garbage collection. |
 | operator.identityHeartbeatTimeout | string | `"30m0s"` | Timeout for identity heartbeats. |
 | operator.image | object | `{"alibabacloudDigest":"","awsDigest":"","azureDigest":"","genericDigest":"","override":null,"pullPolicy":"Always","repository":"quay.io/isovalent-dev/operator","suffix":"-ci","tag":"latest","useDigest":false}` | cilium-operator image. |

@@ -90,6 +90,8 @@ func (nm *nodeManager) NodeDeleted(node nodeTypes.Node) {
 	nm.downstream.NodeDeleted(node)
 }
 
+func (nml *nodeManager) NodeSync() { nml.downstream.NodeSync() }
+
 // needsEncapsulation returns whether tunnel encapsulation shall be used towards
 // the given remote node. It fallbacks to the local primary mode when unknown.
 func (nm *nodeManager) needsEncapsulation(node *nodeTypes.Node) bool {
@@ -232,3 +234,5 @@ func (nml *nodeManagerLight) NodeUpdated(node nodeTypes.Node) {
 func (nml *nodeManagerLight) NodeDeleted(node nodeTypes.Node) {
 	nml.downstream.NodeDeleted(node)
 }
+
+func (nml *nodeManagerLight) NodeSync() { nml.downstream.NodeSync() }

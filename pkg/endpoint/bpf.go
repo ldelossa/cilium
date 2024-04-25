@@ -662,11 +662,7 @@ func (e *Endpoint) realizeBPFState(regenContext *regenerationContext) (compilati
 		}
 
 		// Compile and install BPF programs for this endpoint
-		if datapathRegenCtxt.regenerationLevel == regeneration.RegenerateWithDatapathRebuild {
-			err = e.owner.Datapath().Loader().CompileAndLoad(datapathRegenCtxt.completionCtx, datapathRegenCtxt.epInfoCache, &stats.datapathRealization)
-			e.getLogger().WithError(err).Info("Regenerated endpoint BPF program")
-			compilationExecuted = true
-		} else if datapathRegenCtxt.regenerationLevel == regeneration.RegenerateWithDatapathRewrite {
+		if datapathRegenCtxt.regenerationLevel == regeneration.RegenerateWithDatapathRewrite {
 			err = e.owner.Datapath().Loader().CompileOrLoad(datapathRegenCtxt.completionCtx, datapathRegenCtxt.epInfoCache, &stats.datapathRealization)
 			if err == nil {
 				e.getLogger().Info("Rewrote endpoint BPF program")
@@ -1187,7 +1183,7 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 		return err
 	}
 
-	// Only update Envoy if there are envoy redirects and there were queued incremental changes.
+	// Only update Envoy if there are envoy redirects.
 	// This is safe to do here, since a PolicyMapChange cannot
 	// cause an envoy redirect to appear or disappear. It only allows for
 	// incremental updates. Thus, we don't need to worry about stale
