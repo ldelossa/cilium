@@ -116,7 +116,7 @@ jobs:
         KIND_POD_CIDR_2="10.242.0.0/16"
         KIND_SVC_CIDR_2="10.243.0.0/16"
 
-        CONNECTIVITY_TEST_DEFAULTS="--hubble=false --flow-validation=disabled --external-target=google.com --collect-sysdump-on-failure"
+        CONNECTIVITY_TEST_DEFAULTS="--hubble=false --flow-validation=disabled --external-target=google.com. --collect-sysdump-on-failure"
 
         echo cilium_install_defaults="${CILIUM_INSTALL_DEFAULTS} ${CILIUM_INSTALL_IPFAMILY}" >> $GITHUB_OUTPUT
         echo connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS} >> $GITHUB_OUTPUT

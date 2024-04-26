@@ -514,7 +514,7 @@ jobs:
             --force-deploy \
             --hubble=false \
             --flow-validation=disabled \
-            --external-target=google.com \
+            --external-target=google.com. \
             --include-unsafe-tests \
             --collect-sysdump-on-failure \
             --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml" \
