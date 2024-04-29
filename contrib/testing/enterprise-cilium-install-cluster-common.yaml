@@ -35,7 +35,7 @@ ipv4:
 ipv6:
   enabled: false
 k8sServicePort: 6443
-kubeProxyReplacement: strict
+kubeProxyReplacement: true
 operator:
   image:
     pullPolicy: Never
