@@ -32,7 +32,7 @@ jobs:
           ref: ${{ matrix.branch }}
           persist-credentials: false
       - name: Checkout latest VEX data
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
         with:
           sparse-checkout: |
             .openvex.json
@@ -56,16 +56,16 @@ jobs:
         with:
           pcc_console_url: https://us-east1.cloud.twistlock.com/us-1-111576212
           pcc_user: c2cb4b51-b118-44a6-a13b-e1f8647f2692
-          pcc_pass: ${{ secrets.TWISTCLI_PASSWORD }} 
+          pcc_pass: ${{ secrets.TWISTCLI_PASSWORD }}
           image_name: ${{ matrix.image.name }}:${{ matrix.branch }}
       - name: Set up Go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
       - name: Install vexctl
         run: go install github.com/openvex/vexctl@latest
       - name: Filter false positives
         run: vexctl filter ${{ steps.scan-image.outputs.sarif_file }} isovalent-cilium-vex/.openvex.json > filtered-results.json
       - name: Upload SARIF scan results
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: ${{ matrix.image.name }}-${{ matrix.branch }}.sarif.json
           path: filtered-results.json
