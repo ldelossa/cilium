@@ -6,17 +6,21 @@ package ipset
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/hive"
@@ -35,9 +39,9 @@ Revision: 6
 Header: family inet hashsize 1024 maxelem 65536 bucketsize 12 initval 0x4d9d24f1
 Size in memory: 216
 References: 0
-Number of entries: {{len $addrs.AsSlice}}
+Number of entries: {{len $addrs}}
 Members:
-{{range $idx, $addr := $addrs.AsSlice -}}{{$addr}}
+{{range $addr, $_ := $addrs -}}{{$addr}}
 {{else}}{{end}}{{end}}`
 
 func TestManager(t *testing.T) {
@@ -45,8 +49,8 @@ func TestManager(t *testing.T) {
 
 	var mgr Manager
 
-	ipsets := make(map[string]tables.AddrSet) // mocked kernel IP sets
-	var mu lock.Mutex                         // protect the ipsets map
+	ipsets := make(map[string]AddrSet) // mocked kernel IP sets
+	var mu lock.Mutex                  // protect the ipsets map
 
 	tmpl := template.Must(template.New("ipsets").Parse(textTmpl))
 
@@ -66,65 +70,78 @@ func TestManager(t *testing.T) {
 			cell.Provide(
 				newIPSetManager,
 				tables.NewIPSetTable,
-				reconciler.New[*tables.IPSet],
+				reconciler.New[*tables.IPSetEntry],
 				newReconcilerConfig,
 				newOps,
 			),
+			cell.Provide(func(ops *ops) reconciler.Operations[*tables.IPSetEntry] {
+				return ops
+			}),
 
 			cell.Provide(func(logger logrus.FieldLogger) *ipset {
 				return &ipset{
 					executable: funcExecutable(
-						func(ctx context.Context, command string, arg ...string) ([]byte, error) {
+						func(ctx context.Context, command string, stdin string, arg ...string) ([]byte, error) {
 							mu.Lock()
 							defer mu.Unlock()
 
-							t.Logf("%s %s", command, strings.Join(arg, " "))
-
-							subCommand := arg[0]
-							name := arg[1]
-
-							switch subCommand {
-							case "create":
-								if _, found := ipsets[name]; !found {
-									ipsets[name] = tables.NewAddrSet()
+							var commands [][]string
+							if arg[0] == "restore" {
+								lines := strings.Split(stdin, "\n")
+								for _, line := range lines {
+									if len(line) > 0 {
+										commands = append(commands, strings.Split(line, " "))
+									}
 								}
-								return nil, nil
-							case "destroy":
-								if _, found := ipsets[name]; !found {
-									return nil, fmt.Errorf("ipset %s not found", name)
-								}
-								delete(ipsets, name)
-								return nil, nil
-							case "list":
-								if _, found := ipsets[name]; !found {
-									return nil, fmt.Errorf("ipset %s not found", name)
-								}
-								var bb bytes.Buffer
-								if err := tmpl.Execute(&bb, map[string]tables.AddrSet{name: ipsets[name]}); err != nil {
-									return nil, err
-								}
-								b := bb.Bytes()
-								return b, nil
-							case "add":
-								if _, found := ipsets[name]; !found {
-									return nil, fmt.Errorf("ipset %s not found", name)
-								}
-								addr := netip.MustParseAddr(arg[len(arg)-2])
-								ipsets[name] = ipsets[name].Insert(addr)
-								return nil, nil
-							case "del":
-								if _, found := ipsets[name]; !found {
-									return nil, fmt.Errorf("ipset %s not found", name)
-								}
-								addr := netip.MustParseAddr(arg[len(arg)-2])
-								if !ipsets[name].Has(addr) {
-									return nil, nil
-								}
-								ipsets[name] = ipsets[name].Delete(addr)
-								return nil, nil
-							default:
-								return nil, fmt.Errorf("unexpected ipset subcommand %s", arg[1])
+							} else {
+								commands = [][]string{arg}
 							}
+
+							for _, arg := range commands {
+								subCommand := arg[0]
+								name := arg[1]
+								t.Logf("%s %s", subCommand, strings.Join(arg[1:], " "))
+
+								switch subCommand {
+								case "create":
+									if _, found := ipsets[name]; !found {
+										ipsets[name] = AddrSet{}
+									}
+								case "destroy":
+									if _, found := ipsets[name]; !found {
+										return nil, fmt.Errorf("ipset %s not found", name)
+									}
+									delete(ipsets, name)
+								case "list":
+									if _, found := ipsets[name]; !found {
+										return nil, fmt.Errorf("ipset %s not found", name)
+									}
+									var bb bytes.Buffer
+									if err := tmpl.Execute(&bb, map[string]AddrSet{name: ipsets[name]}); err != nil {
+										return nil, err
+									}
+									b := bb.Bytes()
+									return b, nil
+								case "add":
+									if _, found := ipsets[name]; !found {
+										return nil, fmt.Errorf("ipset %s not found", name)
+									}
+									addr := netip.MustParseAddr(arg[len(arg)-2])
+									ipsets[name] = ipsets[name].Insert(addr)
+								case "del":
+									if _, found := ipsets[name]; !found {
+										return nil, fmt.Errorf("ipset %s not found", name)
+									}
+									addr := netip.MustParseAddr(arg[len(arg)-2])
+									if !ipsets[name].Has(addr) {
+										return nil, nil
+									}
+									ipsets[name] = ipsets[name].Delete(addr)
+								default:
+									return nil, fmt.Errorf("unexpected ipset subcommand %s", arg[1])
+								}
+							}
+							return nil, nil
 						},
 					),
 					log: logger,
@@ -140,14 +157,14 @@ func TestManager(t *testing.T) {
 	testCases := []struct {
 		name     string
 		action   func()
-		expected map[string]tables.AddrSet
+		expected map[string]AddrSet
 	}{
 		{
 			name:   "check Cilium ipsets have been created",
 			action: func() {},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: {},
+				CiliumNodeIPSetV6: {},
 			},
 		},
 		{
@@ -155,11 +172,11 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.AddToIPSet(CiliumNodeIPSetV4, INetFamily, netip.MustParseAddr("1.1.1.1"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("1.1.1.1"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+				CiliumNodeIPSetV6: {},
 			},
 		},
 		{
@@ -167,12 +184,12 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.AddToIPSet(CiliumNodeIPSetV4, INetFamily, netip.MustParseAddr("2.2.2.2"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("1.1.1.1"),
 					netip.MustParseAddr("2.2.2.2"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+				CiliumNodeIPSetV6: {},
 			},
 		},
 		{
@@ -180,12 +197,12 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.AddToIPSet(CiliumNodeIPSetV4, INetFamily, netip.MustParseAddr("2.2.2.2"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("1.1.1.1"),
 					netip.MustParseAddr("2.2.2.2"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+				CiliumNodeIPSetV6: {},
 			},
 		},
 		{
@@ -193,11 +210,11 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.RemoveFromIPSet(CiliumNodeIPSetV4, netip.MustParseAddr("1.1.1.1"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("2.2.2.2"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+				CiliumNodeIPSetV6: {},
 			},
 		},
 		{
@@ -205,11 +222,11 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.RemoveFromIPSet(CiliumNodeIPSetV4, netip.MustParseAddr("3.3.3.3"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("2.2.2.2"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+				CiliumNodeIPSetV6: {},
 			},
 		},
 		{
@@ -217,11 +234,11 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.AddToIPSet(CiliumNodeIPSetV6, INet6Family, netip.MustParseAddr("cafe::1"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("2.2.2.2"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(
+				CiliumNodeIPSetV6: sets.New(
 					netip.MustParseAddr("cafe::1"),
 				),
 			},
@@ -231,11 +248,11 @@ func TestManager(t *testing.T) {
 			action: func() {
 				mgr.RemoveFromIPSet(CiliumNodeIPSetV6, netip.MustParseAddr("cafe::1"))
 			},
-			expected: map[string]tables.AddrSet{
-				CiliumNodeIPSetV4: tables.NewAddrSet(
+			expected: map[string]AddrSet{
+				CiliumNodeIPSetV4: sets.New(
 					netip.MustParseAddr("2.2.2.2"),
 				),
-				CiliumNodeIPSetV6: tables.NewAddrSet(),
+				CiliumNodeIPSetV6: {},
 			},
 		},
 	}
@@ -273,8 +290,8 @@ func TestManager(t *testing.T) {
 func TestManagerNodeIpsetNotNeeded(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	ipsets := make(map[string]tables.AddrSet) // mocked kernel IP sets
-	var mu lock.Mutex                         // protect the ipsets map
+	ipsets := make(map[string]AddrSet) // mocked kernel IP sets
+	var mu lock.Mutex                  // protect the ipsets map
 
 	hive := hive.New(
 		statedb.Cell,
@@ -292,13 +309,16 @@ func TestManagerNodeIpsetNotNeeded(t *testing.T) {
 			cell.Provide(
 				newIPSetManager,
 				tables.NewIPSetTable,
-				reconciler.New[*tables.IPSet],
+				reconciler.New[*tables.IPSetEntry],
 				newReconcilerConfig,
 				newOps,
 			),
+			cell.Provide(func(ops *ops) reconciler.Operations[*tables.IPSetEntry] {
+				return ops
+			}),
 			cell.Provide(func(logger logrus.FieldLogger) *ipset {
 				return &ipset{
-					executable: funcExecutable(func(ctx context.Context, command string, arg ...string) ([]byte, error) {
+					executable: funcExecutable(func(ctx context.Context, command string, stdin string, arg ...string) ([]byte, error) {
 						mu.Lock()
 						defer mu.Unlock()
 
@@ -316,7 +336,6 @@ func TestManagerNodeIpsetNotNeeded(t *testing.T) {
 					log: logger,
 				}
 			}),
-
 			// force manager instantiation
 			cell.Invoke(func(_ Manager) {}),
 		),
@@ -327,26 +346,41 @@ func TestManagerNodeIpsetNotNeeded(t *testing.T) {
 
 	// create ipv4 and ipv6 node ipsets to simulate stale entries from previous Cilium run
 	withLocked(&mu, func() {
-		ipsets[CiliumNodeIPSetV4] = tables.NewAddrSet(netip.MustParseAddr("2.2.2.2"))
-		ipsets[CiliumNodeIPSetV6] = tables.NewAddrSet(netip.MustParseAddr("cafe::1"))
+		ipsets[CiliumNodeIPSetV4] = sets.New(netip.MustParseAddr("2.2.2.2"))
+		ipsets[CiliumNodeIPSetV6] = sets.New(netip.MustParseAddr("cafe::1"))
 	})
 
 	assert.NoError(t, hive.Start(context.Background()))
 
-	// Cilium node ipsets should have been pruned
+	// Cilium node ipsets should eventually be pruned
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if _, found := ipsets[CiliumNodeIPSetV4]; found {
+			return false
+		}
+		if _, found := ipsets[CiliumNodeIPSetV6]; found {
+			return false
+		}
+
+		return true
+	}, 1*time.Second, 50*time.Millisecond)
+
+	// create a custom ipset (not managed by Cilium)
+	withLocked(&mu, func() {
+		ipsets["unmanaged-ipset"] = AddrSet{}
+	})
+
+	assert.NoError(t, hive.Stop(context.Background()))
+
+	// ipset managed by Cilium should not have been created again
 	withLocked(&mu, func() {
 		assert.NotContains(t, ipsets, CiliumNodeIPSetV4)
 		assert.NotContains(t, ipsets, CiliumNodeIPSetV6)
 	})
 
-	// create a custom ipset (not managed by Cilium)
-	withLocked(&mu, func() {
-		ipsets["unmanaged-ipset"] = tables.NewAddrSet()
-	})
-
-	assert.NoError(t, hive.Stop(context.Background()))
-
-	// ipset not managed by Cilium should not been pruned
+	// ipset not managed by Cilium should not have been pruned
 	withLocked(&mu, func() {
 		assert.Contains(t, ipsets, "unmanaged-ipset")
 	})
@@ -359,32 +393,87 @@ func withLocked(m *lock.Mutex, f func()) {
 	f()
 }
 
+func TestOpsPruneEnabled(t *testing.T) {
+	fakeLogger := logrus.New()
+	fakeLogger.SetOutput(io.Discard)
+
+	db, _ := statedb.NewDB(nil, statedb.NewMetrics())
+	table, _ := statedb.NewTable("ipsets", tables.IPSetEntryIndex)
+	require.NoError(t, db.RegisterTable(table))
+
+	txn := db.WriteTxn(table)
+	table.Insert(txn, &tables.IPSetEntry{
+		Name:   CiliumNodeIPSetV4,
+		Family: string(INetFamily),
+		Addr:   netip.MustParseAddr("1.1.1.1"),
+		Status: reconciler.StatusDone(),
+	})
+	table.Insert(txn, &tables.IPSetEntry{
+		Name:   CiliumNodeIPSetV4,
+		Family: string(INetFamily),
+		Addr:   netip.MustParseAddr("2.2.2.2"),
+		Status: reconciler.StatusDone(),
+	})
+	table.Insert(txn, &tables.IPSetEntry{
+		Name:   CiliumNodeIPSetV6,
+		Family: string(INet6Family),
+		Addr:   netip.MustParseAddr("cafe::1"),
+		Status: reconciler.StatusPending(),
+	})
+	txn.Commit()
+
+	var nCalled atomic.Bool // true if the ipset utility has been called
+
+	ipset := &ipset{
+		executable: funcExecutable(func(ctx context.Context, command string, stdin string, arg ...string) ([]byte, error) {
+			nCalled.Store(true)
+			t.Logf("%s %s", command, strings.Join(arg, " "))
+			return nil, nil
+		}),
+		log: fakeLogger,
+	}
+
+	ops := newOps(fakeLogger, ipset, config{NodeIPSetNeeded: true})
+
+	// prune operation should be skipped when it is not enabled
+	iter, _ := table.All(db.ReadTxn())
+	assert.NoError(t, ops.Prune(context.TODO(), db.ReadTxn(), iter))
+	assert.False(t, nCalled.Load())
+
+	ops.enablePrune()
+
+	// prune operation should now be completed
+	iter, _ = table.All(db.ReadTxn())
+	assert.NoError(t, ops.Prune(context.TODO(), db.ReadTxn(), iter))
+	assert.True(t, nCalled.Load())
+}
+
 func TestIPSetList(t *testing.T) {
 	testCases := []struct {
 		name     string
-		ipsets   map[string]tables.AddrSet
-		expected tables.AddrSet
+		ipsets   map[string]AddrSet
+		expected AddrSet
 	}{
 		{
 			name: "empty ipset",
-			ipsets: map[string]tables.AddrSet{
-				"ciliumtest": tables.NewAddrSet(),
+			ipsets: map[string]AddrSet{
+				"ciliumtest": {},
 			},
-			expected: tables.NewAddrSet(),
+			expected: AddrSet{},
 		},
 		{
 			name: "ipset with a single IP",
-			ipsets: map[string]tables.AddrSet{
-				"ciliumtest": tables.NewAddrSet(netip.MustParseAddr("1.1.1.1")),
+			ipsets: map[string]AddrSet{
+				"ciliumtest": sets.New(netip.MustParseAddr("1.1.1.1")),
 			},
-			expected: tables.NewAddrSet(netip.MustParseAddr("1.1.1.1")),
+			expected: sets.New(netip.MustParseAddr("1.1.1.1")),
 		},
 		{
 			name: "ipset with multiple IPs",
-			ipsets: map[string]tables.AddrSet{
-				"ciliumtest": tables.NewAddrSet(netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2")),
+			ipsets: map[string]AddrSet{
+				"ciliumtest": sets.New(netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2")),
 			},
-			expected: tables.NewAddrSet(netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2")),
+			expected: sets.New(netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2")),
 		},
 	}
 
@@ -436,6 +525,118 @@ type mockExec struct {
 	err error
 }
 
-func (e *mockExec) exec(ctx context.Context, name string, arg ...string) ([]byte, error) {
+func (e *mockExec) exec(ctx context.Context, name string, stdin string, arg ...string) ([]byte, error) {
 	return e.out, e.err
+}
+
+func BenchmarkManager(b *testing.B) {
+
+	var (
+		mgr         Manager
+		initializer Initializer
+		addCount    atomic.Int32
+		deleteCount atomic.Int32
+	)
+
+	hive := hive.New(
+		statedb.Cell,
+		job.Cell,
+		reconciler.Cell,
+
+		cell.Module(
+			"ipset-manager-test",
+			"ipset-manager-test",
+
+			cell.Provide(func() config {
+				return config{NodeIPSetNeeded: true}
+			}),
+
+			cell.Provide(
+				newIPSetManager,
+				tables.NewIPSetTable,
+				reconciler.New[*tables.IPSetEntry],
+				newReconcilerConfig,
+				newOps,
+			),
+			cell.Provide(func(ops *ops) reconciler.Operations[*tables.IPSetEntry] {
+				return ops
+			}),
+
+			cell.Provide(func(logger logrus.FieldLogger) *ipset {
+				return &ipset{
+					executable: funcExecutable(
+						func(ctx context.Context, command string, stdin string, arg ...string) ([]byte, error) {
+							// exec of ipset add takes about ~0.51ms
+							time.Sleep(time.Millisecond)
+							if arg[0] == "add" {
+								addCount.Add(1)
+							} else if arg[0] == "del" {
+								deleteCount.Add(1)
+							}
+
+							if arg[0] == "restore" {
+								count := strings.Count(stdin, "\n")
+								if strings.HasPrefix(stdin, "add") {
+									addCount.Add(int32(count))
+								} else {
+									deleteCount.Add(int32(count))
+								}
+							}
+							return nil, nil
+						}),
+					log: logger,
+				}
+			}),
+		),
+
+		cell.Invoke(func(m Manager) {
+			// Add an initializer to stop the pruning
+			initializer = m.NewInitializer()
+			mgr = m
+		}),
+	)
+
+	assert.NoError(b, hive.Start(context.Background()))
+
+	b.ResetTimer()
+
+	numEntries := 1000
+
+	toNetIP := func(i int) netip.Addr {
+		var addr1 [4]byte
+		binary.BigEndian.PutUint32(addr1[:], 0x02000000+uint32(i))
+		return netip.AddrFrom4(addr1)
+	}
+
+	for n := 0; n < b.N; n++ {
+		for i := 0; i < numEntries; i++ {
+			ip := toNetIP(i)
+			mgr.AddToIPSet(CiliumNodeIPSetV4, INetFamily, ip)
+		}
+
+		// Wait for all ops to be done
+		for addCount.Load() != int32(numEntries) {
+			time.Sleep(time.Millisecond)
+
+		}
+		for i := 0; i < numEntries; i++ {
+			ip := toNetIP(i)
+			mgr.RemoveFromIPSet(CiliumNodeIPSetV4, ip)
+		}
+
+		for deleteCount.Load() != int32(numEntries) {
+			time.Sleep(time.Millisecond)
+		}
+
+		addCount.Store(0)
+		deleteCount.Store(0)
+	}
+
+	b.StopTimer()
+
+	b.ReportMetric(float64(2 /*add&delete*/ *b.N*numEntries)/b.Elapsed().Seconds(), "ops/sec")
+
+	initializer.InitDone()
+
+	assert.NoError(b, hive.Stop(context.Background()))
 }

@@ -1,4 +1,4 @@
-{{- if and (.Values.agent) (not .Values.preflight.enabled) }}
+{{- if and ( or (.Values.agent) (.Values.operator.enabled) .Values.externalWorkloads.enabled .Values.clustermesh.useAPIServer) (not .Values.preflight.enabled) }}
 {{- /*  Default values with backwards compatibility */ -}}
 {{- $defaultBpfMapDynamicSizeRatio := 0.0 -}}
 {{- $defaultBpfMasquerade := "false" -}}
@@ -502,7 +502,9 @@ data:
 {{- end }}
 
 {{- if .Values.eni.enabled }}
+  {{- if not .Values.endpointRoutes.enabled }}
   enable-endpoint-routes: "true"
+  {{- end }}
   auto-create-cilium-node-resource: "true"
 {{- if .Values.eni.updateEC2AdapterLimitViaAPI }}
   update-ec2-adapter-limit-via-api: "true"
@@ -1030,9 +1032,6 @@ data:
 
 {{- if .Values.egressGateway.enabled }}
   enable-ipv4-egress-gateway: "true"
-{{- end }}
-{{- if .Values.egressGateway.installRoutes }}
-  install-egress-gateway-routes: "true"
 {{- end }}
 {{- if hasKey .Values.egressGateway "reconciliationTriggerInterval" }}
   egress-gateway-reconciliation-trigger-interval: {{ .Values.egressGateway.reconciliationTriggerInterval | quote }}
