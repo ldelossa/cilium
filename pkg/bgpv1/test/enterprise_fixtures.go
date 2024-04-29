@@ -12,12 +12,14 @@ package test
 
 import (
 	"context"
+	"testing"
+
+	"github.com/cilium/hive/cell"
 
 	enterprisebgpv1 "github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	enterprisereconciler "github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
@@ -82,11 +84,11 @@ func (f EnterpriseFixture) ConfigPolicy() *cilium_api_v2alpha1.CiliumBGPPeeringP
 }
 
 // EnterpriseSetup configures the test environment with enterprise cilium instance and one gobgp peer.
-func EnterpriseSetup(ctx context.Context, fixConfig *EnterpriseFixtureConfig) (peers []GoBGPInstance, f *EnterpriseFixture, cleanup func(), err error) {
+func EnterpriseSetup(t testing.TB, ctx context.Context, fixConfig *EnterpriseFixtureConfig) (peers []GoBGPInstance, f *EnterpriseFixture, cleanup func(), err error) {
 	f = newEnterpriseFixture(fixConfig)
 
 	var gobgpPeers []*goBGP
-	gobgpPeers, cleanup, err = start(ctx, []gobgpConfig{gobgpConf}, f.fixture)
+	gobgpPeers, cleanup, err = start(ctx, t, []gobgpConfig{gobgpConf}, f.fixture)
 
 	for _, peer := range gobgpPeers {
 		peers = append(peers, peer)

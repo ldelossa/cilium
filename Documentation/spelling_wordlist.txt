@@ -130,7 +130,6 @@ Vagrantfile
 Vagrantfiles
 Viljoen
 Wendlandt
-Wireguard
 Wireshark
 Xenial
 Yan
@@ -152,6 +151,7 @@ api
 apiKey
 apiKeys
 apiserver
+appProtocol
 ariane
 arithmetics
 artii
@@ -639,7 +639,7 @@ roadmap
 rollout
 routable
 routingMode
-rst
+rST
 runnable
 runtimes
 sandboxing

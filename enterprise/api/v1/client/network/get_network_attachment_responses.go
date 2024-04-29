@@ -52,7 +52,7 @@ func (o *GetNetworkAttachmentReader) ReadResponse(response runtime.ClientRespons
 		}
 		return nil, result
 	default:
-		return nil, runtime.NewAPIError("response status code does not match any response statuses defined for this endpoint in the swagger spec", response, response.Code())
+		return nil, runtime.NewAPIError("[GET /network/attachment] GetNetworkAttachment", response, response.Code())
 	}
 }
 
@@ -93,6 +93,11 @@ func (o *GetNetworkAttachmentOK) IsServerError() bool {
 // IsCode returns true when this get network attachment o k response a status code equal to that given
 func (o *GetNetworkAttachmentOK) IsCode(code int) bool {
 	return code == 200
+}
+
+// Code gets the status code for the get network attachment o k response
+func (o *GetNetworkAttachmentOK) Code() int {
+	return 200
 }
 
 func (o *GetNetworkAttachmentOK) Error() string {
@@ -158,6 +163,11 @@ func (o *GetNetworkAttachmentFailure) IsCode(code int) bool {
 	return code == 500
 }
 
+// Code gets the status code for the get network attachment failure response
+func (o *GetNetworkAttachmentFailure) Code() int {
+	return 500
+}
+
 func (o *GetNetworkAttachmentFailure) Error() string {
 	return fmt.Sprintf("[GET /network/attachment][%d] getNetworkAttachmentFailure  %+v", 500, o.Payload)
 }
@@ -216,6 +226,11 @@ func (o *GetNetworkAttachmentDisabled) IsServerError() bool {
 // IsCode returns true when this get network attachment disabled response a status code equal to that given
 func (o *GetNetworkAttachmentDisabled) IsCode(code int) bool {
 	return code == 501
+}
+
+// Code gets the status code for the get network attachment disabled response
+func (o *GetNetworkAttachmentDisabled) Code() int {
+	return 501
 }
 
 func (o *GetNetworkAttachmentDisabled) Error() string {

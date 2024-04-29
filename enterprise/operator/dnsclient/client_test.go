@@ -19,10 +19,11 @@ import (
 	"time"
 
 	"github.com/cilium/dns"
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"go.uber.org/goleak"
 
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 func typeA(w dns.ResponseWriter, req *dns.Msg) {
@@ -112,14 +113,14 @@ func TestClient(t *testing.T) {
 		}),
 	)
 
-	if err := hive.Start(context.Background()); err != nil {
+	if err := hive.Start(hivetest.Logger(t), context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	testIPv4(t, client)
 	testIPv6(t, client)
 
-	if err := hive.Stop(context.Background()); err != nil {
+	if err := hive.Stop(hivetest.Logger(t), context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }

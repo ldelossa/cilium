@@ -13,18 +13,17 @@ package multinetwork
 import (
 	"context"
 	"fmt"
-	"runtime/pprof"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/workqueue"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	isovalent_client_v1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 // defaultNetwork is the default IsovalentPodNetwork resource created by the operator.
@@ -49,10 +48,8 @@ type operatorParams struct {
 
 	Config config
 
-	Logger      logrus.FieldLogger
-	Lifecycle   cell.Lifecycle
-	JobRegistry job.Registry
-	Scope       cell.Scope
+	Logger   logrus.FieldLogger
+	JobGroup job.Group
 
 	Clientset k8sClient.Clientset
 }
@@ -76,12 +73,6 @@ func newMultiNetworkOperator(params operatorParams) *Operator {
 		return nil
 	}
 
-	jobGroup := params.JobRegistry.NewGroup(
-		params.Scope,
-		job.WithLogger(params.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "multinetwork")),
-	)
-
 	operator := &Operator{
 		config:           params.Config,
 		logger:           params.Logger,
@@ -89,11 +80,10 @@ func newMultiNetworkOperator(params operatorParams) *Operator {
 	}
 
 	if params.Config.AutoCreateDefaultPodNetwork {
-		jobGroup.Add(
+		params.JobGroup.Add(
 			job.OneShot("create default network",
-				operator.Run, job.WithRetry(3, workqueue.DefaultControllerRateLimiter())),
+				operator.Run, job.WithRetry(3, &job.ExponentialBackoff{Min: 100 * time.Millisecond, Max: time.Second})),
 		)
-		params.Lifecycle.Append(jobGroup)
 	}
 
 	return operator
@@ -101,7 +91,7 @@ func newMultiNetworkOperator(params operatorParams) *Operator {
 
 // Run creates the default IsovalentPodNetwork resource.
 // It is started as a one-shot job by the operator cell.
-func (o *Operator) Run(ctx context.Context, health cell.HealthReporter) error {
+func (o *Operator) Run(ctx context.Context, health cell.Health) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

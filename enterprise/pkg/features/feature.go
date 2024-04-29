@@ -16,10 +16,10 @@ import (
 	"reflect"
 	"regexp"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 

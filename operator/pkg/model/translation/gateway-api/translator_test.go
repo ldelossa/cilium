@@ -46,7 +46,7 @@ func Test_translator_Translate(t *testing.T) {
 			name: "Basic TLS SNI Listener",
 			args: args{
 				m: &model.Model{
-					TLS: basicTLSListeners,
+					TLSPassthrough: basicTLSListeners,
 				},
 			},
 			want: basicTLSListenersCiliumEnvoyConfig,
@@ -56,6 +56,15 @@ func Test_translator_Translate(t *testing.T) {
 			args: args{
 				m: &model.Model{
 					HTTP: simpleSameNamespaceHTTPListeners,
+				},
+			},
+			want: simpleSameNamespaceHTTPListenersCiliumEnvoyConfig,
+		},
+		{
+			name: "Conformance/HTTPRouteBackendProtocolH2C",
+			args: args{
+				m: &model.Model{
+					HTTP: backendProtocolDisabledH2CHTTPListeners,
 				},
 			},
 			want: simpleSameNamespaceHTTPListenersCiliumEnvoyConfig,
@@ -226,7 +235,7 @@ func Test_translator_Translate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &gatewayAPITranslator{
-				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, 60, false, nil, false, false, 0),
+				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, false, true, 60, false, nil, false, false, 0),
 			}
 			cec, _, _, err := trans.Translate(tt.args.m)
 			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
@@ -327,13 +336,45 @@ func Test_translator_TranslateResource(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &gatewayAPITranslator{
-				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, 60, false, nil, false, false, 0),
+				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, false, true, 60, false, nil, false, false, 0),
 			}
 			cec, _, _, err := trans.Translate(tt.args.m)
 			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
 			for _, fn := range tt.validateFuncs {
 				require.True(t, fn(cec), "Validation failed")
 			}
+		})
+	}
+}
+
+func Test_translator_Translate_AppProtocol(t *testing.T) {
+	type args struct {
+		m *model.Model
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *ciliumv2.CiliumEnvoyConfig
+		wantErr bool
+	}{
+		{
+			name: "Conformance/HTTPRouteBackendProtocolH2C",
+			args: args{
+				m: &model.Model{
+					HTTP: backendProtocolEnabledH2CHTTPListeners,
+				},
+			},
+			want: backendProtocolEnabledH2CHTTPListenersCiliumEnvoyConfig,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			trans := &gatewayAPITranslator{
+				cecTranslator: translation.NewCECTranslator("cilium-secrets", false, true, true, 60, false, nil, false, false, 0),
+			}
+			cec, _, _, err := trans.Translate(tt.args.m)
+			require.Equal(t, tt.wantErr, err != nil, "Error mismatch")
+			require.Equal(t, tt.want, cec, "CiliumEnvoyConfig did not match")
 		})
 	}
 }
@@ -401,7 +442,7 @@ func Test_translator_Translate_HostNetwork(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &gatewayAPITranslator{
-				cecTranslator:      translation.NewCECTranslator("cilium-secrets", false, true, 60, true, tt.nodeLabelSelector, tt.ipv4Enabled, tt.ipv6Enabled, 0),
+				cecTranslator:      translation.NewCECTranslator("cilium-secrets", false, false, true, 60, true, tt.nodeLabelSelector, tt.ipv4Enabled, tt.ipv6Enabled, 0),
 				hostNetworkEnabled: true,
 			}
 			cec, svc, ep, err := trans.Translate(tt.args.m)
@@ -443,7 +484,7 @@ func Test_translator_Translate_WithXffNumTrustedHops(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			trans := &gatewayAPITranslator{
-				cecTranslator:      translation.NewCECTranslator("cilium-secrets", false, true, 60, false, nil, false, false, 2),
+				cecTranslator:      translation.NewCECTranslator("cilium-secrets", false, false, true, 60, false, nil, false, false, 2),
 				hostNetworkEnabled: true,
 			}
 			cec, svc, ep, err := trans.Translate(tt.args.m)

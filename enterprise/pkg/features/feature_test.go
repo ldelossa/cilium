@@ -15,11 +15,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 type testConfig struct {
@@ -64,12 +65,12 @@ func TestFeatureWithFn(t *testing.T) {
 
 	err := getHive("meow", func(tc testConfig2) (bool, error) {
 		return tc.EnableXXX == "meow", nil
-	}).Start(ctx)
+	}).Start(hivetest.Logger(t), ctx)
 	assert.Error(t, err)
 
 	err = getHive("meow", func(tc testConfig2) (bool, error) {
 		return tc.EnableXXX == "woof", nil
-	}).Start(ctx)
+	}).Start(hivetest.Logger(t), ctx)
 	assert.NoError(t, err)
 }
 
@@ -83,7 +84,7 @@ func TestSpecValidation(t *testing.T) {
 			FeatureWithConfigT[testConfig](spec),
 		)
 		ctx, cancel := context.WithCancel(context.Background())
-		return cancel, h.Start(ctx)
+		return cancel, h.Start(hivetest.Logger(t), ctx)
 	}
 
 	cancel, err := runTestHive(Spec{
@@ -158,7 +159,7 @@ func TestFeature(t *testing.T) {
 			FeatureWithConfigT[*testConfig](spec),
 		)
 		ctx, cancel := context.WithCancel(context.Background())
-		return cancel, h.Start(ctx)
+		return cancel, h.Start(hivetest.Logger(t), ctx)
 	}
 
 	cancel, err := runTestHive(Spec{

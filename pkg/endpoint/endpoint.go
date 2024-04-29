@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
@@ -33,7 +34,6 @@ import (
 	"github.com/cilium/cilium/pkg/eventqueue"
 	"github.com/cilium/cilium/pkg/fqdn"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
@@ -414,8 +414,11 @@ type Endpoint struct {
 	properties map[string]interface{}
 
 	// Root scope for all of this endpoints reporters.
-	reporterScope       cell.Scope
+	reporterScope       cell.Health
 	closeHealthReporter func()
+
+	// NetNsCookie is the network namespace cookie of the Endpoint.
+	NetNsCookie uint64
 }
 
 func (e *Endpoint) GetRealizedRedirects() (redirects map[string]uint16) {
@@ -425,12 +428,19 @@ func (e *Endpoint) GetRealizedRedirects() (redirects map[string]uint16) {
 	return redirects
 }
 
-func (e *Endpoint) GetReporter(name string) cell.HealthReporter {
-	return cell.GetHealthReporter(e.reporterScope, name)
+func (e *Endpoint) GetReporter(name string) cell.Health {
+	if e.reporterScope == nil {
+		_, h := cell.NewSimpleHealth()
+		return h.NewScope(name)
+	}
+	return e.reporterScope.NewScope(name)
 }
 
-func (e *Endpoint) InitEndpointScope(parent cell.Scope) {
-	s := cell.GetSubScope(parent, fmt.Sprintf("cilium-endpoint-%d (%s)", e.ID, e.GetK8sNamespaceAndPodName()))
+func (e *Endpoint) InitEndpointHealth(parent cell.Health) {
+	if parent == nil {
+		_, parent = cell.NewSimpleHealth()
+	}
+	s := parent.NewScope(fmt.Sprintf("cilium-endpoint-%d (%s)", e.ID, e.GetK8sNamespaceAndPodName()))
 	if s != nil {
 		e.closeHealthReporter = s.Close
 		e.reporterScope = s
@@ -717,28 +727,11 @@ func (e *Endpoint) GetNodeMAC() mac.MAC {
 	return e.nodeMAC
 }
 
-// ConntrackName returns the name suffix for the endpoint-specific bpf
-// conntrack map, which is a 5-digit endpoint ID, or "global" when the
-// global map should be used.
-func (e *Endpoint) ConntrackName() string {
-	e.unconditionalRLock()
-	defer e.runlock()
-	return e.conntrackName()
-}
-
 // ConntrackNameLocked returns the name suffix for the endpoint-specific bpf
 // conntrack map, which is a 5-digit endpoint ID, or "global" when the
 // global map should be used.
 // Must be called with the endpoint locked.
 func (e *Endpoint) ConntrackNameLocked() string {
-	return e.conntrackName()
-}
-
-// ConntrackName returns the name suffix for the endpoint-specific bpf
-// conntrack map, which is a 5-digit endpoint ID, or "global" when the
-// global map should be used.
-// Must be called with the endpoint locked.
-func (e *Endpoint) conntrackName() string {
 	if e.ConntrackLocalLocked() {
 		return fmt.Sprintf("%05d", int(e.ID))
 	}
@@ -1254,7 +1247,7 @@ func (e *Endpoint) leaveLocked(proxyWaitGroup *completion.WaitGroup, conf Delete
 	}
 
 	if e.ConntrackLocalLocked() {
-		ctmap.CloseLocalMaps(e.conntrackName())
+		ctmap.CloseLocalMaps(e.ConntrackNameLocked())
 	} else if !e.isProperty(PropertyFakeEndpoint) {
 		e.scrubIPsInConntrackTableLocked()
 	}
@@ -2560,14 +2553,14 @@ func (e *Endpoint) WaitForFirstRegeneration(ctx context.Context) error {
 
 // SetDefaultConfiguration sets the default configuration options for its
 // boolean configuration options and for policy enforcement based off of the
-// global policy enforcement configuration options. If restore is true, then
-// the configuration option to keep endpoint configuration during endpoint
-// restore is checked, and if so, this is a no-op.
-func (e *Endpoint) SetDefaultConfiguration(restore bool) {
+// global policy enforcement configuration options. If the configuration option to
+// keep endpoint configuration during endpoint restore is enabled, this is a
+// no-op.
+func (e *Endpoint) SetDefaultConfiguration() {
 	e.unconditionalLock()
 	defer e.unlock()
 
-	if restore && option.Config.KeepConfig {
+	if option.Config.KeepConfig {
 		return
 	}
 	e.setDefaultPolicyConfig()

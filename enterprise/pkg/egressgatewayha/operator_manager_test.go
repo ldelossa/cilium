@@ -10,12 +10,12 @@ import (
 	"time"
 
 	. "github.com/cilium/checkmate"
+	"github.com/cilium/hive/hivetest"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/cilium/cilium/pkg/hive/hivetest"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	cilium_fake "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/fake"

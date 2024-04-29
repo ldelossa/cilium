@@ -11,10 +11,11 @@
 package clustermesh
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/datapath/linux"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
 
 	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"

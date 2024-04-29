@@ -11,9 +11,10 @@
 package dnsclient
 
 import (
+	"github.com/cilium/hive/cell"
 	"github.com/spf13/pflag"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/metrics"
 )
 
 const (
@@ -29,7 +30,7 @@ var Cell = cell.Module(
 
 	cell.Config(Config{}),
 	cell.Provide(newClient),
-	cell.Metric(newMetrics),
+	metrics.Metric(newMetrics),
 )
 
 type Config struct {

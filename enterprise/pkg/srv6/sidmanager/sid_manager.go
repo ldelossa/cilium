@@ -19,10 +19,18 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
+	"github.com/cilium/stream"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
+
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/backoff"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -33,14 +41,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/time"
-
-	"github.com/cilium/stream"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	k8sTypes "k8s.io/apimachinery/pkg/types"
 )
 
 // SID Manager is a central point of managing SRv6 SIDs. It is backed by
@@ -135,9 +135,7 @@ type sidManagerParams struct {
 	cell.In
 
 	Logger   logrus.FieldLogger
-	Scope    cell.Scope
-	Registry job.Registry
-	Lc       cell.Lifecycle
+	Group    job.Group
 	Cs       client.Clientset
 	Dc       *option.DaemonConfig
 	Resource LocalIsovalentSRv6SIDManagerResource
@@ -208,14 +206,10 @@ func NewSIDManagerPromise(params sidManagerParams) promise.Promise[SIDManager] {
 	}
 	m.mcast, m.next, m.completed = stream.Multicast[Event]()
 
-	jg := params.Registry.NewGroup(params.Scope)
-
-	jg.Add(
+	params.Group.Add(
 		job.OneShot("spec-reconciler", m.runSpecReconciler),
 		job.OneShot("status-reconciler", m.runStatusReconciler),
 	)
-
-	params.Lc.Append(jg)
 
 	return promise
 }
@@ -242,7 +236,7 @@ func (m *sidManager) Observe(ctx context.Context, next func(Event), complete fun
 	}()
 }
 
-func (m *sidManager) runSpecReconciler(ctx context.Context, health cell.HealthReporter) error {
+func (m *sidManager) runSpecReconciler(ctx context.Context, health cell.Health) error {
 	m.logger.Info("Starting SID Manager spec reconciler")
 
 	restorationDone := false
@@ -504,7 +498,7 @@ func (m *sidManager) deleteAllAllocators(r *v1alpha1.IsovalentSRv6SIDManager) {
 
 }
 
-func (m *sidManager) runStatusReconciler(ctx context.Context, health cell.HealthReporter) error {
+func (m *sidManager) runStatusReconciler(ctx context.Context, health cell.Health) error {
 	m.logger.Info("Starting SID Manager status reconciler")
 
 	// In case of the state synchronization failure, we retry with

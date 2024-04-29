@@ -13,14 +13,17 @@ package ciliummesh
 import (
 	"context"
 	"fmt"
-	"runtime/pprof"
+
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/enterprise/pkg/maps/ciliummeshpolicymap"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -31,10 +34,6 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
-
-	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
 )
 
 type EndpointCreator interface {
@@ -71,10 +70,8 @@ type CiliumMeshController struct {
 type ciliumMeshParams struct {
 	cell.In
 
-	Logger      logrus.FieldLogger
-	LC          cell.Lifecycle
-	JobRegistry job.Registry
-	Scope       cell.Scope
+	Logger   logrus.FieldLogger
+	JobGroup job.Group
 
 	DaemonCfg *option.DaemonConfig
 
@@ -97,12 +94,6 @@ func newCiliumMeshController(p ciliumMeshParams) *CiliumMeshController {
 		return nil
 	}
 
-	jobGroup := p.JobRegistry.NewGroup(
-		p.Scope,
-		job.WithLogger(p.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "cilium-mesh")),
-	)
-
 	cmm := &CiliumMeshController{
 		clusterName:         p.DaemonCfg.ClusterName,
 		resource:            p.Resource,
@@ -116,8 +107,8 @@ func newCiliumMeshController(p ciliumMeshParams) *CiliumMeshController {
 		endpointsCreator: nil,
 	}
 
-	jobGroup.Add(
-		job.OneShot("cilium-mesh main", func(ctx context.Context, _ cell.HealthReporter) error {
+	p.JobGroup.Add(
+		job.OneShot("cilium-mesh main", func(ctx context.Context, _ cell.Health) error {
 			var err error
 			// We need the endpoint creator to be ready before we start handling
 			// events.
@@ -129,8 +120,6 @@ func newCiliumMeshController(p ciliumMeshParams) *CiliumMeshController {
 			return nil
 		}),
 	)
-
-	p.LC.Append(jobGroup)
 
 	return cmm
 }

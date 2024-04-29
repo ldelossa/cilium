@@ -985,7 +985,7 @@
      - bool
      - ``false``
    * - :spelling:ignore:`encryption.ipsec.encryptedOverlay`
-     - Enable IPSec encrypted overlay
+     - Enable IPsec encrypted overlay
      - bool
      - ``false``
    * - :spelling:ignore:`encryption.ipsec.interface`
@@ -1037,7 +1037,7 @@
      - string
      - ``"ipsec"``
    * - :spelling:ignore:`encryption.wireguard.persistentKeepalive`
-     - Controls Wireguard PersistentKeepalive option. Set 0s to disable.
+     - Controls WireGuard PersistentKeepalive option. Set 0s to disable.
      - string
      - ``"0s"``
    * - :spelling:ignore:`encryption.wireguard.userspaceFallback`
@@ -1231,7 +1231,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:40a69964865ac7005488e5b4263894221c24cdb1b2e10da5193bd2e460ce6529","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.3-2c7164c53e26902bba2ab8ba25ae365460d48a58","useDigest":true}``
+     - ``{"digest":"sha256:3c5494946d3d72873d0a40408dba95ed35ee9ed39fbbe46ea031cfbf21c8bc7e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.4-174c6af504235ce8f4ce998f98cac88c50202d29","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1329,9 +1329,13 @@
      - bool
      - ``false``
    * - :spelling:ignore:`envoy.securityContext.capabilities.envoy`
-     - Capabilities for the ``cilium-envoy`` container
+     - Capabilities for the ``cilium-envoy`` container. Even though granted to the container, the cilium-envoy-starter wrapper drops all capabilities after forking the actual Envoy process. ``NET_BIND_SERVICE`` is the only capability that can be passed to the Envoy process by setting ``envoy.capabilities.keepNetBindService=true`` (in addition to granting the capability to the container). Note: In case of embedded envoy, the capability must  be granted to the cilium-agent container.
      - list
      - ``["NET_ADMIN","SYS_ADMIN"]``
+   * - :spelling:ignore:`envoy.securityContext.capabilities.keepCapNetBindService`
+     - Keep capability ``NET_BIND_SERVICE`` for Envoy process.
+     - bool
+     - ``false``
    * - :spelling:ignore:`envoy.securityContext.privileged`
      - Run the pod with elevated privileges
      - bool
@@ -1512,6 +1516,10 @@
      - Additional agent volumes.
      - list
      - ``[]``
+   * - :spelling:ignore:`gatewayAPI.enableAppProtocol`
+     - Enable Backend Protocol selection support (GEP-1911) for Gateway API via appProtocol.
+     - bool
+     - ``false``
    * - :spelling:ignore:`gatewayAPI.enableProxyProtocol`
      - Enable proxy protocol for all GatewayAPI listeners. Note that *only* Proxy protocol traffic will be accepted once this is enabled.
      - bool
@@ -2228,14 +2236,10 @@
      - Specify the labels of the nodes where the Ingress listeners should be exposed  matchLabels:   kubernetes.io/os: linux   kubernetes.io/hostname: kind-worker
      - object
      - ``{}``
-   * - :spelling:ignore:`ingressController.hostNetwork.sharedHTTPPort`
-     - Configure a specific port on the host network that gets used for the shared HTTP listener. This is used for HTTP and HTTPS.
+   * - :spelling:ignore:`ingressController.hostNetwork.sharedListenerPort`
+     - Configure a specific port on the host network that gets used for the shared listener.
      - int
-     - ``0``
-   * - :spelling:ignore:`ingressController.hostNetwork.sharedTLSPassthroughPort`
-     - Configure a specific port on the host network that gets used for the shared TLS passthrough listener
-     - int
-     - ``0``
+     - ``8080``
    * - :spelling:ignore:`ingressController.ingressLBAnnotationPrefixes`
      - IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service
      - list
@@ -2583,7 +2587,7 @@
    * - :spelling:ignore:`nodeinit.image`
      - node-init image.
      - object
-     - ``{"digest":"sha256:e1d442546e868db1a3289166c14011e0dbd32115b338b963e56f830972bc22a2","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"62093c5c233ea914bfa26a10ba41f8780d9b737f","useDigest":true}``
+     - ``{"digest":"sha256:820155cb3b7f00c8d61c1cffa68c44440906cb046bdbad8ff544f5deb1103456","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"19fb149fb3d5c7a37d3edfaf10a2be3ab7386661","useDigest":true}``
    * - :spelling:ignore:`nodeinit.nodeSelector`
      - Node labels for nodeinit pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object

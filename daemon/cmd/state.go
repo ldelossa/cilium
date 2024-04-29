@@ -176,10 +176,8 @@ func (d *Daemon) fetchOldEndpoints(dir string) (*endpointRestoreState, error) {
 // allocating their existing IPs out of the CIDR block and then inserting the
 // endpoints into the endpoints list. It needs to be followed by a call to
 // regenerateRestoredEndpoints() once the endpoint builder is ready.
-//
-// If clean is true, endpoints which cannot be associated with a container
-// workloads are deleted.
-func (d *Daemon) restoreOldEndpoints(state *endpointRestoreState, clean bool) error {
+// Endpoints which cannot be associated with a container workload are deleted.
+func (d *Daemon) restoreOldEndpoints(state *endpointRestoreState) {
 	failed := 0
 	defer func() {
 		state.possible = nil
@@ -187,7 +185,7 @@ func (d *Daemon) restoreOldEndpoints(state *endpointRestoreState, clean bool) er
 
 	if !option.Config.RestoreState {
 		log.Info("Endpoint restore is disabled, skipping restore step")
-		return nil
+		return
 	}
 
 	emf := &cachedEndpointMetadataFetcher{k8sWatcher: d.k8sWatcher}
@@ -234,16 +232,14 @@ func (d *Daemon) restoreOldEndpoints(state *endpointRestoreState, clean bool) er
 			}
 		}
 		if !restore {
-			if clean {
-				state.toClean = append(state.toClean, ep)
-			}
+			state.toClean = append(state.toClean, ep)
 			continue
 		}
 
 		scopedLog.Debug("Restoring endpoint")
 		ep.LogStatusOK(endpoint.Other, "Restoring endpoint from previous cilium instance")
 
-		ep.SetDefaultConfiguration(true)
+		ep.SetDefaultConfiguration()
 		ep.SetProxy(d.l7Proxy)
 		ep.SkipStateClean()
 
@@ -269,8 +265,6 @@ func (d *Daemon) restoreOldEndpoints(state *endpointRestoreState, clean bool) er
 			}
 		}
 	}
-
-	return nil
 }
 
 func (d *Daemon) regenerateRestoredEndpoints(state *endpointRestoreState, endpointsRegenerator *endpoint.Regenerator) {

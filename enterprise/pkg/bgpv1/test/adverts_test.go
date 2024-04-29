@@ -302,7 +302,7 @@ func Test_LBServiceHealthCheckAdvertisements(t *testing.T) {
 		},
 		SvcHealthCheckSubscriber: healthCheckSubscriber,
 	}
-	gobgpPeers, fixture, cleanup, err := test.EnterpriseSetup(testCtx, fixConfig)
+	gobgpPeers, fixture, cleanup, err := test.EnterpriseSetup(t, testCtx, fixConfig)
 	require.NoError(t, err)
 	require.Len(t, gobgpPeers, 1)
 	defer cleanup()

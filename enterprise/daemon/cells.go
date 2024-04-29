@@ -11,26 +11,26 @@
 package main
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/daemon/cmd"
 	"github.com/cilium/cilium/enterprise/api/v1/server"
 	"github.com/cilium/cilium/enterprise/featurelist"
 	"github.com/cilium/cilium/enterprise/pkg/api"
 	"github.com/cilium/cilium/enterprise/pkg/bfd"
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
+	"github.com/cilium/cilium/enterprise/pkg/ciliummesh"
+	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/features"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha"
+	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/mixedrouting"
 	"github.com/cilium/cilium/enterprise/pkg/multicast"
 	"github.com/cilium/cilium/enterprise/pkg/multinetwork"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
-	"github.com/cilium/cilium/pkg/hive/cell"
-
-	"github.com/cilium/cilium/enterprise/pkg/ciliummesh"
-	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
-	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 	"github.com/cilium/cilium/pkg/promise"
 )
 

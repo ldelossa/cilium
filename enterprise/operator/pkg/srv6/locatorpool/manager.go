@@ -12,19 +12,18 @@ package locatorpool
 
 import (
 	"context"
-	"runtime/pprof"
 	"time"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
+	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/util/workqueue"
+
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	isovalent_client_v1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_core_v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
-
-	"github.com/sirupsen/logrus"
-	"k8s.io/client-go/util/workqueue"
 )
 
 var (
@@ -41,10 +40,8 @@ type LocatorPoolManagerParams struct {
 
 	Cfg Config
 
-	Logger      logrus.FieldLogger
-	LC          cell.Lifecycle
-	JobRegistry job.Registry
-	Scope       cell.Scope
+	Logger   logrus.FieldLogger
+	JobGroup job.Group
 
 	Clientset k8sClient.Clientset
 
@@ -86,11 +83,6 @@ func newLocPoolManager(p LocatorPoolManagerParams) (*LocatorPoolManager, error) 
 		return nil, nil
 	}
 
-	jobGroup := p.JobRegistry.NewGroup(
-		p.Scope,
-		job.WithLogger(p.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "locatorpool")),
-	)
 	lpm := &LocatorPoolManager{
 		cfg:                    p.Cfg,
 		logger:                 p.Logger,
@@ -102,14 +94,12 @@ func newLocPoolManager(p LocatorPoolManagerParams) (*LocatorPoolManager, error) 
 		nodeAllocations:        make(map[string]allocations),
 	}
 
-	jobGroup.Add(
-		job.OneShot("locatorpool main", func(ctx context.Context, health cell.HealthReporter) error {
+	p.JobGroup.Add(
+		job.OneShot("locatorpool main", func(ctx context.Context, health cell.Health) error {
 			lpm.Run(ctx)
 			return nil
 		}),
 	)
-
-	p.LC.Append(jobGroup)
 
 	return lpm, nil
 }

@@ -11,10 +11,10 @@
 package server
 
 import (
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 var Cell = cell.Module(

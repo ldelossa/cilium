@@ -13,13 +13,14 @@ package mixedrouting
 import (
 	"testing"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	dpcfgdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
@@ -104,7 +105,7 @@ func TestDatapathConfigProvider(t *testing.T) {
 						outDef.Merge(ned)
 					}
 				}),
-			)).Populate())
+			)).Populate(hivetest.Logger(t)))
 
 			tt.assertProtoDisabled(t, outProto == tunnel.Disabled)
 			tt.assertTunnelMode(t, outDef, "TUNNEL_MODE")

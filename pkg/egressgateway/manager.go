@@ -14,13 +14,13 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -178,7 +178,7 @@ func NewEgressGatewayManager(p Params) (out struct {
 		return out, errors.New("egress gateway is not supported in combination with the CiliumEndpointSlice feature")
 	}
 
-	if !dcfg.MasqueradingEnabled() || !dcfg.EnableBPFMasquerade {
+	if !dcfg.EnableIPv4Masquerade || !dcfg.EnableBPFMasquerade {
 		return out, fmt.Errorf("egress gateway requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
 	}
 

@@ -13,14 +13,13 @@ package clustermesh
 import (
 	"context"
 	"fmt"
-	"runtime/pprof"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
-	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
+	"github.com/cilium/cilium/pkg/time"
 
 	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
@@ -28,10 +27,8 @@ import (
 type jobParams struct {
 	cell.In
 
-	Lifecycle   cell.Lifecycle
-	Logger      logrus.FieldLogger
-	JobRegistry job.Registry
-	Scope       cell.Scope
+	Logger   logrus.FieldLogger
+	JobGroup job.Group
 
 	Config       cecmcfg.Config
 	ClusterMesh  *clustermesh.ClusterMesh
@@ -43,24 +40,17 @@ func registerJobs(params jobParams) {
 		return
 	}
 
-	group := params.JobRegistry.NewGroup(
-		params.Scope,
-		job.WithLogger(params.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "enterprise-clustermesh")),
-	)
-	params.Lifecycle.Append(group)
-
 	if params.Config.EnableClusterAwareAddressing {
-		group.Add(job.OneShot(
+		params.JobGroup.Add(job.OneShot(
 			"clustermesh-cleanup-stale-maps",
 			cleanupStalePerClusterMapsJobFn(params),
-			job.WithRetry(3, workqueue.DefaultControllerRateLimiter()),
+			job.WithRetry(3, &job.ExponentialBackoff{Min: 100 * time.Millisecond, Max: time.Second}),
 		))
 	}
 }
 
 func cleanupStalePerClusterMapsJobFn(params jobParams) job.OneShotFunc {
-	return func(ctx context.Context, health cell.HealthReporter) error {
+	return func(ctx context.Context, health cell.Health) error {
 		// We don't actually care that nodes are synchronized here, but we need
 		// to know that all ClusterIDs for existing clusters have been reserved.
 		if err := params.ClusterMesh.NodesSynced(ctx); err != nil {

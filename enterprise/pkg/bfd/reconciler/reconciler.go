@@ -15,16 +15,15 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
-	"runtime/pprof"
 	"sort"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/node"
@@ -40,9 +39,7 @@ type bfdReconcilerParams struct {
 	cell.In
 
 	Logger         logrus.FieldLogger
-	Lifecycle      cell.Lifecycle
-	JobRegistry    job.Registry
-	Scope          cell.Scope
+	JobGroup       job.Group
 	Cfg            types.BFDConfig
 	LocalNodeStore *node.LocalNodeStore
 
@@ -104,21 +101,15 @@ func newBFDReconciler(p bfdReconcilerParams) *bfdReconciler {
 	}
 
 	// initialize jobs and register them within lifecycle
-	jobs := r.initializeJobs()
-	p.Lifecycle.Append(jobs)
+	r.initializeJobs()
 
 	p.Logger.Info("BFD Reconciler initialized")
 	return r
 }
 
-func (r *bfdReconciler) initializeJobs() job.Group {
-	jobGroup := r.JobRegistry.NewGroup(
-		r.Scope,
-		job.WithLogger(r.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "bfd-reconciler")),
-	)
-	jobGroup.Add(
-		job.OneShot("bfd-main", func(ctx context.Context, health cell.HealthReporter) (err error) {
+func (r *bfdReconciler) initializeJobs() {
+	r.JobGroup.Add(
+		job.OneShot("bfd-main", func(ctx context.Context, health cell.Health) (err error) {
 			r.bfdProfileStore, err = r.BFDProfileResource.Store(ctx)
 			if err != nil {
 				return
@@ -140,12 +131,12 @@ func (r *bfdReconciler) initializeJobs() job.Group {
 			return nil
 		}),
 
-		job.OneShot("bfd-server", func(ctx context.Context, health cell.HealthReporter) (err error) {
+		job.OneShot("bfd-server", func(ctx context.Context, health cell.Health) (err error) {
 			r.BFDServer.Run(ctx)
 			return nil
 		}),
 
-		job.OneShot("bfd-profile-observer", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("bfd-profile-observer", func(ctx context.Context, health cell.Health) error {
 			for e := range r.BFDProfileResource.Events(ctx) {
 				if e.Kind == resource.Sync {
 					select {
@@ -159,7 +150,7 @@ func (r *bfdReconciler) initializeJobs() job.Group {
 			return nil
 		}),
 
-		job.OneShot("bfd-node-config-observer", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("bfd-node-config-observer", func(ctx context.Context, health cell.Health) error {
 			for e := range r.BFDNodeConfigResource.Events(ctx) {
 				if e.Kind == resource.Sync {
 					select {
@@ -173,14 +164,13 @@ func (r *bfdReconciler) initializeJobs() job.Group {
 			return nil
 		}),
 
-		job.OneShot("bfd-peer-status-observer", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("bfd-peer-status-observer", func(ctx context.Context, health cell.Health) error {
 			for e := range stream.ToChannel[types.BFDPeerStatus](ctx, r.BFDServer) {
 				r.handlePeerStatusUpdate(&e)
 			}
 			return nil
 		}),
 	)
-	return jobGroup
 }
 
 func (r *bfdReconciler) run(ctx context.Context) {

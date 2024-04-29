@@ -15,13 +15,13 @@ import (
 	"net/netip"
 	"unsafe"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	loader "github.com/cilium/cilium/pkg/datapath/loader/types"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 )

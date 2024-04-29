@@ -48,7 +48,6 @@ import (
 	"github.com/cilium/cilium/pkg/eventqueue"
 	"github.com/cilium/cilium/pkg/fqdn"
 	"github.com/cilium/cilium/pkg/healthv2/types"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hubble/observer"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
@@ -61,7 +60,6 @@ import (
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/watchers"
-	"github.com/cilium/cilium/pkg/l2announcer"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
@@ -202,16 +200,11 @@ type Daemon struct {
 	// just used to tie together some status reporting
 	cniConfigManager cni.CNIConfigManager
 
-	l2announcer *l2announcer.L2Announcer
-
 	// authManager for reporting the status of the auth system certificate provider
 	authManager *auth.AuthManager
 
 	// read-only map of all the hive settings
 	settings cellSettings
-
-	// enable modules health support
-	healthProvider cell.Health
 
 	healthV2Provider types.Provider
 
@@ -444,13 +437,11 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		cniConfigManager:     params.CNIConfigManager,
 		clustermesh:          params.ClusterMesh,
 		monitorAgent:         params.MonitorAgent,
-		l2announcer:          params.L2Announcer,
 		svc:                  params.ServiceManager,
 		l7Proxy:              params.L7Proxy,
 		envoyXdsServer:       params.EnvoyXdsServer,
 		authManager:          params.AuthManager,
 		settings:             params.Settings,
-		healthProvider:       params.HealthProvider,
 		healthV2Provider:     params.HealthV2Provider,
 		bigTCPConfig:         params.BigTCPConfig,
 		tunnelConfig:         params.TunnelConfig,
@@ -731,9 +722,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// which can be modified after the device detection.
 	var devices []string
 	if d.deviceManager != nil {
-		if detected, err := d.deviceManager.Detect(params.Clientset.IsEnabled()); err == nil {
-			devices = append(devices, detected...)
-		} else {
+		if devices, err = d.deviceManager.Detect(params.Clientset.IsEnabled()); err != nil {
 			if option.Config.AreDevicesRequired() {
 				// Fail hard if devices are required to function.
 				return nil, nil, fmt.Errorf("failed to detect devices: %w", err)
@@ -741,10 +730,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			log.WithError(err).Warn("failed to detect devices, disabling BPF NodePort")
 			disableNodePort()
 		}
-	}
-
-	if d.l2announcer != nil {
-		d.l2announcer.DevicesChanged(devices)
 	}
 
 	nativeDevices, _ := datapathTables.SelectedDevices(d.devices, d.db.ReadTxn())
@@ -806,6 +791,11 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// are set.
 	if params.Clientset.IsEnabled() {
 		bootstrapStats.k8sInit.Start()
+
+		// Launch the policy K8s watcher
+		if params.PolicyK8sWatcher != nil {
+			params.PolicyK8sWatcher.WatchK8sPolicyResources(d.ctx, &d)
+		}
 
 		// Launch the K8s watchers in parallel as we continue to process other
 		// daemon options.
@@ -884,10 +874,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// restore endpoints before any IPs are allocated to avoid eventual IP
 	// conflicts later on, otherwise any IP conflict will result in the
 	// endpoint not being able to be restored.
-	err = d.restoreOldEndpoints(restoredEndpoints, true)
-	if err != nil {
-		log.WithError(err).Error("Unable to restore existing endpoints")
-	}
+	d.restoreOldEndpoints(restoredEndpoints)
 	bootstrapStats.restore.End(true)
 
 	// We must do this after IPAM because we must wait until the

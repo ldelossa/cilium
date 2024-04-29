@@ -16,13 +16,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cilium/hive/cell"
 	"github.com/cilium/workerpool"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	cilium_client_v2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"

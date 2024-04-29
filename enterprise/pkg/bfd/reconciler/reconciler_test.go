@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/hive/hivetest"
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -493,10 +494,11 @@ func Test_BFDReconciler(t *testing.T) {
 	f, waitWatchersReady := newTestFixture(t, testCtx)
 
 	// start the test hive
-	err := f.hive.Start(context.Background())
+	log := hivetest.Logger(t)
+	err := f.hive.Start(log, context.Background())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		f.hive.Stop(context.Background())
+		f.hive.Stop(log, context.Background())
 	})
 
 	// wait until the watchers are ready

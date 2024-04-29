@@ -9,16 +9,16 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cilium/hive/cell"
+	"github.com/spf13/pflag"
+
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
-
-	"github.com/spf13/pflag"
 )
 
 var (

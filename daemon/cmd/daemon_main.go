@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -54,7 +55,6 @@ import (
 	"github.com/cilium/cilium/pkg/flowdebug"
 	healthTypes "github.com/cilium/cilium/pkg/healthv2/types"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hubble/exporter/exporteroption"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/identity"
@@ -92,6 +92,7 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/pidfile"
 	"github.com/cilium/cilium/pkg/policy"
+	policyK8s "github.com/cilium/cilium/pkg/policy/k8s"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/rate"
@@ -360,10 +361,10 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableWellKnownIdentities, defaults.EnableWellKnownIdentities, "Enable well-known identities for known Kubernetes components")
 	option.BindEnv(vp, option.EnableWellKnownIdentities)
 
-	flags.Bool(option.EnableIPSecName, defaults.EnableIPSec, "Enable IPSec support")
+	flags.Bool(option.EnableIPSecName, defaults.EnableIPSec, "Enable IPsec support")
 	option.BindEnv(vp, option.EnableIPSecName)
 
-	flags.String(option.IPSecKeyFileName, "", "Path to IPSec key file")
+	flags.String(option.IPSecKeyFileName, "", "Path to IPsec key file")
 	option.BindEnv(vp, option.IPSecKeyFileName)
 
 	flags.Duration(option.IPsecKeyRotationDuration, defaults.IPsecKeyRotationDuration, "Maximum duration of the IPsec key rotation. The previous key will be removed after that delay.")
@@ -372,7 +373,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableIPsecKeyWatcher, defaults.EnableIPsecKeyWatcher, "Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations.")
 	option.BindEnv(vp, option.EnableIPsecKeyWatcher)
 
-	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPSec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.")
+	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.")
 	option.BindEnv(vp, option.EnableIPSecEncryptedOverlay)
 
 	flags.Bool(option.EnableWireguard, false, "Enable WireGuard")
@@ -1606,6 +1607,7 @@ type daemonParams struct {
 	Policy               *policy.Repository
 	PolicyUpdater        *policy.Updater
 	IPCache              *ipcache.IPCache
+	PolicyK8sWatcher     *policyK8s.PolicyResourcesWatcher
 	EgressGatewayManager *egressgateway.Manager
 	IPAMMetadataManager  *ipamMetadata.Manager
 	CNIConfigManager     cni.CNIConfigManager
@@ -1622,9 +1624,7 @@ type daemonParams struct {
 	APILimiterSet        *rate.APILimiterSet
 	AuthManager          *auth.AuthManager
 	Settings             cellSettings
-	HealthProvider       cell.Health
 	HealthV2Provider     healthTypes.Provider
-	HealthScope          cell.Scope
 	DeviceManager        *linuxdatapath.DeviceManager `optional:"true"`
 	Devices              statedb.Table[*datapathTables.Device]
 	// Grab the GC object so that we can start the CT/NAT map garbage collection.

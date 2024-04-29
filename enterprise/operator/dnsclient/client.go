@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/cilium/dns"
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ip"
 )
 

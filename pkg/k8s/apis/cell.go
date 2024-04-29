@@ -6,10 +6,10 @@ package apis
 import (
 	"fmt"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/client"
 	isovalentclient "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/client"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"

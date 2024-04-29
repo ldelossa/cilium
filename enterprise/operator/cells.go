@@ -11,6 +11,8 @@
 package main
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	"github.com/cilium/cilium/enterprise/operator/dnsresolver"
 	"github.com/cilium/cilium/enterprise/operator/k8s"
@@ -20,7 +22,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/operator/cmd"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 var (

@@ -13,6 +13,7 @@ package main
 import (
 	"testing"
 
+	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
@@ -48,6 +49,6 @@ func TestEnterpriseAgentCell(t *testing.T) {
 	option.Config.IPv4ServiceRange = cmd.AutoCIDR
 	option.Config.IPv6ServiceRange = cmd.AutoCIDR
 
-	err := hive.New(EnterpriseAgent).Populate()
+	err := hive.New(EnterpriseAgent).Populate(hivetest.Logger(t))
 	require.NoError(t, err, "hive.New(EnterpriseAgent).Populate()")
 }

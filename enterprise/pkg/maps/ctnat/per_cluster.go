@@ -14,9 +14,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	fakect "github.com/cilium/cilium/pkg/maps/ctmap/fake"

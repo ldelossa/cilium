@@ -296,7 +296,7 @@ contributors across the globe, there is almost always someone available to help.
 | enableRuntimeDeviceDetection | bool | `false` | Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered. |
 | enableXTSocketFallback | bool | `true` | Enables the fallback compatibility solution for when the xt_socket kernel module is missing and it is needed for the datapath L7 redirection to work properly. See documentation for details on when this can be disabled: https://docs.cilium.io/en/stable/operations/system_requirements/#linux-kernel. |
 | encryption.enabled | bool | `false` | Enable transparent network encryption. |
-| encryption.ipsec.encryptedOverlay | bool | `false` | Enable IPSec encrypted overlay |
+| encryption.ipsec.encryptedOverlay | bool | `false` | Enable IPsec encrypted overlay |
 | encryption.ipsec.interface | string | `""` | The interface to use for encrypted traffic. |
 | encryption.ipsec.keyFile | string | `"keys"` | Name of the key file inside the Kubernetes secret configured via secretName. |
 | encryption.ipsec.keyRotationDuration | string | `"5m"` | Maximum duration of the IPsec key rotation. The previous key will be removed after that delay. |
@@ -309,7 +309,7 @@ contributors across the globe, there is almost always someone available to help.
 | encryption.strictMode.cidr | string | `""` | CIDR for the WireGuard Pod2Pod strict mode. |
 | encryption.strictMode.enabled | bool | `false` | Enable WireGuard Pod2Pod strict mode. |
 | encryption.type | string | `"ipsec"` | Encryption method. Can be either ipsec or wireguard. |
-| encryption.wireguard.persistentKeepalive | string | `"0s"` | Controls Wireguard PersistentKeepalive option. Set 0s to disable. |
+| encryption.wireguard.persistentKeepalive | string | `"0s"` | Controls WireGuard PersistentKeepalive option. Set 0s to disable. |
 | encryption.wireguard.userspaceFallback | bool | `false` | Enables the fallback to the user-space implementation (deprecated). |
 | endpointHealthChecking.enabled | bool | `true` | Enable connectivity health checking between virtual endpoints. |
 | endpointRoutes.enabled | bool | `false` | Enable use of per endpoint routes instead of routing via the cilium_host interface. |
@@ -357,7 +357,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:40a69964865ac7005488e5b4263894221c24cdb1b2e10da5193bd2e460ce6529","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.3-2c7164c53e26902bba2ab8ba25ae365460d48a58","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:3c5494946d3d72873d0a40408dba95ed35ee9ed39fbbe46ea031cfbf21c8bc7e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.4-174c6af504235ce8f4ce998f98cac88c50202d29","useDigest":true}` | Envoy container image. |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. |
@@ -382,7 +382,8 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.readinessProbe.periodSeconds | int | `30` | interval between checks of the readiness probe |
 | envoy.resources | object | `{}` | Envoy resource limits & requests ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/ |
 | envoy.rollOutPods | bool | `false` | Roll out cilium envoy pods automatically when configmap is updated. |
-| envoy.securityContext.capabilities.envoy | list | `["NET_ADMIN","SYS_ADMIN"]` | Capabilities for the `cilium-envoy` container |
+| envoy.securityContext.capabilities.envoy | list | `["NET_ADMIN","SYS_ADMIN"]` | Capabilities for the `cilium-envoy` container. Even though granted to the container, the cilium-envoy-starter wrapper drops all capabilities after forking the actual Envoy process. `NET_BIND_SERVICE` is the only capability that can be passed to the Envoy process by setting `envoy.capabilities.keepNetBindService=true` (in addition to granting the capability to the container). Note: In case of embedded envoy, the capability must  be granted to the cilium-agent container. |
+| envoy.securityContext.capabilities.keepCapNetBindService | bool | `false` | Keep capability `NET_BIND_SERVICE` for Envoy process. |
 | envoy.securityContext.privileged | bool | `false` | Run the pod with elevated privileges |
 | envoy.securityContext.seLinuxOptions | object | `{"level":"s0","type":"spc_t"}` | SELinux options for the `cilium-envoy` container |
 | envoy.startupProbe.failureThreshold | int | `105` | failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s) |
@@ -428,6 +429,7 @@ contributors across the globe, there is almost always someone available to help.
 | extraHostPathMounts | list | `[]` | Additional agent hostPath mounts. |
 | extraVolumeMounts | list | `[]` | Additional agent volumeMounts. |
 | extraVolumes | list | `[]` | Additional agent volumes. |
+| gatewayAPI.enableAppProtocol | bool | `false` | Enable Backend Protocol selection support (GEP-1911) for Gateway API via appProtocol. |
 | gatewayAPI.enableProxyProtocol | bool | `false` | Enable proxy protocol for all GatewayAPI listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled. |
 | gatewayAPI.enabled | bool | `false` | Enable support for Gateway API in cilium This will automatically set enable-envoy-config as well. |
 | gatewayAPI.hostNetwork.enabled | bool | `false` | Configure whether the Envoy listeners should be exposed on the host network. |
@@ -607,8 +609,7 @@ contributors across the globe, there is almost always someone available to help.
 | ingressController.enforceHttps | bool | `true` | Enforce https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. |
 | ingressController.hostNetwork.enabled | bool | `false` | Configure whether the Envoy listeners should be exposed on the host network. |
 | ingressController.hostNetwork.nodes.matchLabels | object | `{}` | Specify the labels of the nodes where the Ingress listeners should be exposed  matchLabels:   kubernetes.io/os: linux   kubernetes.io/hostname: kind-worker |
-| ingressController.hostNetwork.sharedHTTPPort | int | `0` | Configure a specific port on the host network that gets used for the shared HTTP listener. This is used for HTTP and HTTPS. |
-| ingressController.hostNetwork.sharedTLSPassthroughPort | int | `0` | Configure a specific port on the host network that gets used for the shared TLS passthrough listener |
+| ingressController.hostNetwork.sharedListenerPort | int | `8080` | Configure a specific port on the host network that gets used for the shared listener. |
 | ingressController.ingressLBAnnotationPrefixes | list | `["lbipam.cilium.io","nodeipam.cilium.io","service.beta.kubernetes.io","service.kubernetes.io","cloud.google.com"]` | IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service |
 | ingressController.loadbalancerMode | string | `"dedicated"` | Default ingress load balancer mode Supported values: shared, dedicated For granular control, use the following annotations on the ingress resource: "ingress.cilium.io/loadbalancer-mode: dedicated" (or "shared"). |
 | ingressController.secretsNamespace | object | `{"create":true,"name":"cilium-secrets","sync":true}` | SecretsNamespace is the namespace in which envoy SDS will retrieve TLS secrets from. |
@@ -695,7 +696,7 @@ contributors across the globe, there is almost always someone available to help.
 | nodeinit.extraEnv | list | `[]` | Additional nodeinit environment variables. |
 | nodeinit.extraVolumeMounts | list | `[]` | Additional nodeinit volumeMounts. |
 | nodeinit.extraVolumes | list | `[]` | Additional nodeinit volumes. |
-| nodeinit.image | object | `{"digest":"sha256:e1d442546e868db1a3289166c14011e0dbd32115b338b963e56f830972bc22a2","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"62093c5c233ea914bfa26a10ba41f8780d9b737f","useDigest":true}` | node-init image. |
+| nodeinit.image | object | `{"digest":"sha256:820155cb3b7f00c8d61c1cffa68c44440906cb046bdbad8ff544f5deb1103456","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"19fb149fb3d5c7a37d3edfaf10a2be3ab7386661","useDigest":true}` | node-init image. |
 | nodeinit.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node labels for nodeinit pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector |
 | nodeinit.podAnnotations | object | `{}` | Annotations to be added to node-init pods. |
 | nodeinit.podLabels | object | `{}` | Labels to be added to node-init pods. |

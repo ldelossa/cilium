@@ -17,10 +17,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
+	"github.com/cilium/hive/job"
+	"github.com/cilium/stream"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sclient "github.com/cilium/cilium/pkg/k8s/client"
 	clientV1Alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
@@ -28,11 +34,6 @@ import (
 	nodetypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
-
-	"github.com/cilium/stream"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type testObserver struct {
@@ -45,9 +46,7 @@ type testObserver struct {
 type testObserverIn struct {
 	cell.In
 
-	Lifecycle      cell.Lifecycle
-	Scope          cell.Scope
-	Registry       job.Registry
+	Group          job.Group
 	ManagerPromise promise.Promise[SIDManager]
 }
 
@@ -57,9 +56,7 @@ func newTestObserver(in testObserverIn) *testObserver {
 		allocators: make(map[string]SIDAllocator),
 	}
 
-	group := in.Registry.NewGroup(in.Scope)
-
-	group.Add(job.OneShot("observe", func(ctx context.Context, _ cell.HealthReporter) error {
+	in.Group.Add(job.OneShot("observe", func(ctx context.Context, _ cell.Health) error {
 		manager, err := in.ManagerPromise.Await(ctx)
 		if err != nil {
 			return err
@@ -83,8 +80,6 @@ func newTestObserver(in testObserverIn) *testObserver {
 		}
 		return nil
 	}))
-
-	in.Lifecycle.Append(group)
 
 	return o
 }
@@ -173,11 +168,12 @@ var (
 
 func newHive(t *testing.T, invoke ...any) *hive.Hive {
 	return hive.New(
-		job.Cell,
 		SIDManagerCell,
+		// Test module so that newTestObserver gets a job.Group.
+		cell.Module("sid-manager-test", "SID Manager test",
+			cell.Provide(newTestObserver),
+		),
 		cell.Provide(
-			cell.TestScope,
-			newTestObserver,
 			k8sclient.NewFakeClientset,
 			func() *option.DaemonConfig {
 				return &option.DaemonConfig{EnableSRv6: true}
@@ -202,10 +198,11 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 		c = clientset.IsovalentV1alpha1().IsovalentSRv6SIDManagers()
 	})
 
-	err := hive.Start(context.TODO())
+	log := hivetest.Logger(t)
+	err := hive.Start(log, context.TODO())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		hive.Stop(context.TODO())
+		hive.Stop(log, context.TODO())
 	})
 
 	sidmanager := v1alpha1.IsovalentSRv6SIDManager{
@@ -323,10 +320,11 @@ func TestSIDManagerStatusReconciliation(t *testing.T) {
 		c = clientset.IsovalentV1alpha1().IsovalentSRv6SIDManagers()
 	})
 
-	err := hive.Start(context.TODO())
+	log := hivetest.Logger(t)
+	err := hive.Start(log, context.TODO())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		hive.Stop(context.TODO())
+		hive.Stop(log, context.TODO())
 	})
 
 	nodeName := nodetypes.GetName()
@@ -460,10 +458,11 @@ func TestSIDManagerRestoration(t *testing.T) {
 				c = clientset.IsovalentV1alpha1().IsovalentSRv6SIDManagers()
 			})
 
-			err := hive.Start(context.TODO())
+			log := hivetest.Logger(t)
+			err := hive.Start(log, context.TODO())
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				hive.Stop(context.TODO())
+				hive.Stop(log, context.TODO())
 			})
 
 			sidmanager := &v1alpha1.IsovalentSRv6SIDManager{

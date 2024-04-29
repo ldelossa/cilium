@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 
 	enterpriseannotation "github.com/cilium/cilium/enterprise/pkg/annotation"
@@ -25,7 +26,6 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	ossreconciler "github.com/cilium/cilium/pkg/bgpv1/manager/reconciler"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"

@@ -16,10 +16,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+
 	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	isovalent_client_v1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
@@ -28,11 +33,6 @@ import (
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	slim_core_v1_client "github.com/cilium/cilium/pkg/k8s/slim/k8s/client/clientset/versioned/typed/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/utils"
-
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
 )
 
 const (
@@ -126,7 +126,6 @@ func newFixture() *fixture {
 			f.manager = locPoolManager
 		}),
 
-		job.Cell,
 		Cell,
 	)
 
@@ -235,8 +234,9 @@ func Test_PoolValidations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), maxTestDuration)
 	defer cancel()
 
-	f.hive.Start(ctx)
-	defer f.hive.Stop(ctx)
+	log := hivetest.Logger(t)
+	f.hive.Start(log, ctx)
+	defer f.hive.Stop(log, ctx)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -386,8 +386,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), maxTestDuration)
 	defer cancel()
 
-	f.hive.Start(ctx)
-	defer f.hive.Stop(ctx)
+	log := hivetest.Logger(t)
+	f.hive.Start(log, ctx)
+	defer f.hive.Stop(log, ctx)
 
 	// initialize with test nodeAllocations
 	for _, pool := range testLocPool {
@@ -867,8 +868,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), maxTestDuration)
 	defer cancel()
 
-	f.hive.Start(ctx)
-	defer f.hive.Stop(ctx)
+	log := hivetest.Logger(t)
+	f.hive.Start(log, ctx)
+	defer f.hive.Stop(log, ctx)
 
 	// initialize with test nodeAllocations
 	for _, node := range testNodes {
@@ -1467,8 +1469,9 @@ func Test_Resync(t *testing.T) {
 			}
 
 			// start the controller
-			f.hive.Start(ctx)
-			defer f.hive.Stop(ctx)
+			log := hivetest.Logger(t)
+			f.hive.Start(log, ctx)
+			defer f.hive.Stop(log, ctx)
 
 			// wait for manager to synchronize
 			req.Eventually(func() bool {
