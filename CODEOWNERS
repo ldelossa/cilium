@@ -665,6 +665,7 @@ Vagrantfile @cilium/ci-structure
 /bpf/tests/*egressgw_ha_*.c @isovalent/egress-gateway
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
 /cilium-dbg/cmd/enterprise_* @isovalent/cli
+/contrib/testing/kind-egressgwha-values.yaml @isovalent/egress-gateway
 /daemon/cmd/enterprise_fqdn_relay.go @isovalent/dns-proxy
 /Documentation/cmdref/
 /renovate.json5 @isovalent/infrastructure
