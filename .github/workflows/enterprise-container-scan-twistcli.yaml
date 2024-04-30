@@ -52,7 +52,7 @@ jobs:
             OPERATOR_VARIANT=${{ matrix.image.name }}
       - name: Scan image
         id: scan-image
-        uses: PaloAltoNetworks/prisma-cloud-scan@1f38c94d789ff9b01a4e80070b442294ebd3e362 # v1
+        uses: PaloAltoNetworks/prisma-cloud-scan@85c672286d19de64fb4d2277b532df64023d168a # v1.6.5
         with:
           pcc_console_url: https://us-east1.cloud.twistlock.com/us-1-111576212
           pcc_user: c2cb4b51-b118-44a6-a13b-e1f8647f2692
