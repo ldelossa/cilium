@@ -205,7 +205,7 @@ func (t *EnterpriseTest) applyDeployments(ctx context.Context) error {
 		}
 	}
 
-	t.WithFinalizer(func() error {
+	t.WithFinalizer(func(_ context.Context) error {
 		// Use a detached context to make sure this call is not affected by
 		// context cancellation. This deletion needs to happen event when the
 		// user interrupted the program.

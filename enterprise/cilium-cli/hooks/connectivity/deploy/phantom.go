@@ -63,7 +63,7 @@ func PhantomService(ctx context.Context, t *check.Test, ct *check.ConnectivityTe
 	}
 
 	// Register a finalizer to remove the service when the test terminates
-	t.WithFinalizer(func() error {
+	t.WithFinalizer(func(_ context.Context) error {
 		t.Debugf("Removing %q service from namespace %q...", svc.GetName(), ns)
 
 		// Use a separate context so that the service gets deleted also if the test is aborted

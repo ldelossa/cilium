@@ -484,7 +484,7 @@ func (s *egressGatewayMultipleGateways) Run(ctx context.Context, t *check.Test) 
 	}
 
 	// remove the labels after the test is done
-	t.WithFinalizer(func() error {
+	t.WithFinalizer(func(_ context.Context) error {
 		for _, node := range ct.Nodes() {
 			removeNodeLabelPatch := fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, EgressGroupLabelKey)
 			if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
@@ -613,7 +613,7 @@ func (s *egressGatewayAZAffinity) Run(ctx context.Context, t *check.Test) {
 	}
 
 	// remove the labels after the test is done
-	t.WithFinalizer(func() error {
+	t.WithFinalizer(func(_ context.Context) error {
 		for _, node := range ct.Nodes() {
 			if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
 				continue
