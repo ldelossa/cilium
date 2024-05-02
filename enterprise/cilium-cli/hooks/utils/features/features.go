@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	CiliumDNSProxyDeployed features.Feature = "cilium-dnsproxy-deployed"
+	CiliumDNSProxyHA features.Feature = "cilium-dnsproxy-ha"
 
 	EgressGatewayHA features.Feature = "enable-ipv4-egress-gateway-ha"
 
@@ -53,21 +53,19 @@ func Detect(ctx context.Context, ct *check.ConnectivityTest) error {
 		return err
 	}
 
-	err = extractExternalDNSProxyFeature(ctx, ct)
-	if err != nil {
-		return fmt.Errorf("failed to extract feature %s: %w", CiliumDNSProxyDeployed, err)
+	// Only check whether the cilium-dnsproxy DaemonSet is deployed if the feature is enabled in
+	// the ConfigMap.
+	if ct.Features[CiliumDNSProxyHA].Enabled {
+		err = extractExternalDNSProxyFeature(ctx, ct)
+		if err != nil {
+			return fmt.Errorf("failed to extract feature %s: %w", CiliumDNSProxyHA, err)
+		}
 	}
 
 	return nil
 }
 
 func extractExternalDNSProxyFeature(ctx context.Context, ct *check.ConnectivityTest) error {
-	// We already checked whether the external dns proxy is enabled in extractFromConfigMap.
-	if !ct.Features[CiliumDNSProxyDeployed].Enabled {
-		return nil
-	}
-
-	// Check if pods are deployed.
 	for _, client := range ct.Clients() {
 		// cilium-dnsproxy pods are labelled with `k8s-app=ciliumdns-proxy`, let's filter on it.
 		ciliumDNSProxyLabelSelector := fmt.Sprintf("k8s-app=%s", enterpriseDefaults.ExternalCiliumDNSProxyName)
@@ -77,7 +75,7 @@ func extractExternalDNSProxyFeature(ctx context.Context, ct *check.ConnectivityT
 		}
 
 		if len(pods.Items) == 0 {
-			ct.Features[CiliumDNSProxyDeployed] = features.Status{Enabled: false}
+			ct.Features[CiliumDNSProxyHA] = features.Status{Enabled: false}
 			return nil
 		}
 	}
@@ -100,7 +98,7 @@ func extractFromConfigMap(ctx context.Context, ct *check.ConnectivityTest) error
 			(versioncheck.MustCompile(">=1.14.0 <1.15.0")(ct.CiliumVersion) && cm.Data["enable-ipv4-egress-gateway"] == "true"),
 	}
 
-	ct.Features[CiliumDNSProxyDeployed] = features.Status{
+	ct.Features[CiliumDNSProxyHA] = features.Status{
 		Enabled: cm.Data["external-dns-proxy"] == "true",
 	}
 

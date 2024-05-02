@@ -81,9 +81,9 @@ func (ec *EnterpriseConnectivity) addHubbleVersionTests(ct *check.ConnectivityTe
 }
 
 func (ec *EnterpriseConnectivity) addExternalCiliumDNSProxyTests(ct *check.ConnectivityTest) error {
-	test := check.NewTest("external-cilium-dns-proxy", ct.Params().Verbose, ct.Params().Debug)
+	test := check.NewTest("cilium-dns-proxy-ha", ct.Params().Verbose, ct.Params().Debug)
 	ct.AddTest(test).WithCiliumPolicy(allowAllDNSLookupsPolicyYAML).
-		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.CiliumDNSProxyDeployed)).
+		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.CiliumDNSProxyHA)).
 		WithScenarios(enterpriseTests.ExternalCiliumDNSProxy(ec.externalCiliumDNSProxyPods)).WithExpectations(func(a *check.Action) (egress, ingress check.Result) {
 		return check.ResultOK.ExpectMetricsIncrease(enterpriseTests.ExternalCiliumDNSProxySource(ec.externalCiliumDNSProxyPods), "isovalent_external_dns_proxy_policy_l7_total"),
 			check.ResultNone
