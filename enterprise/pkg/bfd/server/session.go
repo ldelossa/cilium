@@ -77,8 +77,14 @@ type bfdSession struct {
 	curDetectionTime  time.Duration
 	curDetectionTimer *time.Timer
 
+	// lastPacketReceived is the time of receipt of last BFD Control packet
+	lastPacketReceived time.Time
+
 	// lastStateChange is the time of the last session state transition
 	lastStateChange time.Time
+
+	// statePreserveTime is the time until the state of the session has to be preserved
+	statePreserveTime time.Time
 
 	// local holds session state variables as perceived by the local system
 	local bfdLocalState
@@ -429,6 +435,8 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 	s.Lock()
 	defer s.Unlock()
 
+	s.lastPacketReceived = time.Now()
+
 	// tracks whether the session state has been changed as part of the packet processing
 	sessionStateChanged := false
 	// tracks whether status change notification should be sent
@@ -482,10 +490,8 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 		// If bfd.SessionState is not Down
 		if s.local.sessionState != types.BFDStateDown {
 			// Set bfd.SessionState to Down
-			s.local.sessionState = types.BFDStateDown
 			// Set bfd.LocalDiag to 3 (Neighbor signaled session down)
-			s.local.diagnostic = types.BFDDiagnosticNeighborSignaledSessionDown
-			sessionStateChanged = true
+			sessionStateChanged = s.changeStateIfAllowed(types.BFDStateDown, types.BFDDiagnosticNeighborSignaledSessionDown)
 		}
 	} else {
 		// If bfd.SessionState is Down
@@ -493,24 +499,20 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 			// If received State is Down
 			if pkt.State == layers.BFDStateDown {
 				// Set bfd.SessionState to Init
-				s.local.sessionState = types.BFDStateInit
-				s.local.diagnostic = types.BFDDiagnosticNoDiagnostic
-				sessionStateChanged = true
+				sessionStateChanged = s.changeStateIfAllowed(types.BFDStateInit, types.BFDDiagnosticNoDiagnostic)
 
 				// Else if received State is Init
 			} else if pkt.State == layers.BFDStateInit {
-				s.local.sessionState = types.BFDStateUp
-				s.local.diagnostic = types.BFDDiagnosticNoDiagnostic
-				sessionStateChanged = true
+				// Set bfd.SessionState to Up
+				sessionStateChanged = s.changeStateIfAllowed(types.BFDStateUp, types.BFDDiagnosticNoDiagnostic)
 			}
 
 			// Else if bfd.SessionState is Init
 		} else if s.local.sessionState == types.BFDStateInit {
 			// If received State is Init or Up
 			if pkt.State == layers.BFDStateInit || pkt.State == layers.BFDStateUp {
-				s.local.sessionState = types.BFDStateUp
-				s.local.diagnostic = types.BFDDiagnosticNoDiagnostic
-				sessionStateChanged = true
+				// Set bfd.SessionState to Up
+				sessionStateChanged = s.changeStateIfAllowed(types.BFDStateUp, types.BFDDiagnosticNoDiagnostic)
 			}
 
 			// Else (bfd.SessionState is Up)
@@ -518,10 +520,8 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 			// If received State is Down
 			if pkt.State == layers.BFDStateDown {
 				// Set bfd.SessionState to Down
-				s.local.sessionState = types.BFDStateDown
 				// Set bfd.LocalDiag to 3 (Neighbor signaled session down)
-				s.local.diagnostic = types.BFDDiagnosticNeighborSignaledSessionDown
-				sessionStateChanged = true
+				sessionStateChanged = s.changeStateIfAllowed(types.BFDStateDown, types.BFDDiagnosticNeighborSignaledSessionDown)
 			}
 		}
 	}
@@ -539,8 +539,7 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 	s.resetDetectionTimer()
 
 	if sessionStateChanged {
-		// update state change time & notify
-		s.lastStateChange = time.Now()
+		// notify about the change
 		notifyStatusChange = true
 
 		txIntervalChanged := false
@@ -576,6 +575,38 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 	if notifyStatusChange {
 		s.notifyStatusChange()
 	}
+}
+
+// changeStateIfAllowed changes session state to the provided value if it is allowed
+// (if the state should not be preserved for some more time).
+func (s *bfdSession) changeStateIfAllowed(state types.BFDState, diagnostic types.BFDDiagnostic) bool {
+	if s.local.sessionState == state {
+		return false
+	}
+
+	// RFC 5880 6.8.1.  State Variables
+	//  Once session state is created, and at least one BFD Control packet is
+	//  received from the remote end, it MUST be preserved for at least one
+	//  Detection Time (see section 6.8.4) subsequent to the receipt of the
+	//  last BFD Control packet, regardless of the session state.  This
+	//  preserves timing parameters in case the session flaps.  A system MAY
+	//  preserve session state longer than this.s
+	if !s.lastPacketReceived.IsZero() && !s.statePreserveTime.IsZero() && s.statePreserveTime.After(time.Now()) {
+		return false // state should be preserved
+	}
+
+	// state can be changed
+	s.changeState(state, diagnostic)
+	return true
+}
+
+// changeState changes session state to the provided value.
+func (s *bfdSession) changeState(state types.BFDState, diagnostic types.BFDDiagnostic) {
+	s.local.sessionState = state
+	s.local.diagnostic = diagnostic
+
+	s.lastStateChange = time.Now()
+	s.statePreserveTime = s.lastPacketReceived.Add(s.curDetectionTime)
 }
 
 // sendPeriodicControlPacket sends a periodic control packet for the session.
@@ -639,9 +670,8 @@ func (s *bfdSession) handleDetectionTimerExpiration() error {
 	// gone down -- the local system MUST set bfd.SessionState to Down and
 	// bfd.LocalDiag to 1 (Control Detection Time Expired).
 	if s.local.sessionState == types.BFDStateUp || s.local.sessionState == types.BFDStateInit {
-		s.local.sessionState = types.BFDStateDown
-		s.lastStateChange = time.Now()
-		s.local.diagnostic = types.BFDDiagnosticControlDetectionTimeExpired
+		// change the state (as the detection timer expired, we don't need to check if it needs to be preserved)
+		s.changeState(types.BFDStateDown, types.BFDDiagnosticControlDetectionTimeExpired)
 
 		// When bfd.SessionState is not Up, the system MUST set bfd.DesiredMinTxInterval
 		// to a value of not less than one second (1,000,000 microseconds).
