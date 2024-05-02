@@ -92,7 +92,6 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
         helm search repo isovalent/cilium --versions | grep X.Y.Y
 
 - [ ] Update the "umbrella" [helm-charts]
-  - Install [kubeform] and [kubeval], which are required to run `test.sh`.
   - Clone the [helm-charts] repository locally. Check out branch `master` for the latest Cilium version, or branch `vX.Y` otherwise.
   - Update `cilium-enterprise/Chart.yaml`, and then run `test.sh`. Create a PR against your base branch: `master` (for the latest Cilium version) or `vX.Y`.
   - Example PR: https://github.com/isovalent/helm-charts/pull/389/files
