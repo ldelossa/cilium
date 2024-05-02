@@ -35,10 +35,10 @@ import (
 
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi"
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
+	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 // Cell implements the cilium enterprise API REST API server when provided

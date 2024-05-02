@@ -13,13 +13,14 @@
 package doubleproxy
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/daemon/cmd"
 	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/remoteproxy"
 	"github.com/cilium/cilium/pkg/endpoint"
 	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"

@@ -13,8 +13,10 @@ package srv6manager
 import (
 	"fmt"
 
+	"github.com/cilium/hive/cell"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/cilium/cilium/daemon/cmd"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ipam"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -22,8 +24,6 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var Cell = cell.Module(

@@ -11,7 +11,7 @@
 package maps
 
 import (
-	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/enterprise/pkg/maps/ciliummeshpolicymap"
 	cectnat "github.com/cilium/cilium/enterprise/pkg/maps/ctnat"

@@ -12,7 +12,7 @@
 package featurelist
 
 import (
-	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/hive/cell"
 )
 
 // EnterpriseFeatures provides a declaration of features (both OSS and Enterprise) as they

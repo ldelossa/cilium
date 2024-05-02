@@ -11,9 +11,10 @@
 package mixedrouting
 
 import (
+	"github.com/cilium/hive/cell"
+
 	dpcfgdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"

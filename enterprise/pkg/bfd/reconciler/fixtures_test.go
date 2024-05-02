@@ -15,14 +15,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cilium/hive/cell"
 	"github.com/cilium/stream"
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sclient "github.com/cilium/cilium/pkg/k8s/client"
 	clientv1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
@@ -61,12 +60,8 @@ func newTestFixture(t *testing.T, ctx context.Context) (*testFixture, func()) {
 			BFDEnabled: true,
 		}),
 
-		job.Cell,
-		statedb.Cell,
-
 		cell.Provide(
 			k8sclient.NewFakeClientset,
-			cell.TestScope,
 		),
 
 		cell.Provide(func() *node.LocalNodeStore {

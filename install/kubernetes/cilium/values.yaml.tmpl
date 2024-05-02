@@ -782,11 +782,8 @@ ingressController:
   hostNetwork:
     # -- Configure whether the Envoy listeners should be exposed on the host network.
     enabled: false
-    # -- Configure a specific port on the host network that gets used for the shared HTTP listener.
-    # This is used for HTTP and HTTPS.
-    sharedHTTPPort: 0
-    # -- Configure a specific port on the host network that gets used for the shared TLS passthrough listener
-    sharedTLSPassthroughPort: 0
+    # -- Configure a specific port on the host network that gets used for the shared listener.
+    sharedListenerPort: 8080
     # Specify the nodes where the Ingress listeners should be exposed
     nodes:
       # -- Specify the labels of the nodes where the Ingress listeners should be exposed
@@ -801,6 +798,8 @@ gatewayAPI:
   enabled: false
   # -- Enable proxy protocol for all GatewayAPI listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
   enableProxyProtocol: false
+  # -- Enable Backend Protocol selection support (GEP-1911) for Gateway API via appProtocol.
+  enableAppProtocol: false
   # -- The number of additional GatewayAPI proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address.
   xffNumTrustedHops: 0
   # -- SecretsNamespace is the namespace in which envoy SDS will retrieve TLS secrets from.
@@ -862,12 +861,12 @@ encryption:
     # -- Maximum duration of the IPsec key rotation. The previous key will be
     # removed after that delay.
     keyRotationDuration: "5m"
-    # -- Enable IPSec encrypted overlay
+    # -- Enable IPsec encrypted overlay
     encryptedOverlay: false
   wireguard:
     # -- Enables the fallback to the user-space implementation (deprecated).
     userspaceFallback: false
-    # -- Controls Wireguard PersistentKeepalive option. Set 0s to disable.
+    # -- Controls WireGuard PersistentKeepalive option. Set 0s to disable.
     persistentKeepalive: 0s
 endpointHealthChecking:
   # -- Enable connectivity health checking between virtual endpoints.
@@ -2121,7 +2120,13 @@ envoy:
       # type available on the system.
       type: 'spc_t'
     capabilities:
-      # -- Capabilities for the `cilium-envoy` container
+      # -- Capabilities for the `cilium-envoy` container.
+      # Even though granted to the container, the cilium-envoy-starter wrapper drops
+      # all capabilities after forking the actual Envoy process.
+      # `NET_BIND_SERVICE` is the only capability that can be passed to the Envoy process by
+      # setting `envoy.capabilities.keepNetBindService=true` (in addition to granting the
+      # capability to the container).
+      # Note: In case of embedded envoy, the capability must  be granted to the cilium-agent container.
       envoy:
         # Used since cilium proxy uses setting IPPROTO_IP/IP_TRANSPARENT
         - NET_ADMIN
@@ -2134,6 +2139,8 @@ envoy:
         # If available, SYS_ADMIN can be removed.
         #- PERFMON
         #- BPF
+      # -- Keep capability `NET_BIND_SERVICE` for Envoy process.
+      keepCapNetBindService: false
   # -- Affinity for cilium-envoy.
   affinity:
     podAntiAffinity:
@@ -3293,7 +3300,7 @@ authentication:
   gcInterval: "5m0s"
   # Configuration for Cilium's service-to-service mutual authentication using TLS handshakes.
   # Note that this is not full mTLS support without also enabling encryption of some form.
-  # Current encryption options are Wireguard or IPSec, configured in encryption block above.
+  # Current encryption options are WireGuard or IPsec, configured in encryption block above.
   mutual:
     # -- Port on the agent where mutual authentication handshakes between agents will be performed
     port: 4250

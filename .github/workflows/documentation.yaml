@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Check code changes
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: docs-tree
@@ -61,7 +62,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Build HTML
-        uses: docker://quay.io/cilium/docs-builder:f85fa1ae0c3dff1f29f210c13cb5ac1b88006111@sha256:ba5876ceda1bb6dd4c14871bcc60ce7b325fd0714ace8bfd7a0bf9adc8af98cb
+        uses: docker://quay.io/cilium/docs-builder:5de04f050b0326696e7fac5a2bcaa488bc8ed149@sha256:ac9e4f3a9caf7f182d8ae24a613dbb7071dab5ea34b6f3d5320654d5dea28155
         with:
           entrypoint: ./Documentation/check-build.sh
           args: html

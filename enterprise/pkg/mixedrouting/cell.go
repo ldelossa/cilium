@@ -11,9 +11,10 @@
 package mixedrouting
 
 import (
-	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/hive/cell"
 
 	cemrcfg "github.com/cilium/cilium/enterprise/pkg/mixedrouting/config"
+	"github.com/cilium/cilium/pkg/metrics"
 )
 
 var Cell = cell.Module(
@@ -21,7 +22,7 @@ var Cell = cell.Module(
 	"Support for mixed routing mode",
 
 	cell.Config(cemrcfg.Config{}),
-	cell.Metric(newMetrics),
+	metrics.Metric(newMetrics),
 
 	cell.Provide(
 		newManager,

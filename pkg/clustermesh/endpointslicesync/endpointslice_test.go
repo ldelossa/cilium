@@ -12,6 +12,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/endpointslice-controller/endpointslice"
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -24,7 +26,6 @@ import (
 	"github.com/cilium/cilium/pkg/annotation"
 	"github.com/cilium/cilium/pkg/clustermesh/common"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
@@ -37,6 +38,7 @@ import (
 
 const (
 	remoteClusterName string = "cluster-1"
+	globalSvcIP       string = "42.42.42.42"
 )
 
 func getControllerQueue(controller *endpointslice.Controller) workqueue.RateLimitingInterface {
@@ -73,16 +75,23 @@ func createService(name string) *slim_corev1.Service {
 	}
 }
 
-func createGlobalService(globalService *common.GlobalServiceCache, podInformer *meshPodInformer, svcName string) {
+func createGlobalService(
+	globalService *common.GlobalServiceCache,
+	podInformer *meshPodInformer,
+	svcName string,
+	updateClusterSvc func(*store.ClusterService)) {
 	clusterSvc := &store.ClusterService{
 		Cluster:   remoteClusterName,
 		Namespace: svcName,
 		Name:      svcName,
 		Backends: map[string]store.PortConfiguration{
-			"42.42.42.42": {"port-name": &loadbalancer.L4Addr{Protocol: loadbalancer.TCP, Port: 42}},
+			globalSvcIP: {"port-name": &loadbalancer.L4Addr{Protocol: loadbalancer.TCP, Port: 42}},
 		},
 		Shared:    true,
 		ClusterID: 1,
+	}
+	if updateClusterSvc != nil {
+		updateClusterSvc(clusterSvc)
 	}
 	globalService.OnUpdate(clusterSvc)
 	// We manually call the rest of the informer for convenience
@@ -114,7 +123,12 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 			return nil
 		}),
 	)
-	hive.Start(context.Background())
+	tlog := hivetest.Logger(t)
+	err := hive.Start(tlog, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hive.Stop(tlog, context.Background())
 
 	globalService := common.NewGlobalServiceCache(metric.NewGauge(metric.GaugeOpts{}))
 	podInformer := newMeshPodInformer(globalService)
@@ -134,10 +148,13 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 
 	t.Run("Create service then global service", func(t *testing.T) {
 		svcName := "local-svc-global-svc"
+		hostname := svcName + "-0"
 		svc1 := createService(svcName)
 		svcStore.CacheStore().Add(svc1)
 		serviceInformer.refreshAllCluster(svc1)
-		createGlobalService(globalService, podInformer, svcName)
+		createGlobalService(globalService, podInformer, svcName, func(clusterSvc *store.ClusterService) {
+			clusterSvc.Hostnames = map[string]string{globalSvcIP: hostname}
+		})
 
 		queue := getControllerQueue(controller)
 		require.NoError(t, waitEmptyQueue(queue))
@@ -151,11 +168,15 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 			mcsapiv1alpha1.LabelSourceCluster: remoteClusterName,
 			corev1.IsHeadlessService:          "",
 		}, epList.Items[0].Labels)
+		require.Equal(t, 1, len(epList.Items[0].Endpoints))
+
+		require.NotNil(t, 1, epList.Items[0].Endpoints[0].Hostname)
+		require.Equal(t, *epList.Items[0].Endpoints[0].Hostname, hostname)
 	})
 
 	t.Run("Create global service then service", func(t *testing.T) {
 		svcName := "global-svc-local-svc"
-		createGlobalService(globalService, podInformer, svcName)
+		createGlobalService(globalService, podInformer, svcName, nil)
 		svc1 := createService(svcName)
 		svcStore.CacheStore().Add(svc1)
 		serviceInformer.refreshAllCluster(svc1)
@@ -190,7 +211,7 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 
 	t.Run("Create global service without service", func(t *testing.T) {
 		svcName := "global-svc-no-local-svc"
-		createGlobalService(globalService, podInformer, svcName)
+		createGlobalService(globalService, podInformer, svcName, nil)
 
 		queue := getControllerQueue(controller)
 		require.NoError(t, waitEmptyQueue(queue))
@@ -207,7 +228,7 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 
 		svcStore.CacheStore().Add(svc1)
 		serviceInformer.refreshAllCluster(svc1)
-		createGlobalService(globalService, podInformer, svcName)
+		createGlobalService(globalService, podInformer, svcName, nil)
 
 		queue := getControllerQueue(controller)
 		require.NoError(t, waitEmptyQueue(queue))
@@ -224,7 +245,7 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 		svc1.ObjectMeta.Annotations[annotation.GlobalServiceSyncEndpointSlices] = "false"
 		svcStore.CacheStore().Add(svc1)
 		serviceInformer.refreshAllCluster(svc1)
-		createGlobalService(globalService, podInformer, svcName)
+		createGlobalService(globalService, podInformer, svcName, nil)
 
 		queue := getControllerQueue(controller)
 		require.NoError(t, waitEmptyQueue(queue))
@@ -236,7 +257,7 @@ func Test_meshEndpointSlice_Reconcile(t *testing.T) {
 
 	t.Run("Create service with global annotation and remove it", func(t *testing.T) {
 		svcName := "svc-remove-annotation"
-		createGlobalService(globalService, podInformer, svcName)
+		createGlobalService(globalService, podInformer, svcName, nil)
 		svc1 := createService(svcName)
 		svcStore.CacheStore().Add(svc1)
 		serviceInformer.refreshAllCluster(svc1)

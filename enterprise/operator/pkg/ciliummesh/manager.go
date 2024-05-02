@@ -12,12 +12,11 @@ package ciliummesh
 
 import (
 	"context"
-	"runtime/pprof"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 )
 
@@ -26,10 +25,8 @@ type CiliumMeshManagerParams struct {
 
 	Cfg Config
 
-	Logger      logrus.FieldLogger
-	LC          cell.Lifecycle
-	JobRegistry job.Registry
-	Scope       cell.Scope
+	Logger   logrus.FieldLogger
+	JobGroup job.Group
 
 	Clientset k8sClient.Clientset
 }
@@ -48,25 +45,18 @@ func newCiliumMeshManager(p CiliumMeshManagerParams) (*CiliumMeshManager, error)
 		return nil, nil
 	}
 
-	jobGroup := p.JobRegistry.NewGroup(
-		p.Scope,
-		job.WithLogger(p.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "cilium-mesh")),
-	)
 	cmm := &CiliumMeshManager{
 		cfg:       p.Cfg,
 		logger:    p.Logger,
 		clientSet: p.Clientset,
 	}
 
-	jobGroup.Add(
-		job.OneShot("cilium-mesh main", func(ctx context.Context, _ cell.HealthReporter) error {
+	p.JobGroup.Add(
+		job.OneShot("cilium-mesh main", func(ctx context.Context, _ cell.Health) error {
 			cmm.Run(ctx)
 			return nil
 		}),
 	)
-
-	p.LC.Append(jobGroup)
 
 	return cmm, nil
 }

@@ -15,14 +15,13 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/cilium/hive/cell"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/k8s"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -150,7 +149,6 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 			f.manager.ciliumVxlanIfIndex = testVxlanIfIndex
 		}),
 
-		job.Cell,
 		Cell,
 	)
 

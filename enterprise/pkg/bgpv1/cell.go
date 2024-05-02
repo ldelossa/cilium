@@ -11,8 +11,9 @@
 package bgpv1
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 // Cell is module with Enterprise BGP Control Plane components

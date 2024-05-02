@@ -332,6 +332,7 @@ multiple fields are set, then all fields must match for the filter to match.
 | destination_workload | [Workload](#flow-Workload) | repeated | destination_workload filters by a list of destination workload. |
 | traffic_direction | [TrafficDirection](#flow-TrafficDirection) | repeated | traffic_direction filters flow by direction of the connection, e.g. ingress or egress. |
 | verdict | [Verdict](#flow-Verdict) | repeated | only return Flows that were classified with a particular verdict. |
+| drop_reason_desc | [DropReason](#flow-DropReason) | repeated | only applicable to Verdict = DROPPED (e.g. &#34;POLICY_DENIED&#34;, &#34;UNSUPPORTED_L3_PROTOCOL&#34;) |
 | event_type | [EventTypeFilter](#flow-EventTypeFilter) | repeated | event_type is the list of event types to filter on |
 | http_status_code | [string](#string) | repeated | http_status_code is a list of string prefixes (e.g. &#34;4&#43;&#34;, &#34;404&#34;, &#34;5&#43;&#34;) to filter on the HTTP status code |
 | protocol | [string](#string) | repeated | protocol filters flows by L4 or L7 protocol, e.g. (e.g. &#34;tcp&#34;, &#34;http&#34;) |
@@ -1026,6 +1027,7 @@ here.
 | IGMP_SUBSCRIBED | 200 |  |
 | MULTICAST_HANDLED | 201 |  |
 | DROP_HOST_NOT_READY | 202 | A BPF program wants to tail call into bpf_host, but the host datapath hasn&#39;t been loaded yet. |
+| DROP_EP_NOT_READY | 203 | A BPF program wants to tail call some endpoint&#39;s policy program in the POLICY_CALL_MAP, but the program is not available. |
 
 
 

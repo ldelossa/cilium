@@ -11,7 +11,7 @@
 
 package features
 
-import "github.com/cilium/cilium/pkg/hive/cell"
+import "github.com/cilium/hive/cell"
 
 // Cell provides a module that does feature registration and feature
 // gate checking tasks.

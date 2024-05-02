@@ -11,10 +11,11 @@
 package bfd
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/enterprise/pkg/bfd/reconciler"
 	"github.com/cilium/cilium/enterprise/pkg/bfd/server"
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 var Cell = cell.Module(

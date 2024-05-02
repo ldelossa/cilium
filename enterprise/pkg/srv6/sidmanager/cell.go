@@ -10,7 +10,7 @@
 
 package sidmanager
 
-import "github.com/cilium/cilium/pkg/hive/cell"
+import "github.com/cilium/hive/cell"
 
 var (
 	SIDManagerCell = cell.Module(

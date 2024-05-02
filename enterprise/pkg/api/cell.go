@@ -14,11 +14,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cilium/hive/cell"
 	"github.com/go-openapi/runtime/middleware"
 
 	enterpriseserver "github.com/cilium/cilium/enterprise/api/v1/server"
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 var Cell = cell.Module(

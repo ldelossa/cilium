@@ -23,6 +23,10 @@ import (
 const (
 	secureHost   = "secure"
 	insecureHost = "insecure"
+
+	AppProtocolH2C = "kubernetes.io/h2c"
+	AppProtocolWS  = "kubernetes.io/ws"
+	AppProtocolWSS = "kubernetes.io/wss"
 )
 
 var _ CECTranslator = (*cecTranslator)(nil)
@@ -36,6 +40,7 @@ var _ CECTranslator = (*cecTranslator)(nil)
 type cecTranslator struct {
 	secretsNamespace string
 	useProxyProtocol bool
+	useAppProtocol   bool
 
 	hostNetworkEnabled           bool
 	hostNetworkNodeLabelSelector *slim_metav1.LabelSelector
@@ -54,13 +59,14 @@ type cecTranslator struct {
 }
 
 // NewCECTranslator returns a new translator
-func NewCECTranslator(secretsNamespace string, useProxyProtocol bool, hostNameSuffixMatch bool, idleTimeoutSeconds int,
+func NewCECTranslator(secretsNamespace string, useProxyProtocol bool, useAppProtocol bool, hostNameSuffixMatch bool, idleTimeoutSeconds int,
 	hostNetworkEnabled bool, hostNetworkNodeLabelSelector *slim_metav1.LabelSelector, ipv4Enabled bool, ipv6Enabled bool,
 	xffNumTrustedHops uint32,
 ) CECTranslator {
 	return &cecTranslator{
 		secretsNamespace:             secretsNamespace,
 		useProxyProtocol:             useProxyProtocol,
+		useAppProtocol:               useAppProtocol,
 		hostNameSuffixMatch:          hostNameSuffixMatch,
 		idleTimeoutSeconds:           idleTimeoutSeconds,
 		xffNumTrustedHops:            xffNumTrustedHops,
@@ -132,26 +138,45 @@ func (i *cecTranslator) getServices(namespace string, name string) []*ciliumv2.S
 func (i *cecTranslator) getResources(m *model.Model) []ciliumv2.XDSResource {
 	var res []ciliumv2.XDSResource
 
-	res = append(res, i.getHTTPRouteListener(m)...)
-	res = append(res, i.getTLSRouteListener(m)...)
+	res = append(res, i.getListener(m)...)
 	res = append(res, i.getEnvoyHTTPRouteConfiguration(m)...)
 	res = append(res, i.getClusters(m)...)
 
 	return res
 }
 
-// getHTTPRouteListener returns the listener for the given model with HTTPRoute.
-// TLS and non-TLS filters for HTTP traffic are applied by default.
-// Only one single listener is returned for shared LB mode.
-func (i *cecTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSResource {
-	if len(m.HTTP) == 0 {
-		return nil
-	}
-	tlsMap := make(map[model.TLSSecret][]string)
-	for _, h := range m.HTTP {
+func tlsSecretsToHostnames(httpListeners []model.HTTPListener) map[model.TLSSecret][]string {
+	tlsSecretsToHostnames := make(map[model.TLSSecret][]string)
+	for _, h := range httpListeners {
 		for _, s := range h.TLS {
-			tlsMap[s] = append(tlsMap[s], h.Hostname)
+			tlsSecretsToHostnames[s] = append(tlsSecretsToHostnames[s], h.Hostname)
 		}
+	}
+
+	return tlsSecretsToHostnames
+}
+
+func tlsPassthroughBackendsToHostnames(tlsPassthroughListeners []model.TLSPassthroughListener) map[string][]string {
+	tlsPassthroughBackendsToHostnames := make(map[string][]string)
+	for _, h := range tlsPassthroughListeners {
+		for _, route := range h.Routes {
+			for _, backend := range route.Backends {
+				key := fmt.Sprintf("%s:%s:%s", backend.Namespace, backend.Name, backend.Port.GetPort())
+				tlsPassthroughBackendsToHostnames[key] = append(tlsPassthroughBackendsToHostnames[key], route.Hostnames...)
+			}
+		}
+	}
+
+	return tlsPassthroughBackendsToHostnames
+}
+
+// getListener returns the listener for the given model.
+// - HTTP non-TLS filters
+// - HTTP TLS filters
+// - TLS passthrough filters
+func (i *cecTranslator) getListener(m *model.Model) []ciliumv2.XDSResource {
+	if len(m.HTTP) == 0 && len(m.TLSPassthrough) == 0 {
+		return nil
 	}
 
 	mutatorFuncs := []ListenerMutator{}
@@ -160,47 +185,14 @@ func (i *cecTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSResou
 	}
 
 	if i.hostNetworkEnabled {
-		mutatorFuncs = append(mutatorFuncs, WithHostNetworkPort(m.HTTP, i.ipv4Enabled, i.ipv6Enabled))
+		mutatorFuncs = append(mutatorFuncs, WithHostNetworkPort(m, i.ipv4Enabled, i.ipv6Enabled))
 	}
 
 	if i.xffNumTrustedHops > 0 {
 		mutatorFuncs = append(mutatorFuncs, WithXffNumTrustedHops(i.xffNumTrustedHops))
 	}
 
-	l, _ := NewHTTPListenerWithDefaults("listener", i.secretsNamespace, tlsMap, mutatorFuncs...)
-	return []ciliumv2.XDSResource{l}
-}
-
-// getTLSRouteListener returns the listener for the given model with TLSRoute.
-// it will set up filters for SNI matching by default.
-func (i *cecTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSResource {
-	if len(m.TLS) == 0 {
-		return nil
-	}
-	backendsMap := make(map[string][]string)
-	for _, h := range m.TLS {
-		for _, route := range h.Routes {
-			for _, backend := range route.Backends {
-				key := fmt.Sprintf("%s:%s:%s", backend.Namespace, backend.Name, backend.Port.GetPort())
-				backendsMap[key] = append(backendsMap[key], route.Hostnames...)
-			}
-		}
-	}
-
-	if len(backendsMap) == 0 {
-		return nil
-	}
-
-	mutatorFuncs := []ListenerMutator{}
-	if i.useProxyProtocol {
-		mutatorFuncs = append(mutatorFuncs, WithProxyProtocol())
-	}
-
-	if i.hostNetworkEnabled {
-		mutatorFuncs = append(mutatorFuncs, WithHostNetworkPort(m.TLS, i.ipv4Enabled, i.ipv6Enabled))
-	}
-
-	l, _ := NewSNIListenerWithDefaults("listener", backendsMap, mutatorFuncs...)
+	l, _ := newListenerWithDefaults("listener", i.secretsNamespace, len(m.HTTP) > 0, tlsSecretsToHostnames(m.HTTP), tlsPassthroughBackendsToHostnames(m.TLSPassthrough), mutatorFuncs...)
 	return []ciliumv2.XDSResource{l}
 }
 
@@ -332,6 +324,16 @@ func (i *cecTranslator) getClusters(m *model.Model) []ciliumv2.XDSResource {
 
 				if isGRPCService(m, ns, name, port) {
 					mutators = append(mutators, WithProtocol(HTTPVersion2))
+				} else if i.useAppProtocol {
+					appProtocol := getAppProtocol(m, ns, name, port)
+
+					switch appProtocol {
+					case AppProtocolH2C:
+						mutators = append(mutators, WithProtocol(HTTPVersion2))
+					default:
+						// When --use-app-protocol is used, envoy will set upstream protocol to HTTP/1.1
+						mutators = append(mutators, WithProtocol(HTTPVersion1))
+					}
 				}
 				envoyClusters[clusterName], _ = NewHTTPCluster(clusterName, clusterServiceName, mutators...)
 			}
@@ -375,6 +377,22 @@ func isGRPCService(m *model.Model, ns string, name string, port string) bool {
 	return res
 }
 
+func getAppProtocol(m *model.Model, ns string, name string, port string) string {
+	for _, l := range m.HTTP {
+		for _, r := range l.Routes {
+			for _, be := range r.Backends {
+				if be.Name == name && be.Namespace == ns && be.Port != nil && be.Port.GetPort() == port {
+					if be.AppProtocol != nil {
+						return *be.AppProtocol
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
 // getNamespaceNamePortsMap returns a map of namespace -> name -> ports.
 // it gets all HTTP and TLS routes.
 // The ports are sorted and unique.
@@ -404,7 +422,7 @@ func getNamespaceNamePortsMap(m *model.Model) map[string]map[string][]string {
 		}
 	}
 
-	for _, l := range m.TLS {
+	for _, l := range m.TLSPassthrough {
 		for _, r := range l.Routes {
 			mergeBackendsInNamespaceNamePortMap(r.Backends, namespaceNamePortMap)
 		}
@@ -435,7 +453,7 @@ func getNamespaceNamePortsMapForHTTP(m *model.Model) map[string]map[string][]str
 // The ports are sorted and unique.
 func getNamespaceNamePortsMapForTLS(m *model.Model) map[string]map[string][]string {
 	namespaceNamePortMap := map[string]map[string][]string{}
-	for _, l := range m.TLS {
+	for _, l := range m.TLSPassthrough {
 		for _, r := range l.Routes {
 			mergeBackendsInNamespaceNamePortMap(r.Backends, namespaceNamePortMap)
 		}

@@ -15,21 +15,19 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
-	"runtime/pprof"
 	"sort"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	ciliumDefaults "github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	isovalent_client_v1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
@@ -58,7 +56,7 @@ type MulticastManagerParams struct {
 
 	Logger                 logrus.FieldLogger
 	LC                     cell.Lifecycle
-	JobRegistry            job.Registry
+	JobGroup               job.Group
 	Clientset              k8sClient.Clientset
 	Cfg                    maps_multicast.Config
 	TunnelConfig           tunnel.Config
@@ -66,14 +64,13 @@ type MulticastManagerParams struct {
 	MulticastGroupResource resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup]
 	MulticastNodeResource  resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastNode]
 	LocalNodeStore         *node.LocalNodeStore
-	Scope                  cell.Scope
 	EndpointResource       resource.Resource[*k8sTypes.CiliumEndpoint]
 }
 
 type MulticastManager struct {
 	Logger         logrus.FieldLogger
 	LC             cell.Lifecycle
-	JobRegistry    job.Registry
+	JobGroup       job.Group
 	LocalNodeStore *node.LocalNodeStore
 
 	// maps_multicast objects
@@ -120,12 +117,6 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		return nil, fmt.Errorf("unsupported tunnel protocol for multicast. Expected vxlan, got %q", p.TunnelConfig.Protocol().String())
 	}
 
-	jobGroup := p.JobRegistry.NewGroup(
-		p.Scope,
-		job.WithLogger(p.Logger),
-		job.WithPprofLabels(pprof.Labels("cell", "multicast-manager")),
-	)
-
 	mm := &MulticastManager{
 		Logger:                 p.Logger,
 		LC:                     p.LC,
@@ -141,8 +132,8 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		nodeEndpoints:          make(map[types.NamespacedName]map[netip.Addr]struct{}),
 	}
 
-	jobGroup.Add(
-		job.OneShot("multicast-main", func(ctx context.Context, health cell.HealthReporter) (err error) {
+	p.JobGroup.Add(
+		job.OneShot("multicast-main", func(ctx context.Context, health cell.Health) (err error) {
 			mm.MulticastGroupStore, err = mm.MulticastGroupResource.Store(ctx)
 			if err != nil {
 				return
@@ -172,9 +163,9 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 			mm.Run(ctx)
 
 			return nil
-		}, job.WithRetry(3, workqueue.DefaultControllerRateLimiter())),
+		}, job.WithRetry(3, &job.ExponentialBackoff{Min: 100 * time.Millisecond, Max: time.Second})),
 
-		job.OneShot("multicast-group-observer", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("multicast-group-observer", func(ctx context.Context, health cell.Health) error {
 			for e := range mm.MulticastGroupResource.Events(ctx) {
 				if e.Kind == resource.Sync {
 					// Send signal to m.Run that groups are synced.
@@ -192,7 +183,7 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 			return nil
 		}),
 
-		job.OneShot("multicast-node-observer", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("multicast-node-observer", func(ctx context.Context, health cell.Health) error {
 			for e := range mm.MulticastNodeResource.Events(ctx) {
 				mm.triggerReconciler()
 				e.Done(nil)
@@ -201,7 +192,7 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		}),
 
 		// TODO remove this timer based reconciler once we have event based updates from BPF
-		job.OneShot("timer-based-reconciler", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("timer-based-reconciler", func(ctx context.Context, health cell.Health) error {
 			ticker := time.NewTicker(defaultResyncTime)
 			defer ticker.Stop()
 
@@ -216,7 +207,6 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		}),
 	)
 
-	p.LC.Append(jobGroup)
 	p.Logger.Info("Multicast manager initialized")
 
 	return mm, nil

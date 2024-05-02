@@ -20,13 +20,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	k8sTesting "k8s.io/client-go/testing"
+
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	srv6Types "github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipam"
@@ -44,12 +50,6 @@ import (
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 	"github.com/cilium/cilium/pkg/types"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
-	k8sTesting "k8s.io/client-go/testing"
 )
 
 type fakeSIDAllocator struct {
@@ -302,31 +302,32 @@ func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
 	}
 
 	cells = append(cells,
-		job.Cell,
-		cell.Provide(
-			cell.TestScope,
-			func() *option.DaemonConfig {
-				return &option.DaemonConfig{
-					EnableSRv6: true,
-				}
-			},
-			func() (promise.Promise[daemon], *fakeIPAMAllocator) {
-				fia := &fakeIPAMAllocator{}
-				fd := &fakeDaemon{a: fia}
-				daemonResolver, daemonPromise := promise.New[daemon]()
-				daemonResolver.Resolve(fd)
-				return daemonPromise, fia
-			},
-			func() cache.IdentityAllocator {
-				return testidentity.NewMockIdentityAllocator(nil)
-			},
-			NewSRv6Manager,
-			node.NewLocalNodeStore,
-			client.NewFakeClientset,
-			newIsovalentVRFResource,
-			signaler.NewBGPCPSignaler,
-			k8s.CiliumSlimEndpointResource,
-			newIsovalentSRv6EgressPolicyResource,
+		// Test module so that NewSRv6Manager gets a job.Group.
+		cell.Module("srv-manager-test", "SRv6 Manager test",
+			cell.Provide(
+				func() *option.DaemonConfig {
+					return &option.DaemonConfig{
+						EnableSRv6: true,
+					}
+				},
+				func() (promise.Promise[daemon], *fakeIPAMAllocator) {
+					fia := &fakeIPAMAllocator{}
+					fd := &fakeDaemon{a: fia}
+					daemonResolver, daemonPromise := promise.New[daemon]()
+					daemonResolver.Resolve(fd)
+					return daemonPromise, fia
+				},
+				func() cache.IdentityAllocator {
+					return testidentity.NewMockIdentityAllocator(nil)
+				},
+				NewSRv6Manager,
+				node.NewLocalNodeStore,
+				client.NewFakeClientset,
+				newIsovalentVRFResource,
+				signaler.NewBGPCPSignaler,
+				k8s.CiliumSlimEndpointResource,
+				newIsovalentSRv6EgressPolicyResource,
+			),
 		),
 		cell.Invoke(
 			invokeFn,
@@ -806,9 +807,10 @@ func TestSRv6Manager(t *testing.T) {
 				},
 			)
 
-			require.NoError(t, fixture.hive.Start(context.TODO()))
+			log := hivetest.Logger(t)
+			require.NoError(t, fixture.hive.Start(log, context.TODO()))
 			t.Cleanup(func() {
-				fixture.hive.Stop(context.TODO())
+				fixture.hive.Stop(log, context.TODO())
 			})
 
 			<-fixture.watching
@@ -1058,10 +1060,11 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		},
 	)
 
-	err := fixture.hive.Start(context.TODO())
+	log := hivetest.Logger(t)
+	err := fixture.hive.Start(log, context.TODO())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		err := fixture.hive.Stop(context.TODO())
+		err := fixture.hive.Stop(log, context.TODO())
 		require.NoError(t, err)
 	})
 
@@ -1393,9 +1396,10 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 				},
 			)
 
-			require.NoError(t, fixture.hive.Start(context.TODO()))
+			log := hivetest.Logger(t)
+			require.NoError(t, fixture.hive.Start(log, context.TODO()))
 			t.Cleanup(func() {
-				fixture.hive.Stop(context.TODO())
+				fixture.hive.Stop(log, context.TODO())
 			})
 
 			<-fixture.watching

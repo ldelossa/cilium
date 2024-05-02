@@ -2080,6 +2080,9 @@
                     ]
                   },
                   "type": "array"
+                },
+                "keepCapNetBindService": {
+                  "type": "boolean"
                 }
               },
               "type": "object"
@@ -2377,6 +2380,9 @@
     },
     "gatewayAPI": {
       "properties": {
+        "enableAppProtocol": {
+          "type": "boolean"
+        },
         "enableProxyProtocol": {
           "type": "boolean"
         },
@@ -3731,10 +3737,7 @@
               },
               "type": "object"
             },
-            "sharedHTTPPort": {
-              "type": "integer"
-            },
-            "sharedTLSPassthroughPort": {
+            "sharedListenerPort": {
               "type": "integer"
             }
           },

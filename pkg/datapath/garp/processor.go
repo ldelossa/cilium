@@ -6,11 +6,11 @@ package garp
 import (
 	"net/netip"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 )
@@ -90,4 +90,9 @@ func (gp *processor) EndpointDeleted(ep *endpoint.Endpoint, conf endpoint.Delete
 	defer gp.mu.Unlock()
 
 	delete(gp.endpointIPs, ep.ID)
+}
+
+// EndpointRestored implements endpointmanager.Subscriber.
+func (gp *processor) EndpointRestored(ep *endpoint.Endpoint) {
+	// No-op
 }

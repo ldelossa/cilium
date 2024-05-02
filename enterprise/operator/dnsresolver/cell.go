@@ -13,15 +13,16 @@ package dnsresolver
 import (
 	"time"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/metrics"
 )
 
 const (
@@ -39,7 +40,7 @@ var Cell = cell.Module(
 
 	cell.Config(defaultConfig),
 	cell.Invoke(newManager),
-	cell.Metric(newMetrics),
+	metrics.Metric(newMetrics),
 )
 
 // Config contains the configuration for the identity-gc.

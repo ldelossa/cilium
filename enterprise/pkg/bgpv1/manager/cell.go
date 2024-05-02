@@ -11,8 +11,9 @@
 package manager
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
-	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
 // ConfigReconcilers contains cells of enterprise-only reconcilers

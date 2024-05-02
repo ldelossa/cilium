@@ -11,11 +11,12 @@
 package fqdnha
 
 import (
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/doubleproxy"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/relay"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/remoteproxy"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ipcache"
 )
 

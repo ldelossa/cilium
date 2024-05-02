@@ -20,15 +20,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"go.uber.org/goleak"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/enterprise/operator/dnsclient"
 	operatorK8s "github.com/cilium/cilium/enterprise/operator/k8s"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
+	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
@@ -89,7 +91,8 @@ func TestManagerSingleFQDNGroup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := hive.Start(ctx); err != nil {
+	log := hivetest.Logger(t)
+	if err := hive.Start(log, ctx); err != nil {
 		t.Fatalf("failed to start: %s", err)
 	}
 
@@ -135,7 +138,7 @@ func TestManagerSingleFQDNGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := hive.Stop(ctx); err != nil {
+	if err := hive.Stop(log, ctx); err != nil {
 		t.Fatalf("failed to stop: %s", err)
 	}
 }
@@ -207,7 +210,8 @@ func TestManagerSingleFQDNGroupSameCIDRs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := hive.Start(ctx); err != nil {
+	log := hivetest.Logger(t)
+	if err := hive.Start(log, ctx); err != nil {
 		t.Fatalf("failed to start: %s", err)
 	}
 
@@ -253,7 +257,7 @@ func TestManagerSingleFQDNGroupSameCIDRs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := hive.Stop(ctx); err != nil {
+	if err := hive.Stop(log, ctx); err != nil {
 		t.Fatalf("failed to stop: %s", err)
 	}
 }
@@ -339,7 +343,8 @@ func TestManagerMultipleSets(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := hive.Start(ctx); err != nil {
+	log := hivetest.Logger(t)
+	if err := hive.Start(log, ctx); err != nil {
 		t.Fatalf("failed to start: %s", err)
 	}
 
@@ -407,7 +412,7 @@ func TestManagerMultipleSets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := hive.Stop(ctx); err != nil {
+	if err := hive.Stop(log, ctx); err != nil {
 		t.Fatalf("failed to stop: %s", err)
 	}
 }
@@ -488,13 +493,14 @@ func TestManagerPeriodicResolver(t *testing.T) {
 			}
 		}),
 		cell.Invoke(newManager),
-		cell.Metric(newMetrics),
+		metrics.Metric(newMetrics),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := hive.Start(ctx); err != nil {
+	log := hivetest.Logger(t)
+	if err := hive.Start(log, ctx); err != nil {
 		t.Fatalf("failed to start: %s", err)
 	}
 
@@ -521,7 +527,7 @@ func TestManagerPeriodicResolver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := hive.Stop(ctx); err != nil {
+	if err := hive.Stop(log, ctx); err != nil {
 		t.Fatalf("failed to stop: %s", err)
 	}
 }

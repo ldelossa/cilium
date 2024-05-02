@@ -16,17 +16,16 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	srv6Types "github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ip"
@@ -40,6 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 const (
@@ -124,10 +124,8 @@ type Manager struct {
 type Params struct {
 	cell.In
 
-	Scope                     cell.Scope
-	JobRegistry               job.Registry
+	JobGroup                  job.Group
 	Logger                    logrus.FieldLogger
-	Lifecycle                 cell.Lifecycle
 	DaemonConfig              *option.DaemonConfig
 	Sig                       *signaler.BGPCPSignaler
 	CacheIdentityAllocator    identityCache.IdentityAllocator
@@ -159,13 +157,11 @@ func NewSRv6Manager(p Params) *Manager {
 		sidAllocatorSyncers: make(map[string]sidmanager.SIDAllocator),
 	}
 
-	jg := p.JobRegistry.NewGroup(p.Scope)
-
 	initDone := make(chan struct{})
 	vrfSyncDone := make(chan struct{})
 
-	jg.Add(
-		job.OneShot("init", func(ctx context.Context, health cell.HealthReporter) error {
+	p.JobGroup.Add(
+		job.OneShot("init", func(ctx context.Context, health cell.Health) error {
 			// Wait for the IPAM to be initialized
 			d, err := manager.daemonPromise.Await(ctx)
 			if err != nil {
@@ -182,9 +178,9 @@ func NewSRv6Manager(p Params) *Manager {
 			close(initDone)
 
 			return nil
-		}, job.WithRetry(100, workqueue.DefaultControllerRateLimiter())),
+		}, job.WithRetry(100, &job.ExponentialBackoff{Min: 100 * time.Millisecond, Max: time.Second})),
 
-		job.OneShot("cep-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("cep-watcher", func(ctx context.Context, health cell.Health) error {
 			select {
 			case <-initDone:
 			case <-ctx.Done():
@@ -217,7 +213,7 @@ func NewSRv6Manager(p Params) *Manager {
 			return ctx.Err()
 		}),
 
-		job.OneShot("vrf-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("vrf-watcher", func(ctx context.Context, health cell.Health) error {
 			select {
 			case <-initDone:
 			case <-ctx.Done():
@@ -248,7 +244,7 @@ func NewSRv6Manager(p Params) *Manager {
 			return ctx.Err()
 		}),
 
-		job.OneShot("policy-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("policy-watcher", func(ctx context.Context, health cell.Health) error {
 			select {
 			case <-initDone:
 			case <-ctx.Done():
@@ -283,7 +279,7 @@ func NewSRv6Manager(p Params) *Manager {
 			return ctx.Err()
 		}),
 
-		job.OneShot("sidmanager-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+		job.OneShot("sidmanager-watcher", func(ctx context.Context, health cell.Health) error {
 			select {
 			case <-initDone:
 			case <-ctx.Done():
@@ -374,8 +370,6 @@ func NewSRv6Manager(p Params) *Manager {
 			return ctx.Err()
 		}),
 	)
-
-	p.Lifecycle.Append(jg)
 
 	return manager
 }

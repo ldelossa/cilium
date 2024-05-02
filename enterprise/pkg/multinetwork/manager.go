@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cilium/hive/cell"
 	"github.com/go-openapi/swag"
 
 	k8sResource "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/enterprise/api/v1/models"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"

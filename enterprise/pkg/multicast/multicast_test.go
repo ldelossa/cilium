@@ -17,6 +17,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/require"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -260,8 +261,9 @@ func Test_MulticastGroups(t *testing.T) {
 			_, err := f.mcastGroupClient.Create(ctx, test.group, meta_v1.CreateOptions{})
 			req.NoError(err)
 
-			f.hive.Start(ctx)
-			defer f.hive.Stop(ctx)
+			log := hivetest.Logger(t)
+			f.hive.Start(log, ctx)
+			defer f.hive.Stop(log, ctx)
 
 			req.Eventually(func() bool {
 				// compare BPF map
@@ -402,8 +404,9 @@ func Test_MulticastRemoteSubscribers(t *testing.T) {
 			_, err := f.mcastGroupClient.Create(ctx, test.group, meta_v1.CreateOptions{})
 			req.NoError(err)
 
-			f.hive.Start(ctx)
-			defer f.hive.Stop(ctx)
+			log := hivetest.Logger(t)
+			f.hive.Start(log, ctx)
+			defer f.hive.Stop(log, ctx)
 
 			// setup remote nodes
 			for _, node := range test.remoteNodeObjs {
@@ -568,8 +571,9 @@ func Test_MulticastNodeStatus(t *testing.T) {
 				req.NoError(err)
 			}
 
-			f.hive.Start(ctx)
-			defer f.hive.Stop(ctx)
+			log := hivetest.Logger(t)
+			f.hive.Start(log, ctx)
+			defer f.hive.Stop(log, ctx)
 
 			// setup remote nodes
 			for _, node := range test.remoteNodeObjs {
@@ -685,8 +689,9 @@ func Test_LocalEndpoint(t *testing.T) {
 			_, err := f.mcastGroupClient.Create(ctx, test.group, meta_v1.CreateOptions{})
 			req.NoError(err)
 
-			f.hive.Start(ctx)
-			defer f.hive.Stop(ctx)
+			log := hivetest.Logger(t)
+			f.hive.Start(log, ctx)
+			defer f.hive.Stop(log, ctx)
 
 			// validate BPF and node state
 			req.Eventually(func() bool {

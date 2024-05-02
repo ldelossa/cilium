@@ -6,14 +6,15 @@ package envoy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"runtime/pprof"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -47,6 +48,7 @@ type envoyProxyConfig struct {
 	ProxyAdminPort                    int
 	EnvoyLog                          string
 	EnvoyBaseID                       uint64
+	EnvoyKeepCapNetbindservice        bool
 	ProxyConnectTimeout               uint
 	ProxyGID                          uint
 	ProxyMaxRequestsPerConnection     int
@@ -67,6 +69,7 @@ func (r envoyProxyConfig) Flags(flags *pflag.FlagSet) {
 	flags.Int("proxy-admin-port", 0, "Port to serve Envoy admin interface on.")
 	flags.String("envoy-log", "", "Path to a separate Envoy log file, if any")
 	flags.Uint64("envoy-base-id", 0, "Envoy base ID")
+	flags.Bool("envoy-keep-cap-netbindservice", false, "Keep capability NET_BIND_SERVICE for Envoy process")
 	flags.Uint("proxy-connect-timeout", 2, "Time after which a TCP connect attempt is considered failed unless completed (in seconds)")
 	flags.Uint("proxy-gid", 1337, "Group ID for proxy control plane sockets.")
 	flags.Int("proxy-max-requests-per-connection", 0, "Set Envoy HTTP option max_requests_per_connection. Default 0 (disable)")
@@ -162,6 +165,7 @@ func newEnvoyXDSServer(params xdsServerParams) (XDSServer, error) {
 			runDir:                   option.Config.RunDir,
 			envoyLogPath:             params.EnvoyProxyConfig.EnvoyLog,
 			envoyBaseID:              params.EnvoyProxyConfig.EnvoyBaseID,
+			keepCapNetBindService:    params.EnvoyProxyConfig.EnvoyKeepCapNetbindservice,
 			metricsListenerPort:      params.EnvoyProxyConfig.ProxyPrometheusPort,
 			adminListenerPort:        params.EnvoyProxyConfig.ProxyAdminPort,
 			connectTimeout:           int64(params.EnvoyProxyConfig.ProxyConnectTimeout),
@@ -214,9 +218,10 @@ type versionCheckParams struct {
 	cell.In
 
 	Lifecycle        cell.Lifecycle
+	Slog             *slog.Logger
 	Logger           logrus.FieldLogger
 	JobRegistry      job.Registry
-	Scope            cell.Scope
+	Health           cell.Health
 	EnvoyProxyConfig envoyProxyConfig
 	EnvoyAdminClient *EnvoyAdminClient
 }
@@ -235,8 +240,8 @@ func registerEnvoyVersionCheck(params versionCheckParams) {
 	}
 
 	jobGroup := params.JobRegistry.NewGroup(
-		params.Scope,
-		job.WithLogger(params.Logger),
+		params.Health,
+		job.WithLogger(params.Slog),
 		job.WithPprofLabels(pprof.Labels("cell", "envoy")),
 	)
 	params.Lifecycle.Append(jobGroup)
@@ -281,10 +286,11 @@ func newArtifactCopier(lifecycle cell.Lifecycle) *ArtifactCopier {
 type syncerParams struct {
 	cell.In
 
+	Slog        *slog.Logger
 	Logger      logrus.FieldLogger
 	Lifecycle   cell.Lifecycle
 	JobRegistry job.Registry
-	Scope       cell.Scope
+	Health      cell.Health
 
 	K8sClientset client.Clientset
 
@@ -318,8 +324,8 @@ func registerSecretSyncer(params syncerParams) error {
 	}
 
 	jobGroup := params.JobRegistry.NewGroup(
-		params.Scope,
-		job.WithLogger(params.Logger),
+		params.Health,
+		job.WithLogger(params.Slog),
 		job.WithPprofLabels(pprof.Labels("cell", "envoy-secretsyncer")),
 	)
 

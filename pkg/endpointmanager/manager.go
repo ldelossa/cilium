@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/netip"
 	"sync"
 
+	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/completion"
@@ -17,7 +19,6 @@ import (
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointid "github.com/cilium/cilium/pkg/endpoint/id"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
@@ -43,7 +44,7 @@ var (
 // endpointManager is a structure designed for containing state about the
 // collection of locally running endpoints.
 type endpointManager struct {
-	reporterScope cell.Scope
+	health cell.Health
 
 	// mutex protects endpoints and endpointsAux
 	mutex lock.RWMutex
@@ -97,9 +98,9 @@ type endpointManager struct {
 type endpointDeleteFunc func(*endpoint.Endpoint, endpoint.DeleteConfig) []error
 
 // New creates a new endpointManager.
-func New(epSynchronizer EndpointResourceSynchronizer, lns *node.LocalNodeStore, reporterScope cell.Scope) *endpointManager {
+func New(epSynchronizer EndpointResourceSynchronizer, lns *node.LocalNodeStore, health cell.Health) *endpointManager {
 	mgr := endpointManager{
-		reporterScope:                reporterScope,
+		health:                       health,
 		endpoints:                    make(map[uint16]*endpoint.Endpoint),
 		endpointsAux:                 make(map[string]*endpoint.Endpoint),
 		mcastManager:                 mcastmanager.New(option.Config.IPv6MCastDevice),
@@ -120,11 +121,11 @@ func (mgr *endpointManager) WithPeriodicEndpointGC(ctx context.Context, checkHea
 	mgr.checkHealth = checkHealth
 	mgr.controllers.UpdateController("endpoint-gc",
 		controller.ControllerParams{
-			Group:          endpointGCControllerGroup,
-			DoFunc:         mgr.markAndSweep,
-			RunInterval:    interval,
-			Context:        ctx,
-			HealthReporter: cell.GetHealthReporter(mgr.reporterScope, "endpoint-gc"),
+			Group:       endpointGCControllerGroup,
+			DoFunc:      mgr.markAndSweep,
+			RunInterval: interval,
+			Context:     ctx,
+			Health:      mgr.health.NewScope("endpoint-gc"),
 		})
 	return mgr
 }
@@ -617,7 +618,7 @@ func (mgr *endpointManager) expose(ep *endpoint.Endpoint) error {
 	mgr.updateReferencesLocked(ep, identifiers)
 	mgr.mutex.Unlock()
 
-	ep.InitEndpointScope(mgr.reporterScope)
+	ep.InitEndpointHealth(mgr.health)
 	mgr.RunK8sCiliumEndpointSync(ep, ep.GetReporter("cep-k8s-sync"))
 
 	return nil
@@ -626,8 +627,24 @@ func (mgr *endpointManager) expose(ep *endpoint.Endpoint) error {
 // RestoreEndpoint exposes the specified endpoint to other subsystems via the
 // manager.
 func (mgr *endpointManager) RestoreEndpoint(ep *endpoint.Endpoint) error {
-	ep.SetDefaultConfiguration(true)
-	return mgr.expose(ep)
+	ep.SetDefaultConfiguration()
+	err := mgr.expose(ep)
+	if err != nil {
+		return err
+	}
+	mgr.mutex.RLock()
+	// Unlock the mutex after reading the subscribers list to not block
+	// endpoint restore operation. This could potentially mean that
+	// subscribers are called even after they've unsubscribed. However,
+	// consumers unsubscribe during the tear down phase so the restore
+	// callbacks may likely not race with unsubscribe calls.
+	subscribers := maps.Clone(mgr.subscribers)
+	mgr.mutex.RUnlock()
+	for s := range subscribers {
+		s.EndpointRestored(ep)
+	}
+
+	return nil
 }
 
 // AddEndpoint takes the prepared endpoint object and starts managing it.
@@ -777,4 +794,14 @@ func (mgr *endpointManager) CallbackForEndpointsAtPolicyRev(ctx context.Context,
 // EndpointExists returns whether the endpoint with id exists.
 func (mgr *endpointManager) EndpointExists(id uint16) bool {
 	return mgr.LookupCiliumID(id) != nil
+}
+
+// GetEndpointNetnsCookieByIP returns the netns cookie for the passed endpoint with ip address if found.
+func (mgr *endpointManager) GetEndpointNetnsCookieByIP(ip netip.Addr) (uint64, error) {
+	ep := mgr.LookupIP(ip)
+	if ep == nil {
+		return 0, fmt.Errorf("endpoint not found by ip %v", ip)
+	}
+
+	return ep.GetEndpointNetnsCookie(), nil
 }

@@ -14,15 +14,15 @@ import (
 	"fmt"
 	"unsafe"
 
+	ciliumebpf "github.com/cilium/ebpf"
+	"github.com/cilium/hive/cell"
+
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/ebpf"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/tuple"
 	"github.com/cilium/cilium/pkg/types"
-
-	ciliumebpf "github.com/cilium/ebpf"
 )
 
 const (

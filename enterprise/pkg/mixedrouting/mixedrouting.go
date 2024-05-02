@@ -14,10 +14,11 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"runtime/pprof"
 	"slices"
 	"strings"
 
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
@@ -25,8 +26,6 @@ import (
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	ipcmap "github.com/cilium/cilium/pkg/maps/ipcache"
@@ -187,9 +186,7 @@ func (mgr *manager) setupEndpointManager(cm *clustermesh.ClusterMesh, lst *dpipc
 func (mgr *manager) registerJobs(in struct {
 	cell.In
 
-	Lifecycle   cell.Lifecycle
-	JobRegistry job.Registry
-	Scope       cell.Scope
+	JobGroup job.Group
 
 	ClusterMesh *clustermesh.ClusterMesh
 }) {
@@ -197,26 +194,18 @@ func (mgr *manager) registerJobs(in struct {
 		return
 	}
 
-	group := in.JobRegistry.NewGroup(
-		in.Scope,
-		job.WithLogger(mgr.logger),
-		job.WithPprofLabels(pprof.Labels("cell", "mixed-routing")),
-	)
-
-	group.Add(
-		job.OneShot("warn-buffered-entries-starter", func(ctx context.Context, _ cell.HealthReporter) error {
+	in.JobGroup.Add(
+		job.OneShot("warn-buffered-entries-starter", func(ctx context.Context, _ cell.Health) error {
 			if in.ClusterMesh != nil {
 				if err := in.ClusterMesh.NodesSynced(ctx); err != nil {
 					return err
 				}
 			}
 
-			group.Add(job.Timer("warn-buffered-entries", mgr.endpoints.warnBufferedEntries, time.Minute))
+			in.JobGroup.Add(job.Timer("warn-buffered-entries", mgr.endpoints.warnBufferedEntries, time.Minute))
 			return nil
 		}),
 	)
-
-	in.Lifecycle.Append(group)
 }
 
 // enabled returns whether mixed routing mode support is enabled.

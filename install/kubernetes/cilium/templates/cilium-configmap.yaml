@@ -271,8 +271,7 @@ data:
   ingress-default-secret-name: {{ .Values.ingressController.defaultSecretName | quote }}
   {{- end }}
   ingress-hostnetwork-enabled: {{ .Values.ingressController.hostNetwork.enabled | quote }}
-  ingress-hostnetwork-shared-http-port: {{ .Values.ingressController.hostNetwork.sharedHTTPPort | quote }}
-  ingress-hostnetwork-shared-tlspassthrough-port: {{ .Values.ingressController.hostNetwork.sharedTLSPassthroughPort | quote }}
+  ingress-hostnetwork-shared-listener-port: {{ .Values.ingressController.hostNetwork.sharedListenerPort | quote }}
   ingress-hostnetwork-nodelabelselector: {{ include "mapToString" .Values.ingressController.hostNetwork.nodes.matchLabels | quote }}
 {{- end }}
 
@@ -280,6 +279,7 @@ data:
   enable-gateway-api: "true"
   enable-gateway-api-secrets-sync: {{ .Values.gatewayAPI.secretsNamespace.sync | quote }}
   enable-gateway-api-proxy-protocol: {{ .Values.gatewayAPI.enableProxyProtocol | quote }}
+  enable-gateway-api-app-protocol: {{ .Values.gatewayAPI.enableAppProtocol | quote }}
   gateway-api-xff-num-trusted-hops: {{ .Values.gatewayAPI.xffNumTrustedHops | quote }}
   gateway-api-secrets-namespace: {{ .Values.gatewayAPI.secretsNamespace.name | quote }}
   gateway-api-hostnetwork-enabled: {{ .Values.gatewayAPI.hostNetwork.enabled | quote }}
@@ -1248,6 +1248,7 @@ data:
   proxy-connect-timeout: {{ .Values.envoy.connectTimeoutSeconds | quote }}
   proxy-max-requests-per-connection: {{ .Values.envoy.maxRequestsPerConnection | quote }}
   proxy-max-connection-duration-seconds: {{ .Values.envoy.maxConnectionDurationSeconds | quote }}
+  proxy-idle-timeout-seconds: {{ .Values.envoy.idleTimeoutDurationSeconds | quote }}
 
   external-envoy-proxy: {{ .Values.envoy.enabled | quote }}
   envoy-base-id: {{ .Values.envoy.baseID | quote }}
@@ -1255,6 +1256,8 @@ data:
 {{- if .Values.envoy.log.path }}
   envoy-log: {{ .Values.envoy.log.path | quote }}
 {{- end }}
+
+  envoy-keep-cap-netbindservice: {{ .Values.envoy.securityContext.capabilities.keepCapNetBindService | quote }}
 
 {{- if hasKey .Values.clustermesh "maxConnectedClusters" }}
   max-connected-clusters: {{ .Values.clustermesh.maxConnectedClusters | quote }}
