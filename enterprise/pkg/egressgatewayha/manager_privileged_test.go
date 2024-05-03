@@ -395,11 +395,11 @@ func (k *EgressGatewayTestSuite) insertEgressCtEntry(t *testing.T, sourceIP, des
 func (k *EgressGatewayTestSuite) assertEgressCtEntries(tb testing.TB, entries []egressCtEntry) {
 	tb.Helper()
 
-	err := tryAssertEgressCtEntries(tb, k.manager.ctMap, entries)
+	err := tryAssertEgressCtEntries(k.manager.ctMap, entries)
 	require.NoError(tb, err)
 }
 
-func tryAssertEgressCtEntries(tb testing.TB, ctMap egressmapha.CtMap, entries []egressCtEntry) error {
+func tryAssertEgressCtEntries(ctMap egressmapha.CtMap, entries []egressCtEntry) error {
 	parsedEntries := []parsedEgressCtEntry{}
 	for _, e := range entries {
 		parsedEntries = append(parsedEntries, parseEgressCtEntry(e.sourceIP, e.destIP, e.gatewayIP))
