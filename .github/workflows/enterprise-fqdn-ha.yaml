@@ -157,6 +157,7 @@ jobs:
       - name: Install Cilium DNS proxy
         run: |
           helm install -n kube-system cilium-dnsproxy ./enterprise/fqdn-proxy/installation \
+            --set image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-dnsproxy-ci \
             --set image.tag=${{ steps.vars.outputs.sha }} \
             --set metrics.enabled=true \
             --set debug=true
