@@ -1,0 +1,16 @@
+# Copyright Authors of Cilium
+# SPDX-License-Identifier: Apache-2.0
+
+export RELEASE_REGISTRY ?= quay.io
+export RELEASE_ORG ?= isovalent
+export CI_REGISTRY ?= quay.io
+export CI_ORG ?= isovalent-dev
+
+ifeq ($(RELEASE),yes)
+    export PULL_POLICY:=IfNotPresent
+    export CILIUM_DNSPROXY_REPO:=${RELEASE_REGISTRY}/${RELEASE_ORG}/cilium-dnsproxy
+else
+    export PULL_POLICY:=Always
+    export CILIUM_DNSPROXY_REPO:=${CI_REGISTRY}/${CI_ORG}/cilium-dnsproxy-ci
+    export CILIUM_DNSPROXY_VERSION:=latest
+endif
