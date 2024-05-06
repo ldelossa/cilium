@@ -28,6 +28,7 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/cilium/cilium/pkg/datapath/linux/netdevice"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	"github.com/cilium/cilium/pkg/ip"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
@@ -540,7 +541,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 	case gc.iface != "":
 		// If the group config specifies an interface, use the first IPv4 assigned to that
 		// interface as egress IP
-		gwc.egressIP, err = getIfaceFirstIPv4Address(gc.iface)
+		gwc.egressIP, err = netdevice.GetIfaceFirstIPv4Address(gc.iface)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
@@ -548,7 +549,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 		// If the group config specifies an egress IP, use the interface with that IP as egress
 		// interface
 		gwc.egressIP = gc.egressIP
-		err = getIfaceWithIPv4Address(gc.egressIP)
+		err = netdevice.TestForIfaceWithIPv4Address(gc.egressIP)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve interface with egress IP: %w", err)
 		}
@@ -560,7 +561,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 			return fmt.Errorf("failed to find interface with default route: %w", err)
 		}
 
-		gwc.egressIP, err = getIfaceFirstIPv4Address(iface.Attrs().Name)
+		gwc.egressIP, err = netdevice.GetIfaceFirstIPv4Address(iface.Attrs().Name)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
