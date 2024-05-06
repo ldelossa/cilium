@@ -81,6 +81,7 @@ cilium_mesh_policy_can_ingress4(struct __ctx_buff *ctx, __be32 ip, __u32 dst_id,
 static __always_inline int
 cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 			  struct iphdr *ip4 __maybe_unused,
+			  __u32 src_sec_identity __maybe_unused,
 			  __u32 dst_sec_identity __maybe_unused,
 			  struct ipv4_ct_tuple *tuple __maybe_unused,
 			  int l4_off __maybe_unused,
@@ -91,27 +92,51 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 	__u16 proxy_port = 0;
 	__u8 audited = 0;
 
-	verdict = cilium_mesh_policy_can_egress4(ctx, ip4->saddr, dst_sec_identity,
-						 tuple->dport, ip4->protocol, l4_off,
-						 &policy_match_type, &audited,
-						 ext_err, &proxy_port);
+	struct ipv4_ct_tuple lookup_tuple;
+	int ct_status;
+	__u32 monitor;
+	struct ct_state ct_state_new = {};
+
+	memcpy(&lookup_tuple, tuple, sizeof(lookup_tuple));
+	ipv4_ct_tuple_reverse(&lookup_tuple);
+	ct_status = ct_lazy_lookup4(get_ct_map4(&lookup_tuple), &lookup_tuple, ctx,
+					 ipv4_is_fragment(ip4), l4_off, true, CT_INGRESS,
+					 SCOPE_FORWARD, CT_ENTRY_ANY, NULL, &monitor);
+
+	if (ct_status < 0)
+		return ct_status;
+
+	/* excluding reply traffic from policy enforcement is not really needed
+	 * at the moment, as only packets in the original direction (i.e. no
+	 * reply traffic) go thorugh the CM egress policy logic.
+	 */
+	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
+		goto out;
+
+	verdict = cilium_mesh_policy_can_egress4(ctx, ip4->saddr, dst_sec_identity, tuple->dport,
+						 ip4->protocol, l4_off, &policy_match_type,
+						 &audited, ext_err, &proxy_port);
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		/* XXX: implement me */
 	}
 
-	/*
-	 * XXX conntrack if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
-	 */
-	 if (verdict != CTX_ACT_OK) {
-		send_policy_verdict_notify(ctx, dst_sec_identity, tuple->dport,
-					   ip4->protocol, POLICY_EGRESS, 0,
-					   verdict, proxy_port, policy_match_type, audited,
-					   0 /* auth_type */ );
-		return verdict;
-	 }
+	if (ct_status == CT_NEW && verdict == CTX_ACT_OK) {
+		ct_state_new.src_sec_id = src_sec_identity;
+		ct_status = ct_create4(get_ct_map4(&lookup_tuple), &CT_MAP_ANY4, &lookup_tuple,
+				       ctx, CT_INGRESS, &ct_state_new, ext_err);
 
-	return CTX_ACT_OK;
+		if (IS_ERR(ct_status))
+			return ct_status;
+	}
+
+	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
+		send_policy_verdict_notify(ctx, dst_sec_identity, tuple->dport, ip4->protocol,
+					   POLICY_EGRESS, 0, verdict, proxy_port, policy_match_type,
+					   audited, 0 /* auth_type */ );
+
+out:
+	return verdict;
 }
 
 static __always_inline int
@@ -122,35 +147,54 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 	__u8 policy_match_type = 0;
 	__u16 proxy_port = 0;
 	__u8 audited = 0;
-	__be16 dport;
-	int verdict;
+	int verdict = CTX_ACT_OK;
 	int l4_off;
-	int ret;
 
-	// XXX tcp&udp ok; what about other traffic?
+	struct ipv4_ct_tuple tuple = {};
+	int ct_status;
+	__u32 monitor;
+	struct ct_state ct_state_new = {};
+
 	l4_off = ETH_HLEN + ipv4_hdrlen(ip4);
-	ret = l4_load_port(ctx, l4_off + 2, &dport);
-	if (IS_ERR(ret))
-		return ret;
+	tuple.nexthdr = ip4->protocol;
+	tuple.daddr = ip4->daddr;
+	tuple.saddr = ip4->saddr;
 
-	verdict = cilium_mesh_policy_can_ingress4(ctx, ip4->daddr, dst_id,
-						  dport, ip4->protocol, l4_off,
-						  &policy_match_type, &audited,
-						  ext_err, &proxy_port);
+	ct_status = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, ip4, l4_off,
+				    CT_EGRESS, NULL, &monitor);
+
+	if (ct_status < 0)
+		return ct_status;
+
+	/* excluding reply traffic from policy enforcement is not really needed
+	 * at the moment, as only packets in the original direction (i.e. no
+	 * reply traffic) go thorugh the CM ingress policy logic.
+	 */
+	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
+		goto out;
+
+	verdict = cilium_mesh_policy_can_ingress4(ctx, ip4->daddr, dst_id, tuple.dport,
+						  ip4->protocol, l4_off, &policy_match_type,
+						  &audited, ext_err, &proxy_port);
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		/* XXX: implement me */
 	}
 
-	/*
-	 * XXX: we don't use CT here, yet, needs to be like this
-	 * if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
-	 */
-	if (verdict != CTX_ACT_OK)
-		send_policy_verdict_notify(ctx, dst_id, dport, ip4->protocol,
-					   POLICY_INGRESS, 0, verdict, proxy_port,
-					   policy_match_type, audited, 0 /* auth_type */ );
+	if (ct_status == CT_NEW && verdict == CTX_ACT_OK) {
+		ct_status = ct_create4(get_ct_map4(&tuple), &CT_MAP_ANY4, &tuple, ctx, CT_EGRESS,
+				       &ct_state_new, ext_err);
 
+		if (IS_ERR(ct_status))
+			return ct_status;
+	}
+
+	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
+		send_policy_verdict_notify(ctx, dst_id, tuple.dport, ip4->protocol, POLICY_INGRESS,
+					   0, verdict, proxy_port, policy_match_type, audited,
+					   0 /* auth_type */ );
+
+out:
 	return verdict;
 }
 
