@@ -999,9 +999,13 @@ encap_redirect:
 	if (ret == CTX_ACT_REDIRECT && ifindex)
 		return ctx_redirect(ctx, ifindex, 0);
 
+	fib_params.l.ipv4_src = IPV4_DIRECT_ROUTING;
+	fib_params.l.ipv4_dst = tunnel_endpoint;
+	fib_params.l.family = AF_INET;
+
 	/* neigh map doesn't contain DMACs for other nodes */
 	allow_neigh_map = false;
-	goto fib_ipv4;
+	goto fib_redirect;
 #endif
 
 fib_lookup:
@@ -1012,9 +1016,6 @@ fib_lookup:
 		if (ret < 0)
 			return ret;
 
-#ifdef TUNNEL_MODE
-fib_ipv4:
-#endif
 		if (!revalidate_data(ctx, &data, &data_end, &ip4))
 			return DROP_INVALID;
 
@@ -1027,6 +1028,10 @@ fib_ipv4:
 		ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_dst,
 			       (union v6addr *)&ip6->daddr);
 	}
+
+#ifdef TUNNEL_MODE
+fib_redirect:
+#endif
 	return fib_redirect(ctx, true, &fib_params, allow_neigh_map, ext_err, &ifindex);
 }
 
@@ -1290,6 +1295,9 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 	if (!lb6_src_range_ok(svc, (union v6addr *)&ip6->saddr))
 		return DROP_NOT_IN_SRC_RANGE;
 
+	if (!lb6_svc_is_routable(svc))
+		return DROP_IS_CLUSTER_IP;
+
 #if defined(ENABLE_L7_LB)
 	if (lb6_svc_is_l7loadbalancer(svc) && svc->l7_lb_proxy_port > 0) {
 		if (ctx_is_xdp())
@@ -1314,9 +1322,6 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 
 	if (IS_ERR(ret))
 		return ret;
-
-	if (!lb6_svc_is_routable(svc))
-		return DROP_IS_CLUSTER_IP;
 
 	backend_local = __lookup_ip6_endpoint(&tuple->daddr);
 	if (!backend_local && lb6_svc_is_hostport(svc))
@@ -2500,6 +2505,9 @@ out:
 	return CTX_ACT_OK;
 
 redirect:
+	fib_params.l.ipv4_src = ip4->saddr;
+	fib_params.l.ipv4_dst = ip4->daddr;
+
 	ret = ipv4_l3(ctx, l3_off, NULL, NULL, ip4);
 	if (unlikely(ret != CTX_ACT_OK))
 		return ret;
@@ -2517,16 +2525,13 @@ redirect:
 		if (ret == CTX_ACT_REDIRECT && ifindex)
 			return ctx_redirect(ctx, ifindex, 0);
 
+		fib_params.l.ipv4_src = IPV4_DIRECT_ROUTING;
+		fib_params.l.ipv4_dst = tunnel_endpoint;
+
 		/* neigh map doesn't contain DMACs for other nodes */
 		allow_neigh_map = false;
 	}
 #endif
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_INVALID;
-
-	fib_params.l.ipv4_src = ip4->saddr;
-	fib_params.l.ipv4_dst = ip4->daddr;
 
 	return fib_redirect(ctx, true, &fib_params, allow_neigh_map, ext_err, &ifindex);
 }
@@ -2819,6 +2824,9 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 	if (!lb4_src_range_ok(svc, ip4->saddr))
 		return DROP_NOT_IN_SRC_RANGE;
 
+	if (!lb4_svc_is_routable(svc))
+		return DROP_IS_CLUSTER_IP;
+
 #if defined(ENABLE_L7_LB)
 	if (lb4_svc_is_l7loadbalancer(svc) && svc->l7_lb_proxy_port > 0) {
 		/* We cannot redirect from the XDP layer to cilium_host.
@@ -2852,9 +2860,6 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 	}
 	if (IS_ERR(ret))
 		return ret;
-
-	if (!lb4_svc_is_routable(svc))
-		return DROP_IS_CLUSTER_IP;
 
 	backend_local = __lookup_ip4_endpoint(tuple->daddr);
 	if (!backend_local && lb4_svc_is_hostport(svc))

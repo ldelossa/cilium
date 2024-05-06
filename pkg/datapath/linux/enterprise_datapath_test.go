@@ -58,8 +58,7 @@ func TestInjectCEPrefixClusterMutator(t *testing.T) {
 			nh := linuxNodeHandler{}
 			nh.SetPrefixClusterMutatorFn(func(n *types.Node) []cmtypes.PrefixClusterOpts { return nil })
 
-			dp := linuxDatapath{node: &nh}
-			InjectCEPrefixClusterMutator(&dp, tt.cmcfg, &option.DaemonConfig{ClusterID: tt.localID})
+			InjectCEPrefixClusterMutator(&nh, tt.cmcfg, &option.DaemonConfig{ClusterID: tt.localID})
 
 			mutators := nh.prefixClusterMutatorFn(&types.Node{ClusterID: tt.nodeID})
 			pc := cmtypes.PrefixClusterFromCIDR(cidr.MustParseCIDR("1.2.3.4/32"), mutators...)

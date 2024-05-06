@@ -582,6 +582,10 @@ data:
   enable-ipv6-big-tcp: {{ .Values.enableIPv6BIGTCP | quote }}
   enable-ipv6-masquerade: {{ .Values.enableIPv6Masquerade | quote }}
 
+{{- if hasKey .Values.bpf "enableTCX" }}
+  enable-tcx: {{ .Values.bpf.enableTCX | quote }}
+{{- end }}
+
 {{- if (not (kindIs "invalid" .Values.bpf.masquerade)) }}
   enable-bpf-masquerade: {{ .Values.bpf.masquerade | quote }}
 {{- else if eq $defaultBpfMasquerade "true" }}
@@ -891,6 +895,14 @@ data:
   # Address to expose Hubble metrics (e.g. ":7070"). Metrics server will be disabled if this
   # field is not set.
   hubble-metrics-server: ":{{ .Values.hubble.metrics.port }}"
+  hubble-metrics-server-enable-tls: "{{ .Values.hubble.metrics.tls.enabled }}"
+  {{- if .Values.hubble.metrics.tls.enabled }}
+  hubble-metrics-server-tls-cert-file: /var/lib/cilium/tls/hubble-metrics/server.crt
+  hubble-metrics-server-tls-key-file: /var/lib/cilium/tls/hubble-metrics/server.key
+  {{- if .Values.hubble.metrics.tls.server.mtls.enabled }}
+  hubble-metrics-server-tls-client-ca-files: /var/lib/cilium/tls/hubble-metrics/client-ca.crt
+  {{- end }}
+  {{- end }}
   # A space separated list of metrics to enable. See [0] for available metrics.
   #
   # https://github.com/cilium/hubble/blob/master/Documentation/metrics.md
@@ -1245,6 +1257,8 @@ data:
   mesh-auth-spiffe-trust-domain: {{ .Values.authentication.mutual.spire.trustDomain | quote }}
 {{- end }}
 
+  proxy-xff-num-trusted-hops-ingress: {{ .Values.envoy.xffNumTrustedHopsL7PolicyIngress | quote }}
+  proxy-xff-num-trusted-hops-egress: {{ .Values.envoy.xffNumTrustedHopsL7PolicyEgress | quote }}
   proxy-connect-timeout: {{ .Values.envoy.connectTimeoutSeconds | quote }}
   proxy-max-requests-per-connection: {{ .Values.envoy.maxRequestsPerConnection | quote }}
   proxy-max-connection-duration-seconds: {{ .Values.envoy.maxConnectionDurationSeconds | quote }}

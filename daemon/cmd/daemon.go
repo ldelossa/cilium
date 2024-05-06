@@ -130,7 +130,7 @@ type Daemon struct {
 
 	// Used to synchronize generation of daemon's BPF programs and endpoint BPF
 	// programs.
-	compilationMutex *lock.RWMutex
+	compilationLock datapath.CompilationLock
 
 	clustermesh *clustermesh.ClusterMesh
 
@@ -230,8 +230,8 @@ func (d *Daemon) GetOptions() *option.IntOptions {
 
 // GetCompilationLock returns the mutex responsible for synchronizing compilation
 // of BPF programs.
-func (d *Daemon) GetCompilationLock() *lock.RWMutex {
-	return d.compilationMutex
+func (d *Daemon) GetCompilationLock() datapath.CompilationLock {
+	return d.compilationLock
 }
 
 func (d *Daemon) init() error {
@@ -245,7 +245,7 @@ func (d *Daemon) init() error {
 	}
 
 	if !option.Config.DryMode {
-		if err := d.Datapath().Loader().Reinitialize(d.ctx, d, d.tunnelConfig, d.mtuConfig.GetDeviceMTU(), d.Datapath(), d.l7Proxy); err != nil {
+		if err := d.Datapath().Orchestrator().Reinitialize(d.ctx); err != nil {
 			return fmt.Errorf("failed while reinitializing datapath: %w", err)
 		}
 
@@ -415,7 +415,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		clientset:         params.Clientset,
 		db:                params.DB,
 		buildEndpointSem:  semaphore.NewWeighted(int64(numWorkerThreads())),
-		compilationMutex:  new(lock.RWMutex),
+		compilationLock:   params.CompilationLock,
 		mtuConfig:         params.MTU,
 		datapath:          params.Datapath,
 		deviceManager:     params.DeviceManager,
@@ -447,12 +447,13 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		tunnelConfig:         params.TunnelConfig,
 		bwManager:            params.BandwidthManager,
 		lrpManager:           params.LRPManager,
+		preFilter:            params.Prefilter,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
 	d.configModifyQueue.Run()
 
-	d.rec, err = recorder.NewRecorder(d.ctx, &d)
+	d.rec, err = recorder.NewRecorder(d.ctx, params.Datapath.Loader())
 	if err != nil {
 		log.WithError(err).Error("error while initializing BPF pcap recorder")
 		return nil, nil, fmt.Errorf("error while initializing BPF pcap recorder: %w", err)
@@ -1014,7 +1015,7 @@ func (d *Daemon) Close() {
 // endpoints may or may not have successfully regenerated.
 func (d *Daemon) TriggerReloadWithoutCompile(reason string) (*sync.WaitGroup, error) {
 	log.Debugf("BPF reload triggered from %s", reason)
-	if err := d.Datapath().Loader().Reinitialize(d.ctx, d, d.tunnelConfig, d.mtuConfig.GetDeviceMTU(), d.Datapath(), d.l7Proxy); err != nil {
+	if err := d.Datapath().Orchestrator().Reinitialize(d.ctx); err != nil {
 		return nil, fmt.Errorf("unable to recompile base programs from %s: %w", reason, err)
 	}
 

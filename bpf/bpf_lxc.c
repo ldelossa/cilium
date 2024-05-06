@@ -546,7 +546,7 @@ ct_recreate6:
 		} else
 # endif /* ENABLE_DSR */
 		/* See comment in handle_ipv4_from_lxc(). */
-		if (ct_state->node_port) {
+		if (ct_state->node_port && lb_is_svc_proto(tuple->nexthdr)) {
 			send_trace_notify(ctx, TRACE_TO_NETWORK, SECLABEL_IPV6,
 					  *dst_sec_identity, 0, 0,
 					  trace.reason, trace.monitor);
@@ -599,7 +599,7 @@ ct_recreate6:
 	 */
 	if (*dst_sec_identity == HOST_ID) {
 		ctx_store_meta(ctx, CB_FROM_HOST, 0);
-		ret = tail_call_policy_static(ctx, HOST_EP_ID);
+		ret = tail_call_policy(ctx, HOST_EP_ID);
 
 		/* return fine-grained error: */
 		return DROP_HOST_NOT_READY;
@@ -1009,8 +1009,11 @@ ct_recreate4:
 		/* This handles reply traffic for the case where the nodeport EP
 		 * is local to the node. We'll do the tail call to perform
 		 * the reverse DNAT.
+		 *
+		 * This codepath currently doesn't support revDNAT for ICMP,
+		 * so make sure that we only send TCP/UDP/SCTP down this way.
 		 */
-		if (ct_state->node_port) {
+		if (ct_state->node_port && lb_is_svc_proto(tuple->nexthdr)) {
 			send_trace_notify(ctx, TRACE_TO_NETWORK, SECLABEL_IPV4,
 					  *dst_sec_identity, 0, 0,
 					  trace.reason, trace.monitor);
@@ -1079,7 +1082,7 @@ ct_recreate4:
 	 */
 	if (*dst_sec_identity == HOST_ID) {
 		ctx_store_meta(ctx, CB_FROM_HOST, 0);
-		ret = tail_call_policy_static(ctx, HOST_EP_ID);
+		ret = tail_call_policy(ctx, HOST_EP_ID);
 
 		/* report fine-grained error: */
 		return DROP_HOST_NOT_READY;
@@ -2439,7 +2442,7 @@ int cil_to_container(struct __ctx_buff *ctx)
 		ctx_store_meta(ctx, CB_FROM_HOST, 1);
 		ctx_store_meta(ctx, CB_DST_ENDPOINT_ID, LXC_ID);
 
-		ret = tail_call_policy_static(ctx, HOST_EP_ID);
+		ret = tail_call_policy(ctx, HOST_EP_ID);
 		return send_drop_notify(ctx, identity, sec_label, LXC_ID,
 					DROP_HOST_NOT_READY, CTX_ACT_DROP,
 					METRIC_INGRESS);

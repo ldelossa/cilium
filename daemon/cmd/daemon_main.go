@@ -705,6 +705,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableXDPPrefilter, false, "Enable XDP prefiltering")
 	option.BindEnv(vp, option.EnableXDPPrefilter)
 
+	flags.Bool(option.EnableTCX, true, "Attach endpoint programs using tcx if supported by the kernel")
+	option.BindEnv(vp, option.EnableTCX)
+
 	flags.Bool(option.PreAllocateMapsName, defaults.PreAllocateMaps, "Enable BPF map pre-allocation")
 	option.BindEnv(vp, option.PreAllocateMapsName)
 
@@ -1643,6 +1646,8 @@ type daemonParams struct {
 	SyncHostIPs         *syncHostIPs
 	LRPManager          *redirectpolicy.Manager
 	NodeDiscovery       *nodediscovery.NodeDiscovery
+	Prefilter           datapath.PreFilter
+	CompilationLock     datapath.CompilationLock
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1702,11 +1707,6 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		return fmt.Errorf("postinit failed: %w", err)
 	}
 
-	bootstrapStats.enableConntrack.Start()
-	log.Info("Starting connection tracking garbage collector")
-	params.CTNATMapGC.Enable()
-	bootstrapStats.enableConntrack.End(true)
-
 	bootstrapStats.k8sInit.Start()
 	if params.Clientset.IsEnabled() {
 		// Wait only for certain caches, but not all!
@@ -1715,6 +1715,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	}
 	bootstrapStats.k8sInit.End(true)
 	d.initRestore(restoredEndpoints, params.EndpointRegenerator)
+
+	bootstrapStats.enableConntrack.Start()
+	log.Info("Starting connection tracking garbage collector")
+	params.CTNATMapGC.Enable()
+	bootstrapStats.enableConntrack.End(true)
 
 	if params.WGAgent != nil {
 		go func() {

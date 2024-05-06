@@ -22,17 +22,17 @@ import (
 // InjectCEPrefixClusterMutator allows to inject a custom prefix cluster mutator which
 // enriches the given cluster with the cluster ID of the node, if cluster aware
 // addressing is enabled, and the node belongs to a remote cluster.
-func InjectCEPrefixClusterMutator(dp datapath.Datapath, cmcfg cecmcfg.Config, dcfg *option.DaemonConfig) {
+func InjectCEPrefixClusterMutator(nh datapath.NodeHandler, cmcfg cecmcfg.Config, dcfg *option.DaemonConfig) {
 	if !cmcfg.EnableClusterAwareAddressing {
 		return
 	}
 
-	ldp, ok := dp.(*linuxDatapath)
+	nodeHandler, ok := nh.(*linuxNodeHandler)
 	if !ok {
 		return
 	}
 
-	ldp.node.SetPrefixClusterMutatorFn(func(node *types.Node) []cmtypes.PrefixClusterOpts {
+	nodeHandler.SetPrefixClusterMutatorFn(func(node *types.Node) []cmtypes.PrefixClusterOpts {
 		var opts []cmtypes.PrefixClusterOpts
 		if node.ClusterID != dcfg.ClusterID {
 			opts = append(opts, cmtypes.WithClusterID(node.ClusterID))
@@ -43,11 +43,11 @@ func InjectCEPrefixClusterMutator(dp datapath.Datapath, cmcfg cecmcfg.Config, dc
 
 // InjectCEEnableEncapsulation overrides the function used to determine whether
 // native routing or tunnel encapsulation should be used for the given node.
-func InjectCEEnableEncapsulation(dp datapath.Datapath, fn func(node *types.Node) bool) {
-	ldp, ok := dp.(*linuxDatapath)
+func InjectCEEnableEncapsulation(nh datapath.NodeHandler, fn func(node *types.Node) bool) {
+	nodeHandler, ok := nh.(*linuxNodeHandler)
 	if !ok {
 		return
 	}
 
-	ldp.node.OverrideEnableEncapsulation(fn)
+	nodeHandler.OverrideEnableEncapsulation(fn)
 }

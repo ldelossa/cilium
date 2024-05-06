@@ -23,6 +23,7 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
 	"github.com/fsnotify/fsnotify"
+	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -363,16 +364,11 @@ func xfrmStateReplace(new *netlink.XfrmState, remoteRebooted bool) error {
 				continue
 			}
 
-			err := netlink.XfrmStateDel(&s)
+			err, deferFn := xfrmTemporarilyRemoveState(scopedLog, s, dir)
 			if err != nil {
 				errs.Add(fmt.Errorf("Failed to remove old XFRM %s state %s: %w", dir, s.String(), err))
 			} else {
-				scopedLog.Infof("Temporarily removed old XFRM %s state", dir)
-				defer func(oldXFRMState netlink.XfrmState, dir string) {
-					if err := netlink.XfrmStateAdd(&oldXFRMState); err != nil {
-						scopedLog.WithError(err).Errorf("Failed to re-add old XFRM %s state", dir)
-					}
-				}(s, dir)
+				defer deferFn()
 			}
 		}
 	}
@@ -401,6 +397,47 @@ func xfrmStateReplace(new *netlink.XfrmState, remoteRebooted bool) error {
 		return firstAttemptErr
 	}
 	return netlink.XfrmStateAdd(new)
+}
+
+// Temporarily remove an XFRM state to allow the addition of another,
+// conflicting XFRM state. This function removes the conflicting state and
+// prepares a defer callback to re-add it with proper logging.
+func xfrmTemporarilyRemoveState(scopedLog *logrus.Entry, state netlink.XfrmState, dir string) (error, func()) {
+	stats, err := procfs.NewXfrmStat()
+	errorCnt := 0
+	if err != nil {
+		log.WithError(err).Error("Error while getting XFRM stats before state removal")
+	} else {
+		if dir == "IN" {
+			errorCnt = stats.XfrmInNoStates
+		} else {
+			errorCnt = stats.XfrmOutNoStates
+		}
+	}
+
+	start := time.Now()
+	if err := netlink.XfrmStateDel(&state); err != nil {
+		return err, nil
+	}
+	return nil, func() {
+		if err := netlink.XfrmStateAdd(&state); err != nil {
+			scopedLog.WithError(err).Errorf("Failed to re-add old XFRM %s state", dir)
+		}
+		elapsed := time.Since(start)
+
+		stats, err := procfs.NewXfrmStat()
+		if err != nil {
+			log.WithError(err).Error("Error while getting XFRM stats after state removal")
+			errorCnt = 0
+		} else {
+			if dir == "IN" {
+				errorCnt = stats.XfrmInNoStates - errorCnt
+			} else {
+				errorCnt = stats.XfrmOutNoStates - errorCnt
+			}
+		}
+		scopedLog.WithField(logfields.Duration, elapsed).Infof("Temporarily removed old XFRM %s state (%d packets dropped)", dir, errorCnt)
+	}
 }
 
 // Attempt to remove any XFRM state that conflicts with the state we just tried

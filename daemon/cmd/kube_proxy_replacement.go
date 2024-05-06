@@ -69,10 +69,6 @@ func initKubeProxyReplacementOptions(sysctl sysctl.Sysctl, tunnelConfig tunnel.C
 	}
 
 	if option.Config.EnableNodePort {
-		if option.Config.EnableIPSec {
-			return fmt.Errorf("IPSec cannot be used with BPF NodePort")
-		}
-
 		if option.Config.NodePortMode != option.NodePortModeSNAT &&
 			option.Config.NodePortMode != option.NodePortModeDSR &&
 			option.Config.NodePortMode != option.NodePortModeHybrid {
@@ -359,7 +355,7 @@ func probeKubeProxyReplacementOptions(sysctl sysctl.Sysctl) error {
 // finishKubeProxyReplacementInit finishes initialization of kube-proxy
 // replacement after all devices are known.
 func finishKubeProxyReplacementInit(sysctl sysctl.Sysctl, devices []*tables.Device) error {
-	if !(option.Config.EnableNodePort || option.Config.EnableWireguard) {
+	if !option.Config.EnableNodePort {
 		// Make sure that NodePort dependencies are disabled
 		disableNodePort()
 		return nil
