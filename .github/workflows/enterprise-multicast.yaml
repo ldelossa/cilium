@@ -75,7 +75,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: vxlan_without_encryption
+          - name: 1
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '5.15-20240305.092417'
+            tunnel: vxlan
+            encryption: false
+          - name: 2
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '6.6-20240305.092417'
             tunnel: vxlan
             encryption: false
     timeout-minutes: 60
@@ -129,14 +136,13 @@ jobs:
           ci-version: ${{ env.cilium_cli_ci_version }}
           local-path: './enterprise/cilium-cli'
 
-      - name: Create kind cluster
-        uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
+      - name: Provision K8s on LVH VM
+        uses: ./.github/actions/lvh-kind
         with:
-          version: ${{ env.KIND_VERSION }}
-          node_image: ${{ env.KIND_K8S_IMAGE }}
-          kubectl_version: ${{ env.KIND_K8S_VERSION }}
-          config: ${{ env.kind_config }}
-          wait: 0 # The control-plane never becomes ready, since no CNI is present
+          test-name: multicast
+          kernel: ${{ matrix.kernel }}
+          kind-config: ${{ env.kind_config }}
+          kind-image: ${{ env.KIND_K8S_IMAGE }}
 
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
