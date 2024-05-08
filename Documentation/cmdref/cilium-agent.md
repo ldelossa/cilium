@@ -170,6 +170,7 @@ cilium-agent [flags]
       --enable-service-topology                                      Enable support for service topology aware hints
       --enable-session-affinity                                      Enable support for service session affinity
       --enable-svc-source-range-check                                Enable check of service source ranges (currently, only for LoadBalancer) (default true)
+      --enable-tcx                                                   Attach endpoint programs using tcx if supported by the kernel (default true)
       --enable-tracing                                               Enable tracing while determining policy (debugging)
       --enable-unreachable-routes                                    Add unreachable routes on pod deletion
       --enable-vtep                                                  Enable  VXLAN Tunnel Endpoint (VTEP) Integration (beta)
@@ -352,6 +353,8 @@ cilium-agent [flags]
       --proxy-portrange-max uint16                                   End of port range that is used to allocate ports for L7 proxies. (default 20000)
       --proxy-portrange-min uint16                                   Start of port range that is used to allocate ports for L7 proxies. (default 10000)
       --proxy-prometheus-port int                                    Port to serve Envoy metrics on. Default 0 (disabled).
+      --proxy-xff-num-trusted-hops-egress uint32                     Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the egress L7 policy enforcement Envoy listeners.
+      --proxy-xff-num-trusted-hops-ingress uint32                    Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the ingress L7 policy enforcement Envoy listeners.
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
       --restore                                                      Restores state, if possible, from previous daemon (default true)
       --route-metric int                                             Overwrite the metric used by cilium when adding routes to its 'cilium_host' device

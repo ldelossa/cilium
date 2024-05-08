@@ -184,6 +184,8 @@ priorityClassName: ""
 dnsPolicy: ""
 # -- Additional containers added to the cilium DaemonSet.
 extraContainers: []
+# -- Additional initContainers added to the cilium Daemonset.
+extraInitContainers: []
 # -- Additional agent container arguments.
 extraArgs: []
 # -- Additional agent container environment variables.
@@ -213,7 +215,10 @@ extraConfig: {}
 # -- Annotations to be added to all top-level cilium-agent objects (resources under templates/cilium-agent)
 annotations: {}
 # -- Security Context for cilium-agent pods.
-podSecurityContext: {}
+podSecurityContext:
+  # -- AppArmorProfile options for the `cilium-agent` and init containers
+  appArmorProfile:
+    type: "Unconfined"
 # -- Annotations to be added to agent pods
 podAnnotations: {}
 # -- Labels to be added to agent pods
@@ -533,6 +538,10 @@ bpf:
   # -- (bool) Disable ExternalIP mitigation (CVE-2020-8554)
   # @default -- `false`
   disableExternalIPMitigation: false
+  # -- (bool) Attach endpoint programs using tcx instead of legacy tc hooks on
+  # supported kernels.
+  # @default -- `true`
+  enableTCX: true
 # -- Enable BPF clock source probing for more efficient tick retrieval.
 bpfClockProbe: false
 # -- Clean all eBPF datapath state from the initContainer of the cilium-agent
@@ -956,8 +965,8 @@ certgen:
     # @schema
     override: ~
     repository: "quay.io/cilium/certgen"
-    tag: "v0.1.11"
-    digest: "sha256:5586de5019abc104637a9818a626956cd9b1e827327b958186ec412ae3d5dea6"
+    tag: "v0.1.12"
+    digest: "sha256:bbc5e65e9dc65bc6b58967fe536b7f3b54e12332908aeb0a96a36866b4372b4e"
     useDigest: true
     pullPolicy: "Always"
   # -- Seconds after which the completed job pod will be deleted
@@ -1020,6 +1029,32 @@ hubble:
     enableOpenMetrics: false
     # -- Configure the port the hubble metric server listens on.
     port: 9965
+    tls:
+      # Enable hubble metrics server TLS.
+      enabled: false
+      # Configure hubble metrics server TLS.
+      server:
+        # -- base64 encoded PEM values for the Hubble metrics server certificate.
+        cert: ""
+        # -- base64 encoded PEM values for the Hubble metrics server key.
+        key: ""
+        # -- Extra DNS names added to certificate when it's auto generated
+        extraDnsNames: []
+        # -- Extra IP addresses added to certificate when it's auto generated
+        extraIpAddresses: []
+        # -- Configure mTLS for the Hubble metrics server.
+        mtls:
+          # When set to true enforces mutual TLS between Hubble Metrics server and its clients.
+          # False allow non-mutual TLS connections.
+          # This option has no effect when TLS is disabled.
+          enabled: false
+          useSecret: false
+          # -- Name of the ConfigMap containing the CA to validate client certificates against.
+          # If mTLS is enabled and this is unspecified, it will default to the
+          # same CA used for Hubble metrics server certificates.
+          name: ~
+          # -- Entry of the ConfigMap containing the CA.
+          key: ca.crt
     # -- Annotations to be added to hubble-metrics service.
     serviceAnnotations: {}
     serviceMonitor:
@@ -1046,6 +1081,10 @@ hubble:
       # @schema
       # -- Metrics relabeling configs for the ServiceMonitor hubble
       metricRelabelings: ~
+      # Configure TLS for the ServiceMonitor.
+      # Note, when using TLS you will either need to specify
+      # tlsConfig.insecureSkipVerify or specify a CA to use.
+      tlsConfig: {}
     # -- Grafana dashboards for hubble
     # grafana can import dashboards based on the label and value
     # ref: https://github.com/grafana/helm-charts/tree/main/charts/grafana#sidecar-for-dashboards
@@ -2114,6 +2153,10 @@ envoy:
   # -- Set Envoy upstream HTTP idle connection timeout seconds.
   # Does not apply to connections with pending requests. Default 60s
   idleTimeoutDurationSeconds: 60
+  # -- Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the ingress L7 policy enforcement Envoy listeners.
+  xffNumTrustedHopsL7PolicyIngress: 0
+  # -- Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the egress L7 policy enforcement Envoy listeners.
+  xffNumTrustedHopsL7PolicyEgress: 0
   # -- Envoy container image.
   image:
     # @schema
@@ -2121,9 +2164,9 @@ envoy:
     # @schema
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.29.4-174c6af504235ce8f4ce998f98cac88c50202d29"
+    tag: "v1.29.4-e2f41ce0e07065f353b8ce28f36c01de3cfdd819"
     pullPolicy: "Always"
-    digest: "sha256:3c5494946d3d72873d0a40408dba95ed35ee9ed39fbbe46ea031cfbf21c8bc7e"
+    digest: "sha256:ec288baaac3758b2b0cfe2e146feb49204543961bd04f0195aae67f7b85d00f4"
     useDigest: true
   # -- Additional containers added to the cilium Envoy DaemonSet.
   extraContainers: []
@@ -2162,7 +2205,10 @@ envoy:
   # -- Annotations to be added to all top-level cilium-envoy objects (resources under templates/cilium-envoy)
   annotations: {}
   # -- Security Context for cilium-envoy pods.
-  podSecurityContext: {}
+  podSecurityContext:
+    # -- AppArmorProfile options for the `cilium-agent` and init containers
+    appArmorProfile:
+      type: "Unconfined"
   # -- Annotations to be added to envoy pods
   podAnnotations: {}
   # -- Labels to be added to envoy pods
@@ -2762,6 +2808,11 @@ nodeinit:
   podAnnotations: {}
   # -- Labels to be added to node-init pods.
   podLabels: {}
+  # -- Security Context for cilium-node-init pods.
+  podSecurityContext:
+    # -- AppArmorProfile options for the `cilium-node-init` and init containers
+    appArmorProfile:
+      type: "Unconfined"
   # -- nodeinit resource limits & requests
   # ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
   resources:

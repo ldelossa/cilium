@@ -84,20 +84,30 @@ type loader struct {
 	hostDpInitializedOnce sync.Once
 	hostDpInitialized     chan struct{}
 
-	sysctl    sysctl.Sysctl
-	db        *statedb.DB
-	nodeAddrs statedb.Table[tables.NodeAddress]
-	devices   statedb.Table[*tables.Device]
+	sysctl          sysctl.Sysctl
+	db              *statedb.DB
+	nodeAddrs       statedb.Table[tables.NodeAddress]
+	devices         statedb.Table[*tables.Device]
+	prefilter       datapath.PreFilter
+	compilationLock datapath.CompilationLock
+	configWriter    datapath.ConfigWriter
+	localNodeConfig datapath.LocalNodeConfiguration
+	nodeHandler     datapath.NodeHandler
 }
 
 type Params struct {
 	cell.In
 
-	Config    Config
-	DB        *statedb.DB
-	NodeAddrs statedb.Table[tables.NodeAddress]
-	Sysctl    sysctl.Sysctl
-	Devices   statedb.Table[*tables.Device]
+	Config          Config
+	DB              *statedb.DB
+	NodeAddrs       statedb.Table[tables.NodeAddress]
+	Sysctl          sysctl.Sysctl
+	Devices         statedb.Table[*tables.Device]
+	Prefilter       datapath.PreFilter
+	CompilationLock datapath.CompilationLock
+	ConfigWriter    datapath.ConfigWriter
+	LocalNodeConfig datapath.LocalNodeConfiguration
+	NodeHandler     datapath.NodeHandler
 }
 
 // newLoader returns a new loader.
@@ -109,6 +119,11 @@ func newLoader(p Params) *loader {
 		sysctl:            p.Sysctl,
 		devices:           p.Devices,
 		hostDpInitialized: make(chan struct{}),
+		prefilter:         p.Prefilter,
+		compilationLock:   p.CompilationLock,
+		configWriter:      p.ConfigWriter,
+		localNodeConfig:   p.LocalNodeConfig,
+		nodeHandler:       p.NodeHandler,
 	}
 }
 
@@ -130,16 +145,16 @@ func NewLoaderForTest(tb testing.TB) *loader {
 
 // Init initializes the datapath cache with base program hashes derived from
 // the LocalNodeConfiguration.
-func (l *loader) init(dp datapath.ConfigWriter, nodeCfg *datapath.LocalNodeConfiguration) {
+func (l *loader) init() {
 	l.once.Do(func() {
-		l.templateCache = newObjectCache(dp, nodeCfg, option.Config.StateDir)
+		l.templateCache = newObjectCache(l.configWriter, &l.localNodeConfig, option.Config.StateDir)
 		ignorePrefixes := ignoredELFPrefixes
 		if !option.Config.EnableIPv4 {
 			ignorePrefixes = append(ignorePrefixes, "LXC_IPV4")
 		}
 		elf.IgnoreSymbolPrefixes(ignorePrefixes)
 	})
-	l.templateCache.Update(nodeCfg)
+	l.templateCache.Update(&l.localNodeConfig)
 }
 
 func upsertEndpointRoute(ep datapath.Endpoint, ip net.IPNet) error {
@@ -331,6 +346,13 @@ func removeObsoleteNetdevPrograms(devices []string) error {
 			continue
 		}
 
+		// Remove the per-device bpffs directory containing pinned links and
+		// per-endpoint maps.
+		bpffsPath := bpffsDeviceDir(bpf.CiliumPath(), l)
+		if err := bpf.Remove(bpffsPath); err != nil {
+			log.WithError(err).WithField(logfields.Device, l.Attrs().Name)
+		}
+
 		ingressFilters, err := netlink.FilterList(l, directionToParent(dirIngress))
 		if err != nil {
 			return fmt.Errorf("listing ingress filters: %w", err)
@@ -357,14 +379,14 @@ func removeObsoleteNetdevPrograms(devices []string) error {
 	}
 
 	for _, dev := range ingressDevs {
-		err = removeTCFilters(dev.Attrs().Name, directionToParent(dirIngress))
+		err = removeTCFilters(dev, directionToParent(dirIngress))
 		if err != nil {
 			log.WithError(err).Errorf("couldn't remove ingress tc filters from %s", dev.Attrs().Name)
 		}
 	}
 
 	for _, dev := range egressDevs {
-		err = removeTCFilters(dev.Attrs().Name, directionToParent(dirEgress))
+		err = removeTCFilters(dev, directionToParent(dirEgress))
 		if err != nil {
 			log.WithError(err).Errorf("couldn't remove egress tc filters from %s", dev.Attrs().Name)
 		}
@@ -405,6 +427,7 @@ func (l *loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 			elf:      objPath,
 			programs: progs,
 			linkDir:  bpffsDeviceLinksDir(bpf.CiliumPath(), host),
+			tcx:      option.Config.EnableTCX,
 		},
 	)
 	if err != nil {
@@ -445,6 +468,7 @@ func (l *loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 			elf:      secondDevObjPath,
 			programs: progs,
 			linkDir:  bpffsDeviceLinksDir(bpf.CiliumPath(), net),
+			tcx:      option.Config.EnableTCX,
 		},
 	)
 	if err != nil {
@@ -467,6 +491,8 @@ func (l *loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 			continue
 		}
 
+		linkDir := bpffsDeviceLinksDir(bpf.CiliumPath(), iface)
+
 		netdevObjPath := path.Join(ep.StateDir(), hostEndpointNetdevPrefix+device+".o")
 		if err := l.patchHostNetdevDatapath(ep, objPath, netdevObjPath, device); err != nil {
 			return err
@@ -486,8 +512,7 @@ func (l *loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 		} else {
 			// Remove any previously attached device from egress path if BPF
 			// NodePort and host firewall are disabled.
-			err := removeTCFilters(device, netlink.HANDLE_MIN_EGRESS)
-			if err != nil {
+			if err := detachSKBProgram(iface, symbolToHostNetdevEp, linkDir, netlink.HANDLE_MIN_EGRESS); err != nil {
 				log.WithField("device", device).Error(err)
 			}
 		}
@@ -497,7 +522,8 @@ func (l *loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 				device:   device,
 				elf:      netdevObjPath,
 				programs: progs,
-				linkDir:  bpffsDeviceLinksDir(bpf.CiliumPath(), iface),
+				linkDir:  linkDir,
+				tcx:      option.Config.EnableTCX,
 			},
 		)
 		if err != nil {
@@ -530,6 +556,7 @@ func (l *loader) reloadHostDatapath(ctx context.Context, ep datapath.Endpoint, o
 func (l *loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs *directoryInfo) error {
 	// Replace the current program
 	objPath := path.Join(dirs.Output, endpointObj)
+	device := ep.InterfaceName()
 
 	if ep.IsHost() {
 		// TODO: react to changes (using the currently ignored watch channel)
@@ -546,28 +573,33 @@ func (l *loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs 
 		}
 	} else {
 		progs := []progDefinition{{progName: symbolFromEndpoint, direction: dirIngress}}
+		linkDir := bpffsEndpointLinksDir(bpf.CiliumPath(), ep)
 
 		if ep.RequireEgressProg() {
 			progs = append(progs, progDefinition{progName: symbolToEndpoint, direction: dirEgress})
 		} else {
-			err := removeTCFilters(ep.InterfaceName(), netlink.HANDLE_MIN_EGRESS)
+			iface, err := netlink.LinkByName(device)
 			if err != nil {
-				log.WithField("device", ep.InterfaceName()).Error(err)
+				log.WithError(err).WithField("device", device).Warn("Link does not exist")
+			}
+			if err := detachSKBProgram(iface, symbolToEndpoint, linkDir, netlink.HANDLE_MIN_EGRESS); err != nil {
+				log.WithField("device", device).Error(err)
 			}
 		}
 
 		finalize, err := replaceDatapath(ctx,
 			replaceDatapathOptions{
-				device:   ep.InterfaceName(),
+				device:   device,
 				elf:      objPath,
 				programs: progs,
-				linkDir:  bpffsEndpointLinksDir(bpf.CiliumPath(), ep),
+				linkDir:  linkDir,
+				tcx:      option.Config.EnableTCX,
 			},
 		)
 		if err != nil {
 			scopedLog := ep.Logger(subsystem).WithFields(logrus.Fields{
 				logfields.Path: objPath,
-				logfields.Veth: ep.InterfaceName(),
+				logfields.Veth: device,
 			})
 			// Don't log an error here if the context was canceled or timed out;
 			// this log message should only represent failures with respect to
@@ -582,7 +614,7 @@ func (l *loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs 
 
 	if ep.RequireEndpointRoute() {
 		scopedLog := ep.Logger(subsystem).WithFields(logrus.Fields{
-			logfields.Veth: ep.InterfaceName(),
+			logfields.Veth: device,
 		})
 		if ip := ep.IPv4Address(); ip.IsValid() {
 			if err := upsertEndpointRoute(ep, *iputil.AddrToIPNet(ip)); err != nil {
@@ -620,6 +652,7 @@ func (l *loader) replaceOverlayDatapath(ctx context.Context, cArgs []string, ifa
 			elf:      overlayObj,
 			programs: progs,
 			linkDir:  bpffsDeviceLinksDir(bpf.CiliumPath(), device),
+			tcx:      option.Config.EnableTCX,
 		},
 	)
 	if err != nil {
@@ -732,13 +765,32 @@ func (l *loader) Unload(ep datapath.Endpoint) {
 		}
 	}
 
+	log := log.WithField(logfields.EndpointID, ep.StringID())
+
+	// Remove legacy tc attachments.
+	link, err := netlink.LinkByName(ep.InterfaceName())
+	if err == nil {
+		if err := removeTCFilters(link, netlink.HANDLE_MIN_INGRESS); err != nil {
+			log.WithError(err).Errorf("Removing ingress filter from interface %s", ep.InterfaceName())
+		}
+		if err := removeTCFilters(link, netlink.HANDLE_MIN_EGRESS); err != nil {
+			log.WithError(err).Errorf("Removing egress filter from interface %s", ep.InterfaceName())
+		}
+	}
+
 	// If Cilium and the kernel support tcx to attach TC programs to the
 	// endpoint's veth device, its bpf_link object is pinned to a per-endpoint
-	// bpffs directory. When the endpoint gets deleted, removing the whole
-	// directory cleans up any pinned maps and links.
-	bpffsPath := bpffsEndpointDir(bpf.CiliumPath(), ep)
-	if err := bpf.Remove(bpffsPath); err != nil {
-		log.WithError(err).WithField(logfields.EndpointID, ep.StringID())
+	// bpffs directory. When the endpoint gets deleted, we can remove the whole
+	// directory to clean up any leftover pinned links and maps.
+
+	// Remove the links directory first to avoid removing program arrays before
+	// the entrypoints are detached.
+	if err := bpf.Remove(bpffsEndpointLinksDir(bpf.CiliumPath(), ep)); err != nil {
+		log.WithError(err)
+	}
+	// Finally, remove the endpoint's top-level directory.
+	if err := bpf.Remove(bpffsEndpointDir(bpf.CiliumPath(), ep)); err != nil {
+		log.WithError(err)
 	}
 }
 

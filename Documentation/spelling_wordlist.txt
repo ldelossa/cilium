@@ -386,6 +386,7 @@ impactful
 ingressing
 init
 initContainer
+initContainers
 initialDelaySeconds
 inlined
 inlines
@@ -612,6 +613,7 @@ qemu
 queryable
 queueing
 rbac
+rST
 rc
 reStructuredText
 reachability
@@ -639,7 +641,6 @@ roadmap
 rollout
 routable
 routingMode
-rST
 runnable
 runtimes
 sandboxing
@@ -703,6 +704,7 @@ tcpdump
 tcplife
 tcptop
 tcptracer
+tcx
 templating
 terminatingTLS
 terminationGracePeriodSeconds

@@ -137,7 +137,7 @@ func (mgr *manager) configureLocalNode(lns *node.LocalNodeStore) {
 	})
 }
 
-func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.ClusterMesh, nomgr nodemanager.NodeManager) {
+func (mgr *manager) setupNodeManager(nh datapath.NodeHandler, cm *clustermesh.ClusterMesh, nomgr nodemanager.NodeManager) {
 	// The downstream is configured here to avoid a circular dependency in Hive.
 	mgr.nodes.downstream = nomgr
 
@@ -151,7 +151,7 @@ func (mgr *manager) setupNodeManager(dp datapath.Datapath, cm *clustermesh.Clust
 	}
 
 	clustermesh.InjectCENodeObserver(cm, mgr.nodes)
-	linuxdatapath.InjectCEEnableEncapsulation(dp, mgr.nodes.needsEncapsulation)
+	linuxdatapath.InjectCEEnableEncapsulation(nh, mgr.nodes.needsEncapsulation)
 }
 
 func (mgr *manager) ipsetFilter() nodemanager.IPSetFilterFn {

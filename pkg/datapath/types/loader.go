@@ -11,7 +11,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/loader/metrics"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
-	"github.com/cilium/cilium/pkg/lock"
 )
 
 // Loader is an interface to abstract out loading of datapath programs.
@@ -20,26 +19,17 @@ type Loader interface {
 	CustomCallsMapPath(id uint16) string
 	CompileOrLoad(ctx context.Context, ep Endpoint, stats *metrics.SpanStat) error
 	ReloadDatapath(ctx context.Context, ep Endpoint, stats *metrics.SpanStat) error
-	ReinitializeXDP(ctx context.Context, o BaseProgramOwner, extraCArgs []string) error
+	ReinitializeXDP(ctx context.Context, extraCArgs []string) error
 	EndpointHash(cfg EndpointConfiguration) (string, error)
 	Unload(ep Endpoint)
-	Reinitialize(ctx context.Context, o BaseProgramOwner, tunnelConfig tunnel.Config, deviceMTU int, iptMgr IptablesManager, p Proxy) error
+	Reinitialize(ctx context.Context, tunnelConfig tunnel.Config, deviceMTU int, iptMgr IptablesManager, p Proxy) error
 	HostDatapathInitialized() <-chan struct{}
 	RestoreTemplates(stateDir string) error
-	DeviceHasTCProgramLoaded(hostInterface string, checkEgress bool) (bool, error)
-}
-
-// BaseProgramOwner is any type for which a loader is building base programs.
-type BaseProgramOwner interface {
-	DeviceConfiguration
-	GetCompilationLock() *lock.RWMutex
-	Datapath() Datapath
-	LocalConfig() *LocalNodeConfiguration
-	SetPrefilter(pf PreFilter)
 }
 
 // PreFilter an interface for an XDP pre-filter.
 type PreFilter interface {
+	Enabled() bool
 	WriteConfig(fw io.Writer)
 	Dump(to []string) ([]string, int64)
 	Insert(revision int64, cidrs []net.IPNet) error
@@ -80,4 +70,18 @@ type IptablesManager interface {
 
 	// See comments for InstallNoTrackRules.
 	RemoveNoTrackRules(ip netip.Addr, port uint16)
+}
+
+// CompilationLock is a interface over a mutex, it is used by both the loader, daemon
+// and endpoint manager to lock the compilation process. This is a bit of a layer violation
+// since certain methods on the loader such as CompileAndLoad and CompileOrLoad expect the
+// lock to be taken before being called.
+//
+// Once we have moved header file generation from the endpoint manager into the loader, we can
+// remove this interface and have the loader manage the lock internally.
+type CompilationLock interface {
+	Lock()
+	Unlock()
+	RLock()
+	RUnlock()
 }
