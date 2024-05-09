@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/netip"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -332,9 +331,22 @@ func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
 			invokeFn,
 
 			// This is a workaround for https://github.com/cilium/cilium/pull/31010. We should
-			// have the same issue here.
+			// have the same issue here. Notice that we need to do it per resource.
 			func(fcs *client.FakeClientset) {
-				var once sync.Once
+				requiredResources := map[string]chan struct{}{
+					"isovalentsrv6egresspolicies": make(chan struct{}),
+					"ciliumendpoints":             make(chan struct{}),
+					"isovalentvrfs":               make(chan struct{}),
+				}
+				if useRealSIDManager {
+					requiredResources["isovalentsrv6sidmanagers"] = make(chan struct{})
+				}
+				go func() {
+					for _, ch := range requiredResources {
+						<-ch
+					}
+					close(fixture.watching)
+				}()
 				fcs.CiliumFakeClientset.PrependWatchReactor("*", func(action k8sTesting.Action) (handled bool, ret watch.Interface, err error) {
 					w := action.(k8sTesting.WatchAction)
 					gvr := w.GetResource()
@@ -343,7 +355,7 @@ func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
 					if err != nil {
 						return false, nil, err
 					}
-					once.Do(func() { close(fixture.watching) })
+					close(requiredResources[gvr.Resource])
 					return true, watch, nil
 				})
 			},
