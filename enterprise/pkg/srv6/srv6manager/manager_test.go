@@ -12,7 +12,6 @@ package srv6manager
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/netip"
 	"strings"
@@ -363,8 +362,9 @@ func allocateIdentity(t *testing.T, identityAllocator cache.IdentityAllocator, e
 	ep.Status.Identity.ID = int64(id.ID)
 }
 
-func eventually(t *testing.T, f func() bool) {
-	require.Eventually(t, f, time.Second*3, time.Millisecond*10)
+func eventuallyWithT(t *testing.T, f func(t *assert.CollectT)) {
+	t.Helper()
+	require.EventuallyWithT(t, f, time.Second*3, time.Millisecond*10)
 }
 
 func TestSRv6Manager(t *testing.T) {
@@ -838,35 +838,24 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			// Ensure all maps are initialized as expected
-			eventually(t, func() bool {
+			eventuallyWithT(t, func(t *assert.CollectT) {
 				currentVRFMapEntries := []*vrfKV{}
 				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
 					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
 				})
-				if !bpfMapsEqual(currentVRFMapEntries, test.initVRFMapEntries) {
-					t.Log("VRF map entries are mismatched, retrying")
-					return false
-				}
+				assert.True(t, bpfMapsEqual(currentVRFMapEntries, test.initVRFMapEntries), "VRF map entries are mismatched, retrying")
 
 				currentPolicyMapEntries := []*policyKV{}
 				srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
 					currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
 				})
-				if !bpfMapsEqual(currentPolicyMapEntries, test.initPolicyMapEntries) {
-					t.Log("Policy map entries are mismatching, retrying")
-					return false
-				}
+				assert.True(t, bpfMapsEqual(currentPolicyMapEntries, test.initPolicyMapEntries), "Policy map entries are mismatching, retrying")
 
 				currentSIDMapEntries := []*sidKV{}
 				srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
 					currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
 				})
-				if !bpfMapsEqual(currentSIDMapEntries, test.initSIDMapEntries) {
-					t.Log("SID map entries are mismatched, retrying")
-					return false
-				}
-
-				return true
+				assert.True(t, bpfMapsEqual(currentSIDMapEntries, test.initSIDMapEntries), "SID map entries are mismatched, retrying")
 			})
 
 			// Do CRUD for Endpoints
@@ -926,35 +915,24 @@ func TestSRv6Manager(t *testing.T) {
 			}
 
 			// Make sure all maps are updated as expected
-			eventually(t, func() bool {
+			eventuallyWithT(t, func(t *assert.CollectT) {
 				currentVRFMapEntries := []*vrfKV{}
 				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
 					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
 				})
-				if !bpfMapsEqual(currentVRFMapEntries, test.updatedVRFMapEntries) {
-					t.Log("VRF map entries are mismatched, retrying")
-					return false
-				}
+				assert.True(t, bpfMapsEqual(currentVRFMapEntries, test.updatedVRFMapEntries), "VRF map entries are mismatched, retrying")
 
 				currentPolicyMapEntries := []*policyKV{}
 				srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
 					currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
 				})
-				if !bpfMapsEqual(currentPolicyMapEntries, test.updatedPolicyMapEntries) {
-					t.Log("Policy map entries are mismatched, retrying")
-					return false
-				}
+				assert.True(t, bpfMapsEqual(currentPolicyMapEntries, test.updatedPolicyMapEntries), "Policy map entries are mismatched, retrying")
 
 				currentSIDMapEntries := []*sidKV{}
 				srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
 					currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
 				})
-				if !bpfMapsEqual(currentSIDMapEntries, test.updatedSIDMapEntries) {
-					t.Log("SID map entries are mismatched, retrying")
-					return false
-				}
-
-				return true
+				assert.True(t, bpfMapsEqual(currentSIDMapEntries, test.updatedSIDMapEntries), "SID map entries are mismatched, retrying")
 			})
 		})
 	}
@@ -1087,46 +1065,44 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get allocated SID from status field
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			sm, err := smClient.Get(context.TODO(), sidmanager1.Name, metav1.GetOptions{})
-			if err != nil {
-				return false
+			if !assert.NoError(t, err) {
+				return
 			}
-			if sm.Status == nil {
-				return false
+			if !assert.NotNil(t, sm.Status) {
+				return
 			}
-			if len(sm.Status.SIDAllocations) != 1 {
-				return false
+			if !assert.Len(t, sm.Status.SIDAllocations, 1) {
+				return
 			}
-			if len(sm.Status.SIDAllocations[0].SIDs) != 1 {
-				return false
+			if !assert.Len(t, sm.Status.SIDAllocations[0].SIDs, 1) {
+				return
 			}
 			sid1 = netip.MustParseAddr(sm.Status.SIDAllocations[0].SIDs[0].SID.Addr)
-			return strings.HasPrefix(sid1.String(), "fd00:1:1:")
+			assert.True(t, strings.HasPrefix(sid1.String(), "fd00:1:1:"))
 		})
 
 		// Now the SID allocation from SIDManager and update to the SIDMap should happen eventually
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			vrfs := manager.GetAllVRFs()
-			if len(vrfs) != 1 {
-				return false
+			if !assert.Len(t, vrfs, 1) {
+				return
 			}
 
-			if vrfs[0].SIDInfo == nil {
-				return false
+			if !assert.NotNil(t, vrfs[0].SIDInfo) {
+				return
 			}
 
 			info := vrfs[0].SIDInfo
-			if ownerName != info.Owner ||
-				vrf0.Name != info.MetaData ||
-				sid1.String() != info.SID.Addr.String() ||
-				srv6Types.BehaviorTypeBase != info.BehaviorType ||
-				srv6Types.BehaviorEndDT4 != info.Behavior {
-				return false
-			}
+			assert.Equal(t, ownerName, info.Owner)
+			assert.Equal(t, vrf0.Name, info.MetaData)
+			assert.Equal(t, sid1.String(), info.SID.Addr.String())
+			assert.Equal(t, srv6Types.BehaviorTypeBase, info.BehaviorType)
+			assert.Equal(t, srv6Types.BehaviorEndDT4, info.Behavior)
 
 			var val srv6map.SIDValue
-			return srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val) == nil
+			assert.NoError(t, srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val))
 		})
 	})
 
@@ -1137,54 +1113,55 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get allocated SID from status field
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			sm, err := smClient.Get(context.TODO(), sidmanager1.Name, metav1.GetOptions{})
-			if err != nil {
-				return false
+			if !assert.NoError(t, err) {
+				return
 			}
-			if len(sm.Status.SIDAllocations) != 1 {
-				return false
+			if !assert.NotNil(t, sm.Status) {
+				return
 			}
-			if len(sm.Status.SIDAllocations[0].SIDs) != 1 {
-				return false
+			if !assert.Len(t, sm.Status.SIDAllocations, 1) {
+				return
+			}
+			if !assert.Len(t, sm.Status.SIDAllocations[0].SIDs, 1) {
+				return
 			}
 			sid2 = netip.MustParseAddr(sm.Status.SIDAllocations[0].SIDs[0].SID.Addr)
-			return strings.HasPrefix(sid2.String(), "fd00:1:2:")
+			assert.True(t, strings.HasPrefix(sid2.String(), "fd00:1:2:"))
 		})
 
 		// Now the SID allocation from SIDManager should happen and old SIDMap entry should
 		// be removed and a new SIDMap entry should appear.
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			vrfs := manager.GetAllVRFs()
-			if len(vrfs) != 1 {
-				return false
+			if !assert.Len(t, vrfs, 1) {
+				return
 			}
 
-			if vrfs[0].SIDInfo == nil {
-				return false
+			if !assert.NotNil(t, vrfs[0].SIDInfo) {
+				return
 			}
 
 			info := vrfs[0].SIDInfo
-			if ownerName != info.Owner ||
-				vrf0.Name != info.MetaData ||
-				sid2.String() != info.SID.Addr.String() ||
-				srv6Types.BehaviorTypeBase != info.BehaviorType ||
-				srv6Types.BehaviorEndDT4 != info.Behavior {
-				return false
-			}
+			assert.Equal(t, ownerName, info.Owner)
+			assert.Equal(t, vrf0.Name, info.MetaData)
+			assert.Equal(t, sid2.String(), info.SID.Addr.String())
+			assert.Equal(t, srv6Types.BehaviorTypeBase, info.BehaviorType)
+			assert.Equal(t, srv6Types.BehaviorEndDT4, info.Behavior)
 
 			var val srv6map.SIDValue
 			err := srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid2.As16()}, &val)
-			if err != nil {
-				return false
+			if !assert.NoError(t, err) {
+				return
 			}
 
 			err = srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val)
-			if err == nil {
-				return false
+			if !assert.Error(t, err) {
+				return
 			}
 
-			return errors.Is(err, ebpf.ErrKeyNotExist)
+			assert.ErrorIs(t, err, ebpf.ErrKeyNotExist)
 		})
 	})
 
@@ -1195,23 +1172,23 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		require.NoError(t, err)
 
 		// Now the SID deletion from SIDManager should happen and old SIDMap entry should disappear
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			vrfs := manager.GetAllVRFs()
-			if len(vrfs) != 1 {
-				return false
+			if !assert.Len(t, vrfs, 1) {
+				return
 			}
 
-			if vrfs[0].SIDInfo != nil {
-				return false
+			if !assert.Nil(t, vrfs[0].SIDInfo) {
+				return
 			}
 
 			var val srv6map.SIDValue
 			err = srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid2.As16()}, &val)
-			if err == nil {
-				return false
+			if !assert.Error(t, err) {
+				return
 			}
 
-			return errors.Is(err, ebpf.ErrKeyNotExist)
+			assert.ErrorIs(t, err, ebpf.ErrKeyNotExist)
 		})
 	})
 }
@@ -1408,32 +1385,33 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 			<-fixture.watching
 
 			// Wait for the SIDManager sync
-			eventually(t, func() bool {
-				return m.sidAllocatorIsSet()
+			eventuallyWithT(t, func(t *assert.CollectT) {
+				assert.True(t, m.sidAllocatorIsSet())
 			})
 
-			eventually(t, func() bool {
+			eventuallyWithT(t, func(t *assert.CollectT) {
 				vrfs := m.GetAllVRFs()
 
 				if test.vrf != nil {
 					if !assert.Len(t, vrfs, 1) {
-						return false
+						return
 					}
 				} else {
-					return assert.Len(t, vrfs, 0)
+					assert.Len(t, vrfs, 0)
+					return
 				}
 
 				if test.expectedAllocation != nil {
 					info := vrfs[0].SIDInfo
 					expected := test.expectedAllocation
-					return assert.NotNil(t, info) &&
-						assert.Equal(t, expected.Owner, info.Owner) &&
-						assert.Equal(t, expected.MetaData, info.MetaData) &&
-						assert.Equal(t, expected.SID, info.SID) &&
-						assert.Equal(t, expected.BehaviorType, info.BehaviorType) &&
-						assert.Equal(t, expected.Behavior, info.Behavior)
+					assert.NotNil(t, info)
+					assert.Equal(t, expected.Owner, info.Owner)
+					assert.Equal(t, expected.MetaData, info.MetaData)
+					assert.Equal(t, expected.SID, info.SID)
+					assert.Equal(t, expected.BehaviorType, info.BehaviorType)
+					assert.Equal(t, expected.Behavior, info.Behavior)
 				} else {
-					return assert.Nil(t, vrfs[0].SIDInfo)
+					assert.Nil(t, vrfs[0].SIDInfo)
 				}
 			})
 		})

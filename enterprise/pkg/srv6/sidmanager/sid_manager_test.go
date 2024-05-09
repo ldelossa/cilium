@@ -183,8 +183,9 @@ func newHive(t *testing.T, invoke ...any) *hive.Hive {
 	)
 }
 
-func eventually(t *testing.T, f func() bool) {
-	require.Eventually(t, f, time.Second*3, time.Millisecond*10)
+func eventuallyWithT(t *testing.T, f func(collect *assert.CollectT)) {
+	t.Helper()
+	require.EventuallyWithT(t, f, time.Second*3, time.Millisecond*10)
 }
 
 func TestSIDManagerSpecReconciliation(t *testing.T) {
@@ -218,12 +219,14 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("AddOneLocator", func(t *testing.T) {
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
-			return assert.True(t, found, "Allocator not found") &&
-				assert.Equal(t, locator1, allocator.Locator(), "Locator mismatched") &&
-				assert.Equal(t, structure1, allocator.Structure(), "Structure mismatched") &&
-				assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
+			if !assert.True(t, found, "Allocator not found") {
+				return
+			}
+			assert.Equal(t, locator1, allocator.Locator(), "Locator mismatched")
+			assert.Equal(t, structure1, allocator.Structure(), "Structure mismatched")
+			assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
 
@@ -233,12 +236,14 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 		_, err := c.Update(context.TODO(), &sidmanager, metav1.UpdateOptions{})
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
-			return assert.True(t, found, "Allocator not found") &&
-				assert.Equal(t, locator3, allocator.Locator(), "Locator mismatched") &&
-				assert.Equal(t, structure1, allocator.Structure(), "Structure mismatched") &&
-				assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
+			if !assert.True(t, found, "Allocator not found") {
+				return
+			}
+			assert.Equal(t, locator3, allocator.Locator(), "Locator mismatched")
+			assert.Equal(t, structure1, allocator.Structure(), "Structure mismatched")
+			assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
 
@@ -248,12 +253,14 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 		_, err := c.Update(context.TODO(), &sidmanager, metav1.UpdateOptions{})
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
-			return assert.True(t, found, "Allocator not found") &&
-				assert.Equal(t, locator4, allocator.Locator(), "Locator mismatched") &&
-				assert.Equal(t, structure2, allocator.Structure(), "Structure mismatched") &&
-				assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
+			if !assert.True(t, found, "Allocator not found") {
+				return
+			}
+			assert.Equal(t, locator4, allocator.Locator(), "Locator mismatched")
+			assert.Equal(t, structure2, allocator.Structure(), "Structure mismatched")
+			assert.Equal(t, types.BehaviorTypeBase, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
 
@@ -263,12 +270,14 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 		_, err := c.Update(context.TODO(), &sidmanager, metav1.UpdateOptions{})
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			allocator, found := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
-			return assert.True(t, found, "Allocator not found") &&
-				assert.Equal(t, locator4, allocator.Locator(), "Locator mismatched") &&
-				assert.Equal(t, structure2, allocator.Structure(), "Structure mismatched") &&
-				assert.Equal(t, types.BehaviorTypeUSID, allocator.BehaviorType(), "BehaviorType mismatched")
+			if !assert.True(t, found, "Allocator not found") {
+				return
+			}
+			assert.Equal(t, locator4, allocator.Locator(), "Locator mismatched")
+			assert.Equal(t, structure2, allocator.Structure(), "Structure mismatched")
+			assert.Equal(t, types.BehaviorTypeUSID, allocator.BehaviorType(), "BehaviorType mismatched")
 		})
 	})
 
@@ -278,17 +287,21 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 		_, err := c.Update(context.TODO(), &sidmanager, metav1.UpdateOptions{})
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			allocator1, found1 := o.Allocator(sidmanager.Spec.LocatorAllocations[0].PoolRef)
 			allocator2, found2 := o.Allocator(sidmanager.Spec.LocatorAllocations[1].PoolRef)
-			return assert.True(t, found1, "Allocator1 not found") &&
-				assert.Equal(t, locator4, allocator1.Locator(), "Locator1 mismatched") &&
-				assert.Equal(t, structure2, allocator1.Structure(), "Structure1 mismatched") &&
-				assert.Equal(t, types.BehaviorTypeUSID, allocator1.BehaviorType(), "BehaviorType1 mismatched") &&
-				assert.True(t, found2, "Allocator2 not found") &&
-				assert.Equal(t, locator2, allocator2.Locator(), "Locator2 mismatched") &&
-				assert.Equal(t, structure1, allocator2.Structure(), "Structure2 mismatched") &&
-				assert.Equal(t, types.BehaviorTypeBase, allocator2.BehaviorType(), "BehaviorType2 mismatched")
+			if !assert.True(t, found1, "Allocator1 not found") {
+				return
+			}
+			assert.Equal(t, locator4, allocator1.Locator(), "Locator1 mismatched")
+			assert.Equal(t, structure2, allocator1.Structure(), "Structure1 mismatched")
+			assert.Equal(t, types.BehaviorTypeUSID, allocator1.BehaviorType(), "BehaviorType1 mismatched")
+			if !assert.True(t, found2, "Allocator2 not found") {
+				return
+			}
+			assert.Equal(t, locator2, allocator2.Locator(), "Locator2 mismatched")
+			assert.Equal(t, structure1, allocator2.Structure(), "Structure2 mismatched")
+			assert.Equal(t, types.BehaviorTypeBase, allocator2.BehaviorType(), "BehaviorType2 mismatched")
 		})
 	})
 
@@ -300,11 +313,11 @@ func TestSIDManagerSpecReconciliation(t *testing.T) {
 		_, err := c.Update(context.TODO(), &sidmanager, metav1.UpdateOptions{})
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			_, found1 := o.Allocator(oldRef1)
 			_, found2 := o.Allocator(oldRef2)
-			return assert.False(t, found1, "Allocator1 still exists") &&
-				assert.False(t, found2, "Allocator2 still exists")
+			assert.False(t, found1, "Allocator1 still exists")
+			assert.False(t, found2, "Allocator2 still exists")
 		})
 	})
 }
@@ -344,27 +357,27 @@ func TestSIDManagerStatusReconciliation(t *testing.T) {
 	t.Run("AllocateSID", func(t *testing.T) {
 		var allocator SIDAllocator
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			a, found := o.Allocator(poolName1)
 			allocator = a
-			return assert.True(t, found, "Allocator not found")
+			assert.True(t, found, "Allocator not found")
 		})
 
 		sidInfo, err := allocator.Allocate(sid1.Addr, "test", "test1", types.BehaviorEndDT4)
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			sm, err := c.Get(context.TODO(), sidmanager.Name, metav1.GetOptions{})
-			require.NoError(t, err)
-
-			return assert.NotNil(t, sm.Status, "Status is nil") &&
-				assert.Len(t, sm.Status.SIDAllocations, 1, "Invalid SIDAllocations length") &&
-				assert.Equal(t, poolName1, sm.Status.SIDAllocations[0].PoolRef,
-					"Pool name mismatched between status and allocation") &&
-				assert.Len(t, sm.Status.SIDAllocations[0].SIDs, 1,
-					"More than one SID is on status") &&
-				assert.Equal(t, sidInfo.SID.Addr.String(), sm.Status.SIDAllocations[0].SIDs[0].SID.Addr,
-					"SID mismatched between status and allocation")
+			if !assert.NoError(t, err) {
+				return
+			}
+			if !assert.NotNil(t, sm.Status, "Status is nil") {
+				return
+			}
+			assert.Len(t, sm.Status.SIDAllocations, 1, "Invalid SIDAllocations length")
+			assert.Equal(t, poolName1, sm.Status.SIDAllocations[0].PoolRef, "Pool name mismatched between status and allocation")
+			assert.Len(t, sm.Status.SIDAllocations[0].SIDs, 1, "More than one SID is on status")
+			assert.Equal(t, sidInfo.SID.String(), sm.Status.SIDAllocations[0].SIDs[0].SID.Addr, "SID mismatched between status and allocation")
 		})
 	})
 
@@ -375,11 +388,15 @@ func TestSIDManagerStatusReconciliation(t *testing.T) {
 		err := allocator.Release(sid1.Addr)
 		require.NoError(t, err)
 
-		eventually(t, func() bool {
+		eventuallyWithT(t, func(t *assert.CollectT) {
 			sm, err := c.Get(context.TODO(), sidmanager.Name, metav1.GetOptions{})
-			require.NoError(t, err)
-			return assert.NotNil(t, sm.Status, "Status is nil") &&
-				assert.Len(t, sm.Status.SIDAllocations, 0, "SIDAllocations still exists")
+			if !assert.NoError(t, err) {
+				return
+			}
+			if !assert.NotNil(t, sm.Status, "Status is nil") {
+				return
+			}
+			assert.Len(t, sm.Status.SIDAllocations, 0, "SIDAllocations still exists")
 		})
 	})
 }
@@ -491,18 +508,18 @@ func TestSIDManagerRestoration(t *testing.T) {
 			t.Cleanup(func() {
 				err := c.Delete(context.TODO(), sidmanager.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
-				eventually(t, func() bool {
-					return assert.Len(t, o.Allocators(), 0, "Allocators still exist")
+				eventuallyWithT(t, func(t *assert.CollectT) {
+					assert.Len(t, o.Allocators(), 0, "Allocators still exist")
 				})
 			})
 
 			if !test.stale {
 				// Valid allocation should be restored to the allocator
 				var allocator SIDAllocator
-				eventually(t, func() bool {
+				eventuallyWithT(t, func(t *assert.CollectT) {
 					a, found := o.Allocator(poolName1)
 					allocator = a
-					return assert.True(t, found, "Allocator not found")
+					assert.True(t, found, "Allocator not found")
 				})
 				sids := allocator.AllocatedSIDs("test")
 				require.Len(t, sids, 1,
@@ -517,12 +534,15 @@ func TestSIDManagerRestoration(t *testing.T) {
 					"Restored Behavior doesn't match to status")
 			} else {
 				// Stale allocation shouldn't be restored to the status
-				eventually(t, func() bool {
+				eventuallyWithT(t, func(t *assert.CollectT) {
 					sm, err := c.Get(context.TODO(), sidmanager.Name, metav1.GetOptions{})
-					require.NoError(t, err)
-					return assert.NotNil(t, sm.Status, "Status is nil") &&
-						assert.Len(t, sm.Status.SIDAllocations, 0,
-							"Stale allocation restored to the status")
+					if !assert.NoError(t, err) {
+						return
+					}
+					if !assert.NotNil(t, sm.Status, "Status is nil") {
+						return
+					}
+					assert.Len(t, sm.Status.SIDAllocations, 0, "Stale allocation restored to the status")
 				})
 			}
 		})
