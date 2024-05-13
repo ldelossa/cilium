@@ -728,6 +728,8 @@ Vagrantfile @cilium/ci-structure
 /enterprise/plugins/hubble-flow-aggregation/api @isovalent/hubble-api
 /enterprise/test/srv6/ @isovalent/traffic-engineering
 /enterprise/tools/release-notes/ @isovalent/release-managers
+/hubble/Makefile.override @isovalent/hubble
+/hubble/enterprise/ @isovalent/hubble
 /install/kubernetes/cilium/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/*enterprise* @isovalent/sig-k8s @isovalent/helm
 /install/kubernetes/cilium/templates/_extensions.tpl @isovalent/sig-k8s @isovalent/helm @isovalent/core-structure

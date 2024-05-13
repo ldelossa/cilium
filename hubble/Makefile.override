@@ -1,0 +1,1 @@
+SUBDIRS_HUBBLE_CLI := enterprise

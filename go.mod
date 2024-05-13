@@ -32,6 +32,7 @@ require (
 	github.com/cilium/stream v0.0.0-20240226091623-f979d32855f8
 	github.com/cilium/workerpool v1.2.0
 	github.com/containernetworking/cni v1.2.0
+	github.com/coreos/go-oidc/v3 v3.10.0
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/docker v26.1.1+incompatible
@@ -62,6 +63,7 @@ require (
 	github.com/hashicorp/consul/api v1.28.2
 	github.com/hashicorp/go-immutable-radix/v2 v2.1.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/int128/listener v1.1.0
 	github.com/jeremywohl/flatten v1.0.1
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/kr/pretty v0.3.1
@@ -72,6 +74,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.32.0
 	github.com/osrg/gobgp/v3 v3.26.0
+	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/prometheus/client_golang v1.19.0
 	github.com/prometheus/client_model v0.6.1
@@ -105,8 +108,10 @@ require (
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/mod v0.17.0
 	golang.org/x/net v0.24.0
+	golang.org/x/oauth2 v0.17.0
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.20.0
+	golang.org/x/term v0.19.0
 	golang.org/x/time v0.5.0
 	golang.org/x/tools v0.20.0
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
@@ -137,6 +142,8 @@ require github.com/jonboulle/clockwork v0.2.2
 
 require (
 	cel.dev/expr v0.15.0 // indirect
+	cloud.google.com/go/compute v1.24.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest/azure/cli v0.4.6 // indirect
@@ -268,8 +275,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/oauth2 v0.17.0 // indirect
-	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
