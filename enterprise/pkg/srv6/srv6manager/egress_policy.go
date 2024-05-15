@@ -13,6 +13,7 @@ package srv6manager
 import (
 	"fmt"
 	"net"
+	"net/netip"
 
 	"k8s.io/apimachinery/pkg/types"
 
@@ -26,7 +27,7 @@ type EgressPolicy struct {
 	id types.NamespacedName
 
 	VRFID    uint32
-	DstCIDRs []*net.IPNet
+	DstCIDRs []netip.Prefix
 	SID      ciliumTypes.IPv6
 }
 
@@ -43,15 +44,8 @@ func (in *EgressPolicy) DeepCopy() *EgressPolicy {
 func (in *EgressPolicy) deepCopyInto(out *EgressPolicy) {
 	out.id = in.id
 	out.VRFID = in.VRFID
-	out.DstCIDRs = make([]*net.IPNet, len(in.DstCIDRs))
-	for i, cidr := range in.DstCIDRs {
-		out.DstCIDRs[i] = &net.IPNet{
-			IP:   make(net.IP, len(cidr.IP)),
-			Mask: make(net.IPMask, len(cidr.Mask)),
-		}
-		copy(out.DstCIDRs[i].IP, cidr.IP)
-		copy(out.DstCIDRs[i].Mask, cidr.Mask)
-	}
+	out.DstCIDRs = make([]netip.Prefix, len(in.DstCIDRs))
+	copy(out.DstCIDRs, in.DstCIDRs)
 }
 
 // PolicyID includes policy name and namespace
@@ -63,13 +57,13 @@ func ParsePolicy(csrep *v1alpha1.IsovalentSRv6EgressPolicy) (*EgressPolicy, erro
 		return nil, fmt.Errorf("IsovalentSRv6EgressPolicy must have a name")
 	}
 
-	var dstCidrList []*net.IPNet
+	var dstCidrList []netip.Prefix
 	var sid ciliumTypes.IPv6
 
 	copy(sid[:], net.ParseIP(csrep.Spec.DestinationSID).To16())
 
 	for _, cidrString := range csrep.Spec.DestinationCIDRs {
-		_, cidr, err := net.ParseCIDR(string(cidrString))
+		cidr, err := netip.ParsePrefix(string(cidrString))
 		if err != nil {
 			return nil, err
 		}

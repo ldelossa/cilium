@@ -6,17 +6,23 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
-	"text/tabwriter"
 	"time"
 
+	"github.com/liggitt/tabwriter"
 	"github.com/spf13/cobra"
+
+	"github.com/cilium/statedb"
+
+	clientPkg "github.com/cilium/cilium/pkg/client"
 
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/healthv2"
 	"github.com/cilium/cilium/pkg/healthv2/types"
-	"github.com/cilium/cilium/pkg/statedb"
 )
 
 var StatedbCmd = &cobra.Command{
@@ -28,12 +34,42 @@ var statedbDumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Dump StateDB contents as JSON",
 	Run: func(cmd *cobra.Command, args []string) {
-		_, err := client.Statedb.GetStatedbDump(nil, os.Stdout)
+		transport, err := clientPkg.NewTransport("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
+			Fatalf("NewTransport: %s", err)
 		}
+		client := http.Client{Transport: transport}
+		resp, err := client.Get(statedbURL.JoinPath("dump").String())
+		if err != nil {
+			Fatalf("Get(dump): %s", err)
+		}
+		io.Copy(os.Stdout, resp.Body)
+		resp.Body.Close()
 	},
+}
+
+// StateDB HTTP handler is mounted at /statedb by configureAPIServer() in daemon/cmd/cells.go.
+var statedbURL, _ = url.Parse("http://localhost/statedb")
+
+func newRemoteTable[Obj any](tableName string) *statedb.RemoteTable[Obj] {
+	table := statedb.NewRemoteTable[Obj](statedbURL, tableName)
+	transport, err := clientPkg.NewTransport("")
+	if err != nil {
+		Fatalf("NewTransport: %s", err)
+	}
+	table.SetTransport(transport)
+	return table
+}
+
+func newTabWriter(out io.Writer) *tabwriter.Writer {
+	const (
+		minWidth = 6
+		width    = 4
+		padding  = 3
+		padChar  = ' '
+		flags    = tabwriter.RememberWidths
+	)
+	return tabwriter.NewWriter(out, minWidth, width, padding, padChar, flags)
 }
 
 func statedbTableCommand[Obj statedb.TableWritable](tableName string) *cobra.Command {
@@ -42,9 +78,9 @@ func statedbTableCommand[Obj statedb.TableWritable](tableName string) *cobra.Com
 		Use:   tableName,
 		Short: fmt.Sprintf("Show contents of table %q", tableName),
 		Run: func(cmd *cobra.Command, args []string) {
-			table := statedb.NewRemoteTable[Obj](client, tableName)
+			table := newRemoteTable[Obj](tableName)
 
-			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
+			w := newTabWriter(os.Stdout)
 			var obj Obj
 			fmt.Fprintf(w, "%s\n", strings.Join(obj.TableHeader(), "\t"))
 			defer w.Flush()
@@ -57,7 +93,7 @@ func statedbTableCommand[Obj statedb.TableWritable](tableName string) *cobra.Com
 				iter, errChan := table.LowerBound(context.Background(), statedb.ByRevision[Obj](revision))
 
 				if iter != nil {
-					err := statedb.ProcessEach[Obj](
+					err := statedb.ProcessEach(
 						iter,
 						func(obj Obj, rev statedb.Revision) error {
 							// Remember the latest revision to query from.
@@ -100,6 +136,7 @@ func init() {
 		statedbTableCommand[tables.NodeAddress](tables.NodeAddressTableName),
 		statedbTableCommand[*tables.Sysctl](tables.SysctlTableName),
 		statedbTableCommand[types.Status](healthv2.HealthTableName),
+		statedbTableCommand[*tables.IPSetEntry](tables.IPSetsTableName),
 	)
 	RootCmd.AddCommand(StatedbCmd)
 }

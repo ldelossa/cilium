@@ -119,6 +119,13 @@ type Manager struct {
 	// is the name of the locator pool and the value is the SIDAllocator.
 	// Manager.RWMutex must be held when accessing.
 	sidAllocatorSyncers map[string]sidmanager.SIDAllocator
+
+	// BPF Maps
+	vrfMap4    *srv6map.VRFMap4
+	vrfMap6    *srv6map.VRFMap6
+	policyMap4 *srv6map.PolicyMap4
+	policyMap6 *srv6map.PolicyMap6
+	sidMap     *srv6map.SIDMap
 }
 
 type Params struct {
@@ -134,6 +141,11 @@ type Params struct {
 	CiliumEndpointResource    resource.Resource[*k8sTypes.CiliumEndpoint]
 	IsovalentVRFResource      resource.Resource[*iso_v1alpha1.IsovalentVRF]
 	IsovalentSRv6EgressPolicy resource.Resource[*iso_v1alpha1.IsovalentSRv6EgressPolicy]
+	VRF4Map                   *srv6map.VRFMap4
+	VRF6Map                   *srv6map.VRFMap6
+	Policy4Map                *srv6map.PolicyMap4
+	Policy6Map                *srv6map.PolicyMap6
+	SIDMap                    *srv6map.SIDMap
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
@@ -155,6 +167,11 @@ func NewSRv6Manager(p Params) *Manager {
 		vrfResource:         p.IsovalentVRFResource,
 		policyResource:      p.IsovalentSRv6EgressPolicy,
 		sidAllocatorSyncers: make(map[string]sidmanager.SIDAllocator),
+		vrfMap4:             p.VRF4Map,
+		vrfMap6:             p.VRF6Map,
+		policyMap4:          p.Policy4Map,
+		policyMap6:          p.Policy6Map,
+		sidMap:              p.SIDMap,
 	}
 
 	initDone := make(chan struct{})
@@ -723,11 +740,11 @@ func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Label
 // egress policy BPF map.
 func (manager *Manager) addMissingSRv6PolicyRules() {
 	srv6Policies := map[srv6map.PolicyKey]srv6map.PolicyValue{}
-	srv6map.SRv6PolicyMap4.IterateWithCallback4(
+	manager.policyMap4.IterateWithCallback(
 		func(key *srv6map.PolicyKey, val *srv6map.PolicyValue) {
 			srv6Policies[*key] = *val
 		})
-	srv6map.SRv6PolicyMap6.IterateWithCallback6(
+	manager.policyMap6.IterateWithCallback(
 		func(key *srv6map.PolicyKey, val *srv6map.PolicyValue) {
 			srv6Policies[*key] = *val
 		})
@@ -745,11 +762,15 @@ func (manager *Manager) addMissingSRv6PolicyRules() {
 				continue
 			}
 
-			err = srv6map.GetPolicyMap(policyKey).Update(policyKey, policy.SID)
+			if dstCIDR.Addr().Is4() {
+				err = manager.policyMap4.Update(&policyKey, policy.SID)
+			} else {
+				err = manager.policyMap6.Update(&policyKey, policy.SID)
+			}
 
 			logger := manager.logger.WithFields(logrus.Fields{
 				logfields.VRF:             policy.VRFID,
-				logfields.DestinationCIDR: *dstCIDR,
+				logfields.DestinationCIDR: dstCIDR,
 				logfields.SID:             policy.SID,
 			})
 			if err != nil {
@@ -780,11 +801,11 @@ func (manager *Manager) addMissingSRv6PolicyRules() {
 //	}
 func (manager *Manager) removeUnusedSRv6PolicyRules() {
 	srv6Policies := map[srv6map.PolicyKey]srv6map.PolicyValue{}
-	srv6map.SRv6PolicyMap4.IterateWithCallback4(
+	manager.policyMap4.IterateWithCallback(
 		func(key *srv6map.PolicyKey, val *srv6map.PolicyValue) {
 			srv6Policies[*key] = *val
 		})
-	srv6map.SRv6PolicyMap6.IterateWithCallback6(
+	manager.policyMap6.IterateWithCallback(
 		func(key *srv6map.PolicyKey, val *srv6map.PolicyValue) {
 			srv6Policies[*key] = *val
 		})
@@ -793,7 +814,11 @@ nextPolicyKey:
 	for policyKey := range srv6Policies {
 		for _, policy := range manager.policies {
 			for _, dstCIDR := range policy.DstCIDRs {
-				if policyKey.Match(policy.VRFID, dstCIDR) {
+				k := srv6map.PolicyKey{
+					VRFID:    policy.VRFID,
+					DestCIDR: dstCIDR,
+				}
+				if policyKey.Equal(&k) {
 					continue nextPolicyKey
 				}
 			}
@@ -804,7 +829,14 @@ nextPolicyKey:
 			logfields.DestinationCIDR: policyKey.DestCIDR,
 		})
 
-		if err := srv6map.GetPolicyMap(policyKey).Delete(policyKey); err != nil {
+		var err error
+		if policyKey.DestCIDR.Addr().Is4() {
+			err = manager.policyMap4.Delete(&policyKey)
+		} else {
+			err = manager.policyMap6.Delete(&policyKey)
+		}
+
+		if err != nil {
 			logger.WithError(err).Error("Error removing SRv6 egress policy")
 		} else {
 			logger.Info("SRv6 egress policy removed")
@@ -817,7 +849,7 @@ func (manager *Manager) addMissingSRv6SIDs() {
 		if vrf.SIDInfo == nil {
 			continue
 		}
-		if err := manager.updateSIDMap(vrf.SIDInfo.SID, vrf.VRFID); err != nil {
+		if err := manager.sidMap.Update(&srv6map.SIDKey{SID: vrf.SIDInfo.SID.As16()}, vrf.VRFID); err != nil {
 			manager.logger.WithField("VRF", vrf.id.Name).WithError(err).Error("VRF has SID allocation and SIDMap entry is missing, but failed to update")
 			continue
 		}
@@ -828,7 +860,7 @@ func (manager *Manager) addMissingSRv6SIDs() {
 // for the SID map.
 func (manager *Manager) removeUnusedSRv6SIDs() {
 	srv6SIDs := map[srv6map.SIDKey]srv6map.SIDValue{}
-	srv6map.SRv6SIDMap.IterateWithCallback(
+	manager.sidMap.IterateWithCallback(
 		func(key *srv6map.SIDKey, val *srv6map.SIDValue) {
 			srv6SIDs[*key] = *val
 		})
@@ -845,7 +877,7 @@ nextSIDKey:
 			logfields.SID: sidKey.SID,
 		})
 
-		if err := srv6map.SRv6SIDMap.Delete(sidKey); err != nil {
+		if err := manager.sidMap.Delete(&sidKey); err != nil {
 			logger.WithError(err).Error("Error removing SID")
 		} else {
 			logger.Info("SID removed")
@@ -872,22 +904,22 @@ func (m *Manager) reconcileVRFEgressPath() {
 				"component": "srv6.Manager.reconcileVRFEgressPath",
 			},
 		)
-		srv6VRFs = map[string]keyEntry{}
+		srv6VRFs = map[srv6map.VRFKey]keyEntry{}
 	)
 
 	m.logger.Info("Reconciling egress datapath for encapsulation.")
 
 	// populate srv6VRFs map
-	srv6map.SRv6VRFMap4.IterateWithCallback4(
+	m.vrfMap4.IterateWithCallback(
 		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
-			srv6VRFs[key.String()] = keyEntry{
+			srv6VRFs[*key] = keyEntry{
 				key:   key,
 				value: val,
 			}
 		})
-	srv6map.SRv6VRFMap6.IterateWithCallback6(
+	m.vrfMap6.IterateWithCallback(
 		func(key *srv6map.VRFKey, val *srv6map.VRFValue) {
-			srv6VRFs[key.String()] = keyEntry{
+			srv6VRFs[*key] = keyEntry{
 				key:   key,
 				value: val,
 			}
@@ -896,7 +928,7 @@ func (m *Manager) reconcileVRFEgressPath() {
 	for _, vrf := range m.vrfs {
 		keys := m.getVRFKeysFromMatchingEndpoint(vrf)
 		for _, key := range keys {
-			vrfVal, vrfPresent := srv6VRFs[key.String()]
+			vrfVal, vrfPresent := srv6VRFs[key]
 			if vrfPresent && vrfVal.value.ID == vrf.VRFID {
 				continue
 			}
@@ -905,7 +937,15 @@ func (m *Manager) reconcileVRFEgressPath() {
 				logfields.DestinationCIDR: key.DestCIDR,
 				logfields.VRF:             vrf.VRFID,
 			})
-			if err := srv6map.GetVRFMap(key).Update(key, vrf.VRFID); err != nil {
+
+			var err error
+			if key.DestCIDR.Addr().Is4() {
+				err = m.vrfMap4.Update(&key, vrf.VRFID)
+			} else {
+				err = m.vrfMap6.Update(&key, vrf.VRFID)
+			}
+
+			if err != nil {
 				logger.WithError(err).Error("Error applying SRv6 VRF mapping")
 			} else {
 				logger.Info("SRv6 VRF mapping applied")
@@ -919,7 +959,11 @@ nextVRFKey:
 		for _, vrf := range m.vrfs {
 			keys := m.getVRFKeysFromMatchingEndpoint(vrf)
 			for _, key := range keys {
-				if vrfKeyEntry.key.Match(*key.SourceIP, key.DestCIDR) {
+				k := srv6map.VRFKey{
+					SourceIP: key.SourceIP,
+					DestCIDR: key.DestCIDR,
+				}
+				if vrfKeyEntry.key.Equal(&k) {
 					continue nextVRFKey
 				}
 			}
@@ -929,7 +973,14 @@ nextVRFKey:
 			logfields.DestinationCIDR: vrfKeyEntry.key.DestCIDR,
 		})
 
-		if err := srv6map.GetVRFMap(*vrfKeyEntry.key).Delete(*vrfKeyEntry.key); err != nil {
+		var err error
+		if vrfKeyEntry.key.DestCIDR.Addr().Is4() {
+			err = m.vrfMap4.Delete(vrfKeyEntry.key)
+		} else {
+			err = m.vrfMap6.Delete(vrfKeyEntry.key)
+		}
+
+		if err != nil {
 			logger.WithError(err).Error("Error removing SRv6 VRF mapping")
 		} else {
 			logger.Info("SRv6 VRF mapping removed")
@@ -1123,14 +1174,6 @@ func (m *Manager) releaseSID(pool string, sid srv6Types.SID) error {
 	}
 }
 
-func (m *Manager) updateSIDMap(sid srv6Types.SID, vrfID uint32) error {
-	return srv6map.SRv6SIDMap.Update(srv6map.NewSIDKey(sid.As16()), vrfID)
-}
-
-func (m *Manager) deleteSIDMap(sid srv6Types.SID) error {
-	return srv6map.SRv6SIDMap.Delete(srv6map.NewSIDKey(sid.As16()))
-}
-
 // createIngressPathVRFs will range over the provided VRFs and configure
 // the datapath for ingressing VPN traffic destined for this node's VRF.
 //
@@ -1178,8 +1221,7 @@ func (m *Manager) createIngressPathVRFs(vrfs []*VRF) {
 			}()
 
 			// populate SID map
-			err = m.updateSIDMap(info.SID, vrf.VRFID)
-			if err != nil {
+			if err := m.sidMap.Update(&srv6map.SIDKey{SID: info.SID.As16()}, vrf.VRFID); err != nil {
 				l.WithField("vrf", vrf.id.Name).WithError(err).Error("Failed to update SID Map")
 				return
 			}
@@ -1231,7 +1273,7 @@ func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
 				}
 			}()
 
-			err = m.deleteSIDMap(oldAllocation.SIDInfo.SID)
+			err = m.sidMap.Delete(&srv6map.SIDKey{SID: oldAllocation.SIDInfo.SID.As16()})
 			if err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
 				l.WithError(err).Error("Failed to delete SID map entry")
 				return
@@ -1239,7 +1281,7 @@ func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
 
 			defer func() {
 				if err != nil {
-					if err := m.updateSIDMap(oldAllocation.SIDInfo.SID, vrf.VRFID); err != nil {
+					if err := m.sidMap.Update(&srv6map.SIDKey{SID: oldAllocation.SIDInfo.SID.As16()}, vrf.VRFID); err != nil {
 						l.WithError(err).Error("Failed to recover by updating SID Map with old SID")
 					}
 				}
@@ -1251,7 +1293,7 @@ func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
 				return
 			}
 
-			err = m.updateSIDMap(newInfo.SID, vrf.VRFID)
+			err = m.sidMap.Update(&srv6map.SIDKey{SID: newInfo.SID.As16()}, vrf.VRFID)
 			if err != nil {
 				l.WithError(err).Error("Failed to update SID map entry")
 				return
@@ -1259,7 +1301,7 @@ func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
 
 			defer func() {
 				if err != nil {
-					if err := m.deleteSIDMap(newInfo.SID); err != nil {
+					if err := m.sidMap.Delete(&srv6map.SIDKey{SID: newInfo.SID.As16()}); err != nil {
 						l.WithError(err).Error("Failed to recover by deleting new SID from SID Map")
 					}
 				}
@@ -1300,7 +1342,7 @@ func (m *Manager) removeIngressPathVRFs(allocs []*SIDAllocation) {
 			},
 		)
 		var shouldRelease = true
-		if err := m.deleteSIDMap(alloc.SIDInfo.SID); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+		if err := m.sidMap.Delete(&srv6map.SIDKey{SID: alloc.SIDInfo.SID.As16()}); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
 			l.WithError(err).Error("failed deleting SIDMap entry for allocation")
 			shouldRelease = false
 		}
@@ -1344,11 +1386,7 @@ func (manager *Manager) reconcileVRF() {
 		l.Debug("SRv6 Manager not configured with SID Allocator yet, won't export VRFs.")
 	}
 
-	if srv6map.VRFMapsInitialized() {
-		manager.reconcileVRFEgressPath()
-	} else {
-		l.Debug("SRv6 VRF maps not initialized yet, skipping egress datapath reconciliation.")
-	}
+	manager.reconcileVRFEgressPath()
 
 	manager.bgp.Event(struct{}{})
 }

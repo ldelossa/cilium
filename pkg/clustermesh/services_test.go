@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cilium/hive/hivetest"
+	"github.com/cilium/statedb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -19,7 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/clustermesh/common"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	cmutils "github.com/cilium/cilium/pkg/clustermesh/utils"
-	fakeTypes "github.com/cilium/cilium/pkg/datapath/fake/types"
+	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -64,7 +65,16 @@ func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 	clusterName2 := s.randomName + "2"
 
 	require.NoError(tb, kvstore.Client().DeletePrefix(context.TODO(), "cilium/state/services/v1/"+s.randomName))
-	s.svcCache = k8s.NewServiceCache(fakeTypes.NewNodeAddressing())
+
+	db := statedb.New()
+
+	nodeAddrs, err := datapathTables.NewNodeAddressTable()
+	require.Nil(tb, err)
+
+	err = db.RegisterTable(nodeAddrs)
+	require.NoError(tb, err)
+
+	s.svcCache = k8s.NewServiceCache(db, nodeAddrs)
 
 	mgr := cache.NewCachingIdentityAllocator(&testidentity.IdentityAllocatorOwnerMock{})
 	// The nils are only used by k8s CRD identities. We default to kvstore.
@@ -83,7 +93,7 @@ func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 	}
 
 	config1 := path.Join(dir, clusterName1)
-	err := os.WriteFile(config1, etcdConfig, 0644)
+	err = os.WriteFile(config1, etcdConfig, 0644)
 	require.NoError(tb, err)
 
 	config2 := path.Join(dir, clusterName2)
@@ -99,7 +109,7 @@ func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 		Config:                common.Config{ClusterMeshConfig: dir},
 		ClusterInfo:           cmtypes.ClusterInfo{ID: 255, Name: "test2", MaxConnectedClusters: 255},
 		NodeKeyCreator:        testNodeCreator,
-		NodeObserver:          &testObserver{},
+		NodeObserver:          newNodesObserver(),
 		ServiceMerger:         s.svcCache,
 		RemoteIdentityWatcher: mgr,
 		IPCache:               ipc,

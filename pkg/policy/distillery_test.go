@@ -12,30 +12,22 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/cilium/checkmate"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
-	"github.com/cilium/cilium/pkg/checker"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
+	"github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 )
 
-//
-// Distillery unit tests
-//
-
-type DistilleryTestSuite struct{}
-
 var (
-	_ = Suite(&DistilleryTestSuite{})
-
 	ep1 = testutils.NewTestEndpoint()
 	ep2 = testutils.NewTestEndpoint()
 )
@@ -44,100 +36,106 @@ func localIdentity(n uint32) identity.NumericIdentity {
 	return identity.NumericIdentity(n) | identity.IdentityScopeLocal
 
 }
-func (s *DistilleryTestSuite) TestCacheManagement(c *C) {
+func TestCacheManagement(t *testing.T) {
 	repo := NewPolicyRepository(nil, nil, nil, nil)
 	cache := repo.policyCache
 	identity := ep1.GetSecurityIdentity()
-	c.Assert(ep2.GetSecurityIdentity(), Equals, identity)
+	require.Equal(t, identity, ep2.GetSecurityIdentity())
 
 	// Nonsense delete of entry that isn't yet inserted
 	deleted := cache.delete(identity)
-	c.Assert(deleted, Equals, false)
+	require.Equal(t, false, deleted)
 
 	// Insert identity twice. Should be the same policy.
 	policy1 := cache.insert(identity)
 	policy2 := cache.insert(identity)
-	c.Assert(policy1, Equals, policy2)
+	require.Equal(t, policy2, policy1)
 
 	// Despite two insert calls, there is no reference tracking; any delete
 	// will clear the cache.
 	cacheCleared := cache.delete(identity)
-	c.Assert(cacheCleared, Equals, true)
+	require.True(t, cacheCleared)
 	cacheCleared = cache.delete(identity)
-	c.Assert(cacheCleared, Equals, false)
+	require.Equal(t, false, cacheCleared)
 
 	// Insert two distinct identities, then delete one. Other should still
 	// be there.
 	ep3 := testutils.NewTestEndpoint()
 	ep3.SetIdentity(1234, true)
 	identity3 := ep3.GetSecurityIdentity()
-	c.Assert(identity3, Not(Equals), identity)
+	require.NotEqual(t, identity, identity3)
 	policy1 = cache.insert(identity)
 	policy3 := cache.insert(identity3)
-	c.Assert(policy1, Not(Equals), policy3)
+	require.NotEqual(t, policy3, policy1)
 	_ = cache.delete(identity)
 	policy3 = cache.lookupOrCreate(identity3, false)
-	c.Assert(policy3, NotNil)
+	require.NotNil(t, policy3)
 }
 
-func (s *DistilleryTestSuite) TestCachePopulation(c *C) {
+func TestCachePopulation(t *testing.T) {
 	repo := NewPolicyRepository(nil, nil, nil, nil)
 	repo.revision.Store(42)
 	cache := repo.policyCache
 
 	identity1 := ep1.GetSecurityIdentity()
-	c.Assert(ep2.GetSecurityIdentity(), Equals, identity1)
+	require.Equal(t, identity1, ep2.GetSecurityIdentity())
 	policy1 := cache.insert(identity1)
 
 	// Calculate the policy and observe that it's cached
 	updated, err := cache.updateSelectorPolicy(identity1)
-	c.Assert(err, IsNil)
-	c.Assert(updated, Equals, true)
+	require.NoError(t, err)
+	require.True(t, updated)
 	updated, err = cache.updateSelectorPolicy(identity1)
-	c.Assert(err, IsNil)
-	c.Assert(updated, Equals, false)
+	require.NoError(t, err)
+	require.Equal(t, false, updated)
 	policy2 := cache.insert(identity1)
 	idp1 := policy1.(*cachedSelectorPolicy).getPolicy()
 	idp2 := policy2.(*cachedSelectorPolicy).getPolicy()
-	c.Assert(idp1, Equals, idp2)
+	require.Equal(t, idp2, idp1)
 
 	// Remove the identity and observe that it is no longer available
 	cacheCleared := cache.delete(identity1)
-	c.Assert(cacheCleared, Equals, true)
+	require.True(t, cacheCleared)
 	updated, err = cache.updateSelectorPolicy(identity1)
-	c.Assert(err, NotNil)
+	require.Error(t, err)
 
 	// Attempt to update policy for non-cached endpoint and observe failure
 	ep3 := testutils.NewTestEndpoint()
 	ep3.SetIdentity(1234, true)
 	_, err = cache.updateSelectorPolicy(ep3.GetSecurityIdentity())
-	c.Assert(err, NotNil)
-	c.Assert(updated, Equals, false)
+	require.Error(t, err)
+	require.Equal(t, false, updated)
 
 	// Insert endpoint with different identity and observe that the cache
 	// is different from ep1, ep2
 	policy1 = cache.insert(identity1)
 	idp1 = policy1.(*cachedSelectorPolicy).getPolicy()
-	c.Assert(idp1, NotNil)
+	require.NotNil(t, idp1)
 	identity3 := ep3.GetSecurityIdentity()
 	policy3 := cache.insert(identity3)
-	c.Assert(policy3, Not(Equals), policy1)
+	require.NotEqual(t, policy1, policy3)
 	updated, err = cache.updateSelectorPolicy(identity3)
-	c.Assert(err, IsNil)
-	c.Assert(updated, Equals, true)
+	require.NoError(t, err)
+	require.True(t, updated)
 	idp3 := policy3.(*cachedSelectorPolicy).getPolicy()
-	c.Assert(idp3, Not(Equals), idp1)
+	require.NotEqual(t, idp1, idp3)
 
 	// If there's an error during policy resolution, update should fail
 	//repo.err = fmt.Errorf("not implemented!")
 	//repo.revision++
 	//_, err = cache.updateSelectorPolicy(identity3)
-	//c.Assert(err, NotNil)
+	//require.Error(t, err)
 }
 
-//
 // Distillery integration tests
-//
+func key(id uint32, port uint16, hdr uint8, dir uint8) Key {
+	return types.Key{
+		Identity:         id,
+		DestPort:         port,
+		Nexthdr:          hdr,
+		TrafficDirection: dir,
+	}
+}
 
 var (
 	// Identity, labels, selectors for an endpoint named "foo"
@@ -353,16 +351,16 @@ var (
 	dirIngress = trafficdirection.Ingress.Uint8()
 	dirEgress  = trafficdirection.Egress.Uint8()
 	// Desired map keys for L3, L3-dependent L4, L4
-	mapKeyAllowFoo__ = Key{identityFoo, 0, 0, dirIngress}
-	mapKeyAllowBar__ = Key{identityBar, 0, 0, dirIngress}
-	mapKeyAllowBarL4 = Key{identityBar, 80, 6, dirIngress}
-	mapKeyAllowFooL4 = Key{identityFoo, 80, 6, dirIngress}
+	mapKeyAllowFoo__ = key(identityFoo, 0, 0, dirIngress)
+	mapKeyAllowBar__ = key(identityBar, 0, 0, dirIngress)
+	mapKeyAllowBarL4 = key(identityBar, 80, 6, dirIngress)
+	mapKeyAllowFooL4 = key(identityFoo, 80, 6, dirIngress)
 	mapKeyDeny_Foo__ = mapKeyAllowFoo__
 	mapKeyDeny_FooL4 = mapKeyAllowFooL4
-	mapKeyAllow___L4 = Key{0, 80, 6, dirIngress}
+	mapKeyAllow___L4 = key(0, 80, 6, dirIngress)
 	mapKeyDeny____L4 = mapKeyAllow___L4
-	mapKeyAllowAll__ = Key{0, 0, 0, dirIngress}
-	mapKeyAllowAllE_ = Key{0, 0, 0, dirEgress}
+	mapKeyAllowAll__ = key(0, 0, 0, dirIngress)
+	mapKeyAllowAllE_ = key(0, 0, 0, dirEgress)
 	// Desired map entries for no L7 redirect / redirect to Proxy
 	mapEntryL7None_ = func(lbls ...labels.LabelArray) MapStateEntry {
 		return NewMapStateEntry(nil, labels.LabelArrayList(lbls).Sort(), 0, "", 0, false, DefaultAuthType, AuthTypeDisabled).WithOwners()
@@ -650,10 +648,10 @@ func Test_MergeL3(t *testing.T) {
 				if err != nil {
 					t.Errorf("Policy resolution failure: %s", err)
 				}
-				if equal, err := checker.ExportedEqual(mapstate, tt.result); !equal {
+				if equal := assert.EqualExportedValues(t, tt.result, mapstate); !equal {
 					t.Logf("Rules:\n%s\n\n", api.Rules(rules).String())
 					t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-					t.Errorf("Policy obtained didn't match expected for endpoint %s:\n%s\nObtained: %v\nExpected: %v", labelsFoo, err, mapstate, tt.result)
+					t.Errorf("Policy obtained didn't match expected for endpoint %s:\nObtained: %v\nExpected: %v", labelsFoo, mapstate, tt.result)
 				}
 				for remoteID, expectedAuthTypes := range tt.auths {
 					authTypes := repo.GetAuthTypes(identity.ID, remoteID)
@@ -1201,10 +1199,11 @@ func Test_MergeRules(t *testing.T) {
 			// Ignore generated rules as they lap LabelArrayList which would
 			// make the tests fail.
 			if i < generatedIdx {
-				if equal, err := checker.ExportedEqual(mapstate, tt.result); !equal {
+				if equal := assert.EqualExportedValues(t, mapstate, tt.result); !equal {
+					require.EqualExportedValuesf(t, tt.result, mapstate, "Policy obtained didn't match expected for endpoint %s", labelsFoo)
 					t.Logf("Rules:\n%s\n\n", tt.rules.String())
 					t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-					t.Errorf("Policy obtained didn't match expected for endpoint %s:\n%s", labelsFoo, err)
+					t.Errorf("Policy obtained didn't match expected for endpoint %s", labelsFoo)
 				}
 			}
 			// It is extremely difficult to derive the "DerivedFromRules" field.
@@ -1219,15 +1218,15 @@ func Test_MergeRules(t *testing.T) {
 				mapstate.Insert(k, v)
 				return true
 			})
-			if equal, err := checker.ExportedEqual(mapstate, expectedMapState[tt.test]); !equal {
+			if equal := assert.EqualExportedValues(t, expectedMapState[tt.test], mapstate); !equal {
 				t.Logf("Rules:\n%s\n\n", tt.rules.String())
 				t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-				t.Errorf("Policy obtained didn't match expected for endpoint:\n%s", err)
+				t.Error("Policy obtained didn't match expected for endpoint")
 			}
-			if equal, err := checker.ExportedEqual(generatedRule, tt.rules); !equal {
+			if equal := assert.ElementsMatch(t, tt.rules, generatedRule); !equal {
 				t.Logf("Rules:\n%s\n\n", tt.rules.String())
 				t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-				t.Errorf("Generated rules didn't match manual rules:\n%s", err)
+				t.Error("Generated rules didn't match manual rules")
 			}
 		})
 	}
@@ -1304,11 +1303,7 @@ func Test_MergeRulesWithNamedPorts(t *testing.T) {
 			if err != nil {
 				t.Errorf("Policy resolution failure: %s", err)
 			}
-			if equal, err := checker.ExportedEqual(mapstate, tt.result); !equal {
-				t.Logf("Rules:\n%s\n\n", tt.rules.String())
-				t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-				t.Errorf("Policy obtained didn't match expected for endpoint %s:\n%s", labelsFoo, err)
-			}
+			require.EqualExportedValuesf(t, tt.result, mapstate, "Policy obtained didn't match expected for endpoint %s", labelsFoo)
 		})
 	}
 }
@@ -1353,10 +1348,10 @@ func Test_AllowAll(t *testing.T) {
 			if err != nil {
 				t.Errorf("Policy resolution failure: %s", err)
 			}
-			if equal, err := checker.ExportedEqual(mapstate, tt.result); !equal {
+			if equal := assert.EqualExportedValues(t, tt.result, mapstate); !equal {
 				t.Logf("Rules:\n%s\n\n", tt.rules.String())
 				t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-				t.Errorf("Policy obtained didn't match expected for endpoint %s:\n%s", labelsFoo, err)
+				t.Errorf("Policy obtained didn't match expected for endpoint %s", labelsFoo)
 			}
 		})
 	}
@@ -1378,8 +1373,8 @@ var (
 	worldReservedID           = identity.ReservedIdentityWorld.Uint32()
 	worldReservedIPv4ID       = identity.ReservedIdentityWorldIPv4.Uint32()
 	worldReservedIPv6ID       = identity.ReservedIdentityWorldIPv6.Uint32()
-	mapKeyL3WorldIngress      = Key{worldReservedID, 0, 0, trafficdirection.Ingress.Uint8()}
-	mapKeyL3WorldEgress       = Key{worldReservedID, 0, 0, trafficdirection.Egress.Uint8()}
+	mapKeyL3WorldIngress      = key(worldReservedID, 0, 0, trafficdirection.Ingress.Uint8())
+	mapKeyL3WorldEgress       = key(worldReservedID, 0, 0, trafficdirection.Egress.Uint8())
 	mapEntryDeny              = MapStateEntry{
 		ProxyPort:        0,
 		DerivedFromRules: labels.LabelArrayList{nil},
@@ -1432,8 +1427,8 @@ var (
 			ToCIDRSet: api.CIDRRuleSlice{worldSubnetRule},
 		},
 	}}).WithEndpointSelector(api.WildcardEndpointSelector)
-	mapKeyL3SubnetIngress = Key{worldSubnetIdentity.Uint32(), 0, 0, trafficdirection.Ingress.Uint8()}
-	mapKeyL3SubnetEgress  = Key{worldSubnetIdentity.Uint32(), 0, 0, trafficdirection.Egress.Uint8()}
+	mapKeyL3SubnetIngress = key(worldSubnetIdentity.Uint32(), 0, 0, trafficdirection.Ingress.Uint8())
+	mapKeyL3SubnetEgress  = key(worldSubnetIdentity.Uint32(), 0, 0, trafficdirection.Egress.Uint8())
 
 	ruleL3DenySmallerSubnet = api.NewRule().WithIngressDenyRules([]api.IngressDenyRule{{
 		IngressCommonRule: api.IngressCommonRule{
@@ -1455,8 +1450,8 @@ var (
 		},
 	}}).WithEndpointSelector(api.WildcardEndpointSelector)
 
-	mapKeyL3SmallerSubnetIngress = Key{worldIPIdentity.Uint32(), 0, 0, trafficdirection.Ingress.Uint8()}
-	mapKeyL3SmallerSubnetEgress  = Key{worldIPIdentity.Uint32(), 0, 0, trafficdirection.Egress.Uint8()}
+	mapKeyL3SmallerSubnetIngress = key(worldIPIdentity.Uint32(), 0, 0, trafficdirection.Ingress.Uint8())
+	mapKeyL3SmallerSubnetEgress  = key(worldIPIdentity.Uint32(), 0, 0, trafficdirection.Egress.Uint8())
 
 	ruleL3AllowHostEgress = api.NewRule().WithEgressRules([]api.EgressRule{{
 		EgressCommonRule: api.EgressCommonRule{
@@ -1464,14 +1459,14 @@ var (
 		},
 	}}).WithEndpointSelector(api.WildcardEndpointSelector)
 
-	mapKeyL3UnknownIngress = Key{identity.IdentityUnknown.Uint32(), 0, 0, trafficdirection.Ingress.Uint8()}
+	mapKeyL3UnknownIngress = key(identity.IdentityUnknown.Uint32(), 0, 0, trafficdirection.Ingress.Uint8())
 	derivedFrom            = labels.LabelArrayList{
 		labels.LabelArray{
 			labels.NewLabel(LabelKeyPolicyDerivedFrom, LabelAllowAnyIngress, labels.LabelSourceReserved),
 		},
 	}
 	mapEntryL3UnknownIngress = NewMapStateEntry(nil, derivedFrom, 0, "", 0, false, ExplicitAuthType, AuthTypeDisabled)
-	mapKeyL3HostEgress       = Key{identity.ReservedIdentityHost.Uint32(), 0, 0, trafficdirection.Egress.Uint8()}
+	mapKeyL3HostEgress       = key(identity.ReservedIdentityHost.Uint32(), 0, 0, trafficdirection.Egress.Uint8())
 
 	ruleL3L4Port8080ProtoAnyDenyWorld = api.NewRule().WithIngressDenyRules([]api.IngressDenyRule{
 		{
@@ -1506,31 +1501,31 @@ var (
 			},
 		},
 	}).WithEndpointSelector(api.WildcardEndpointSelector)
-	mapKeyL3L4Port8080ProtoTCPWorldIngress      = Key{worldReservedID, 8080, 6, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoTCPWorldEgress       = Key{worldReservedID, 8080, 6, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoTCPWorldIPv4Ingress  = Key{worldReservedIPv4ID, 8080, 6, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoTCPWorldIPv4Egress   = Key{worldReservedIPv4ID, 8080, 6, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoTCPWorldIPv6Ingress  = Key{worldReservedIPv6ID, 8080, 6, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoTCPWorldIPv6Egress   = Key{worldReservedIPv6ID, 8080, 6, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldIngress      = Key{worldReservedID, 8080, 17, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldEgress       = Key{worldReservedID, 8080, 17, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldIPv4Ingress  = Key{worldReservedIPv4ID, 8080, 17, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldIPv4Egress   = Key{worldReservedIPv4ID, 8080, 17, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldIPv6Ingress  = Key{worldReservedIPv6ID, 8080, 17, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldIPv6Egress   = Key{worldReservedIPv6ID, 8080, 17, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldIngress     = Key{worldReservedID, 8080, 132, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldEgress      = Key{worldReservedID, 8080, 132, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldIPv4Ingress = Key{worldReservedIPv4ID, 8080, 132, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldIPv4Egress  = Key{worldReservedIPv4ID, 8080, 132, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldIPv6Ingress = Key{worldReservedIPv6ID, 8080, 132, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldIPv6Egress  = Key{worldReservedIPv6ID, 8080, 132, trafficdirection.Egress.Uint8()}
+	mapKeyL3L4Port8080ProtoTCPWorldIngress      = key(worldReservedID, 8080, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoTCPWorldEgress       = key(worldReservedID, 8080, 6, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoTCPWorldIPv4Ingress  = key(worldReservedIPv4ID, 8080, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoTCPWorldIPv4Egress   = key(worldReservedIPv4ID, 8080, 6, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoTCPWorldIPv6Ingress  = key(worldReservedIPv6ID, 8080, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoTCPWorldIPv6Egress   = key(worldReservedIPv6ID, 8080, 6, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldIngress      = key(worldReservedID, 8080, 17, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldEgress       = key(worldReservedID, 8080, 17, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldIPv4Ingress  = key(worldReservedIPv4ID, 8080, 17, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldIPv4Egress   = key(worldReservedIPv4ID, 8080, 17, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldIPv6Ingress  = key(worldReservedIPv6ID, 8080, 17, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldIPv6Egress   = key(worldReservedIPv6ID, 8080, 17, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldIngress     = key(worldReservedID, 8080, 132, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldEgress      = key(worldReservedID, 8080, 132, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldIPv4Ingress = key(worldReservedIPv4ID, 8080, 132, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldIPv4Egress  = key(worldReservedIPv4ID, 8080, 132, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldIPv6Ingress = key(worldReservedIPv6ID, 8080, 132, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldIPv6Egress  = key(worldReservedIPv6ID, 8080, 132, trafficdirection.Egress.Uint8())
 
-	mapKeyL3L4Port8080ProtoTCPWorldSNIngress  = Key{worldSubnetIdentity.Uint32(), 8080, 6, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoTCPWorldSNEgress   = Key{worldSubnetIdentity.Uint32(), 8080, 6, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldSNIngress  = Key{worldSubnetIdentity.Uint32(), 8080, 17, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoUDPWorldSNEgress   = Key{worldSubnetIdentity.Uint32(), 8080, 17, trafficdirection.Egress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldSNIngress = Key{worldSubnetIdentity.Uint32(), 8080, 132, trafficdirection.Ingress.Uint8()}
-	mapKeyL3L4Port8080ProtoSCTPWorldSNEgress  = Key{worldSubnetIdentity.Uint32(), 8080, 132, trafficdirection.Egress.Uint8()}
+	mapKeyL3L4Port8080ProtoTCPWorldSNIngress  = key(worldSubnetIdentity.Uint32(), 8080, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoTCPWorldSNEgress   = key(worldSubnetIdentity.Uint32(), 8080, 6, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldSNIngress  = key(worldSubnetIdentity.Uint32(), 8080, 17, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoUDPWorldSNEgress   = key(worldSubnetIdentity.Uint32(), 8080, 17, trafficdirection.Egress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldSNIngress = key(worldSubnetIdentity.Uint32(), 8080, 132, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8080ProtoSCTPWorldSNEgress  = key(worldSubnetIdentity.Uint32(), 8080, 132, trafficdirection.Egress.Uint8())
 
 	ruleL3AllowWorldSubnet = api.NewRule().WithIngressRules([]api.IngressRule{{
 		ToPorts: api.PortRules{
@@ -1571,14 +1566,14 @@ var (
 			ToCIDR: api.CIDRSlice{worldCIDR},
 		},
 	}}).WithEndpointSelector(api.WildcardEndpointSelector)
-	mapKeyL4Port8080ProtoAnyWorldIPIngress       = Key{worldIPIdentity.Uint32(), 0, 0, trafficdirection.Ingress.Uint8()}
-	mapKeyL4Port8080ProtoAnyWorldIPEgress        = Key{worldIPIdentity.Uint32(), 0, 0, trafficdirection.Egress.Uint8()}
-	mapKeyL4Port8080ProtoTCPWorldIPIngress       = Key{worldIPIdentity.Uint32(), 8080, 6, trafficdirection.Ingress.Uint8()}
-	mapKeyL4Port8080ProtoTCPWorldIPEgress        = Key{worldIPIdentity.Uint32(), 8080, 6, trafficdirection.Egress.Uint8()}
-	mapKeyL4Port8080ProtoUDPWorldIPIngress       = Key{worldIPIdentity.Uint32(), 8080, 17, trafficdirection.Ingress.Uint8()}
-	mapKeyL4Port8080ProtoUDPWorldIPEgress        = Key{worldIPIdentity.Uint32(), 8080, 17, trafficdirection.Egress.Uint8()}
-	mapKeyL4Port8080ProtoSCTPWorldIPIngress      = Key{worldIPIdentity.Uint32(), 8080, 132, trafficdirection.Ingress.Uint8()}
-	mapKeyL4Port8080ProtoSCTPWorldIPEgress       = Key{worldIPIdentity.Uint32(), 8080, 132, trafficdirection.Egress.Uint8()}
+	mapKeyL4Port8080ProtoAnyWorldIPIngress       = key(worldIPIdentity.Uint32(), 0, 0, trafficdirection.Ingress.Uint8())
+	mapKeyL4Port8080ProtoAnyWorldIPEgress        = key(worldIPIdentity.Uint32(), 0, 0, trafficdirection.Egress.Uint8())
+	mapKeyL4Port8080ProtoTCPWorldIPIngress       = key(worldIPIdentity.Uint32(), 8080, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL4Port8080ProtoTCPWorldIPEgress        = key(worldIPIdentity.Uint32(), 8080, 6, trafficdirection.Egress.Uint8())
+	mapKeyL4Port8080ProtoUDPWorldIPIngress       = key(worldIPIdentity.Uint32(), 8080, 17, trafficdirection.Ingress.Uint8())
+	mapKeyL4Port8080ProtoUDPWorldIPEgress        = key(worldIPIdentity.Uint32(), 8080, 17, trafficdirection.Egress.Uint8())
+	mapKeyL4Port8080ProtoSCTPWorldIPIngress      = key(worldIPIdentity.Uint32(), 8080, 132, trafficdirection.Ingress.Uint8())
+	mapKeyL4Port8080ProtoSCTPWorldIPEgress       = key(worldIPIdentity.Uint32(), 8080, 132, trafficdirection.Egress.Uint8())
 	mapEntryL4SubnetPort8080ProtoAnyIngressAllow = MapStateEntry{
 		ProxyPort:        0,
 		IsDeny:           true,
@@ -1693,9 +1688,9 @@ func Test_EnsureDeniesPrecedeAllows(t *testing.T) {
 			if err != nil {
 				t.Errorf("Policy resolution failure: %s", err)
 			}
-			if equal, err := checker.ExportedEqual(mapstate, tt.result); !equal {
+			if equal := assert.EqualExportedValues(t, tt.result, mapstate); !equal {
 				t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-				t.Errorf("Policy test, %q, obtained didn't match expected for endpoint %s:\n%s", tt.test, labelsFoo, err)
+				t.Errorf("Policy test, %q, obtained didn't match expected for endpoint %s", tt.test, labelsFoo)
 			}
 		})
 	}
@@ -1743,9 +1738,9 @@ func Test_EnsureEntitiesSelectableByCIDR(t *testing.T) {
 			if err != nil {
 				t.Errorf("Policy resolution failure: %s", err)
 			}
-			if equal, err := checker.ExportedEqual(mapstate, tt.result); !equal {
+			if equal := assert.EqualExportedValues(t, tt.result, mapstate); !equal {
 				t.Logf("Policy Trace: \n%s\n", logBuffer.String())
-				t.Errorf("Policy test, %q, obtained didn't match expected for endpoint %s:\n%s", tt.test, labelsFoo, err)
+				t.Errorf("Policy test, %q, obtained didn't match expected for endpoint %s", tt.test, labelsFoo)
 			}
 		})
 	}

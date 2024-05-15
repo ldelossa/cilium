@@ -709,46 +709,6 @@ paths:
           schema:
             "$ref": "#/definitions/Error"
 
-  "/statedb/dump":
-    get:
-      produces:
-      - application/octet-stream
-      summary: Dump StateDB contents
-      tags:
-      - statedb
-      responses:
-        '200':
-          description: Success
-          schema:
-            type: string
-            format: binary
-
-  "/statedb/query/{table}":
-    get:
-      produces:
-      - application/octet-stream
-      summary: Perform a query against a StateDB table
-      tags:
-      - statedb
-      parameters:
-      - "$ref": "#/parameters/statedb-table"
-      - "$ref": "#/parameters/statedb-index"
-      - "$ref": "#/parameters/statedb-key"
-      - "$ref": "#/parameters/statedb-lowerbound"
-      responses:
-        '200':
-          description: Success
-          schema:
-            # Stream of gob encoded revision and object pairs.
-            type: string
-            format: binary
-        '400':
-          description: Invalid parameters
-          schema:
-            "$ref": "#/definitions/Error"
-        '404':
-          description: Table or Index not found
-
   "/recorder":
     get:
       summary: Retrieve list of all recorders
@@ -1276,30 +1236,6 @@ parameters:
     required: true
     schema:
       "$ref": "#/definitions/ServiceSpec"
-  statedb-table:
-    name: table
-    description: StateDB table name
-    required: true
-    in: path
-    type: string
-  statedb-index:
-    name: index
-    description: StateDB index name
-    required: true
-    in: query
-    type: string
-  statedb-key:
-    name: key
-    description: Query key (base64 encoded)
-    required: true
-    in: query
-    type: string
-  statedb-lowerbound:
-    name: lowerbound
-    description: If true perform a LowerBound search
-    required: true
-    in: query
-    type: boolean
   recorder-id:
     name: id
     description: ID of recorder
@@ -1478,6 +1414,9 @@ definitions:
         type: string
       k8s-namespace:
         description: Kubernetes namespace name
+        type: string
+      k8s-uid:
+        description: Kubernetes pod UID
         type: string
       datapath-map-id:
         description: ID of datapath tail call map
@@ -2772,6 +2711,9 @@ definitions:
       GROIPv4MaxSize:
         description: Maximum IPv4 GRO size on workload facing devices
         type: integer
+      ipLocalReservedPorts:
+        description: Comma-separated list of IP ports should be reserved in the workload network namespace
+        type: string
   DatapathMode:
     description: Datapath mode
     type: string
@@ -3039,6 +2981,9 @@ definitions:
         type: integer
         format: uint16
         x-nullable: true
+      zone:
+        description: Optional name of the zone in which this backend runs
+        type: string
   LRPBackend:
     description: Pod backend of an LRP
     type: object

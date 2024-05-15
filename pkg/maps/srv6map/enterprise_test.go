@@ -12,6 +12,7 @@ package srv6map
 
 import (
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/cilium/cilium/pkg/types"
@@ -30,11 +31,11 @@ func TestPolicyKeyEqual(t *testing.T) {
 			name: "Equal",
 			a: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.1/24"),
 			},
 			b: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.1/24"),
 			},
 			want: true,
 		},
@@ -42,23 +43,23 @@ func TestPolicyKeyEqual(t *testing.T) {
 			name: "Different VRFID",
 			a: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.1/24"),
 			},
 			b: &PolicyKey{
 				VRFID:    2,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.1/24"),
 			},
 			want: false,
 		},
 		{
-			name: "Different IPNet",
+			name: "Different DestCIDR",
 			a: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.1/24"),
 			},
 			b: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 2), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.2/24"),
 			},
 			want: false,
 		},
@@ -67,7 +68,7 @@ func TestPolicyKeyEqual(t *testing.T) {
 			a:    nil,
 			b: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 2), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.2/24"),
 			},
 			want: false,
 		},
@@ -75,7 +76,7 @@ func TestPolicyKeyEqual(t *testing.T) {
 			name: "Nil argument",
 			a: &PolicyKey{
 				VRFID:    1,
-				DestCIDR: &net.IPNet{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+				DestCIDR: netip.MustParsePrefix("10.0.0.1/24"),
 			},
 			b:    nil,
 			want: false,
@@ -266,8 +267,10 @@ func TestSIDValueEqual(t *testing.T) {
 }
 
 func TestVRFKeyEqual(t *testing.T) {
-	ip1 := net.IPv4(10, 0, 0, 1)
-	ip2 := net.IPv4(10, 0, 0, 2)
+	srcip1 := netip.MustParseAddr("10.0.0.1")
+	srcip2 := netip.MustParseAddr("10.0.0.2")
+	destcidr1 := netip.PrefixFrom(srcip2, 24)
+	destcidr2 := netip.PrefixFrom(srcip2, 23)
 	tests := []struct {
 		name string
 		a    *VRFKey
@@ -277,36 +280,36 @@ func TestVRFKeyEqual(t *testing.T) {
 		{
 			name: "Equal",
 			a: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr1,
 			},
 			b: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr1,
 			},
 			want: true,
 		},
 		{
 			name: "Different SourceIP",
 			a: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr1,
 			},
 			b: &VRFKey{
-				SourceIP: &ip2,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip2,
+				DestCIDR: destcidr1,
 			},
 			want: false,
 		},
 		{
 			name: "Different DestCIDR",
 			a: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr1,
 			},
 			b: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 254, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr2,
 			},
 			want: false,
 		},
@@ -314,16 +317,16 @@ func TestVRFKeyEqual(t *testing.T) {
 			name: "Nil receiver",
 			a:    nil,
 			b: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr1,
 			},
 			want: false,
 		},
 		{
 			name: "Nil argument",
 			a: &VRFKey{
-				SourceIP: &ip1,
-				DestCIDR: &net.IPNet{IP: ip2, Mask: net.IPv4Mask(255, 255, 255, 0)},
+				SourceIP: srcip1,
+				DestCIDR: destcidr1,
 			},
 			b:    nil,
 			want: false,

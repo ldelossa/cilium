@@ -684,8 +684,11 @@ daemon:
 # -- Enables experimental support for the detection of new and removed datapath
 # devices. When devices change the eBPF datapath is reloaded and services updated.
 # If "devices" is set then only those devices, or devices matching a wildcard will
-# be considered.
-enableRuntimeDeviceDetection: false
+# be considered. 
+#
+# This option has been deprecated and is a no-op.
+enableRuntimeDeviceDetection: true
+
 # -- Chains to ignore when installing feeder rules.
 # disableIptablesFeederRules: ""
 
@@ -2170,7 +2173,7 @@ envoy:
       # Even though granted to the container, the cilium-envoy-starter wrapper drops
       # all capabilities after forking the actual Envoy process.
       # `NET_BIND_SERVICE` is the only capability that can be passed to the Envoy process by
-      # setting `envoy.capabilities.keepNetBindService=true` (in addition to granting the
+      # setting `envoy.securityContext.capabilities.keepNetBindService=true` (in addition to granting the
       # capability to the container).
       # Note: In case of embedded envoy, the capability must  be granted to the cilium-agent container.
       envoy:
@@ -2892,6 +2895,8 @@ clustermesh:
   # -- Enable the synchronization of Kubernetes EndpointSlices corresponding to
   # the remote endpoints of appropriately-annotated global services through ClusterMesh
   enableEndpointSliceSynchronization: false
+  # -- Enable Multi-Cluster Services API support
+  enableMCSAPISupport: false
 
   # -- Annotations to be added to all top-level clustermesh objects (resources under templates/clustermesh-apiserver and templates/clustermesh-config)
   annotations: {}

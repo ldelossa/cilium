@@ -326,6 +326,7 @@ func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
 				k8s.CiliumSlimEndpointResource,
 				newIsovalentSRv6EgressPolicyResource,
 			),
+			srv6map.Cell,
 		),
 		cell.Invoke(
 			invokeFn,
@@ -357,6 +358,23 @@ func newFixture(t *testing.T, useRealSIDManager bool, invokeFn any) *fixture {
 					}
 					close(requiredResources[gvr.Resource])
 					return true, watch, nil
+				})
+			},
+
+			// Register cleanup function
+			func(
+				pm4 *srv6map.PolicyMap4,
+				pm6 *srv6map.PolicyMap6,
+				vm4 *srv6map.VRFMap4,
+				vm6 *srv6map.VRFMap6,
+				sm *srv6map.SIDMap,
+			) {
+				t.Cleanup(func() {
+					pm4.Unpin()
+					pm6.Unpin()
+					vm4.Unpin()
+					vm6.Unpin()
+					sm.Unpin()
 				})
 			},
 		),
@@ -401,15 +419,16 @@ func TestSRv6Manager(t *testing.T) {
 				Addressing: v2.AddressPairList{
 					{
 						IPV4: "10.0.0.1",
+						IPV6: "fd00:1:0:0::1",
 					},
 				},
 			},
 		},
 	}
 
-	ip1 := net.ParseIP("10.0.0.1")
-	_, cidr1, _ := net.ParseCIDR("0.0.0.0/0")
-	_, cidr2, _ := net.ParseCIDR("10.0.0.0/24")
+	ip1 := netip.MustParseAddr("10.0.0.1")
+	cidr1 := netip.MustParsePrefix("0.0.0.0/0")
+	cidr2 := netip.MustParsePrefix("10.0.0.0/24")
 
 	sid1IP := net.ParseIP("fd00:0:0:1::")
 	sid2IP := net.ParseIP("fd00:0:1:1::")
@@ -492,7 +511,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -503,7 +522,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -511,7 +530,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithVRFID2},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 2},
 				},
 			},
@@ -522,7 +541,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -530,7 +549,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithDestinationCIDR},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr2},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr2},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -541,7 +560,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -549,7 +568,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget2},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -560,7 +579,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -577,7 +596,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -591,7 +610,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -602,7 +621,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -619,7 +638,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -633,7 +652,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -650,7 +669,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -664,7 +683,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -681,7 +700,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -694,7 +713,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -705,7 +724,7 @@ func TestSRv6Manager(t *testing.T) {
 			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -718,7 +737,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -736,7 +755,7 @@ func TestSRv6Manager(t *testing.T) {
 			initPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -751,7 +770,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0WithVRFID2},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -769,7 +788,7 @@ func TestSRv6Manager(t *testing.T) {
 			initPolicies:  []*v1alpha1.IsovalentSRv6EgressPolicy{policy0},
 			initVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -783,7 +802,7 @@ func TestSRv6Manager(t *testing.T) {
 			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
-					k: &srv6map.VRFKey{SourceIP: &ip1, DestCIDR: cidr1},
+					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
 					v: &srv6map.VRFValue{ID: 1},
 				},
 			},
@@ -792,14 +811,10 @@ func TestSRv6Manager(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			srv6map.CreateMaps()
-			t.Cleanup(func() {
-				srv6map.DeleteMaps()
-			})
-
 			var (
 				ia cache.IdentityAllocator
 				cs client.Clientset
+				m  *Manager
 			)
 
 			fixture := newFixture(
@@ -814,6 +829,7 @@ func TestSRv6Manager(t *testing.T) {
 				) {
 					ia = identityAllocator
 					cs = clientset
+					m = manager
 
 					fia.sid = sid2IP
 					fsm.pools["pool1"] = &fakeSIDAllocator{
@@ -852,19 +868,19 @@ func TestSRv6Manager(t *testing.T) {
 			// Ensure all maps are initialized as expected
 			eventuallyWithT(t, func(t *assert.CollectT) {
 				currentVRFMapEntries := []*vrfKV{}
-				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
+				m.vrfMap4.IterateWithCallback(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
 					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
 				})
 				assert.True(t, bpfMapsEqual(currentVRFMapEntries, test.initVRFMapEntries), "VRF map entries are mismatched, retrying")
 
 				currentPolicyMapEntries := []*policyKV{}
-				srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
+				m.policyMap4.IterateWithCallback(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
 					currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
 				})
 				assert.True(t, bpfMapsEqual(currentPolicyMapEntries, test.initPolicyMapEntries), "Policy map entries are mismatching, retrying")
 
 				currentSIDMapEntries := []*sidKV{}
-				srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
+				m.sidMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
 					currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
 				})
 				assert.True(t, bpfMapsEqual(currentSIDMapEntries, test.initSIDMapEntries), "SID map entries are mismatched, retrying")
@@ -929,19 +945,19 @@ func TestSRv6Manager(t *testing.T) {
 			// Make sure all maps are updated as expected
 			eventuallyWithT(t, func(t *assert.CollectT) {
 				currentVRFMapEntries := []*vrfKV{}
-				srv6map.SRv6VRFMap4.IterateWithCallback4(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
+				m.vrfMap4.IterateWithCallback(func(k *srv6map.VRFKey, v *srv6map.VRFValue) {
 					currentVRFMapEntries = append(currentVRFMapEntries, &vrfKV{k: k, v: v})
 				})
 				assert.True(t, bpfMapsEqual(currentVRFMapEntries, test.updatedVRFMapEntries), "VRF map entries are mismatched, retrying")
 
 				currentPolicyMapEntries := []*policyKV{}
-				srv6map.SRv6PolicyMap4.IterateWithCallback4(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
+				m.policyMap4.IterateWithCallback(func(k *srv6map.PolicyKey, v *srv6map.PolicyValue) {
 					currentPolicyMapEntries = append(currentPolicyMapEntries, &policyKV{k: k, v: v})
 				})
 				assert.True(t, bpfMapsEqual(currentPolicyMapEntries, test.updatedPolicyMapEntries), "Policy map entries are mismatched, retrying")
 
 				currentSIDMapEntries := []*sidKV{}
-				srv6map.SRv6SIDMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
+				m.sidMap.IterateWithCallback(func(k *srv6map.SIDKey, v *srv6map.SIDValue) {
 					currentSIDMapEntries = append(currentSIDMapEntries, &sidKV{k: k, v: v})
 				})
 				assert.True(t, bpfMapsEqual(currentSIDMapEntries, test.updatedSIDMapEntries), "SID map entries are mismatched, retrying")
@@ -1029,11 +1045,6 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 		},
 	}
 
-	srv6map.CreateMaps()
-	t.Cleanup(func() {
-		srv6map.DeleteMaps()
-	})
-
 	var (
 		c                 client.Clientset
 		manager           *Manager
@@ -1114,7 +1125,8 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			assert.Equal(t, srv6Types.BehaviorEndDT4, info.Behavior)
 
 			var val srv6map.SIDValue
-			assert.NoError(t, srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val))
+			err := manager.sidMap.Lookup(&srv6map.SIDKey{SID: sid1.As16()}, &val)
+			assert.NoError(t, err)
 		})
 	})
 
@@ -1163,12 +1175,12 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			assert.Equal(t, srv6Types.BehaviorEndDT4, info.Behavior)
 
 			var val srv6map.SIDValue
-			err := srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid2.As16()}, &val)
+			err := manager.sidMap.Lookup(&srv6map.SIDKey{SID: sid2.As16()}, &val)
 			if !assert.NoError(t, err) {
 				return
 			}
 
-			err = srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid1.As16()}, &val)
+			err = manager.sidMap.Lookup(&srv6map.SIDKey{SID: sid1.As16()}, &val)
 			if !assert.Error(t, err) {
 				return
 			}
@@ -1195,7 +1207,7 @@ func TestSRv6ManagerWithSIDManager(t *testing.T) {
 			}
 
 			var val srv6map.SIDValue
-			err = srv6map.SRv6SIDMap.Lookup(srv6map.SIDKey{SID: sid2.As16()}, &val)
+			err = manager.sidMap.Lookup(&srv6map.SIDKey{SID: sid2.As16()}, &val)
 			if !assert.Error(t, err) {
 				return
 			}
@@ -1355,11 +1367,6 @@ func TestSIDManagerSIDRestoration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			srv6map.CreateMaps()
-			t.Cleanup(func() {
-				srv6map.DeleteMaps()
-			})
-
 			var (
 				m  *Manager
 				cs client.Clientset

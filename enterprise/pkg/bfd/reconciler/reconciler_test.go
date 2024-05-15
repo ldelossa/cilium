@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cilium/hive/hivetest"
+	"github.com/cilium/statedb"
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/logging"
-	"github.com/cilium/cilium/pkg/statedb"
 )
 
 const (
@@ -102,7 +102,7 @@ func Test_BFDReconciler(t *testing.T) {
 		operation    string // "create" / "update" / "delete"
 		bfdProfiles  []*v1alpha1.IsovalentBFDProfile
 		nodeConfigs  []*v1alpha1.IsovalentBFDNodeConfig
-		expectEvents []statedb.Event[*types.BFDPeerStatus]
+		expectEvents []statedb.Change[*types.BFDPeerStatus]
 	}{
 		{
 			description: "Add node config with missing profile",
@@ -139,7 +139,7 @@ func Test_BFDReconciler(t *testing.T) {
 				},
 			},
 			nodeConfigs: nil,
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -160,7 +160,7 @@ func Test_BFDReconciler(t *testing.T) {
 				},
 			},
 			nodeConfigs: nil,
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -181,7 +181,7 @@ func Test_BFDReconciler(t *testing.T) {
 				},
 			},
 			nodeConfigs: nil,
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -202,7 +202,7 @@ func Test_BFDReconciler(t *testing.T) {
 				},
 			},
 			nodeConfigs: nil,
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
@@ -224,7 +224,7 @@ func Test_BFDReconciler(t *testing.T) {
 				},
 			},
 			nodeConfigs: nil,
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -248,7 +248,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
@@ -279,7 +279,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -314,7 +314,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeer2IP,
@@ -344,7 +344,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
@@ -369,7 +369,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
@@ -400,7 +400,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -424,7 +424,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
@@ -475,7 +475,7 @@ func Test_BFDReconciler(t *testing.T) {
 					},
 				},
 			},
-			expectEvents: []statedb.Event[*types.BFDPeerStatus]{
+			expectEvents: []statedb.Change[*types.BFDPeerStatus]{
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
@@ -504,8 +504,8 @@ func Test_BFDReconciler(t *testing.T) {
 	// wait until the watchers are ready
 	waitWatchersReady()
 
-	observable := statedb.Observable[*types.BFDPeerStatus](f.db, f.peerTable)
-	peersEventCh := stream.ToChannel[statedb.Event[*types.BFDPeerStatus]](testCtx, observable)
+	observable := statedb.Observable(f.db, f.peerTable)
+	peersEventCh := stream.ToChannel(testCtx, observable)
 
 	// run the test steps
 	for _, step := range steps {
@@ -563,7 +563,7 @@ func Test_BFDReconciler(t *testing.T) {
 	}
 }
 
-func validateEvents(t *testing.T, expected, actual statedb.Event[*types.BFDPeerStatus]) {
+func validateEvents(t *testing.T, expected, actual statedb.Change[*types.BFDPeerStatus]) {
 	require.EqualValues(t, expected.Deleted, actual.Deleted)
 	require.EqualValues(t, expected.Object.PeerAddress, actual.Object.PeerAddress)
 	require.EqualValues(t, expected.Object.Local.State, actual.Object.Local.State)

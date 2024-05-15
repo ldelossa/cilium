@@ -15,8 +15,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/cilium/cilium/pkg/statedb"
-	"github.com/cilium/cilium/pkg/statedb/index"
+	"github.com/cilium/statedb"
+	"github.com/cilium/statedb/index"
 )
 
 type BFDPeerKey struct {

@@ -29,9 +29,12 @@ var Cell = cell.Module(
 	"endpointslicesync-clustermesh",
 	"EndpointSlice clustermesh synchronization in the Cilium operator",
 	cell.Config(ClusterMeshConfig{}),
-	cell.Provide(newClusterMesh),
-	// Invoke an empty function which takes a clusterMesh to force its construction.
-	cell.Invoke(func(*clusterMesh) {}),
+	cell.Provide(
+		newClusterMesh,
+		newAPIClustersHandler,
+	),
+	// Invoke an empty function which takes a ClusterMesh to force its construction.
+	cell.Invoke(func(ClusterMesh) {}),
 
 	cell.Config(common.Config{}),
 

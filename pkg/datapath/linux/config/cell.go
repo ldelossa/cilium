@@ -5,6 +5,7 @@ package config
 
 import (
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/statedb"
 	"github.com/sirupsen/logrus"
 
 	dpdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
@@ -12,7 +13,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/maps/nodemap"
-	"github.com/cilium/cilium/pkg/statedb"
 )
 
 type WriterParams struct {
@@ -26,6 +26,7 @@ type WriterParams struct {
 	Sysctl             sysctl.Sysctl
 	DB                 *statedb.DB
 	Devices            statedb.Table[*tables.Device]
+	NodeAddresses      statedb.Table[tables.NodeAddress]
 }
 
 var Cell = cell.Module(

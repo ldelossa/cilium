@@ -412,7 +412,6 @@ Makefile* @cilium/build
 /pkg/bpf/ @cilium/loader
 /pkg/byteorder/ @cilium/sig-datapath @cilium/api
 /pkg/cgroups/ @cilium/sig-datapath
-/pkg/checker/ @cilium/ci-structure
 /pkg/cidr/ @cilium/sig-agent
 /pkg/ciliumenvoyconfig/ @cilium/envoy @cilium/sig-servicemesh
 /pkg/cleanup/ @cilium/sig-agent
@@ -537,7 +536,6 @@ Makefile* @cilium/build
 /pkg/source @cilium/ipcache
 /pkg/spanstat/ @cilium/sig-agent
 /pkg/status/ @cilium/sig-agent
-/pkg/statedb @cilium/sig-foundations
 /pkg/testutils/ @cilium/ci-structure
 /pkg/time @cilium/sig-agent
 /pkg/trigger/ @cilium/sig-agent

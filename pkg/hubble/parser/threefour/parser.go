@@ -170,18 +170,22 @@ func (p *Parser) Decode(data []byte, decoded *pb.Flow) error {
 	}
 
 	ether, ip, l4, srcIP, dstIP, srcPort, dstPort, summary := decodeLayers(p.packet)
-	if tn != nil {
+	if tn != nil && ip != nil {
 		if !tn.OriginalIP().IsUnspecified() {
 			// Ignore invalid IP - getters will handle invalid value.
 			srcIP, _ = ippkg.AddrFromIP(tn.OriginalIP())
-			if ip != nil {
+			// On SNAT the trace notification has OrigIP set to the pre
+			// translation IP and the source IP parsed from the header is the
+			// post translation IP. The check is here because sometimes we get
+			// trace notifications with OrigIP set to the header's IP
+			// (pre-translation events?)
+			if ip.GetSource() != srcIP.String() {
+				ip.SourceXlated = ip.GetSource()
 				ip.Source = srcIP.String()
 			}
 		}
 
-		if ip != nil {
-			ip.Encrypted = tn.IsEncrypted()
-		}
+		ip.Encrypted = tn.IsEncrypted()
 	}
 
 	srcLabelID, dstLabelID := decodeSecurityIdentities(dn, tn, pvn)
@@ -496,6 +500,8 @@ func decodeTrafficDirection(srcEP uint32, dn *monitor.DropNotify, tn *monitor.Tr
 		if tn.TraceReasonIsKnown() {
 			// true if the traffic source is the local endpoint, i.e. egress
 			isSourceEP := tn.Source == uint16(srcEP)
+			// when OrigIP is set, then the packet was SNATed
+			isSNATed := !tn.OriginalIP().IsUnspecified()
 			// true if the packet is a reply, i.e. reverse direction
 			isReply := tn.TraceReasonIsReply()
 
@@ -510,6 +516,8 @@ func decodeTrafficDirection(srcEP uint32, dn *monitor.DropNotify, tn *monitor.Tr
 			// isSourceEP != isReply ==
 			//  (isSourceEP && !isReply) || (!isSourceEP && isReply)
 			case isSourceEP != isReply:
+				return pb.TrafficDirection_EGRESS
+			case isSNATed:
 				return pb.TrafficDirection_EGRESS
 			}
 			return pb.TrafficDirection_INGRESS

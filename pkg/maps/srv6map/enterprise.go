@@ -11,13 +11,7 @@
 package srv6map
 
 import (
-	"unsafe"
-
-	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/types"
-
-	"golang.org/x/exp/slices"
-	netutils "k8s.io/utils/net"
 )
 
 // Equal compares two PolicyKey objects
@@ -25,14 +19,7 @@ func (a *PolicyKey) Equal(b *PolicyKey) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.VRFID == b.VRFID &&
-		a.DestCIDR.IP.Equal(b.DestCIDR.IP) &&
-		slices.Equal(a.DestCIDR.Mask, b.DestCIDR.Mask)
-}
-
-// IsIPv6 returns true if the key is for an IPv6 destination CIDR.
-func (k *PolicyKey) IsIPv6() bool {
-	return netutils.IsIPv6CIDR(k.DestCIDR)
+	return *a == *b
 }
 
 // Equal compares two PolicyValue objects
@@ -45,59 +32,56 @@ func (a *PolicyValue) Equal(b *PolicyValue) bool {
 
 // toIPv4 converts the generic PolicyKey into an IPv4 policy key, to be used
 // with BPF maps.
-func (k *PolicyKey) toIPv4() PolicyKey4 {
-	result := PolicyKey4{}
-	ones, _ := k.DestCIDR.Mask.Size()
-
-	result.VRFID = k.VRFID
-	copy(result.DestCIDR[:], k.DestCIDR.IP.To4())
-	result.PrefixLen = policyStaticPrefixBits + uint32(ones)
-
-	return result
+func (k *PolicyKey) toIPv4() *PolicyKey4 {
+	return &PolicyKey4{
+		PrefixLen: policyStaticPrefixBits + uint32(k.DestCIDR.Bits()),
+		VRFID:     k.VRFID,
+		DestCIDR:  k.DestCIDR.Addr().As4(),
+	}
 }
 
 // toIPv6 converts the generic PolicyKey into an IPv6 policy key, to be used
 // with BPF maps.
-func (k *PolicyKey) toIPv6() PolicyKey6 {
-	result := PolicyKey6{}
-	ones, _ := k.DestCIDR.Mask.Size()
-
-	result.VRFID = k.VRFID
-	copy(result.DestCIDR[:], k.DestCIDR.IP.To16())
-	result.PrefixLen = policyStaticPrefixBits + uint32(ones)
-
-	return result
+func (k *PolicyKey) toIPv6() *PolicyKey6 {
+	return &PolicyKey6{
+		PrefixLen: policyStaticPrefixBits + uint32(k.DestCIDR.Bits()),
+		VRFID:     k.VRFID,
+		DestCIDR:  k.DestCIDR.Addr().As16(),
+	}
 }
 
-func (m *srv6PolicyMap) Lookup(key PolicyKey, val *PolicyValue) error {
-	if key.IsIPv6() {
-		return m.Map.Lookup(key.toIPv6(), val)
+func (m *PolicyMap4) Lookup(key *PolicyKey, val *PolicyValue) error {
+	v, err := m.Map.Lookup(key.toIPv4())
+	if err != nil {
+		return err
 	}
-	return m.Map.Lookup(key.toIPv4(), val)
+	*val = *v.(*PolicyValue)
+	return nil
 }
 
-func (m *srv6PolicyMap) Update(key PolicyKey, sid types.IPv6) error {
-	val := PolicyValue{SID: sid}
-	if key.IsIPv6() {
-		return m.Map.Update(key.toIPv6(), val, 0)
-	}
-	return m.Map.Update(key.toIPv4(), val, 0)
+func (m *PolicyMap4) Update(key *PolicyKey, sid types.IPv6) error {
+	return m.Map.Update(key.toIPv4(), &PolicyValue{SID: sid})
 }
 
-func (m *srv6PolicyMap) Delete(key PolicyKey) error {
-	if key.IsIPv6() {
-		return m.Map.Delete(key.toIPv6())
-	}
+func (m *PolicyMap4) Delete(key *PolicyKey) error {
 	return m.Map.Delete(key.toIPv4())
 }
 
-// GetPolicyMap returns the appropriate egress policy map (IPv4 or IPv6)
-// for the given key.
-func GetPolicyMap(key PolicyKey) *srv6PolicyMap {
-	if key.IsIPv6() {
-		return SRv6PolicyMap6
+func (m *PolicyMap6) Lookup(key *PolicyKey, val *PolicyValue) error {
+	v, err := m.Map.Lookup(key.toIPv6())
+	if err != nil {
+		return err
 	}
-	return SRv6PolicyMap4
+	*val = *v.(*PolicyValue)
+	return nil
+}
+
+func (m *PolicyMap6) Update(key *PolicyKey, sid types.IPv6) error {
+	return m.Map.Update(key.toIPv6(), &PolicyValue{SID: sid})
+}
+
+func (m *PolicyMap6) Delete(key *PolicyKey) error {
+	return m.Map.Delete(key.toIPv6())
 }
 
 // Equal compares two SIDKey objects
@@ -116,26 +100,21 @@ func (a *SIDValue) Equal(b *SIDValue) bool {
 	return a.VRFID == b.VRFID
 }
 
-func (m *srv6SIDMap) Lookup(key SIDKey, val *SIDValue) error {
-	return m.Map.Lookup(key, val)
+func (m *SIDMap) Lookup(key *SIDKey, val *SIDValue) error {
+	v, err := m.Map.Lookup(key)
+	if err != nil {
+		return err
+	}
+	*val = *v.(*SIDValue)
+	return nil
 }
 
-func DeleteMaps() {
-	SRv6PolicyMap4.Close()
-	SRv6PolicyMap4.Unpin()
-	SRv6PolicyMap6.Close()
-	SRv6PolicyMap6.Unpin()
-	SRv6SIDMap.Close()
-	SRv6SIDMap.Unpin()
-	SRv6VRFMap4.Close()
-	SRv6VRFMap4.Unpin()
-	SRv6VRFMap6.Close()
-	SRv6VRFMap6.Unpin()
+func (m *SIDMap) Update(key *SIDKey, vrfID uint32) error {
+	return m.Map.Update(key, &SIDValue{VRFID: vrfID})
 }
 
-// IsIPv6 returns true if the key is for an IPv6 endpoint.
-func (k *StateKey) IsIPv6() bool {
-	return ip.IsIPv6(*k.InnerSrc) && ip.IsIPv6(*k.InnerDst)
+func (m *SIDMap) Delete(key *SIDKey) error {
+	return m.Map.Delete(key)
 }
 
 // Equal compares two VRFKey objects
@@ -143,14 +122,7 @@ func (a *VRFKey) Equal(b *VRFKey) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.SourceIP.Equal(*b.SourceIP) &&
-		a.DestCIDR.IP.Equal(b.DestCIDR.IP) &&
-		slices.Equal(a.DestCIDR.Mask, b.DestCIDR.Mask)
-}
-
-// IsIPv6 returns true if the key is for an IPv6 endpoint.
-func (k *VRFKey) IsIPv6() bool {
-	return ip.IsIPv6(*k.SourceIP)
+	return *a == *b
 }
 
 // Equal compares two VRFValue objects
@@ -158,66 +130,59 @@ func (a *VRFValue) Equal(b *VRFValue) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.ID == b.ID
-}
-
-func VRFMapsInitialized() bool {
-	return SRv6VRFMap4 != nil && SRv6VRFMap6 != nil
+	return *a == *b
 }
 
 // toIPv4 converts the generic VRFKey into an IPv4 VRF mapping key,
 // to be used with BPF maps.
-func (k *VRFKey) toIPv4() VRFKey4 {
-	result := VRFKey4{}
-	ones, _ := k.DestCIDR.Mask.Size()
-
-	copy(result.SourceIP[:], k.SourceIP.To4())
-	copy(result.DestCIDR[:], k.DestCIDR.IP.To4())
-	result.PrefixLen = uint32(unsafe.Sizeof(result.SourceIP)*8) + uint32(ones)
-
-	return result
+func (k *VRFKey) toIPv4() *VRFKey4 {
+	return &VRFKey4{
+		PrefixLen: vrf4StaticPrefixBits + uint32(k.DestCIDR.Bits()),
+		SourceIP:  k.SourceIP.As4(),
+		DestCIDR:  k.DestCIDR.Addr().As4(),
+	}
 }
 
 // toIPv6 converts the generic VRFKey into an IPv6 VRF mapping key,
 // to be used with BPF maps.
-func (k *VRFKey) toIPv6() VRFKey6 {
-	result := VRFKey6{}
-	ones, _ := k.DestCIDR.Mask.Size()
-
-	copy(result.SourceIP[:], k.SourceIP.To16())
-	copy(result.DestCIDR[:], k.DestCIDR.IP.To16())
-	result.PrefixLen = uint32(unsafe.Sizeof(result.SourceIP)*8) + uint32(ones)
-
-	return result
+func (k *VRFKey) toIPv6() *VRFKey6 {
+	return &VRFKey6{
+		PrefixLen: vrf6StaticPrefixBits + uint32(k.DestCIDR.Bits()),
+		SourceIP:  k.SourceIP.As16(),
+		DestCIDR:  k.DestCIDR.Addr().As16(),
+	}
 }
 
-func (m *srv6VRFMap) Lookup(key VRFKey, val *VRFValue) error {
-	if key.IsIPv6() {
-		return m.Map.Lookup(key.toIPv6(), val)
+func (m *VRFMap4) Lookup(key *VRFKey, val *VRFValue) error {
+	v, err := m.Map.Lookup(key.toIPv4())
+	if err != nil {
+		return err
 	}
-	return m.Map.Lookup(key.toIPv4(), val)
+	*val = *v.(*VRFValue)
+	return nil
 }
 
-func (m *srv6VRFMap) Update(key VRFKey, vrfID uint32) error {
-	val := VRFValue{ID: vrfID}
-	if key.IsIPv6() {
-		return m.Map.Update(key.toIPv6(), val, 0)
-	}
-	return m.Map.Update(key.toIPv4(), val, 0)
+func (m *VRFMap4) Update(key *VRFKey, vrfID uint32) error {
+	return m.Map.Update(key.toIPv4(), &VRFValue{ID: vrfID})
 }
 
-func (m *srv6VRFMap) Delete(key VRFKey) error {
-	if key.IsIPv6() {
-		return m.Map.Delete(key.toIPv6())
-	}
+func (m *VRFMap4) Delete(key *VRFKey) error {
 	return m.Map.Delete(key.toIPv4())
 }
 
-// GetVRFMap returns the appropriate VRF mapping map (IPv4 or IPv6)
-// for the given key.
-func GetVRFMap(key VRFKey) *srv6VRFMap {
-	if key.IsIPv6() {
-		return SRv6VRFMap6
+func (m *VRFMap6) Lookup(key *VRFKey, val *VRFValue) error {
+	v, err := m.Map.Lookup(key.toIPv6())
+	if err != nil {
+		return err
 	}
-	return SRv6VRFMap4
+	*val = *v.(*VRFValue)
+	return nil
+}
+
+func (m *VRFMap6) Update(key *VRFKey, vrfID uint32) error {
+	return m.Map.Update(key.toIPv6(), &VRFValue{ID: vrfID})
+}
+
+func (m *VRFMap6) Delete(key *VRFKey) error {
+	return m.Map.Delete(key.toIPv6())
 }

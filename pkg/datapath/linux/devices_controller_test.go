@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/hivetest"
+	"github.com/cilium/statedb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
@@ -28,7 +30,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/logging"
-	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/testutils/netns"
 )
@@ -83,9 +84,6 @@ func TestDevicesController(t *testing.T) {
 		for _, r := range routes {
 			// undefined IP will stringify as "invalid IP", turn them into "".
 			actualDst, actualSrc, actualGw := r.Dst.String(), addrToString(r.Src), addrToString(r.Gw)
-			/*fmt.Printf("%d %s %s %s -- %d %s %s %s\n",
-			r.LinkIndex, actualDst, actualSrc, actualGw,
-			linkIndex, dst, src, gw)*/
 			if r.LinkIndex == linkIndex && actualDst == dst && actualSrc == src &&
 				actualGw == gw {
 				return true
@@ -419,8 +417,6 @@ func TestDevicesController_Restarts(t *testing.T) {
 		devicesTable statedb.Table[*tables.Device]
 	)
 
-	logging.SetLogLevelToDebug()
-
 	// Is this the first subscription?
 	var first atomic.Bool
 	first.Store(true)
@@ -520,7 +516,7 @@ func TestDevicesController_Restarts(t *testing.T) {
 		},
 	}
 
-	tlog := hivetest.Logger(t)
+	tlog := hivetest.Logger(t, hivetest.LogLevel(slog.LevelDebug))
 	h := hive.New(
 		DevicesControllerCell,
 		cell.Provide(func() *netlinkFuncs { return &funcs }),

@@ -158,6 +158,11 @@ const (
 	// which allows to use reserved label for fixed identities
 	FixedIdentityMapping = "fixed-identity-mapping"
 
+	// FixedZoneMapping is the key-value for the fixed zone mapping which
+	// is used to map zone value (string) from EndpointSlice to ID (uint8)
+	// in lb{4,6}_backend in BPF map.
+	FixedZoneMapping = "fixed-zone-mapping"
+
 	// IPv4Range is the per-node IPv4 endpoint prefix, e.g. 10.16.0.0/16
 	IPv4Range = "ipv4-range"
 
@@ -366,6 +371,10 @@ const (
 	// InstallNoConntrackIptRules instructs Cilium to install Iptables rules
 	// to skip netfilter connection tracking on all pod traffic.
 	InstallNoConntrackIptRules = "install-no-conntrack-iptables-rules"
+
+	// ContainerIPLocalReservedPorts instructs the Cilium CNI plugin to reserve
+	// the provided comma-separated list of ports in the container network namespace
+	ContainerIPLocalReservedPorts = "container-ip-local-reserved-ports"
 
 	// IPv6NodeAddr is the IPv6 address of node
 	IPv6NodeAddr = "ipv6-node"
@@ -1652,6 +1661,9 @@ type DaemonConfig struct {
 	EnableUnreachableRoutes       bool
 	FixedIdentityMapping          map[string]string
 	FixedIdentityMappingValidator func(val string) (string, error) `json:"-"`
+	FixedZoneMapping              map[string]uint8
+	ReverseFixedZoneMapping       map[uint8]string
+	FixedZoneMappingValidator     func(val string) (string, error) `json:"-"`
 	IPv4Range                     string
 	IPv6Range                     string
 	IPv4ServiceRange              string
@@ -1801,7 +1813,7 @@ type DaemonConfig struct {
 
 	// KVstoreMaxConsecutiveQuorumErrors is the maximum number of acceptable
 	// kvstore consecutive quorum errors before the agent assumes permanent failure
-	KVstoreMaxConsecutiveQuorumErrors int
+	KVstoreMaxConsecutiveQuorumErrors uint
 
 	// KVstorePeriodicSync is the time interval in which periodic
 	// synchronization with the kvstore occurs
@@ -2240,6 +2252,10 @@ type DaemonConfig struct {
 	// InstallNoConntrackIptRules instructs Cilium to install Iptables rules to skip netfilter connection tracking on all pod traffic.
 	InstallNoConntrackIptRules bool
 
+	// ContainerIPLocalReservedPorts instructs the Cilium CNI plugin to reserve
+	// the provided comma-separated list of ports in the container network namespace
+	ContainerIPLocalReservedPorts string
+
 	// EnableCustomCalls enables tail call hooks for user-defined custom
 	// eBPF programs, typically used to collect custom per-endpoint
 	// metrics.
@@ -2418,6 +2434,7 @@ var (
 		BPFEventsDropEnabled:          defaults.BPFEventsDropEnabled,
 		BPFEventsPolicyVerdictEnabled: defaults.BPFEventsPolicyVerdictEnabled,
 		BPFEventsTraceEnabled:         defaults.BPFEventsTraceEnabled,
+		EnableEnvoyConfig:             defaults.EnableEnvoyConfig,
 	}
 )
 
@@ -2715,6 +2732,18 @@ func (c *DaemonConfig) validateHubbleRedact() error {
 	return nil
 }
 
+func (c *DaemonConfig) validateContainerIPLocalReservedPorts() error {
+	if c.ContainerIPLocalReservedPorts == "" || c.ContainerIPLocalReservedPorts == defaults.ContainerIPLocalReservedPortsAuto {
+		return nil
+	}
+
+	if regexp.MustCompile(`^(\d+(-\d+)?)(,\d+(-\d+)?)*$`).MatchString(c.ContainerIPLocalReservedPorts) {
+		return nil
+	}
+
+	return fmt.Errorf("Invalid comma separated list of of ranges for %s option", ContainerIPLocalReservedPorts)
+}
+
 // Validate validates the daemon configuration
 func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 	if err := c.validateIPv6ClusterAllocCIDR(); err != nil {
@@ -2802,6 +2831,10 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 	}
 
 	if err := c.validatePolicyCIDRMatchMode(); err != nil {
+		return err
+	}
+
+	if err := c.validateContainerIPLocalReservedPorts(); err != nil {
 		return err
 	}
 
@@ -3001,7 +3034,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.KVstoreKeepAliveInterval = c.KVstoreLeaseTTL / defaults.KVstoreKeepAliveIntervalFactor
 	c.KVstorePeriodicSync = vp.GetDuration(KVstorePeriodicSync)
 	c.KVstoreConnectivityTimeout = vp.GetDuration(KVstoreConnectivityTimeout)
-	c.KVstoreMaxConsecutiveQuorumErrors = vp.GetInt(KVstoreMaxConsecutiveQuorumErrorsName)
+	c.KVstoreMaxConsecutiveQuorumErrors = vp.GetUint(KVstoreMaxConsecutiveQuorumErrorsName)
 	c.LabelPrefixFile = vp.GetString(LabelPrefixFile)
 	c.Labels = vp.GetStringSlice(Labels)
 	c.LibDir = vp.GetString(LibDir)
@@ -3052,6 +3085,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.LoadBalancerRSSv4CIDR = vp.GetString(LoadBalancerRSSv4CIDR)
 	c.LoadBalancerRSSv6CIDR = vp.GetString(LoadBalancerRSSv6CIDR)
 	c.InstallNoConntrackIptRules = vp.GetBool(InstallNoConntrackIptRules)
+	c.ContainerIPLocalReservedPorts = vp.GetString(ContainerIPLocalReservedPorts)
 	c.EnableCustomCalls = vp.GetBool(EnableCustomCallsName)
 	c.BGPAnnounceLBIP = vp.GetBool(BGPAnnounceLBIP)
 	c.BGPAnnouncePodCIDR = vp.GetBool(BGPAnnouncePodCIDR)
@@ -3257,6 +3291,27 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 		log.Fatalf("unable to parse %s: %s", FixedIdentityMapping, err)
 	} else if len(m) != 0 {
 		c.FixedIdentityMapping = m
+	}
+
+	if m := command.GetStringMapString(vp, FixedZoneMapping); err != nil {
+		log.Fatalf("unable to parse %s: %s", FixedZoneMapping, err)
+	} else if len(m) != 0 {
+		forward := make(map[string]uint8, len(m))
+		reverse := make(map[uint8]string, len(m))
+		for k, v := range m {
+			bigN, _ := strconv.Atoi(v)
+			n := uint8(bigN)
+			if oldKey, ok := reverse[n]; ok && oldKey != k {
+				log.Fatalf("duplicate numeric ID entry for %s: %q and %q map to the same value %d", FixedZoneMapping, oldKey, k, n)
+			}
+			if oldN, ok := forward[k]; ok && oldN != n {
+				log.Fatalf("duplicate zone name entry for %s: %d and %d map to different values %s", FixedZoneMapping, oldN, n, k)
+			}
+			forward[k] = n
+			reverse[n] = k
+		}
+		c.FixedZoneMapping = forward
+		c.ReverseFixedZoneMapping = reverse
 	}
 
 	c.ConntrackGCInterval = vp.GetDuration(ConntrackGCInterval)
@@ -4188,4 +4243,12 @@ func (d *DaemonConfig) EnforceLXCFibLookup() bool {
 	// since v1.14.0-snapshot.2. We will remove this hack later, once we
 	// have auto-device detection on by default.
 	return d.EnableEndpointRoutes
+}
+
+func (d *DaemonConfig) GetZone(id uint8) string {
+	return d.ReverseFixedZoneMapping[id]
+}
+
+func (d *DaemonConfig) GetZoneID(zone string) uint8 {
+	return d.FixedZoneMapping[zone]
 }

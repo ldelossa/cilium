@@ -1224,8 +1224,8 @@ handle_netdev(struct __ctx_buff *ctx, const bool from_host)
 		return send_drop_notify(ctx, sec_label, id, 0, ret,
 					CTX_ACT_DROP, METRIC_EGRESS);
 #else
-		send_trace_notify(ctx, TRACE_TO_STACK, HOST_ID, 0, 0, 0,
-				  TRACE_REASON_UNKNOWN, 0);
+		send_trace_notify(ctx, TRACE_TO_STACK, HOST_ID, 0, 0,
+				  TRACE_IFINDEX_UNKNOWN, TRACE_REASON_UNKNOWN, 0);
 		/* Pass unknown traffic to the stack */
 		return CTX_ACT_OK;
 #endif /* ENABLE_HOST_FIREWALL */
@@ -1363,10 +1363,9 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 		if (vlan_id) {
 			if (allow_vlan(ctx->ifindex, vlan_id))
 				return CTX_ACT_OK;
-			else
-				return send_drop_notify_error(ctx, src_sec_identity,
-							      DROP_VLAN_FILTERED,
-							      CTX_ACT_DROP, METRIC_EGRESS);
+
+			ret = DROP_VLAN_FILTERED;
+			goto drop_err;
 		}
 	}
 
@@ -1376,8 +1375,7 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 
 		ctx->mark = 0;
 		ret = tail_call_egress_policy(ctx, (__u16)lxc_id);
-		return send_drop_notify_error(ctx, src_sec_identity, ret,
-					      CTX_ACT_DROP, METRIC_EGRESS);
+		goto drop_err;
 	}
 #endif
 
@@ -1387,7 +1385,7 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 
 	if (!validate_ethertype(ctx, &proto)) {
 		ret = DROP_UNSUPPORTED_L2;
-		goto out;
+		goto drop_err;
 	}
 
 	policy_clear_mark(ctx);
@@ -1415,11 +1413,9 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 		ret = DROP_UNKNOWN_L3;
 		break;
 	}
-out:
+
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, src_sec_identity,
-						  ret, ext_err, CTX_ACT_DROP,
-						  METRIC_EGRESS);
+		goto drop_err;
 
 skip_host_firewall:
 #endif /* ENABLE_HOST_FIREWALL */
@@ -1445,12 +1441,12 @@ skip_host_firewall:
 			 * for tracepoint
 			 */
 			send_trace_notify(ctx, TRACE_TO_STACK, 0, 0, 0,
-					  0, TRACE_REASON_ENCRYPT_OVERLAY, 0);
+					  TRACE_IFINDEX_UNKNOWN,
+					  TRACE_REASON_ENCRYPT_OVERLAY, 0);
 			return ret;
 		}
 		if (IS_ERR(ret))
-			return send_drop_notify_error(ctx, src_sec_identity, ret,
-						      CTX_ACT_DROP, METRIC_EGRESS);
+			goto drop_err;
 	}
 #endif /* ENABLE_ENCRYPTED_OVERLAY */
 
@@ -1479,15 +1475,14 @@ skip_host_firewall:
 		if (ret == CTX_ACT_REDIRECT)
 			return ret;
 		else if (IS_ERR(ret))
-			return send_drop_notify_error(ctx, src_sec_identity, ret,
-						      CTX_ACT_DROP, METRIC_EGRESS);
+			goto drop_err;
 	}
 
 #if defined(ENCRYPTION_STRICT_MODE)
-	if (!strict_allow(ctx))
-		return send_drop_notify_error(ctx, src_sec_identity,
-					      DROP_UNENCRYPTED_TRAFFIC,
-					      CTX_ACT_DROP, METRIC_EGRESS);
+	if (!strict_allow(ctx)) {
+		ret = DROP_UNENCRYPTED_TRAFFIC;
+		goto drop_err;
+	}
 #endif /* ENCRYPTION_STRICT_MODE */
 #endif /* ENABLE_WIREGUARD */
 
@@ -1513,12 +1508,16 @@ skip_host_firewall:
 exit:
 #endif
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, src_sec_identity, ret, ext_err,
-						  CTX_ACT_DROP, METRIC_EGRESS);
+		goto drop_err;
+
 	send_trace_notify(ctx, TRACE_TO_NETWORK, 0, 0, 0,
-			  0, trace.reason, trace.monitor);
+			  TRACE_IFINDEX_UNKNOWN, trace.reason, trace.monitor);
 
 	return ret;
+
+drop_err:
+	return send_drop_notify_error_ext(ctx, src_sec_identity, ret, ext_err,
+					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
 /*

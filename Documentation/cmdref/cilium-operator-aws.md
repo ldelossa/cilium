@@ -40,6 +40,7 @@ cilium-operator-aws [flags]
       --clustermesh-concurrent-service-endpoint-syncs int            The number of remote cluster service syncing operations that will be done concurrently. Larger number = faster endpoint slice updating, but more CPU (and network) load. (default 5)
       --clustermesh-config string                                    Path to the ClusterMesh configuration directory
       --clustermesh-enable-endpoint-sync                             Whether or not the endpoint slice cluster mesh synchronization is enabled.
+      --clustermesh-enable-mcs-api                                   Whether or not the MCS API support is enabled.
       --clustermesh-endpoint-updates-batch-period duration           The length of endpoint slice updates batching period for remote cluster services. Processing of pod changes will be delayed by this duration to join them with potential upcoming updates and reduce the overall number of endpoints updates. Larger number = higher endpoint programming latency, but lower number of endpoints revision generated. (default 500ms)
       --clustermesh-endpoints-per-slice int                          The maximum number of endpoints that will be added to a remote cluster's EndpointSlice . More endpoints per slice will result in less endpoint slices, but larger resources. (default 100)
       --cnp-status-cleanup-burst int                                 Maximum burst of requests to clean up status nodes updates in CNPs (default 20)
@@ -88,6 +89,7 @@ cilium-operator-aws [flags]
       --identity-gc-rate-limit int                                   Maximum number of security identities that will be deleted within the identity-gc-rate-interval (default 2500)
       --identity-heartbeat-timeout duration                          Timeout after which identity expires on lack of heartbeat (default 30m0s)
       --ingress-default-lb-mode string                               Default loadbalancer mode for Ingress. Applicable values: dedicated, shared (default "dedicated")
+      --ingress-default-request-timeout duration                     Default request timeout for Ingress.
       --ingress-default-secret-name string                           Default secret name for Ingress.
       --ingress-default-secret-namespace string                      Default secret namespace for Ingress.
       --ingress-default-xff-num-trusted-hops uint32                  The number of additional ingress proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address.
@@ -151,4 +153,6 @@ cilium-operator-aws [flags]
 * [cilium-operator-aws completion](cilium-operator-aws_completion.md)	 - Generate the autocompletion script for the specified shell
 * [cilium-operator-aws hive](cilium-operator-aws_hive.md)	 - Inspect the hive
 * [cilium-operator-aws metrics](cilium-operator-aws_metrics.md)	 - Access metric status of the operator
+* [cilium-operator-aws status](cilium-operator-aws_status.md)	 - Display status of operator
+* [cilium-operator-aws troubleshoot](cilium-operator-aws_troubleshoot.md)	 - Run troubleshooting utilities to check control-plane connectivity
 
