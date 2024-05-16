@@ -12,11 +12,13 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/cilium/hive/hivetest"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/bpf"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/identity"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
@@ -35,6 +37,7 @@ type EgressGatewayTestSuite struct {
 	policies    fakeResource[*Policy]
 	endpoints   fakeResource[*k8sTypes.CiliumEndpoint]
 	ciliumNodes fakeResource[*cilium_api_v2.CiliumNode]
+	sysctl      sysctl.Sysctl
 
 	reconciliationEventsCount uint64
 }
@@ -49,6 +52,7 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 	k.policies = make(fakeResource[*Policy])
 	k.endpoints = make(fakeResource[*k8sTypes.CiliumEndpoint])
 	k.ciliumNodes = make(fakeResource[*cilium_api_v2.CiliumNode])
+	k.sysctl = sysctl.NewDirectSysctl(afero.NewOsFs(), "/proc")
 
 	lc := hivetest.Lifecycle(t)
 	policyMap := egressmapha.CreatePrivatePolicyMap(lc, egressmapha.DefaultPolicyConfig)
@@ -75,14 +79,15 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 		Endpoints:         k.endpoints,
 		Nodes:             k.ciliumNodes,
 		LocalNodeStore:    localNodeStore,
+		Sysctl:            k.sysctl,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, k.manager)
 
 	k.reconciliationEventsCount = k.manager.reconciliationEventsCount.Load()
 
-	createTestInterface(t, testInterface1, egressCIDR1)
-	createTestInterface(t, testInterface2, egressCIDR2)
+	createTestInterface(t, k.sysctl, testInterface1, egressCIDR1)
+	createTestInterface(t, k.sysctl, testInterface2, egressCIDR2)
 
 	k.policies.sync(t)
 	k.endpoints.sync(t)
@@ -93,7 +98,7 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 	return k
 }
 
-func createTestInterface(tb testing.TB, iface string, addr string) {
+func createTestInterface(tb testing.TB, sysctl sysctl.Sysctl, iface string, addr string) {
 	tb.Helper()
 
 	la := netlink.NewLinkAttrs()
@@ -122,6 +127,28 @@ func createTestInterface(tb testing.TB, iface string, addr string) {
 	if err := netlink.AddrAdd(link, a); err != nil {
 		tb.Fatal(err)
 	}
+
+	ensureRPFilterIsEnabled(tb, sysctl, iface)
+}
+
+func ensureRPFilterIsEnabled(tb testing.TB, sysctl sysctl.Sysctl, iface string) {
+	rpFilterSetting := fmt.Sprintf("net.ipv4.conf.%s.rp_filter", iface)
+
+	for i := 0; i < 10; i++ {
+		if err := sysctl.Enable(rpFilterSetting); err != nil {
+			tb.Fatal(err)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		if val, err := sysctl.Read(rpFilterSetting); err == nil {
+			if val == "1" {
+				return
+			}
+		}
+	}
+
+	tb.Fatal("failed to enable rp_filter")
 }
 
 func (k *EgressGatewayTestSuite) waitForReconciliationRun(t *testing.T) {
@@ -264,6 +291,11 @@ type parsedEgressRule struct {
 	gatewayIP netip.Addr
 }
 
+type rpFilterSetting struct {
+	iFaceName       string
+	rpFilterSetting string
+}
+
 func parseEgressRule(sourceIP, destCIDR, egressIP, gatewayIP string) parsedEgressRule {
 	sip := netip.MustParseAddr(sourceIP)
 	dc := netip.MustParsePrefix(destCIDR)
@@ -340,6 +372,25 @@ func tryAssertEgressRules(policyMap egressmapha.PolicyMap, rules []egressRule) e
 
 	if untrackedRule {
 		return fmt.Errorf("Untracked egress policy")
+	}
+
+	return nil
+}
+
+func assertRPFilter(t *testing.T, sysctl sysctl.Sysctl, rpFilterSettings []rpFilterSetting) {
+	t.Helper()
+
+	err := tryAssertRPFilterSettings(sysctl, rpFilterSettings)
+	require.NoError(t, err)
+}
+
+func tryAssertRPFilterSettings(sysctl sysctl.Sysctl, rpFilterSettings []rpFilterSetting) error {
+	for _, setting := range rpFilterSettings {
+		if val, err := sysctl.Read(fmt.Sprintf("net.ipv4.conf.%s.rp_filter", setting.iFaceName)); err != nil {
+			return fmt.Errorf("failed to read rp_filter")
+		} else if val != setting.rpFilterSetting {
+			return fmt.Errorf("mismatched rp_filter iface: %s rp_filter: %s", setting.iFaceName, val)
+		}
 	}
 
 	return nil
@@ -530,6 +581,10 @@ func TestEgressGatewayManagerHAGroup(t *testing.T) {
 		healthyGatewayIPs: []string{node1IP, node2IP},
 	})
 
+	assertRPFilter(t, k.sysctl, []rpFilterSetting{
+		{iFaceName: testInterface1, rpFilterSetting: "2"},
+		{iFaceName: testInterface2, rpFilterSetting: "1"},
+	})
 	k.assertEgressRules(t, []egressRule{})
 
 	// Add a new endpoint which matches policy-1

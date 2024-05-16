@@ -74,6 +74,9 @@ type azActiveGatewayIPs struct {
 // that IP assigned to) or the interface (and in this case we need to find the
 // first IPv4 assigned to that).
 type gatewayConfig struct {
+	// ifaceName is the name of the interface used to SNAT traffic
+	ifaceName string
+
 	// egressIP is the IP used to SNAT traffic
 	egressIP netip.Addr
 
@@ -541,6 +544,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 	case gc.iface != "":
 		// If the group config specifies an interface, use the first IPv4 assigned to that
 		// interface as egress IP
+		gwc.ifaceName = gc.iface
 		gwc.egressIP, err = netdevice.GetIfaceFirstIPv4Address(gc.iface)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
@@ -549,7 +553,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 		// If the group config specifies an egress IP, use the interface with that IP as egress
 		// interface
 		gwc.egressIP = gc.egressIP
-		err = netdevice.TestForIfaceWithIPv4Address(gc.egressIP)
+		gwc.ifaceName, err = netdevice.GetIfaceWithIPv4Address(gc.egressIP)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve interface with egress IP: %w", err)
 		}
@@ -561,7 +565,8 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 			return fmt.Errorf("failed to find interface with default route: %w", err)
 		}
 
-		gwc.egressIP, err = netdevice.GetIfaceFirstIPv4Address(iface.Attrs().Name)
+		gwc.ifaceName = iface.Attrs().Name
+		gwc.egressIP, err = netdevice.GetIfaceFirstIPv4Address(gwc.ifaceName)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
