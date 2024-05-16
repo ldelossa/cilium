@@ -76,6 +76,7 @@ cilium-agent [flags]
       --config-dir string                                            Configuration directory that contains a file for each option
       --conntrack-gc-interval duration                               Overwrite the connection-tracking garbage collection interval
       --conntrack-gc-max-interval duration                           Set the maximum interval for the connection-tracking garbage collection
+      --container-ip-local-reserved-ports string                     Instructs the Cilium CNI plugin to reserve the provided comma-separated list of ports in the container network namespace. Prevents the container from using these ports as ephemeral source ports (see Linux ip_local_reserved_ports). Use this flag if you observe port conflicts between transparent DNS proxy requests and host network namespace services. Value "auto" reserves the WireGuard and VXLAN ports used by Cilium (default "auto")
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
       --crd-wait-timeout duration                                    Cilium will exit if CRDs are not available within this duration upon startup (default 5m0s)
       --datapath-mode string                                         Datapath mode name (default "veth")
@@ -165,7 +166,6 @@ cilium-agent [flags]
       --enable-pmtu-discovery                                        Enable path MTU discovery to send ICMP fragmentation-needed replies to the client
       --enable-policy string                                         Enable policy enforcement (default "default")
       --enable-recorder                                              Enable BPF datapath pcap recorder
-      --enable-runtime-device-detection                              Enable runtime device detection and datapath reconfiguration (experimental)
       --enable-sctp                                                  Enable SCTP support (beta)
       --enable-service-topology                                      Enable support for service topology aware hints
       --enable-session-affinity                                      Enable support for service session affinity
@@ -296,7 +296,7 @@ cilium-agent [flags]
       --kube-proxy-replacement-healthz-bind-address string           The IP address with port for kube-proxy replacement health check server to serve on (set to '0.0.0.0:10256' for all IPv4 interfaces and '[::]:10256' for all IPv6 interfaces). Set empty to disable.
       --kvstore string                                               Key-value store type
       --kvstore-connectivity-timeout duration                        Time after which an incomplete kvstore operation  is considered failed (default 2m0s)
-      --kvstore-max-consecutive-quorum-errors int                    Max acceptable kvstore consecutive quorum errors before the agent assumes permanent failure (default 2)
+      --kvstore-max-consecutive-quorum-errors uint                   Max acceptable kvstore consecutive quorum errors before the agent assumes permanent failure (default 2)
       --kvstore-opt map                                              Key-value store options e.g. etcd.address=127.0.0.1:4001
       --kvstore-periodic-sync duration                               Periodic KVstore synchronization interval (default 5m0s)
       --l2-announcements-lease-duration duration                     Duration of inactivity after which a new leader is selected (default 15s)

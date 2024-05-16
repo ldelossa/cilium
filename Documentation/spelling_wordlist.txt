@@ -38,6 +38,7 @@ Donenfeld
 ECMP
 ENI
 Efx
+EKS
 Engleder
 FIt
 Fastabend
@@ -404,6 +405,7 @@ ipcache
 ipmasq
 iproute
 ipsec
+ipsets
 iptables
 ipv
 istio
@@ -507,6 +509,7 @@ memcd
 microservice
 microservices
 minikube
+misconfiguration
 misconfigures
 mitigations
 mlx

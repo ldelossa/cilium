@@ -291,6 +291,10 @@ type Endpoint struct {
 	// Immutable after Endpoint creation.
 	K8sNamespace string
 
+	// K8sUID is the Kubernetes UID of the pod. Passed directly from the CNI.
+	// Immutable after Endpoint creation.
+	K8sUID string
+
 	// pod
 	pod atomic.Pointer[slim_corev1.Pod]
 
@@ -1264,6 +1268,14 @@ func (e *Endpoint) GetK8sNamespace() string {
 	return ns
 }
 
+// GetK8sUID returns the UID of the pod if the endpoint represents a Kubernetes
+// pod.
+func (e *Endpoint) GetK8sUID() string {
+	// const after creation
+	uid := e.K8sUID
+	return uid
+}
+
 // SetPod sets the pod related to this endpoint.
 func (e *Endpoint) SetPod(pod *slim_corev1.Pod) {
 	e.pod.Store(pod)
@@ -1721,9 +1733,15 @@ func (e *Endpoint) metadataResolver(ctx context.Context,
 
 	ns, podName := e.GetK8sNamespace(), e.GetK8sPodName()
 
-	pod, cp, identityLabels, info, _, err := resolveMetadata(ns, podName)
-	if err != nil {
+	pod, k8sMetadata, err := resolveMetadata(ns, podName)
+	switch {
+	case err != nil:
 		e.Logger(resolveLabels).WithError(err).Warning("Unable to fetch kubernetes labels")
+		fallthrough
+	case e.K8sUID != "" && e.K8sUID != string(pod.GetUID()):
+		if err == nil {
+			err = errors.New("metadata resolver: pod store out-of-date")
+		}
 		// If we were unable to fetch the k8s endpoints then
 		// we will mark the endpoint with the init identity.
 		if !restoredEndpoint {
@@ -1742,12 +1760,12 @@ func (e *Endpoint) metadataResolver(ctx context.Context,
 
 	// Merge the labels retrieved from the 'resolveMetadata' into the base
 	// labels.
-	controllerBaseLabels.MergeLabels(identityLabels)
+	controllerBaseLabels.MergeLabels(k8sMetadata.IdentityLabels)
 
 	e.SetPod(pod)
-	e.SetK8sMetadata(cp)
+	e.SetK8sMetadata(k8sMetadata.ContainerPorts)
 	e.UpdateNoTrackRules(func(_, _ string) (noTrackPort string, err error) {
-		po, _, _, _, _, err := resolveMetadata(ns, podName)
+		po, _, err := resolveMetadata(ns, podName)
 		if err != nil {
 			return "", err
 		}
@@ -1755,7 +1773,7 @@ func (e *Endpoint) metadataResolver(ctx context.Context,
 		return value, nil
 	})
 	e.UpdateVisibilityPolicy(func(_, _ string) (proxyVisibility string, err error) {
-		po, _, _, _, _, err := resolveMetadata(ns, podName)
+		po, _, err := resolveMetadata(ns, podName)
 		if err != nil {
 			return "", err
 		}
@@ -1763,11 +1781,11 @@ func (e *Endpoint) metadataResolver(ctx context.Context,
 		return value, nil
 	})
 	e.UpdateBandwidthPolicy(bwm, func(ns, podName string) (bandwidthEgress string, err error) {
-		_, _, _, _, annotations, err := resolveMetadata(ns, podName)
+		_, k8sMetadata, err := resolveMetadata(ns, podName)
 		if err != nil {
 			return "", err
 		}
-		return annotations[bandwidth.EgressBandwidth], nil
+		return k8sMetadata.Annotations[bandwidth.EgressBandwidth], nil
 	})
 
 	// If 'baseLabels' are not set then 'controllerBaseLabels' only contains
@@ -1778,14 +1796,23 @@ func (e *Endpoint) metadataResolver(ctx context.Context,
 	if len(baseLabels) != 0 {
 		source = labels.LabelSourceAny
 	}
-	regenTriggered = e.UpdateLabels(ctx, source, controllerBaseLabels, info, blocking)
+	regenTriggered = e.UpdateLabels(ctx, source, controllerBaseLabels, k8sMetadata.InfoLabels, blocking)
 
 	return regenTriggered, nil
 }
 
+// K8sMetadata is a collection of Kubernetes-related metadata that are fetched
+// from Kubernetes.
+type K8sMetadata struct {
+	ContainerPorts []slim_corev1.ContainerPort
+	IdentityLabels labels.Labels
+	InfoLabels     labels.Labels
+	Annotations    map[string]string
+}
+
 // MetadataResolverCB provides an implementation for resolving the endpoint
 // metadata for an endpoint such as the associated labels and annotations.
-type MetadataResolverCB func(ns, podName string) (pod *slim_corev1.Pod, _ []slim_corev1.ContainerPort, identityLabels labels.Labels, infoLabels labels.Labels, annotations map[string]string, err error)
+type MetadataResolverCB func(ns, podName string) (pod *slim_corev1.Pod, k8sMetadata *K8sMetadata, err error)
 
 // RunMetadataResolver starts a controller associated with the received
 // endpoint which will periodically attempt to resolve the metadata for the

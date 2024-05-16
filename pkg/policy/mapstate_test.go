@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"testing"
 
-	check "github.com/cilium/checkmate"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/cilium/cilium/pkg/checker"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/labels"
@@ -25,73 +24,73 @@ func Test_IsSuperSetOf(t *testing.T) {
 		res      int
 	}{
 		{Key{}, Key{}, 0},
-		{Key{0, 0, 0, 0}, Key{42, 0, 6, 0}, 1},
-		{Key{0, 0, 0, 0}, Key{42, 80, 6, 0}, 1},
-		{Key{0, 0, 0, 0}, Key{42, 0, 0, 0}, 1},
-		{Key{0, 0, 6, 0}, Key{42, 0, 6, 0}, 2},
-		{Key{0, 0, 6, 0}, Key{42, 80, 6, 0}, 2},
-		{Key{0, 80, 6, 0}, Key{42, 80, 6, 0}, 3},
-		{Key{0, 80, 6, 0}, Key{42, 80, 17, 0}, 0},  // proto is different
-		{Key{2, 80, 6, 0}, Key{42, 80, 6, 0}, 0},   // id is different
-		{Key{0, 8080, 6, 0}, Key{42, 80, 6, 0}, 0}, // port is different
-		{Key{42, 0, 0, 0}, Key{42, 0, 0, 0}, 0},    // same key
-		{Key{42, 0, 0, 0}, Key{42, 0, 6, 0}, 4},
-		{Key{42, 0, 0, 0}, Key{42, 80, 6, 0}, 4},
-		{Key{42, 0, 0, 0}, Key{42, 0, 17, 0}, 4},
-		{Key{42, 0, 0, 0}, Key{42, 80, 17, 0}, 4},
-		{Key{42, 0, 6, 0}, Key{42, 0, 6, 0}, 0}, // same key
-		{Key{42, 0, 6, 0}, Key{42, 80, 6, 0}, 5},
-		{Key{42, 0, 6, 0}, Key{42, 8080, 6, 0}, 5},
-		{Key{42, 80, 6, 0}, Key{42, 80, 6, 0}, 0},    // same key
-		{Key{42, 80, 6, 0}, Key{42, 8080, 6, 0}, 0},  // different port
-		{Key{42, 80, 6, 0}, Key{42, 80, 17, 0}, 0},   // different proto
-		{Key{42, 80, 6, 0}, Key{42, 8080, 17, 0}, 0}, // different port and proto
+		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1},
+		{key(0, 0, 0, 0), key(42, 80, 6, 0), 1},
+		{key(0, 0, 0, 0), key(42, 0, 0, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 6, 0), 2},
+		{key(0, 0, 6, 0), key(42, 80, 6, 0), 2},
+		{key(0, 80, 6, 0), key(42, 80, 6, 0), 3},
+		{key(0, 80, 6, 0), key(42, 80, 17, 0), 0},  // proto is different
+		{key(2, 80, 6, 0), key(42, 80, 6, 0), 0},   // id is different
+		{key(0, 8080, 6, 0), key(42, 80, 6, 0), 0}, // port is different
+		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},    // same key
+		{key(42, 0, 0, 0), key(42, 0, 6, 0), 4},
+		{key(42, 0, 0, 0), key(42, 80, 6, 0), 4},
+		{key(42, 0, 0, 0), key(42, 0, 17, 0), 4},
+		{key(42, 0, 0, 0), key(42, 80, 17, 0), 4},
+		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0}, // same key
+		{key(42, 0, 6, 0), key(42, 80, 6, 0), 5},
+		{key(42, 0, 6, 0), key(42, 8080, 6, 0), 5},
+		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0},    // same key
+		{key(42, 80, 6, 0), key(42, 8080, 6, 0), 0},  // different port
+		{key(42, 80, 6, 0), key(42, 80, 17, 0), 0},   // different proto
+		{key(42, 80, 6, 0), key(42, 8080, 17, 0), 0}, // different port and proto
 
 		// increasing specificity for a L3/L4 key
-		{Key{0, 0, 0, 0}, Key{42, 80, 6, 0}, 1},
-		{Key{0, 0, 6, 0}, Key{42, 80, 6, 0}, 2},
-		{Key{0, 80, 6, 0}, Key{42, 80, 6, 0}, 3},
-		{Key{42, 0, 0, 0}, Key{42, 80, 6, 0}, 4},
-		{Key{42, 0, 6, 0}, Key{42, 80, 6, 0}, 5},
-		{Key{42, 80, 6, 0}, Key{42, 80, 6, 0}, 0}, // same key
+		{key(0, 0, 0, 0), key(42, 80, 6, 0), 1},
+		{key(0, 0, 6, 0), key(42, 80, 6, 0), 2},
+		{key(0, 80, 6, 0), key(42, 80, 6, 0), 3},
+		{key(42, 0, 0, 0), key(42, 80, 6, 0), 4},
+		{key(42, 0, 6, 0), key(42, 80, 6, 0), 5},
+		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0}, // same key
 
 		// increasing specificity for a L3-only key
-		{Key{0, 0, 0, 0}, Key{42, 0, 0, 0}, 1},
-		{Key{0, 0, 6, 0}, Key{42, 0, 0, 0}, 0},   // not a superset
-		{Key{0, 80, 6, 0}, Key{42, 0, 0, 0}, 0},  // not a superset
-		{Key{42, 0, 0, 0}, Key{42, 0, 0, 0}, 0},  // same key
-		{Key{42, 0, 6, 0}, Key{42, 0, 0, 0}, 0},  // not a superset
-		{Key{42, 80, 6, 0}, Key{42, 0, 0, 0}, 0}, // not a superset
+		{key(0, 0, 0, 0), key(42, 0, 0, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 0, 0), 0},   // not a superset
+		{key(0, 80, 6, 0), key(42, 0, 0, 0), 0},  // not a superset
+		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},  // same key
+		{key(42, 0, 6, 0), key(42, 0, 0, 0), 0},  // not a superset
+		{key(42, 80, 6, 0), key(42, 0, 0, 0), 0}, // not a superset
 
 		// increasing specificity for a L3/proto key
-		{Key{0, 0, 0, 0}, Key{42, 0, 6, 0}, 1},
-		{Key{0, 0, 6, 0}, Key{42, 0, 6, 0}, 2},
-		{Key{0, 80, 6, 0}, Key{42, 0, 6, 0}, 0}, // not a superset
-		{Key{42, 0, 0, 0}, Key{42, 0, 6, 0}, 4},
-		{Key{42, 0, 6, 0}, Key{42, 0, 6, 0}, 0},  // same key
-		{Key{42, 80, 6, 0}, Key{42, 0, 6, 0}, 0}, // not a superset
+		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 6, 0), 2},
+		{key(0, 80, 6, 0), key(42, 0, 6, 0), 0}, // not a superset
+		{key(42, 0, 0, 0), key(42, 0, 6, 0), 4},
+		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0},  // same key
+		{key(42, 80, 6, 0), key(42, 0, 6, 0), 0}, // not a superset
 
 		// increasing specificity for a proto-only key
-		{Key{0, 0, 0, 0}, Key{0, 0, 6, 0}, 1},
-		{Key{0, 0, 6, 0}, Key{0, 0, 6, 0}, 0},   // same key
-		{Key{0, 80, 6, 0}, Key{0, 0, 6, 0}, 0},  // not a superset
-		{Key{42, 0, 0, 0}, Key{0, 0, 6, 0}, 0},  // not a superset
-		{Key{42, 0, 6, 0}, Key{0, 0, 6, 0}, 0},  // not a superset
-		{Key{42, 80, 6, 0}, Key{0, 0, 6, 0}, 0}, // not a superset
+		{key(0, 0, 0, 0), key(0, 0, 6, 0), 1},
+		{key(0, 0, 6, 0), key(0, 0, 6, 0), 0},   // same key
+		{key(0, 80, 6, 0), key(0, 0, 6, 0), 0},  // not a superset
+		{key(42, 0, 0, 0), key(0, 0, 6, 0), 0},  // not a superset
+		{key(42, 0, 6, 0), key(0, 0, 6, 0), 0},  // not a superset
+		{key(42, 80, 6, 0), key(0, 0, 6, 0), 0}, // not a superset
 
 		// increasing specificity for a L4-only key
-		{Key{0, 0, 0, 0}, Key{0, 80, 6, 0}, 1},
-		{Key{0, 0, 6, 0}, Key{0, 80, 6, 0}, 2},
-		{Key{0, 80, 6, 0}, Key{0, 80, 6, 0}, 0},  // same key
-		{Key{42, 0, 0, 0}, Key{0, 80, 6, 0}, 0},  // not a superset
-		{Key{42, 0, 6, 0}, Key{0, 80, 6, 0}, 0},  // not a superset
-		{Key{42, 80, 6, 0}, Key{0, 80, 6, 0}, 0}, // not a superset
+		{key(0, 0, 0, 0), key(0, 80, 6, 0), 1},
+		{key(0, 0, 6, 0), key(0, 80, 6, 0), 2},
+		{key(0, 80, 6, 0), key(0, 80, 6, 0), 0},  // same key
+		{key(42, 0, 0, 0), key(0, 80, 6, 0), 0},  // not a superset
+		{key(42, 0, 6, 0), key(0, 80, 6, 0), 0},  // not a superset
+		{key(42, 80, 6, 0), key(0, 80, 6, 0), 0}, // not a superset
 
 	}
 	for i, tt := range tests {
-		assert.Equal(t, tt.res, tt.superSet.IsSuperSetOf(tt.subSet), fmt.Sprintf("IsSuperSetOf failed on round %d", i+1))
+		assert.Equal(t, tt.res, IsSuperSetOf(tt.superSet, tt.subSet), fmt.Sprintf("IsSuperSetOf failed on round %d", i+1))
 		if tt.res != 0 {
-			assert.Equal(t, 0, tt.subSet.IsSuperSetOf(tt.superSet), fmt.Sprintf("Reverse IsSuperSetOf succeeded on round %d", i+1))
+			assert.Equal(t, 0, IsSuperSetOf(tt.subSet, tt.superSet), fmt.Sprintf("Reverse IsSuperSetOf succeeded on round %d", i+1))
 		}
 	}
 }
@@ -131,28 +130,28 @@ func (e MapStateEntry) WithDependents(keys ...Key) MapStateEntry {
 	return e
 }
 
-func (ds *PolicyTestSuite) TestPolicyKeyTrafficDirection(c *check.C) {
+func TestPolicyKeyTrafficDirection(t *testing.T) {
 	k := Key{TrafficDirection: trafficdirection.Ingress.Uint8()}
-	c.Assert(k.IsIngress(), check.Equals, true)
-	c.Assert(k.IsEgress(), check.Equals, false)
+	require.True(t, k.IsIngress())
+	require.Equal(t, false, k.IsEgress())
 
 	k = Key{TrafficDirection: trafficdirection.Egress.Uint8()}
-	c.Assert(k.IsIngress(), check.Equals, false)
-	c.Assert(k.IsEgress(), check.Equals, true)
+	require.Equal(t, false, k.IsIngress())
+	require.True(t, k.IsEgress())
 }
 
 // validatePortProto makes sure each Key in MapState abides by the contract that protocol/nexthdr
 // can only be wildcarded if the destination port is also wildcarded.
-func (ms *mapState) validatePortProto(c *check.C) {
+func (ms *mapState) validatePortProto(t *testing.T) {
 	ms.ForEach(func(k Key, _ MapStateEntry) bool {
 		if k.Nexthdr == 0 {
-			c.Assert(k.DestPort, check.Equals, uint16(0))
+			require.Equal(t, uint16(0), k.DestPort)
 		}
 		return true
 	})
 }
 
-func (ds *PolicyTestSuite) TestMapState_denyPreferredInsertWithChanges(c *check.C) {
+func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 	type args struct {
 		key   Key
 		entry MapStateEntry
@@ -1175,17 +1174,17 @@ func (ds *PolicyTestSuite) TestMapState_denyPreferredInsertWithChanges(c *check.
 		})
 
 		ms.denyPreferredInsertWithChanges(tt.args.key, tt.args.entry, nil, denyRules, changes)
-		ms.validatePortProto(c)
-		c.Assert(ms.allows, checker.DeepEquals, tt.want.allows, check.Commentf("%s: MapState mismatch allows", tt.name))
-		c.Assert(ms.denies, checker.DeepEquals, tt.want.denies, check.Commentf("%s: MapState mismatch denies", tt.name))
-		c.Assert(changes.Adds, checker.DeepEquals, tt.wantAdds, check.Commentf("%s: Adds mismatch", tt.name))
-		c.Assert(changes.Deletes, checker.DeepEquals, tt.wantDeletes, check.Commentf("%s: Deletes mismatch", tt.name))
-		c.Assert(changes.Old, checker.DeepEquals, tt.wantOld, check.Commentf("%s: OldValues mismatch allows", tt.name))
+		ms.validatePortProto(t)
+		require.EqualValuesf(t, tt.want.allows, ms.allows, "%s: MapState mismatch allows", tt.name)
+		require.EqualValuesf(t, tt.want.denies, ms.denies, "%s: MapState mismatch denies", tt.name)
+		require.EqualValuesf(t, tt.wantAdds, changes.Adds, "%s: Adds mismatch", tt.name)
+		require.EqualValuesf(t, tt.wantDeletes, changes.Deletes, "%s: Deletes mismatch", tt.name)
+		require.EqualValuesf(t, tt.wantOld, changes.Old, "%s: OldValues mismatch allows", tt.name)
 
 		// Revert changes and check that we get the original mapstate
 		ms.RevertChanges(changes)
-		c.Assert(ms.allows, checker.DeepEquals, tt.ms.allows, check.Commentf("%s: Revert mismatch allows", tt.name))
-		c.Assert(ms.denies, checker.DeepEquals, tt.ms.denies, check.Commentf("%s: Revert mismatch denies", tt.name))
+		require.EqualValuesf(t, tt.ms.allows, ms.allows, "%s: Revert mismatch allows", tt.name)
+		require.EqualValuesf(t, tt.ms.denies, ms.denies, "%s: Revert mismatch denies", tt.name)
 	}
 }
 
@@ -1268,7 +1267,7 @@ func testEntryD(proxyPort uint16, deny bool, authType AuthType, derivedFrom labe
 	return entry
 }
 
-func (ds *PolicyTestSuite) TestMapState_AccumulateMapChangesDeny(c *check.C) {
+func TestMapState_AccumulateMapChangesDeny(t *testing.T) {
 	csFoo := newTestCachedSelector("Foo", false)
 	csBar := newTestCachedSelector("Bar", false)
 
@@ -1602,14 +1601,14 @@ func (ds *PolicyTestSuite) TestMapState_AccumulateMapChangesDeny(c *check.C) {
 			policyMaps.AccumulateMapChanges(cs, adds, deletes, key, value)
 		}
 		adds, deletes := policyMaps.consumeMapChanges(DummyOwner{}, policyMapState, denyRules, nil)
-		policyMapState.validatePortProto(c)
-		c.Assert(policyMapState, checker.DeepEquals, tt.state, check.Commentf(tt.name+" (MapState)"))
-		c.Assert(adds, checker.DeepEquals, tt.adds, check.Commentf(tt.name+" (adds)"))
-		c.Assert(deletes, checker.DeepEquals, tt.deletes, check.Commentf(tt.name+" (deletes)"))
+		policyMapState.validatePortProto(t)
+		require.EqualValues(t, tt.state, policyMapState, tt.name+" (MapState)")
+		require.EqualValues(t, tt.adds, adds, tt.name+" (adds)")
+		require.EqualValues(t, tt.deletes, deletes, tt.name+" (deletes)")
 	}
 }
 
-func (ds *PolicyTestSuite) TestMapState_AccumulateMapChanges(c *check.C) {
+func TestMapState_AccumulateMapChanges(t *testing.T) {
 	csFoo := newTestCachedSelector("Foo", false)
 	csBar := newTestCachedSelector("Bar", false)
 
@@ -1823,10 +1822,10 @@ func (ds *PolicyTestSuite) TestMapState_AccumulateMapChanges(c *check.C) {
 			policyMaps.AccumulateMapChanges(cs, adds, deletes, key, value)
 		}
 		adds, deletes := policyMaps.consumeMapChanges(DummyOwner{}, policyMapState, policyFeatures(0), nil)
-		policyMapState.validatePortProto(c)
-		c.Assert(policyMapState, checker.DeepEquals, tt.state, check.Commentf(tt.name+" (MapState)"))
-		c.Assert(adds, checker.DeepEquals, tt.adds, check.Commentf(tt.name+" (adds)"))
-		c.Assert(deletes, checker.DeepEquals, tt.deletes, check.Commentf(tt.name+" (deletes)"))
+		policyMapState.validatePortProto(t)
+		require.EqualValues(t, tt.state, policyMapState, tt.name+" (MapState)")
+		require.EqualValues(t, tt.adds, adds, tt.name+" (adds)")
+		require.EqualValues(t, tt.deletes, deletes, tt.name+" (deletes)")
 	}
 }
 
@@ -1834,7 +1833,7 @@ var testLabels = labels.LabelArray{
 	labels.NewLabel("test", "ing", labels.LabelSourceReserved),
 }
 
-func (ds *PolicyTestSuite) TestMapState_AddVisibilityKeys(c *check.C) {
+func TestMapState_AddVisibilityKeys(t *testing.T) {
 	csFoo := newTestCachedSelector("Foo", false)
 	csBar := newTestCachedSelector("Bar", false)
 
@@ -1999,9 +1998,9 @@ func (ds *PolicyTestSuite) TestMapState_AddVisibilityKeys(c *check.C) {
 			Old:  make(map[Key]MapStateEntry),
 		}
 		tt.ms.AddVisibilityKeys(DummyOwner{}, tt.args.redirectPort, &tt.args.visMeta, changes)
-		tt.ms.validatePortProto(c)
-		c.Assert(tt.ms.allows, checker.DeepEquals, tt.want.allows, check.Commentf(tt.name))
-		c.Assert(tt.ms.denies, checker.DeepEquals, tt.want.denies, check.Commentf(tt.name))
+		tt.ms.validatePortProto(t)
+		require.EqualValues(t, tt.want.allows, tt.ms.allows, tt.name)
+		require.EqualValues(t, tt.want.denies, tt.ms.denies, tt.name)
 		// Find new and updated entries
 		wantAdds := make(Keys)
 		wantOld := make(map[Key]MapStateEntry)
@@ -2013,7 +2012,7 @@ func (ds *PolicyTestSuite) TestMapState_AddVisibilityKeys(c *check.C) {
 		}
 		tt.ms.ForEach(func(k Key, v MapStateEntry) bool {
 			if v2, ok := old.Old[k]; ok {
-				if equals, _ := checker.DeepEqual(v2, v); !equals {
+				if !assert.ObjectsAreEqual(v2, v) {
 					if !v.DatapathEqual(&v2) {
 						wantAdds[k] = struct{}{}
 					}
@@ -2024,12 +2023,12 @@ func (ds *PolicyTestSuite) TestMapState_AddVisibilityKeys(c *check.C) {
 			}
 			return true
 		})
-		c.Assert(changes.Adds, checker.DeepEquals, wantAdds, check.Commentf(tt.name))
-		c.Assert(changes.Old, checker.DeepEquals, wantOld, check.Commentf(tt.name))
+		require.EqualValues(t, wantAdds, changes.Adds, tt.name)
+		require.EqualValues(t, wantOld, changes.Old, tt.name)
 	}
 }
 
-func (ds *PolicyTestSuite) TestMapState_AccumulateMapChangesOnVisibilityKeys(c *check.C) {
+func TestMapState_AccumulateMapChangesOnVisibilityKeys(t *testing.T) {
 	csFoo := newTestCachedSelector("Foo", false)
 	csBar := newTestCachedSelector("Bar", false)
 
@@ -2368,8 +2367,8 @@ func (ds *PolicyTestSuite) TestMapState_AccumulateMapChangesOnVisibilityKeys(c *
 		for _, arg := range tt.visArgs {
 			policyMapState.AddVisibilityKeys(DummyOwner{}, arg.redirectPort, &arg.visMeta, changes)
 		}
-		c.Assert(changes.Adds, checker.DeepEquals, tt.visAdds, check.Commentf(tt.name+" (visAdds)"))
-		c.Assert(changes.Old, checker.DeepEquals, tt.visOld, check.Commentf(tt.name+" (visOld)"))
+		require.EqualValues(t, tt.visAdds, changes.Adds, tt.name+" (visAdds)")
+		require.EqualValues(t, tt.visOld, changes.Old, tt.name+" (visOld)")
 
 		for _, x := range tt.args {
 			dir := trafficdirection.Egress
@@ -2404,14 +2403,14 @@ func (ds *PolicyTestSuite) TestMapState_AccumulateMapChangesOnVisibilityKeys(c *
 		for k := range changes.Old {
 			changes.Deletes[k] = struct{}{}
 		}
-		policyMapState.validatePortProto(c)
-		c.Assert(policyMapState, checker.DeepEquals, tt.state, check.Commentf(tt.name+" (MapState)"))
-		c.Assert(changes.Adds, checker.DeepEquals, tt.adds, check.Commentf(tt.name+" (adds)"))
-		c.Assert(changes.Deletes, checker.DeepEquals, tt.deletes, check.Commentf(tt.name+" (deletes)"))
+		policyMapState.validatePortProto(t)
+		require.EqualValues(t, tt.state, policyMapState, tt.name+" (MapState)")
+		require.EqualValues(t, tt.adds, changes.Adds, tt.name+" (adds)")
+		require.EqualValues(t, tt.deletes, changes.Deletes, tt.name+" (deletes)")
 	}
 }
 
-func (ds *PolicyTestSuite) TestMapState_denyPreferredInsertWithSubnets(c *check.C) {
+func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 	identityCache := cache.IdentityCache{
 		identity.ReservedIdentityWorld: labels.LabelWorld.LabelArray(),
 		worldIPIdentity:                lblWorldIP,                  // "192.0.2.3/32"
@@ -2537,8 +2536,8 @@ func (ds *PolicyTestSuite) TestMapState_denyPreferredInsertWithSubnets(c *check.
 		outcomeKeys := newMapState(nil)
 		outcomeKeys.denyPreferredInsert(aKey, aEntry, selectorCache, allFeatures)
 		outcomeKeys.denyPreferredInsert(bKey, bEntry, selectorCache, allFeatures)
-		outcomeKeys.validatePortProto(c)
-		c.Assert(outcomeKeys, checker.DeepEquals, expectedKeys, check.Commentf(tt.name))
+		outcomeKeys.validatePortProto(t)
+		require.EqualValues(t, expectedKeys, outcomeKeys, tt.name)
 	}
 	// Now test all cases with different traffic directions.
 	// This should result in both entries being inserted with
@@ -2562,7 +2561,7 @@ func (ds *PolicyTestSuite) TestMapState_denyPreferredInsertWithSubnets(c *check.
 		outcomeKeys := newMapState(nil)
 		outcomeKeys.denyPreferredInsert(aKey, aEntry, selectorCache, allFeatures)
 		outcomeKeys.denyPreferredInsert(bKey, bEntry, selectorCache, allFeatures)
-		outcomeKeys.validatePortProto(c)
-		c.Assert(outcomeKeys, checker.DeepEquals, expectedKeys, check.Commentf("different traffic directions %s", tt.name))
+		outcomeKeys.validatePortProto(t)
+		require.EqualValuesf(t, expectedKeys, outcomeKeys, "different traffic directions %s", tt.name)
 	}
 }

@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	fakeDatapath "github.com/cilium/cilium/pkg/datapath/fake/types"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/loadbalancer"
@@ -78,7 +77,7 @@ func TestPhantomServiceMutator(t *testing.T) {
 }
 
 func TestPhantomServiceUpdate(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()), cmcfg.Config{})
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{})
 
 	svc := store.ClusterService{
 		Cluster:   "other",
@@ -129,7 +128,7 @@ func TestPhantomServiceUpdate(t *testing.T) {
 }
 
 func TestPhantomServiceDelete(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()), cmcfg.Config{})
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{})
 
 	svc := store.ClusterService{
 		Cluster:   "other",
@@ -172,7 +171,7 @@ func TestPhantomServiceDelete(t *testing.T) {
 }
 
 func TestGlobalToPhantomToGlobalService(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()), cmcfg.Config{})
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{})
 
 	k8sSvc := slim_corev1.Service{
 		ObjectMeta: slim_metav1.ObjectMeta{

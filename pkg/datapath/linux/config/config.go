@@ -21,6 +21,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/cilium/statedb"
+
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/byteorder"
 	"github.com/cilium/cilium/pkg/cidr"
@@ -53,14 +55,12 @@ import (
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/maps/recorder"
 	"github.com/cilium/cilium/pkg/maps/signalmap"
-	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/maps/vtep"
 	"github.com/cilium/cilium/pkg/maps/worldcidrsmap"
 	"github.com/cilium/cilium/pkg/netns"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
-	"github.com/cilium/cilium/pkg/statedb"
 	wgtypes "github.com/cilium/cilium/pkg/wireguard/types"
 )
 
@@ -69,6 +69,7 @@ import (
 type HeaderfileWriter struct {
 	db                 *statedb.DB
 	devices            statedb.Table[*tables.Device]
+	nodeAddrs          statedb.Table[tables.NodeAddress]
 	log                logrus.FieldLogger
 	nodeMap            nodemap.MapV2
 	nodeAddressing     datapath.NodeAddressing
@@ -88,6 +89,7 @@ func NewHeaderfileWriter(p WriterParams) (datapath.ConfigWriter, error) {
 		nodeMap:            p.NodeMap,
 		db:                 p.DB,
 		devices:            p.Devices,
+		nodeAddrs:          p.NodeAddresses,
 		nodeAddressing:     p.NodeAddressing,
 		nodeExtraDefines:   merged,
 		nodeExtraDefineFns: p.NodeExtraDefineFns,
@@ -102,6 +104,8 @@ func writeIncludes(w io.Writer) (int, error) {
 
 // WriteNodeConfig writes the local node configuration to the specified writer.
 func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeConfiguration) error {
+	txn := h.db.ReadTxn()
+
 	extraMacrosMap := make(dpdef.Map)
 	cDefinesMap := make(dpdef.Map)
 
@@ -118,16 +122,30 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	routerIP := node.GetIPv6Router()
 	hostIP := node.GetIPv6()
 
+	var ipv4NodePortAddrs, ipv6NodePortAddrs []netip.Addr
+	iter, _ := h.nodeAddrs.All(txn)
+	for addr, _, ok := iter.Next(); ok; addr, _, ok = iter.Next() {
+		if !addr.NodePort {
+			continue
+		}
+		if addr.Addr.Is4() {
+			ipv4NodePortAddrs = append(ipv4NodePortAddrs, addr.Addr)
+		} else {
+			ipv6NodePortAddrs = append(ipv6NodePortAddrs, addr.Addr)
+
+		}
+	}
+
 	fmt.Fprintf(fw, "/*\n")
 	if option.Config.EnableIPv6 {
 		fmt.Fprintf(fw, " cilium.v6.external.str %s\n", node.GetIPv6().String())
 		fmt.Fprintf(fw, " cilium.v6.internal.str %s\n", node.GetIPv6Router().String())
-		fmt.Fprintf(fw, " cilium.v6.nodeport.str %v\n", h.nodeAddressing.IPv6().LoadBalancerNodeAddresses())
+		fmt.Fprintf(fw, " cilium.v6.nodeport.str %v\n", ipv6NodePortAddrs)
 		fmt.Fprintf(fw, "\n")
 	}
 	fmt.Fprintf(fw, " cilium.v4.external.str %s\n", node.GetIPv4().String())
 	fmt.Fprintf(fw, " cilium.v4.internal.str %s\n", node.GetInternalIPv4Router().String())
-	fmt.Fprintf(fw, " cilium.v4.nodeport.str %v\n", h.nodeAddressing.IPv4().LoadBalancerNodeAddresses())
+	fmt.Fprintf(fw, " cilium.v4.nodeport.str %v\n", ipv4NodePortAddrs)
 	fmt.Fprintf(fw, "\n")
 	if option.Config.EnableIPv6 {
 		fw.WriteString(dumpRaw(defaults.RestoreV6Addr, node.GetIPv6Router()))
@@ -203,17 +221,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["NODE_MAP"] = nodemap.MapName
 	cDefinesMap["NODE_MAP_V2"] = nodemap.MapNameV2
 	cDefinesMap["NODE_MAP_SIZE"] = fmt.Sprintf("%d", h.nodeMap.Size())
-	cDefinesMap["SRV6_VRF_MAP4"] = srv6map.VRFMapName4
-	cDefinesMap["SRV6_VRF_MAP6"] = srv6map.VRFMapName6
-	cDefinesMap["SRV6_POLICY_MAP4"] = srv6map.PolicyMapName4
-	cDefinesMap["SRV6_POLICY_MAP6"] = srv6map.PolicyMapName6
-	cDefinesMap["SRV6_SID_MAP"] = srv6map.SIDMapName
-	cDefinesMap["SRV6_STATE_MAP4"] = srv6map.StateMapName4
-	cDefinesMap["SRV6_STATE_MAP6"] = srv6map.StateMapName6
-	cDefinesMap["SRV6_VRF_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxVRFEntries)
-	cDefinesMap["SRV6_POLICY_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxPolicyEntries)
-	cDefinesMap["SRV6_SID_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxSIDEntries)
-	cDefinesMap["SRV6_STATE_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxStateEntries)
 	cDefinesMap["WORLD_CIDRS4_MAP"] = worldcidrsmap.MapName4
 	cDefinesMap["WORLD_CIDRS4_MAP_SIZE"] = fmt.Sprintf("%d", worldcidrsmap.MapMaxEntries)
 	cDefinesMap["POLICY_PROG_MAP_SIZE"] = fmt.Sprintf("%d", policymap.PolicyCallMaxEntries)

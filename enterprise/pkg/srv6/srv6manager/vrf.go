@@ -12,7 +12,7 @@ package srv6manager
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
@@ -77,19 +77,31 @@ func (m *Manager) getVRFKeysFromMatchingEndpoint(vrf *VRF) []srv6map.VRFKey {
 			if !rule.selectsEndpoint(labels.K8sStringMap()) {
 				continue
 			}
-			var ips []net.IP
+			var ips []netip.Addr
 			for _, pair := range endpoint.Networking.Addressing {
 				if pair.IPV4 != "" {
-					ips = append(ips, net.ParseIP(pair.IPV4).To4())
+					ip, err := netip.ParseAddr(pair.IPV4)
+					if err != nil {
+						continue
+					}
+					ips = append(ips, ip)
 				}
 				if pair.IPV6 != "" {
-					ips = append(ips, net.ParseIP(pair.IPV6).To16())
+					ip, err := netip.ParseAddr(pair.IPV6)
+					if err != nil {
+						continue
+					}
+					ips = append(ips, ip)
 				}
 			}
-			for i := range ips {
+			for _, ip := range ips {
 				for _, dstCIDR := range rule.dstCIDRs {
+					// We don't support heterogenenous family
+					if ip.Is4() != dstCIDR.Addr().Is4() {
+						continue
+					}
 					keys = append(keys, srv6map.VRFKey{
-						SourceIP: &(ips[i]),
+						SourceIP: ip,
 						DestCIDR: dstCIDR,
 					})
 				}
@@ -102,7 +114,7 @@ func (m *Manager) getVRFKeysFromMatchingEndpoint(vrf *VRF) []srv6map.VRFKey {
 // VRFRule is the internal representation of rules from IsovalentVRF.
 type VRFRule struct {
 	endpointSelectors []api.EndpointSelector
-	dstCIDRs          []*net.IPNet
+	dstCIDRs          []netip.Prefix
 }
 
 // deepcopy-gen cannot generate a DeepCopyInto for net.IPNet. Define by ourselves.
@@ -125,15 +137,8 @@ func (in *VRFRule) DeepCopyInto(out *VRFRule) {
 		}
 	}
 	if in.dstCIDRs != nil {
-		out.dstCIDRs = make([]*net.IPNet, len(in.dstCIDRs))
-		for i, cidr := range in.dstCIDRs {
-			out.dstCIDRs[i] = &net.IPNet{
-				IP:   make(net.IP, len(cidr.IP)),
-				Mask: make(net.IPMask, len(cidr.Mask)),
-			}
-			copy(out.dstCIDRs[i].IP, cidr.IP)
-			copy(out.dstCIDRs[i].Mask, cidr.Mask)
-		}
+		out.dstCIDRs = make([]netip.Prefix, len(in.dstCIDRs))
+		copy(out.dstCIDRs, in.dstCIDRs)
 	}
 }
 
@@ -159,7 +164,7 @@ func ParseVRF(csrvrf *v1alpha1.IsovalentVRF) (*VRF, error) {
 	}
 
 	var endpointSelectorList []api.EndpointSelector
-	var dstCidrList []*net.IPNet
+	var dstCidrList []netip.Prefix
 	var rules []VRFRule
 
 	allowAllNamespacesRequirement := slim_metav1.LabelSelectorRequirement{
@@ -169,7 +174,7 @@ func ParseVRF(csrvrf *v1alpha1.IsovalentVRF) (*VRF, error) {
 
 	for _, rule := range csrvrf.Spec.Rules {
 		for _, cidrString := range rule.DestinationCIDRs {
-			_, cidr, err := net.ParseCIDR(string(cidrString))
+			cidr, err := netip.ParsePrefix(string(cidrString))
 			if err != nil {
 				return nil, err
 			}

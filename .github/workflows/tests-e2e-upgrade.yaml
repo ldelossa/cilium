@@ -24,6 +24,8 @@ on:
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
 permissions:
+  # To read actions state with catchpoint/workflow-telemetry-action
+  actions: read
   # To be able to access the repository with actions/checkout
   contents: read
   # To allow retrieving information from the PR API
@@ -258,6 +260,7 @@ jobs:
             # Disable bpf.tproxy=true until https://github.com/cilium/cilium/issues/31918
             # has been resolved.
             misc: 'bpfClockProbe=false,cni.uninstall=false'
+            ciliumendpointslice: 'true'
 
           - name: '16'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -271,6 +274,7 @@ jobs:
             encryption: 'wireguard'
             encryption-node: 'false'
             host-fw: 'true'
+            ciliumendpointslice: 'true'
 
     timeout-minutes: 60
     steps:
@@ -280,7 +284,7 @@ jobs:
           comment_on_pr: false
 
       - name: Checkout context ref (trusted)
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
@@ -320,6 +324,7 @@ jobs:
           mutual-auth: false
           ingress-controller: ${{ matrix.ingress-controller }}
           misc: ${{ matrix.misc || 'bpfClockProbe=false,cni.uninstall=false' }}
+          ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
 
       - name: Derive newest Cilium installation config
         id: cilium-newest-config
@@ -341,9 +346,10 @@ jobs:
           mutual-auth: false
           ingress-controller: ${{ matrix.ingress-controller }}
           misc: ${{ matrix.misc || 'bpfClockProbe=false,cni.uninstall=false' }}
+          ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@bfa4f93a41da410a1b4c9373c1694ca6d5c35ade # v0.16.6
+        uses: cilium/cilium-cli@13cf0683b2662c27c691f4330c2ac0f48b429ce5 # v0.16.7
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -372,7 +378,7 @@ jobs:
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
       - name: Checkout pull request branch (NOT TRUSTED)
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -381,7 +387,7 @@ jobs:
             install/kubernetes/cilium
 
       - name: Checkout ${{ steps.vars.outputs.downgrade_version }} branch to get the Helm chart
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           ref: ${{ steps.vars.outputs.downgrade_version }}
           persist-credentials: false
@@ -426,7 +432,7 @@ jobs:
           ./cilium-cli upgrade \
             ${{ steps.cilium-newest-config.outputs.config }}
 
-          ./cilium-cli status --wait
+          ./cilium-cli status --wait --wait-duration=10m
           kubectl get pods --all-namespaces -o wide
           kubectl -n kube-system exec daemonset/cilium -- cilium status
 
@@ -457,7 +463,7 @@ jobs:
           ./cilium-cli upgrade \
             ${{ steps.cilium-stable-config.outputs.config }}
 
-          ./cilium-cli status --wait
+          ./cilium-cli status --wait --wait-duration=10m
           kubectl get pods --all-namespaces -o wide
           kubectl -n kube-system exec daemonset/cilium -- cilium status
 

@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/hivetest"
+	"github.com/cilium/statedb"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
@@ -31,7 +32,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/nodemap/fake"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
-	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/testutils"
 )
 
@@ -92,15 +92,18 @@ func writeConfig(t *testing.T, header string, write writeFn) {
 		h := hive.New(
 			provideNodemap,
 			cell.Provide(
+				tables.NewNodeAddressTable,
+				statedb.RWTable[tables.NodeAddress].ToTable,
+				tables.NewDeviceTable,
+				statedb.RWTable[*tables.Device].ToTable,
 				fakeTypes.NewNodeAddressing,
 				func() sysctl.Sysctl { return sysctl.NewDirectSysctl(afero.NewOsFs(), "/proc") },
-				tables.NewDeviceTable,
-				func(_ *statedb.DB, devices statedb.RWTable[*tables.Device]) statedb.Table[*tables.Device] {
-					return devices
-				},
 				NewHeaderfileWriter,
 			),
-			cell.Invoke(statedb.RegisterTable[*tables.Device]),
+			cell.Invoke(
+				statedb.RegisterTable[*tables.Device],
+				statedb.RegisterTable[tables.NodeAddress],
+			),
 			cell.Invoke(func(writer_ datapath.ConfigWriter) {
 				writer = writer_
 			}),
@@ -368,26 +371,32 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 	setupConfigSuite(t)
 
 	var (
-		db      *statedb.DB
-		devices statedb.Table[*tables.Device]
-		na      datapath.NodeAddressing
+		db        *statedb.DB
+		devices   statedb.Table[*tables.Device]
+		nodeAddrs statedb.Table[tables.NodeAddress]
+		na        datapath.NodeAddressing
 	)
 	h := hive.New(
 		cell.Provide(
 			fakeTypes.NewNodeAddressing,
 			tables.NewDeviceTable,
-			func(_ *statedb.DB, devices statedb.RWTable[*tables.Device]) statedb.Table[*tables.Device] {
-				return devices
-			},
+			tables.NewNodeAddressTable,
+			statedb.RWTable[*tables.Device].ToTable,
+			statedb.RWTable[tables.NodeAddress].ToTable,
 		),
-		cell.Invoke(statedb.RegisterTable[*tables.Device]),
+		cell.Invoke(
+			statedb.RegisterTable[*tables.Device],
+			statedb.RegisterTable[tables.NodeAddress],
+		),
 		cell.Invoke(func(
 			db_ *statedb.DB,
 			devices_ statedb.Table[*tables.Device],
+			nodeAddrs_ statedb.Table[tables.NodeAddress],
 			nodeaddressing datapath.NodeAddressing,
 		) {
 			db = db_
 			devices = devices_
+			nodeAddrs = nodeAddrs_
 			na = nodeaddressing
 		}),
 	)
@@ -402,6 +411,7 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 	cfg, err := NewHeaderfileWriter(WriterParams{
 		DB:               db,
 		Devices:          devices,
+		NodeAddresses:    nodeAddrs,
 		NodeAddressing:   na,
 		NodeExtraDefines: nil,
 		NodeExtraDefineFns: []dpdef.Fn{
@@ -425,7 +435,8 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 	cfg, err = NewHeaderfileWriter(WriterParams{
 		DB:               db,
 		Devices:          devices,
-		NodeAddressing:   na,
+		NodeAddresses:    nodeAddrs,
+		NodeAddressing:   fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines: nil,
 		NodeExtraDefineFns: []dpdef.Fn{
 			func() (dpdef.Map, error) { return nil, errors.New("failing on purpose") },
@@ -442,7 +453,8 @@ func TestWriteNodeConfigExtraDefines(t *testing.T) {
 	cfg, err = NewHeaderfileWriter(WriterParams{
 		DB:               db,
 		Devices:          devices,
-		NodeAddressing:   na,
+		NodeAddresses:    nodeAddrs,
+		NodeAddressing:   fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines: nil,
 		NodeExtraDefineFns: []dpdef.Fn{
 			func() (dpdef.Map, error) { return dpdef.Map{"FOO": "0x1", "BAR": "0x2"}, nil },
@@ -461,17 +473,22 @@ func TestNewHeaderfileWriter(t *testing.T) {
 	testutils.PrivilegedTest(t)
 	setupConfigSuite(t)
 
-	devices, err := tables.NewDeviceTable()
-	require.NoError(t, err)
-	db, err := statedb.NewDB([]statedb.TableMeta{devices}, statedb.NewMetrics())
-	require.NoError(t, err)
-
 	a := dpdef.Map{"A": "1"}
 	var buffer bytes.Buffer
+
+	nodeAddrs, err := tables.NewNodeAddressTable()
+	require.NoError(t, err)
+
+	devices, err := tables.NewDeviceTable()
+	require.NoError(t, err)
+
+	db := statedb.New()
+	require.NoError(t, db.RegisterTable(devices, nodeAddrs), "RegisterTable")
 
 	_, err = NewHeaderfileWriter(WriterParams{
 		DB:                 db,
 		Devices:            devices,
+		NodeAddresses:      nodeAddrs,
 		NodeAddressing:     fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines:   []dpdef.Map{a, a},
 		NodeExtraDefineFns: nil,
@@ -484,6 +501,7 @@ func TestNewHeaderfileWriter(t *testing.T) {
 	cfg, err := NewHeaderfileWriter(WriterParams{
 		DB:                 db,
 		Devices:            devices,
+		NodeAddresses:      nodeAddrs,
 		NodeAddressing:     fakeTypes.NewNodeAddressing(),
 		NodeExtraDefines:   []dpdef.Map{a},
 		NodeExtraDefineFns: nil,

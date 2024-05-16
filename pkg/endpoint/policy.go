@@ -34,6 +34,7 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
+	policyTypes "github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/revert"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/types"
@@ -380,7 +381,6 @@ func (e *Endpoint) updateAndOverrideEndpointOptions(opts option.OptionMap) (opts
 // Called with e.mutex UNlocked
 func (e *Endpoint) regenerate(ctx *regenerationContext) (retErr error) {
 	var revision uint64
-	var stateDirComplete bool
 	var err error
 
 	ctx.Stats = regenerationStatistics{}
@@ -485,7 +485,7 @@ func (e *Endpoint) regenerate(ctx *regenerationContext) (retErr error) {
 		e.unlock()
 	}()
 
-	revision, stateDirComplete, err = e.regenerateBPF(ctx)
+	revision, err = e.regenerateBPF(ctx)
 
 	// Write full verifier log to the endpoint directory.
 	var ve *ebpf.VerifierError
@@ -516,13 +516,13 @@ func (e *Endpoint) regenerate(ctx *regenerationContext) (retErr error) {
 		return err
 	}
 
-	return e.updateRealizedState(stats, origDir, revision, stateDirComplete)
+	return e.updateRealizedState(stats, origDir, revision)
 }
 
 // updateRealizedState sets any realized state fields within the endpoint to
 // be the desired state of the endpoint. This is only called after a successful
 // regeneration of the endpoint.
-func (e *Endpoint) updateRealizedState(stats *regenerationStatistics, origDir string, revision uint64, stateDirComplete bool) error {
+func (e *Endpoint) updateRealizedState(stats *regenerationStatistics, origDir string, revision uint64) error {
 	// Update desired policy for endpoint because policy has now been realized
 	// in the datapath. PolicyMap state is not updated here, because that is
 	// performed in endpoint.syncPolicyMap().
@@ -538,7 +538,7 @@ func (e *Endpoint) updateRealizedState(stats *regenerationStatistics, origDir st
 	// Depending upon result of BPF regeneration (compilation executed),
 	// shift endpoint directories to match said BPF regeneration
 	// results.
-	err = e.synchronizeDirectories(origDir, stateDirComplete)
+	err = e.synchronizeDirectories(origDir)
 	if err != nil {
 		return fmt.Errorf("error synchronizing endpoint BPF program directories: %w", err)
 	}
@@ -985,7 +985,7 @@ func (e *Endpoint) UpdateBandwidthPolicy(bwm dptypes.BandwidthManager, annoCB An
 // LabelArrayList is shallow-copied and therefore must not be mutated.
 // This function explicitly exported to be accessed by code outside of the
 // Cilium source code tree and for testing.
-func (e *Endpoint) GetRealizedPolicyRuleLabelsForKey(key policy.Key) (
+func (e *Endpoint) GetRealizedPolicyRuleLabelsForKey(key policyTypes.Key) (
 	derivedFrom labels.LabelArrayList,
 	revision uint64,
 	ok bool,
