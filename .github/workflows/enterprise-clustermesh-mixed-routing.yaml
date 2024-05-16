@@ -232,6 +232,7 @@ jobs:
             --set routingMode=${{ (matrix.routing == 'native' || matrix.routing == 'mixed') && 'native' || 'tunnel' }} \
             --set autoDirectNodeRoutes=${{ matrix.routing == 'native' || matrix.routing == 'mixed' }} \
             --set bpf.masquerade=${{ matrix.kube-proxy == 'none' }} \
+            --set bpf.hostLegacyRouting=${{ matrix.kube-proxy == 'none' }} \
             --set endpointRoutes.enabled=${{ matrix.endpoint-routes }} \
           "
 
