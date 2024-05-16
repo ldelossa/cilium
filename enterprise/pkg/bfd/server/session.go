@@ -13,7 +13,7 @@ package server
 import (
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/netip"
 
 	"github.com/google/gopacket/layers"
@@ -724,7 +724,7 @@ func (s *bfdSession) setTransmitTimer() {
 
 	quarterInterval := s.curTransmitInterval / 4
 	// 75% + 0-25%
-	nextInterval := (quarterInterval * 3) + time.Duration(rand.Int63n(int64(quarterInterval)))
+	nextInterval := (quarterInterval * 3) + time.Duration(rand.Int64N(int64(quarterInterval)))
 
 	if s.local.detectMultiplier == 1 {
 		// If bfd.DetectMult is equal to 1, the interval between transmitted BFD
@@ -736,7 +736,7 @@ func (s *bfdSession) setTransmitTimer() {
 
 		thenthInterval := s.curTransmitInterval / 10
 		// 75% + 0-15%
-		nextInterval = (quarterInterval * 3) + time.Duration(rand.Int63n(int64(quarterInterval-thenthInterval)))
+		nextInterval = (quarterInterval * 3) + time.Duration(rand.Int64N(int64(quarterInterval-thenthInterval)))
 	}
 
 	s.transmitTimer = time.NewTimer(nextInterval)
