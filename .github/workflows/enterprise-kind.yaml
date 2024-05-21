@@ -20,6 +20,8 @@ concurrency:
 env:
   helm_chart_repo: oci://quay.io/isovalent-charts-dev/cilium
   kind_config: .github/kind-config.yaml
+  # renovate: datasource=github-releases depName=yannh/kubeconform
+  kubeconform_version: v0.6.6
 
 jobs:
   installation-and-connectivity:
@@ -80,6 +82,16 @@ jobs:
           cd enterprise/cilium-cli
           go mod tidy
           test -z "$(git status --porcelain)" || (echo "please run 'go mod tidy' and submit your changes"; exit 1)
+
+      - name: Install kubeconform
+        run: |
+          wget -qO- https://github.com/yannh/kubeconform/releases/download/${{ env.kubeconform_version }}/kubeconform-linux-amd64.tar.gz | tar xvz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin
+
+      - name: Lint FQDN Proxy Helm chart
+        run: |
+          cd enterprise/fqdn-proxy/installation
+          ./test.sh
 
       - name: Wait for Helm dev chart to be available
         timeout-minutes: 30
