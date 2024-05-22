@@ -37,6 +37,7 @@ pod_cidr="10.244.0.0/16"
 vpn_peer_ip="10.100.1.100"
 vpn_peer_gw_ip="10.100.1.1"
 vpn_prefix_len="24"
+service_vip="10.200.0.0"
 
 external_sid="fd00:aa:bb::100"
 sid_wait_seconds="60"
@@ -77,7 +78,11 @@ else
   kubectl apply -f "${manifests_dir}/vrf-default-locator.yaml"
 fi
 kubectl apply -f "${manifests_dir}/srv6-policy.yaml"
+kubectl apply -f "${manifests_dir}/service.yaml"
 kubectl apply -f "${manifests_dir}/pod.yaml"
+
+# wait for the service to come up
+kubectl wait --for=condition=Ready pod/httpbin-vrf1 --timeout=120s
 
 # wait for the netshoot pod to come up
 kubectl wait --for=condition=Ready pod/netshoot-vrf1 --timeout=120s
@@ -150,6 +155,7 @@ if [ "${srv6_encap_mode}" == "reduced" ]; then
   iproute_encap_mode="encap.red"
 fi
 ${external_node_exec} ip -4 route add "${pod_cidr}" vrf "${vrf_if_name}" encap seg6 mode "${iproute_encap_mode}" segs "${allocated_sid}" dev "${host_if_name}"
+${external_node_exec} ip -4 route add "${service_vip}/32" vrf "${vrf_if_name}" encap seg6 mode "${iproute_encap_mode}" segs "${allocated_sid}" dev "${host_if_name}"
 ${external_node_exec} ip -6 route add "${allocated_sid}/128" vrf "${vrf_if_name}" via "${cilium_node_ipv6}" dev "${host_if_name}"
 
 #
@@ -160,6 +166,9 @@ netshoot_pod_ip=$(kubectl get pod "${netshoot_pod_name}" --template '{{.status.p
 
 # ping from the k8s pod to the remote peer
 kubectl exec -t "${netshoot_pod_name}" -- ping -c 3 -w 10 -s 1400 "${vpn_peer_ip}"
+
+# curl from external node to the k8s pod
+${external_node_exec} ip netns exec "${ns_name}" curl -s -m 10 "http://${service_vip}:80/get"
 
 # helper func used to assert that the json output ($1) is equal to the expected value ($3) at the provided path ($2)
 jq_assert_eq () {
