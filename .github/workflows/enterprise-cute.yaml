@@ -43,6 +43,7 @@ env:
 
 jobs:
   commit-status-start:
+    if: ${{ github.event_name != 'push' }}
     name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
@@ -556,3 +557,15 @@ jobs:
           fi
           echo "destroying infra ..."
           make destroy AUTO_APPROVE=true
+
+  commit-status-final:
+    if: ${{ always() && github.event_name != 'push' }}
+    name: Commit Status Final
+    needs: cute-ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set final commit status
+        uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+          status: ${{ needs.cute-ci.result }}
