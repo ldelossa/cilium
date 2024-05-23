@@ -5,6 +5,7 @@ package types
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +51,10 @@ func (i Identifier) String() string {
 	return strings.Join([]string{i.Module.String(), i.Component.String()}, ".")
 }
 
+func (i Identifier) HealthID() HealthID {
+	return HealthID(i.String())
+}
+
 // Status represents a current health status update.
 type Status struct {
 	ID      Identifier
@@ -65,16 +70,28 @@ type Status struct {
 }
 
 func (Status) TableHeader() []string {
-	return []string{"Module", "Component", "Level", "Message", "LastOK", "UpdatedAt", "Count"}
+	return []string{"Module", "Component", "Level", "Message", "Error", "LastOK", "UpdatedAt", "Count"}
 }
 
 func (s Status) TableRow() []string {
-	return []string{s.ID.Module.String(), s.ID.Component.String(), string(s.Level), s.Message, s.LastOK.Format(time.RFC3339),
-		s.Updated.Format(time.RFC3339), fmt.Sprintf("%d", s.Count)}
+	return []string{
+		s.ID.Module.String(),
+		s.ID.Component.String(),
+		string(s.Level),
+		s.Message,
+		s.Error,
+		s.LastOK.Format(time.RFC3339),
+		s.Updated.Format(time.RFC3339),
+		strconv.FormatUint(s.Count, 10),
+	}
 }
 
 func (s Status) String() string {
-	return fmt.Sprintf("%s: [%s] %s", s.ID.String(), s.Level, s.Message)
+	if s.Error != "" {
+		return fmt.Sprintf("%s: [%s] %s: %s", s.ID.String(), s.Level, s.Message, s.Error)
+	} else {
+		return fmt.Sprintf("%s: [%s] %s", s.ID.String(), s.Level, s.Message)
+	}
 }
 
 type Level string

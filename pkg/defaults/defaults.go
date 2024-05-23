@@ -56,8 +56,9 @@ const (
 	// TemplatesDir is the default path for the compiled template objects relative to StateDir
 	TemplatesDir = "templates"
 
-	// TemplatePath is the default path for a symlink to a template relative to StateDir/<EPID>
-	TemplatePath = "template.o"
+	// TemplateIDPath is the name of a file which contains the ID (aka hash) of
+	// the template used by the endpoint.
+	TemplateIDPath = "template.txt"
 
 	// BpfDir is the default path for template files relative to LibDir
 	BpfDir = "bpf"
@@ -179,6 +180,14 @@ const (
 
 	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
 	DNSProxyEnableTransparentMode = false
+
+	// DNSProxyLockCount is the default array size containing mutexes which protect
+	// against parallel handling of DNS response names.
+	DNSProxyLockCount = 131
+
+	// DNSProxyLockTimeout is the default timeout when acquiring the locks controlled by
+	// DNSProxyLockCount.
+	DNSProxyLockTimeout = 500 * time.Millisecond
 
 	// IdentityChangeGracePeriod is the default value for
 	// option.IdentityChangeGracePeriod

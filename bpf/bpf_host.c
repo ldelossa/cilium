@@ -1083,14 +1083,15 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 		if (magic == MARK_MAGIC_PROXY_EGRESS_EPID) {
 			/* extracted identity is actually the endpoint ID */
 			ret = tail_call_egress_policy(ctx, (__u16)identity);
-			return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP,
+			return send_drop_notify_error(ctx, UNKNOWN_ID, ret, CTX_ACT_DROP,
 						      METRIC_EGRESS);
 		}
 #endif
 
 #ifdef ENABLE_IPSEC
 		if (magic == MARK_MAGIC_ENCRYPT) {
-			send_trace_notify(ctx, TRACE_FROM_STACK, identity, 0, 0,
+			send_trace_notify(ctx, TRACE_FROM_STACK, identity, UNKNOWN_ID,
+					  TRACE_EP_ID_UNKNOWN,
 					  ctx->ingress_ifindex, TRACE_REASON_ENCRYPTED, 0);
 			ret = CTX_ACT_OK;
 # ifdef TUNNEL_MODE
@@ -1104,8 +1105,8 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 #endif /* ENABLE_IPSEC */
 	}
 
-	send_trace_notify(ctx, trace, identity, 0, 0, ctx->ingress_ifindex,
-			  TRACE_REASON_UNKNOWN, TRACE_PAYLOAD_LEN);
+	send_trace_notify(ctx, trace, identity, UNKNOWN_ID, TRACE_EP_ID_UNKNOWN,
+			  ctx->ingress_ifindex, TRACE_REASON_UNKNOWN, TRACE_PAYLOAD_LEN);
 
 	bpf_clear_meta(ctx);
 
@@ -1221,10 +1222,11 @@ handle_netdev(struct __ctx_buff *ctx, const bool from_host)
 			break;
 		}
 #endif
-		return send_drop_notify(ctx, sec_label, id, 0, ret,
+		return send_drop_notify(ctx, sec_label, id, TRACE_EP_ID_UNKNOWN, ret,
 					CTX_ACT_DROP, METRIC_EGRESS);
 #else
-		send_trace_notify(ctx, TRACE_TO_STACK, HOST_ID, 0, 0,
+		send_trace_notify(ctx, TRACE_TO_STACK, HOST_ID, UNKNOWN_ID,
+				  TRACE_EP_ID_UNKNOWN,
 				  TRACE_IFINDEX_UNKNOWN, TRACE_REASON_UNKNOWN, 0);
 		/* Pass unknown traffic to the stack */
 		return CTX_ACT_OK;
@@ -1380,6 +1382,9 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 #endif
 
 #ifdef ENABLE_HOST_FIREWALL
+	/* This was initially added for Egress GW. There it's no longer needed,
+	 * but it potentially also helps other paths (LB-to-remote-backend ?).
+	 */
 	if (ctx_snat_done(ctx))
 		goto skip_host_firewall;
 
@@ -1440,8 +1445,8 @@ skip_host_firewall:
 			/* we are redirecting back into the stack, so TRACE_TO_STACK
 			 * for tracepoint
 			 */
-			send_trace_notify(ctx, TRACE_TO_STACK, 0, 0, 0,
-					  TRACE_IFINDEX_UNKNOWN,
+			send_trace_notify(ctx, TRACE_TO_STACK, UNKNOWN_ID, UNKNOWN_ID,
+					  TRACE_EP_ID_UNKNOWN, TRACE_IFINDEX_UNKNOWN,
 					  TRACE_REASON_ENCRYPT_OVERLAY, 0);
 			return ret;
 		}
@@ -1510,7 +1515,8 @@ exit:
 	if (IS_ERR(ret))
 		goto drop_err;
 
-	send_trace_notify(ctx, TRACE_TO_NETWORK, 0, 0, 0,
+	send_trace_notify(ctx, TRACE_TO_NETWORK, UNKNOWN_ID, UNKNOWN_ID,
+			  TRACE_EP_ID_UNKNOWN,
 			  TRACE_IFINDEX_UNKNOWN, trace.reason, trace.monitor);
 
 	return ret;
@@ -1601,7 +1607,8 @@ out:
 						  CTX_ACT_DROP, METRIC_INGRESS);
 
 	if (!traced)
-		send_trace_notify(ctx, TRACE_TO_STACK, src_id, 0, 0,
+		send_trace_notify(ctx, TRACE_TO_STACK, src_id, UNKNOWN_ID,
+				  TRACE_EP_ID_UNKNOWN,
 				  CILIUM_IFINDEX, trace.reason, trace.monitor);
 
 	return ret;
@@ -1698,7 +1705,7 @@ to_host_from_lxc(struct __ctx_buff *ctx __maybe_unused)
 
 out:
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+		return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_INGRESS);
 	return ret;
 }

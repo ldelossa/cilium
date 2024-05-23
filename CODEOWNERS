@@ -389,6 +389,7 @@ Makefile* @cilium/build
 /netlify.toml @cilium/ci-structure
 /operator/ @cilium/operator
 /operator/pkg/bgpv2 @cilium/sig-bgp
+/operator/pkg/ciliumendpointslice @cilium/sig-scalability
 /operator/pkg/ciliumenvoyconfig @cilium/sig-servicemesh
 /operator/pkg/controller-runtime @cilium/sig-servicemesh
 /operator/pkg/gateway-api @cilium/sig-servicemesh
@@ -446,7 +447,6 @@ Makefile* @cilium/build
 /pkg/debug @cilium/sig-agent
 /pkg/ebpf @cilium/sig-datapath
 /pkg/egressgateway/ @cilium/egress-gateway
-/pkg/elf @cilium/loader
 /pkg/endpoint/ @cilium/endpoint
 /pkg/endpointcleanup/ @cilium/endpoint
 /pkg/endpointmanager/ @cilium/endpoint
@@ -520,7 +520,6 @@ Makefile* @cilium/build
 /pkg/proxy/accesslog @cilium/proxy @cilium/api
 /pkg/proxy/dns.go @cilium/proxy @cilium/fqdn
 /pkg/proxy/envoyproxy.go @cilium/proxy @cilium/envoy
-/pkg/rand/ @cilium/sig-agent
 /pkg/rate/ @cilium/sig-agent
 /pkg/rate/metrics @cilium/metrics
 /pkg/recorder @cilium/sig-datapath
