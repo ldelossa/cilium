@@ -17,6 +17,7 @@ import (
 	cniVersion "github.com/containernetworking/cni/pkg/version"
 
 	"github.com/cilium/cilium/enterprise/cilium-cni/pkg/multinetwork"
+	_ "github.com/cilium/cilium/enterprise/fips"
 	"github.com/cilium/cilium/pkg/version"
 	"github.com/cilium/cilium/plugins/cilium-cni/cmd"
 )

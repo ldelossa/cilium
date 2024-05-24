@@ -1,3 +1,5 @@
+//go:build fips
+
 //  Copyright (C) Isovalent, Inc. - All Rights Reserved.
 //
 //  NOTICE: All information contained herein is, and remains the property of
@@ -8,16 +10,6 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package main
+package fips
 
-import (
-	_ "github.com/cilium/cilium/enterprise/fips"
-	"github.com/cilium/cilium/operator/cmd"
-	"github.com/cilium/cilium/pkg/hive"
-)
-
-func main() {
-	operatorHive := hive.New(EnterpriseOperator)
-
-	cmd.Execute(cmd.NewOperatorCmd(operatorHive))
-}
+import _ "crypto/tls/fipsonly"

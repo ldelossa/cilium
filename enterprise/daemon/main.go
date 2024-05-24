@@ -15,6 +15,7 @@ import (
 
 	"github.com/cilium/cilium/daemon/cmd"
 	"github.com/cilium/cilium/enterprise/daemon/daemonplugins"
+	_ "github.com/cilium/cilium/enterprise/fips"
 	"github.com/cilium/cilium/pkg/hive"
 )
 

@@ -6,6 +6,7 @@ package main
 import (
 	"os"
 
+	_ "github.com/cilium/cilium/enterprise/fips"
 	"github.com/cilium/cilium/hubble-relay/cmd"
 )
 

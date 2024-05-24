@@ -7,17 +7,11 @@
 //  protected by trade secret or copyright law.  Dissemination of this information
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
+//
+// Package fips can be used to enable the usage of FIPs compliant crypto
+// algorithms for a binary, with the following steps:
+// 1. Import this package somewhere in the target binary's project.
+// 2. Set the environment variable GOEXPERIMENT=boringcrypto
+// 3. Build your binary with the build tag 'fips'.
 
-package main
-
-import (
-	_ "github.com/cilium/cilium/enterprise/fips"
-	"github.com/cilium/cilium/operator/cmd"
-	"github.com/cilium/cilium/pkg/hive"
-)
-
-func main() {
-	operatorHive := hive.New(EnterpriseOperator)
-
-	cmd.Execute(cmd.NewOperatorCmd(operatorHive))
-}
+package fips

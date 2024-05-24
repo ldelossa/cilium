@@ -706,6 +706,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/cilium-dbg/cmd/*bfd_* @isovalent/traffic-engineering
 /enterprise/daemon/ @isovalent/cilium-agent
 /enterprise/featurelist/ @isovalent/cilium-agent
+/enterprise/fips/ @isovalent/cilium-agent
 /enterprise/fqdn-proxy/ @isovalent/dns-proxy
 /enterprise/hubble-relay/ @isovalent/hubble
 /enterprise/operator/ @isovalent/cilium-agent
