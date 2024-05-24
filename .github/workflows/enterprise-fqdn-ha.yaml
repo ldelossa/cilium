@@ -95,7 +95,8 @@ jobs:
             SHA="${{ github.sha }}"
           fi
 
-          CILIUM_INSTALL_DEFAULTS="--chart-directory=install/kubernetes/cilium \
+          CILIUM_INSTALL_DEFAULTS=" \
+            --chart-directory=install/kubernetes/cilium \
             --namespace=kube-system \
             --helm-set=debug.enabled=true \
             --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
@@ -106,10 +107,16 @@ jobs:
             --helm-set=operator.image.tag=${SHA} \
             --helm-set=operator.image.useDigest=false \
             --helm-set-string=extraConfig.external-dns-proxy=true \
-            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}'
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}' \
           "
 
-          CONNECTIVITY_TEST_DEFAULTS="--hubble=false --flow-validation=disabled --collect-sysdump-on-failure"
+          CONNECTIVITY_TEST_DEFAULTS=" \
+            --hubble=false \
+            --flow-validation=disabled \
+            --test='to-fqdn' \
+            --test='external-cilium-dns-proxy' \
+            --collect-sysdump-on-failure \
+          "
 
           echo cilium_install_defaults="${CILIUM_INSTALL_DEFAULTS}" >> $GITHUB_OUTPUT
           echo connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS} >> $GITHUB_OUTPUT
@@ -165,7 +172,9 @@ jobs:
 
       - name: Run connectivity fqdn test
         run: |
-          cilium connectivity test --namespace kube-system --test to-fqdn,external-cilium-dns-proxy
+          cilium connectivity test \
+            --namespace kube-system \
+            ${{ steps.vars.outputs.connectivity_test_defaults }}
 
       - name: Apply policy
         run: |
