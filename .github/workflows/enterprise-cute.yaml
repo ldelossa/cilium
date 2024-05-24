@@ -30,6 +30,10 @@ permissions:
   contents: read
   # To be able to request the JWT from GitHub's OIDC provider
   id-token: write
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # To be able to set commit status
+  statuses: write
 
 env:
   helm_registry: quay.io
@@ -42,15 +46,31 @@ env:
   artifact_retention_days: 15
 
 jobs:
+  commit-status-inputs:
+    name: Prepare inputs for commit status start/finish
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+    steps:
+      - id: vars
+        name: Echo inputs
+        run: |
+          if [[ "${{ inputs.SHA }}" == "n/a" ]]
+          then
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ inputs.SHA }}" >> "$GITHUB_OUTPUT"
+          fi
+
   commit-status-start:
-    if: ${{ github.event_name != 'push' }}
     name: Commit Status Start
+    needs: commit-status-inputs
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
         uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
         with:
-          sha: ${{ inputs.SHA || github.sha }}
+          sha: ${{ needs.commit-status-inputs.outputs.sha }}
 
   cute-ci:
     name: CuTE CI
@@ -559,13 +579,12 @@ jobs:
           make destroy AUTO_APPROVE=true
 
   commit-status-final:
-    if: ${{ always() && github.event_name != 'push' }}
     name: Commit Status Final
-    needs: cute-ci
+    needs: [ commit-status-inputs, cute-ci ]
     runs-on: ubuntu-latest
     steps:
       - name: Set final commit status
         uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
         with:
-          sha: ${{ inputs.SHA || github.sha }}
+          sha: ${{ needs.commit-status-inputs.outputs.sha }}
           status: ${{ needs.cute-ci.result }}
