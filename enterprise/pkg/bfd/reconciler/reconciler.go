@@ -14,7 +14,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
+	"slices"
 	"sort"
 
 	"github.com/cilium/hive/cell"
@@ -22,9 +24,12 @@ import (
 	"github.com/cilium/statedb"
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/exp/maps"
+	"k8s.io/utils/pointer"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/node"
@@ -42,6 +47,7 @@ type bfdReconcilerParams struct {
 	JobGroup       job.Group
 	Cfg            types.BFDConfig
 	LocalNodeStore *node.LocalNodeStore
+	Sysctl         sysctl.Sysctl
 
 	DB            *statedb.DB
 	BFDPeersTable statedb.RWTable[*types.BFDPeerStatus]
@@ -315,9 +321,9 @@ func (r *bfdReconciler) getDesiredBFDPeerConfig(peer *v1alpha1.BFDNodePeerConfig
 	cfg := &types.BFDPeerConfig{
 		PeerAddress:      peerAddr,
 		LocalAddress:     localAddr,
-		DetectMultiplier: uint8(*profile.Spec.DetectMultiplier),
-		TransmitInterval: time.Duration(*profile.Spec.TransmitIntervalMilliseconds) * time.Millisecond,
-		ReceiveInterval:  time.Duration(*profile.Spec.ReceiveIntervalMilliseconds) * time.Millisecond,
+		DetectMultiplier: uint8(pointer.Int32Deref(profile.Spec.DetectMultiplier, 0)),
+		TransmitInterval: time.Duration(pointer.Int32Deref(profile.Spec.TransmitIntervalMilliseconds, 0)) * time.Millisecond,
+		ReceiveInterval:  time.Duration(pointer.Int32Deref(profile.Spec.ReceiveIntervalMilliseconds, 0)) * time.Millisecond,
 	}
 	if peer.Interface != nil {
 		cfg.Interface = *peer.Interface
@@ -329,9 +335,39 @@ func (r *bfdReconciler) getDesiredBFDPeerConfig(peer *v1alpha1.BFDNodePeerConfig
 		}
 	}
 	if profile.Spec.EchoFunction != nil {
-		cfg.EchoReceiveInterval = time.Duration(*profile.Spec.EchoFunction.ReceiveIntervalMilliseconds) * time.Millisecond
+		if slices.Contains(profile.Spec.EchoFunction.Directions, v1alpha1.BFDEchoFunctionDirectionReceive) {
+			cfg.EchoReceiveInterval =
+				time.Duration(pointer.Int32Deref(profile.Spec.EchoFunction.ReceiveIntervalMilliseconds, 0)) * time.Millisecond
+		}
+		if slices.Contains(profile.Spec.EchoFunction.Directions, v1alpha1.BFDEchoFunctionDirectionTransmit) {
+			cfg.EchoTransmitInterval =
+				time.Duration(pointer.Int32Deref(profile.Spec.EchoFunction.TransmitIntervalMilliseconds, 0)) * time.Millisecond
+
+			if peer.EchoSourceAddress != nil && *peer.EchoSourceAddress != "" {
+				cfg.EchoSourceAddress, err = netip.ParseAddr(*peer.EchoSourceAddress)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing BFD echo source address '%s': %w", *peer.EchoSourceAddress, err)
+				}
+			}
+		}
 	}
 
+	// Auto-detect interface for non-multihop peers.
+	// NOTE: We do this auto-detection in the reconciler, as in case that the routing changes, the peering
+	// needs to be re-created. However, we do not actively detect and trigger reconcile upon such events.
+	if !cfg.Multihop && cfg.Interface == "" {
+		if cfg.PeerAddress.Is6() && cfg.PeerAddress.IsLinkLocalUnicast() {
+			return nil, errors.New("interface must be specified for peers with link-local IPv6 address")
+		}
+		cfg.Interface, err = detectEgressInterface(cfg.LocalAddress, cfg.PeerAddress)
+		if err != nil {
+			return nil, fmt.Errorf("could not auto-detect egress interface for peer %v: %w", cfg.PeerAddress, err)
+		}
+		r.Logger.WithFields(logrus.Fields{
+			types.PeerAddressField:   peer.PeerAddress,
+			types.InterfaceNameField: cfg.Interface,
+		}).Debug("Auto-detected egress interface for the peer")
+	}
 	return cfg, nil
 }
 
@@ -359,14 +395,19 @@ func (r *bfdReconciler) addPeer(peer *peerConfig) error {
 		return fmt.Errorf("error creating BFD peer in statedb: %w", err)
 	}
 
+	err = r.ensureEchoInterfaceSysctlConfig(peer.config)
+	if err != nil {
+		return fmt.Errorf("error ensuring sysctl config: %w", err)
+	}
+
 	// add the BFD peer on the BFD server
 	err = r.BFDServer.AddPeer(peer.config)
 	if err != nil {
 		if dbObjCreated {
 			// cleanup just created statedb entry
-			err = r.deletePeerStateDBObj(peer.config)
-			if err != nil {
-				logger.WithError(err).Warn("Failed deleting statedb entry for the peer, stale entry may be left in it.")
+			delErr := r.deletePeerStateDBObj(peer.config)
+			if delErr != nil {
+				logger.WithError(delErr).Warn("Failed deleting statedb entry for the peer, stale entry may be left in it.")
 			}
 		}
 		return fmt.Errorf("error creating BFD peer: %w", err)
@@ -380,8 +421,15 @@ func (r *bfdReconciler) updatePeer(peer *peerConfig) error {
 	desired := peer.config
 	existing := r.configuredPeers[peer.key()].config
 
+	err := r.ensureEchoInterfaceSysctlConfig(peer.config)
+	if err != nil {
+		return fmt.Errorf("error ensuring sysctl config: %w", err)
+	}
+
 	if desired.PeerAddress != existing.PeerAddress || desired.Interface != existing.Interface ||
 		desired.LocalAddress != existing.LocalAddress ||
+		(desired.EchoTransmitInterval == 0) != (existing.EchoTransmitInterval == 0) ||
+		desired.EchoSourceAddress != existing.EchoSourceAddress ||
 		desired.Multihop != existing.Multihop || desired.MinimumTTL != existing.MinimumTTL {
 
 		// connection-related config change, we need to re-create the peer
@@ -399,7 +447,7 @@ func (r *bfdReconciler) updatePeer(peer *peerConfig) error {
 
 	// detection interval -related change, we can update existing peer
 	logger.Debug("Updating BFD peer")
-	err := r.BFDServer.UpdatePeer(desired)
+	err = r.BFDServer.UpdatePeer(desired)
 	if err != nil {
 		return fmt.Errorf("error updating BFD peer: %w", err)
 	}
@@ -491,4 +539,96 @@ func (r *bfdReconciler) handlePeerStatusUpdate(peer *types.BFDPeerStatus) {
 		return
 	}
 	txn.Commit()
+}
+
+// ensureEchoInterfaceSysctlConfig ensures necessary sysctl config on the interface used for the provided BFD peer
+// config if Echo function is enabled.
+// NOTE: As multiple peers may be using the same interface, and other Cilium features may need to set the
+// same sysctl parameters, we are not reverting this config when a BFD peer is being removed.
+func (r *bfdReconciler) ensureEchoInterfaceSysctlConfig(cfg *types.BFDPeerConfig) error {
+	if cfg.Interface != "" {
+		if cfg.EchoTransmitInterval > 0 && cfg.PeerAddress.Is4() {
+			// accept incoming packets with local source addresses (our echo packets)
+			err := r.Sysctl.Enable(fmt.Sprintf("net.ipv4.conf.%s.accept_local", cfg.Interface))
+			if err != nil {
+				return fmt.Errorf("error applying sysctl config: %w", err)
+			}
+			// do not test source IP against FIB
+			err = r.Sysctl.Disable(fmt.Sprintf("net.ipv4.conf.%s.rp_filter", cfg.Interface))
+			if err != nil {
+				return fmt.Errorf("error applying sysctl config: %w", err)
+			}
+		}
+		if cfg.EchoReceiveInterval > 0 && cfg.PeerAddress.Is4() {
+			// to not send ICMP redirects for the incoming echo packets generated by the peer
+			// (if their source IP is from the interface's local subnet)
+			err := r.Sysctl.Disable(fmt.Sprintf("net.ipv4.conf.%s.send_redirects", cfg.Interface))
+			if err != nil {
+				return fmt.Errorf("error applying sysctl config: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// detectEgressInterface detects egress interface based on a local IP address or a destination IP address.
+func detectEgressInterface(localAddr, remoteAddr netip.Addr) (string, error) {
+	var err error
+	linkIndex := -1
+
+	// if local address is specified, find interface with that IP
+	if localAddr.IsValid() {
+		linkIndex, err = getLinkByLocalAddr(localAddr)
+		if err != nil {
+			return "", fmt.Errorf("error by interface lookup by local address: %w", err)
+		}
+	}
+	// otherwise lookup remote address in the routing table
+	if linkIndex == -1 {
+		linkIndex, err = getLinkByRemoteAddr(remoteAddr)
+		if err != nil {
+			return "", fmt.Errorf("error by interface lookup by remote address: %w", err)
+		}
+	}
+	link, err := netlink.LinkByIndex(linkIndex)
+	if err != nil {
+		return "", fmt.Errorf("error by retrieving link by index (%d): %w", linkIndex, err)
+	}
+	return link.Attrs().Name, nil
+}
+
+func getLinkByLocalAddr(localAddr netip.Addr) (ifIdx int, err error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return -1, err
+	}
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+		if err != nil {
+			return -1, err
+		}
+		for _, a := range addrs {
+			switch ipAddr := a.(type) {
+			case *net.IPNet:
+				if ipAddr.IP.Equal(localAddr.AsSlice()) {
+					return i.Index, nil
+				}
+			}
+		}
+	}
+	return -1, nil
+}
+
+func getLinkByRemoteAddr(remoteAddr netip.Addr) (ifIdx int, err error) {
+	routes, err := netlink.RouteGet(remoteAddr.AsSlice())
+	if err != nil {
+		return -1, err
+	}
+	if len(routes) == 0 {
+		return -1, fmt.Errorf("no route to IP: %v", remoteAddr)
+	}
+	if len(routes) > 1 {
+		return -1, fmt.Errorf("multiple routes to IP %v", remoteAddr)
+	}
+	return routes[0].LinkIndex, nil
 }

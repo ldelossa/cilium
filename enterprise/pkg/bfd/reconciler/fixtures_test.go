@@ -22,6 +22,8 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
+	"github.com/cilium/cilium/pkg/datapath/fake"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	k8sclient "github.com/cilium/cilium/pkg/k8s/client"
@@ -71,6 +73,8 @@ func newTestFixture(t *testing.T, ctx context.Context) (*testFixture, func()) {
 				},
 			})
 		}),
+
+		cell.Provide(func() sysctl.Sysctl { return &fake.Sysctl{} }),
 
 		cell.Invoke(func(db *statedb.DB, table statedb.RWTable[*types.BFDPeerStatus]) {
 			f.db = db
@@ -160,6 +164,7 @@ func (s *fakeBFDServer) Observe(ctx context.Context, next func(types.BFDPeerStat
 func (s *fakeBFDServer) generatePeerStatus(peer *types.BFDPeerConfig) {
 	status := types.BFDPeerStatus{
 		PeerAddress: peer.PeerAddress,
+		Interface:   peer.Interface,
 		Local: types.BFDSessionStatus{
 			State:               types.BFDStateDown,
 			ReceiveInterval:     peer.ReceiveInterval,

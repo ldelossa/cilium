@@ -22,7 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -37,22 +37,25 @@ func Test_BFDReconciler(t *testing.T) {
 	logging.DefaultLogger.SetLevel(logrus.DebugLevel)
 
 	var (
-		bfdPeerName  = "test-peer-1"
-		bfdPeerIP    = netip.MustParseAddr("10.0.0.1")
-		bfdPeer2Name = "test-peer-2"
-		bfdPeer2IP   = netip.MustParseAddr("10.0.0.2")
+		bfdPeerName      = "test-peer-1"
+		bfdPeerIP        = netip.MustParseAddr("10.0.0.1")
+		bfdPeerInterface = "eth0"
+
+		bfdPeer2Name      = "test-peer-2"
+		bfdPeer2IP        = netip.MustParseAddr("10.0.0.2")
+		bfdPeer2Interface = "eth0"
 
 		bfdProfileName  = "test-profile"
 		bfdProfileSpec1 = v1alpha1.BFDProfileSpec{
-			ReceiveIntervalMilliseconds:  pointer.Int32(10),
-			TransmitIntervalMilliseconds: pointer.Int32(20),
-			DetectMultiplier:             pointer.Int32(3),
-			MinimumTTL:                   pointer.Int32(255),
+			ReceiveIntervalMilliseconds:  ptr.To[int32](10),
+			TransmitIntervalMilliseconds: ptr.To[int32](20),
+			DetectMultiplier:             ptr.To[int32](3),
+			MinimumTTL:                   ptr.To[int32](255),
 			EchoFunction: &v1alpha1.BFDEchoFunctionConfig{
 				Directions: []v1alpha1.BFDEchoFunctionDirection{
 					v1alpha1.BFDEchoFunctionDirectionReceive,
 				},
-				ReceiveIntervalMilliseconds: pointer.Int32(5),
+				ReceiveIntervalMilliseconds: ptr.To[int32](5),
 			},
 		}
 		bfdStatusProfile1 = types.BFDSessionStatus{
@@ -64,30 +67,33 @@ func Test_BFDReconciler(t *testing.T) {
 		}
 
 		bfdProfileSpec2 = v1alpha1.BFDProfileSpec{
-			ReceiveIntervalMilliseconds:  pointer.Int32(11),
-			TransmitIntervalMilliseconds: pointer.Int32(21),
-			DetectMultiplier:             pointer.Int32(4),
-			MinimumTTL:                   pointer.Int32(255),
+			ReceiveIntervalMilliseconds:  ptr.To[int32](11),
+			TransmitIntervalMilliseconds: ptr.To[int32](21),
+			DetectMultiplier:             ptr.To[int32](4),
+			MinimumTTL:                   ptr.To[int32](255),
 			EchoFunction: &v1alpha1.BFDEchoFunctionConfig{
 				Directions: []v1alpha1.BFDEchoFunctionDirection{
 					v1alpha1.BFDEchoFunctionDirectionReceive,
+					v1alpha1.BFDEchoFunctionDirectionTransmit,
 				},
-				ReceiveIntervalMilliseconds: pointer.Int32(55),
+				ReceiveIntervalMilliseconds:  ptr.To[int32](55),
+				TransmitIntervalMilliseconds: ptr.To[int32](55),
 			},
 		}
 		bfdStatusProfile2 = types.BFDSessionStatus{
-			State:               types.BFDStateDown,
-			ReceiveInterval:     11 * time.Millisecond,
-			TransmitInterval:    21 * time.Millisecond,
-			DetectMultiplier:    4,
-			EchoReceiveInterval: 55 * time.Millisecond,
+			State:                types.BFDStateDown,
+			ReceiveInterval:      11 * time.Millisecond,
+			TransmitInterval:     21 * time.Millisecond,
+			DetectMultiplier:     4,
+			EchoReceiveInterval:  55 * time.Millisecond,
+			EchoTransmitInterval: 55 * time.Millisecond,
 		}
 
 		bfdProfileSpecMultihop = v1alpha1.BFDProfileSpec{
-			ReceiveIntervalMilliseconds:  pointer.Int32(11),
-			TransmitIntervalMilliseconds: pointer.Int32(21),
-			DetectMultiplier:             pointer.Int32(4),
-			MinimumTTL:                   pointer.Int32(200),
+			ReceiveIntervalMilliseconds:  ptr.To[int32](11),
+			TransmitIntervalMilliseconds: ptr.To[int32](21),
+			DetectMultiplier:             ptr.To[int32](4),
+			MinimumTTL:                   ptr.To[int32](200),
 		}
 		bfdStatusMultihop = types.BFDSessionStatus{
 			State:            types.BFDStateDown,
@@ -119,6 +125,7 @@ func Test_BFDReconciler(t *testing.T) {
 							{
 								Name:          bfdPeerName,
 								PeerAddress:   bfdPeerIP.String(),
+								Interface:     ptr.To[string](bfdPeerInterface),
 								BFDProfileRef: bfdProfileName,
 							},
 						},
@@ -143,6 +150,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -164,6 +172,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile2,
 					},
 				},
@@ -185,6 +194,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusMultihop,
 					},
 				},
@@ -207,6 +217,7 @@ func Test_BFDReconciler(t *testing.T) {
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusMultihop,
 					},
 				},
@@ -228,6 +239,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -253,6 +265,7 @@ func Test_BFDReconciler(t *testing.T) {
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -273,6 +286,7 @@ func Test_BFDReconciler(t *testing.T) {
 							{
 								Name:          bfdPeerName,
 								PeerAddress:   bfdPeerIP.String(),
+								Interface:     ptr.To[string](bfdPeerInterface),
 								BFDProfileRef: bfdProfileName,
 							},
 						},
@@ -283,6 +297,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -303,11 +318,13 @@ func Test_BFDReconciler(t *testing.T) {
 							{
 								Name:          bfdPeerName,
 								PeerAddress:   bfdPeerIP.String(),
+								Interface:     ptr.To[string](bfdPeerInterface),
 								BFDProfileRef: bfdProfileName,
 							},
 							{
 								Name:          bfdPeer2Name,
 								PeerAddress:   bfdPeer2IP.String(),
+								Interface:     ptr.To[string](bfdPeer2Interface),
 								BFDProfileRef: bfdProfileName,
 							},
 						},
@@ -318,6 +335,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeer2IP,
+						Interface:   bfdPeer2Interface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -338,6 +356,7 @@ func Test_BFDReconciler(t *testing.T) {
 							{
 								Name:          bfdPeerName,
 								PeerAddress:   bfdPeerIP.String(),
+								Interface:     ptr.To[string](bfdPeer2Interface),
 								BFDProfileRef: bfdProfileName,
 							},
 						},
@@ -349,6 +368,7 @@ func Test_BFDReconciler(t *testing.T) {
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeer2IP,
+						Interface:   bfdPeer2Interface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -374,6 +394,7 @@ func Test_BFDReconciler(t *testing.T) {
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -394,6 +415,7 @@ func Test_BFDReconciler(t *testing.T) {
 							{
 								Name:          bfdPeerName,
 								PeerAddress:   bfdPeerIP.String(),
+								Interface:     ptr.To[string](bfdPeerInterface),
 								BFDProfileRef: bfdProfileName,
 							},
 						},
@@ -404,6 +426,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -429,6 +452,7 @@ func Test_BFDReconciler(t *testing.T) {
 					Deleted: true,
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -448,11 +472,13 @@ func Test_BFDReconciler(t *testing.T) {
 						Peers: []*v1alpha1.BFDNodePeerConfig{
 							{
 								Name:          bfdPeerName + "-1",
+								Interface:     ptr.To[string](bfdPeerInterface),
 								PeerAddress:   bfdPeerIP.String(),
 								BFDProfileRef: bfdProfileName,
 							},
 							{
 								Name:          bfdPeerName + "-2",
+								Interface:     ptr.To[string](bfdPeerInterface),
 								PeerAddress:   bfdPeerIP.String(),
 								BFDProfileRef: bfdProfileName,
 							},
@@ -468,6 +494,7 @@ func Test_BFDReconciler(t *testing.T) {
 						Peers: []*v1alpha1.BFDNodePeerConfig{
 							{
 								Name:          bfdPeerName,
+								Interface:     ptr.To[string](bfdPeerInterface),
 								PeerAddress:   bfdPeerIP.String(),
 								BFDProfileRef: bfdProfileName,
 							},
@@ -479,6 +506,7 @@ func Test_BFDReconciler(t *testing.T) {
 				{
 					Object: &types.BFDPeerStatus{
 						PeerAddress: bfdPeerIP,
+						Interface:   bfdPeerInterface,
 						Local:       bfdStatusProfile1,
 					},
 				},
@@ -504,7 +532,7 @@ func Test_BFDReconciler(t *testing.T) {
 	// wait until the watchers are ready
 	waitWatchersReady()
 
-	observable := statedb.Observable(f.db, f.peerTable)
+	observable := statedb.Observable[*types.BFDPeerStatus](f.db, f.peerTable)
 	peersEventCh := stream.ToChannel(testCtx, observable)
 
 	// run the test steps
@@ -566,9 +594,24 @@ func Test_BFDReconciler(t *testing.T) {
 func validateEvents(t *testing.T, expected, actual statedb.Change[*types.BFDPeerStatus]) {
 	require.EqualValues(t, expected.Deleted, actual.Deleted)
 	require.EqualValues(t, expected.Object.PeerAddress, actual.Object.PeerAddress)
+	require.EqualValues(t, expected.Object.Interface, actual.Object.Interface)
 	require.EqualValues(t, expected.Object.Local.State, actual.Object.Local.State)
 	require.EqualValues(t, expected.Object.Local.ReceiveInterval, actual.Object.Local.ReceiveInterval)
 	require.EqualValues(t, expected.Object.Local.TransmitInterval, actual.Object.Local.TransmitInterval)
 	require.EqualValues(t, expected.Object.Local.EchoReceiveInterval, actual.Object.Local.EchoReceiveInterval)
 	require.EqualValues(t, expected.Object.Local.DetectMultiplier, actual.Object.Local.DetectMultiplier)
+}
+
+func Test_detectEgressInterface(t *testing.T) {
+	ifName, err := detectEgressInterface(netip.MustParseAddr("127.0.0.1"), netip.Addr{})
+	require.NoError(t, err)
+	require.NotEmpty(t, ifName)
+
+	ifName, err = detectEgressInterface(netip.Addr{}, netip.MustParseAddr("1.2.3.4"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ifName)
+
+	ifName, err = detectEgressInterface(netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("1.2.3.4"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ifName)
 }
