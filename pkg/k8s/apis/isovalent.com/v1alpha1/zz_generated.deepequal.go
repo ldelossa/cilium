@@ -40,6 +40,14 @@ func (in *BFDEchoFunctionConfig) DeepEqual(other *BFDEchoFunctionConfig) bool {
 		}
 	}
 
+	if (in.TransmitIntervalMilliseconds == nil) != (other.TransmitIntervalMilliseconds == nil) {
+		return false
+	} else if in.TransmitIntervalMilliseconds != nil {
+		if *in.TransmitIntervalMilliseconds != *other.TransmitIntervalMilliseconds {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -101,6 +109,14 @@ func (in *BFDNodePeerConfig) DeepEqual(other *BFDNodePeerConfig) bool {
 		return false
 	} else if in.LocalAddress != nil {
 		if *in.LocalAddress != *other.LocalAddress {
+			return false
+		}
+	}
+
+	if (in.EchoSourceAddress == nil) != (other.EchoSourceAddress == nil) {
+		return false
+	} else if in.EchoSourceAddress != nil {
+		if *in.EchoSourceAddress != *other.EchoSourceAddress {
 			return false
 		}
 	}

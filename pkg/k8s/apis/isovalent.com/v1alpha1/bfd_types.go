@@ -3,11 +3,13 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // BFDEchoFunctionDirection defines the direction in which the Echo Function is enabled (RFC 5880, section 2.3.).
 //
-// +kubebuilder:validation:Enum=Receive
+// +kubebuilder:validation:Enum=Receive;Transmit
 type BFDEchoFunctionDirection string
 
 const (
@@ -17,7 +19,7 @@ const (
 
 	// BFDEchoFunctionDirectionTransmit represents the Echo function in the direction
 	// towards the remote peer (cilium node sending Echo packets towards the remote peer).
-	// BFDEchoFunctionDirectionTransmit BFDEchoFunctionDirection = "Transmit" // NOTE: not supported yet.
+	BFDEchoFunctionDirectionTransmit BFDEchoFunctionDirection = "Transmit"
 )
 
 // +genclient
@@ -66,6 +68,7 @@ type BFDProfileSpec struct {
 	// system is capable of supporting, less any jitter applied by the sender.
 	//
 	// If not specified, defaults to 300 milliseconds.
+	// When Echo Function is active, it is automatically adapted to 1 second if lower interval was configured.
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum=10
@@ -123,7 +126,10 @@ type BFDEchoFunctionConfig struct {
 	// Directions defines the directions in which the Echo Function is enabled.
 	// If empty, the Echo Function is disabled. Single or both directions can be configured,
 	// see RFC 5880, section 6.4. (The Echo Function and Asymmetry) for more details.
-	// At the moment, only the "Receive" direction is supported.
+	//
+	// Note that enabling Echo Function for a peering bound to a specific network interface
+	// (either explicitly configured or auto-detected) may result into modifying sysctl kernel parameters
+	// for the given interface (`send_redirects` for `Receive`, `accept_local` & `rp_filter` for `Transmit`).
 	//
 	// +kubebuilder:validation:Optional
 	// +listType=set
@@ -140,6 +146,17 @@ type BFDEchoFunctionConfig struct {
 	// +kubebuilder:validation:Maximum=60000
 	// +kubebuilder:default=300
 	ReceiveIntervalMilliseconds *int32 `json:"receiveIntervalMilliseconds,omitempty"`
+
+	// TransmitIntervalMilliseconds defines the minimum interval, in milliseconds, that the local system
+	// would like to use when transmitting BFD Echo packets, less any jitter applied.
+	//
+	// If not specified, defaults to 300 milliseconds.
+	//
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=10
+	// +kubebuilder:validation:Maximum=60000
+	// +kubebuilder:default=300
+	TransmitIntervalMilliseconds *int32 `json:"transmitIntervalMilliseconds,omitempty"`
 }
 
 // +genclient
@@ -234,10 +251,15 @@ type BFDNodePeerConfig struct {
 	// +kubebuilder:validation:Required
 	BFDProfileRef string `json:"bfdProfileRef,omitempty"`
 
-	// Interface is a name of a network interface to which this session is bound to.
+	// Interface is the name of a network interface to which this session is bound to. If not specified:
 	//
-	// If not specified, the actual interface is auto-selected by the operating system using the
-	// routing table entries, and no other session with the same PeerAddress can exist on the node.
+	// - For directly connected peers, the session is bound to an interface that is auto-detected
+	//   during BFD peer reconciliation (based on the host's routing table and the LocalAddress if specified).
+	//   If the routing changes and the peering needs to be re-bound to another interface,
+	//   it can be done either by explicitly specifying the interface, or by any change in the BFD profile / peer config.
+	//
+	// - For multi-hop peers, the session is not bound to any specific interface, and no other session
+	//   with the same PeerAddress can exist on the node.
 	//
 	// +kubebuilder:validation:Optional
 	Interface *string `json:"interface,omitempty"`
@@ -251,6 +273,24 @@ type BFDNodePeerConfig struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Format=ip
 	LocalAddress *string `json:"localAddress,omitempty"`
+
+	// EchoSourceAddress defines the IP address used as the source address when sending Echo packets for the BFD peering.
+	// If not configured, the LocalAddress will be used if configured, or the auto-detected IP address
+	// of the egress interface will be used, which has the following limitations:
+	//
+	//  - The detection of the source address happens during the session setup, and it does not
+	//    automatically update upon interface address changes,
+	//
+	//  - Per RFC 5881, the Echo source address should not be part of the subnet bound to the interface
+	//    over which the BFD Echo packet is being transmitted, and it should not be an IPv6 link-local address
+	//    to preclude the remote system from generating ICMP or Neighbor Discovery Redirect messages.
+	//
+	// These limitations can be addressed by configuring an explicit EchoSourceAddress, which can be
+	// any IP address, even non-existing on the given node.
+	//
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Format=ip
+	EchoSourceAddress *string `json:"echoSourceAddress,omitempty"`
 }
 
 // +deepequal-gen=false

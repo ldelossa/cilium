@@ -67,12 +67,36 @@ spec:
                         peering. \n The peering will not be configured until the referenced
                         profile exists."
                       type: string
+                    echoSourceAddress:
+                      description: "EchoSourceAddress defines the IP address used
+                        as the source address when sending Echo packets for the BFD
+                        peering. If not configured, the LocalAddress will be used
+                        if configured, or the auto-detected IP address of the egress
+                        interface will be used, which has the following limitations:
+                        \n - The detection of the source address happens during the
+                        session setup, and it does not automatically update upon interface
+                        address changes, \n - Per RFC 5881, the Echo source address
+                        should not be part of the subnet bound to the interface over
+                        which the BFD Echo packet is being transmitted, and it should
+                        not be an IPv6 link-local address to preclude the remote system
+                        from generating ICMP or Neighbor Discovery Redirect messages.
+                        \n These limitations can be addressed by configuring an explicit
+                        EchoSourceAddress, which can be any IP address, even non-existing
+                        on the given node."
+                      format: ip
+                      type: string
                     interface:
-                      description: "Interface is a name of a network interface to
-                        which this session is bound to. \n If not specified, the actual
-                        interface is auto-selected by the operating system using the
-                        routing table entries, and no other session with the same
-                        PeerAddress can exist on the node."
+                      description: "Interface is the name of a network interface to
+                        which this session is bound to. If not specified: \n - For
+                        directly connected peers, the session is bound to an interface
+                        that is auto-detected during BFD peer reconciliation (based
+                        on the host's routing table and the LocalAddress if specified).
+                        If the routing changes and the peering needs to be re-bound
+                        to another interface, it can be done either by explicitly
+                        specifying the interface, or by any change in the BFD profile
+                        / peer config. \n - For multi-hop peers, the session is not
+                        bound to any specific interface, and no other session with
+                        the same PeerAddress can exist on the node."
                       type: string
                     localAddress:
                       description: "LocalAddress is the local IP address used for

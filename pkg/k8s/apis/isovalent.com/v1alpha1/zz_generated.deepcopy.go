@@ -27,6 +27,11 @@ func (in *BFDEchoFunctionConfig) DeepCopyInto(out *BFDEchoFunctionConfig) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.TransmitIntervalMilliseconds != nil {
+		in, out := &in.TransmitIntervalMilliseconds, &out.TransmitIntervalMilliseconds
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
@@ -100,6 +105,11 @@ func (in *BFDNodePeerConfig) DeepCopyInto(out *BFDNodePeerConfig) {
 	}
 	if in.LocalAddress != nil {
 		in, out := &in.LocalAddress, &out.LocalAddress
+		*out = new(string)
+		**out = **in
+	}
+	if in.EchoSourceAddress != nil {
+		in, out := &in.EchoSourceAddress, &out.EchoSourceAddress
 		*out = new(string)
 		**out = **in
 	}
