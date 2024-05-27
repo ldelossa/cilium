@@ -59,6 +59,18 @@ type BFDPeerConfig struct {
 	// the IP address on the egress interface towards the peer.
 	LocalAddress netip.Addr
 
+	// EchoSourceAddress defines the IP address used as the source address when sending Echo packets.
+	// If not configured, the LocalAddress will be used if configured, or the auto-detected IP address
+	// of the egress interface will be used, which has the following limitations:
+	//  - The detection of the source address happens during the session setup, and it does not
+	//    automatically update upon interface address changes (session re-creation would be needed),
+	//  - Per RFC 5881, the Echo source address should not be part of the subnet bound to the interface
+	//    over which the BFD Echo packet is being transmitted, and it should not be an IPv6 link-local address
+	//    to preclude the remote system from generating ICMP or Neighbor Discovery Redirect messages.
+	// These limitations can be achieved by configuring an explicit EchoSourceAddress, which can be
+	// any IP address that conforms the above requirements, and does not need to be applied on the node.
+	EchoSourceAddress netip.Addr
+
 	// Multihop enables BFD for Multihop Paths mode (RFC 5883) for this session.
 	Multihop bool
 
@@ -99,7 +111,6 @@ type BFDPeerConfig struct {
 	// transmitting BFD Echo packets, less any jitter applied.
 	// Non-zero value enables the Echo Function in the direction towards the remote system.
 	// Zero value disables the Echo function in the direction towards the remote system.
-	// NOTE: not supported yet, the value will be ignored.
 	EchoTransmitInterval time.Duration
 }
 

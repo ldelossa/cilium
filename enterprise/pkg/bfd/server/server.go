@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net"
 	"net/netip"
 
 	"github.com/cilium/stream"
@@ -36,6 +37,11 @@ const (
 	// IPv4 and IPv6 is identical to that defined in [BFD-1HOP], except that
 	// the UDP destination port MUST have a value of 4784.
 	multiHopServerPort = 4784
+
+	// RFC 5881, 4. Encapsulation
+	// BFD Echo packets MUST be transmitted in UDP packets with destination
+	// UDP port 3785 in an IPv4 or IPv6 packet.
+	echoServerPort = 3785
 
 	// sessionStatusUpdateChannelSize is a size of the channel used to deliver session status updates
 	// to subscribed observers (using Observe). If observers are slow in consuming the updates, it may get filled,
@@ -149,31 +155,32 @@ func (s *BFDServer) AddPeer(cfg *types.BFDPeerConfig) error {
 		}
 	}
 
-	// ensure a listener exists for this session's params
-	err := s.ensureListener(cfg)
+	// create client connection(s) for this session
+	outConn, outEchoConn, err := s.createClientConnections(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating BFD client connections: %w", err)
 	}
 
-	// create a client connection for this session
-	outConn, sourcePort, err := s.createClientConnection(cfg)
+	// ensure listener(s) exist for this session
+	err = s.ensureListeners(cfg)
 	if err != nil {
-		s.releaseListener(cfg)
-		return err
+		outConn.Close()
+		if outEchoConn != nil {
+			outEchoConn.Close()
+		}
+		return fmt.Errorf("error ensuring BFD listeners: %w", err)
 	}
 
 	// start a new BFD session
-	session, err := newBFDSession(l, cfg, outConn, localDiscriminator, s.statusUpdateCh)
+	session, err := newBFDSession(l, cfg, outConn, outEchoConn, localDiscriminator, s.statusUpdateCh)
 	if err != nil {
-		s.releaseListener(cfg)
-		outConn.Close()
 		return fmt.Errorf("error creating BFD session: %w", err)
 	}
 	session.start()
 
 	s.sessionsByDiscr[localDiscriminator] = session
 	s.sessionsByPeerAddrIf[peerAddrIf] = session
-	s.sessionsBySrcPort[sourcePort] = session
+	s.sessionsBySrcPort[session.outConn.LocalAddrPort().Port()] = session
 
 	return nil
 }
@@ -226,7 +233,12 @@ func (s *BFDServer) DeletePeer(cfg *types.BFDPeerConfig) error {
 	delete(s.sessionsBySrcPort, session.outConn.LocalAddrPort().Port())
 
 	session.outConn.Close()
-	s.releaseListener(cfg)
+	s.releaseListener(cfg, false)
+
+	if conn, ok := session.outEchoConn.(*bfdEchoClientConn); ok && conn != nil {
+		conn.Close()
+		s.releaseListener(cfg, true)
+	}
 
 	return nil
 }
@@ -278,13 +290,43 @@ func (s *BFDServer) validatePeerConfig(cfg *types.BFDPeerConfig) error {
 	if cfg.DetectMultiplier == 0 {
 		return fmt.Errorf("DetectMultiplier is zero")
 	}
+	if cfg.PeerAddress.Is6() && cfg.PeerAddress.IsLinkLocalUnicast() && cfg.Interface == "" {
+		return fmt.Errorf("interface must be specified for peers with link-local IPv6 address")
+	}
+	if cfg.EchoTransmitInterval > 0 && cfg.Interface == "" {
+		return fmt.Errorf("interface must be specified if echo transmit is enabled")
+	}
+	if cfg.EchoTransmitInterval > 0 && cfg.Multihop {
+		return fmt.Errorf("echo transmit is not allowed for multihop peers")
+	}
 	return nil
 }
 
-// createClientConnection creates a new client connection for a session.
+// createClientConnections creates necessary client connections for this session (control connection +
+// Echo connection if Echo transmit is enabled).
+func (s *BFDServer) createClientConnections(cfg *types.BFDPeerConfig) (ctrlConn *bfdControlClientConn, echoConn *bfdEchoClientConn, err error) {
+	// create client control connection for this session
+	ctrlConn, err = s.createClientConnection(cfg)
+	if err != nil {
+		return
+	}
+
+	// create client Echo connection for this session (if needed)
+	if cfg.EchoTransmitInterval > 0 {
+		echoConn, err = s.createEchoClientConnection(cfg)
+		if err != nil {
+			ctrlConn.Close()
+			return
+		}
+	}
+	return
+}
+
+// createControlClientConnection creates a new client connection for a session.
 // It allocates an unused source port for it. It is the responsibility of the caller to
 // tie the allocated port with the session once it is created.
-func (s *BFDServer) createClientConnection(cfg *types.BFDPeerConfig) (conn bfdConnection, sourcePort uint16, err error) {
+func (s *BFDServer) createClientConnection(cfg *types.BFDPeerConfig) (conn *bfdControlClientConn, err error) {
+	sourcePort := uint16(0)
 	attempts := 0
 	for {
 		// find a port not used by any other session
@@ -306,7 +348,7 @@ func (s *BFDServer) createClientConnection(cfg *types.BFDPeerConfig) (conn bfdCo
 		// create a new client connection
 		localAddr := netip.AddrPortFrom(cfg.LocalAddress, sourcePort)
 		remoteAddr := netip.AddrPortFrom(cfg.PeerAddress, bfdServerPort(cfg.Multihop))
-		conn, err = createClientConnection(localAddr, remoteAddr, cfg.Interface)
+		conn, err = createControlClientConnection(localAddr, remoteAddr, cfg.Interface)
 
 		if err != nil {
 			if errors.Is(err, unix.EADDRINUSE) {
@@ -316,19 +358,108 @@ func (s *BFDServer) createClientConnection(cfg *types.BFDPeerConfig) (conn bfdCo
 				return
 			}
 		}
+		s.logger.WithFields(log.Fields{
+			types.LocalAddressField:  localAddr,
+			types.RemoteAddressField: remoteAddr,
+			types.InterfaceNameField: cfg.Interface,
+		}).Debug("Created BFD Control client connection")
 		return // connected using the allocated source port
 	}
 }
 
+// createEchoClientConnection creates a new Echo client connection for a session.
+// If echo transmit is not enabled in the configuration, returns nil connection.
+func (s *BFDServer) createEchoClientConnection(cfg *types.BFDPeerConfig) (conn *bfdEchoClientConn, err error) {
+	if cfg.Interface == "" {
+		return nil, fmt.Errorf("missing interface name")
+	}
+
+	// destination IP is either explicitly configured LocalAddress or our interface IP
+	var dstIP netip.Addr
+	if cfg.LocalAddress.IsValid() {
+		dstIP = cfg.LocalAddress
+	} else {
+		interfaceIP, err := s.lookupInterfaceIP(cfg)
+		if err != nil {
+			return nil, err
+		}
+		dstIP = interfaceIP
+	}
+
+	// source IP is either explicitly configured EchoSourceAddress, or the same as destination IP
+	var srcIP netip.Addr
+	if cfg.EchoSourceAddress.IsValid() {
+		srcIP = cfg.EchoSourceAddress
+	} else {
+		srcIP = dstIP
+	}
+
+	// RFC 5881, 4. Encapsulation
+	// BFD Echo packets MUST be transmitted in UDP packets with destination
+	// UDP port 3785 in an IPv4 or IPv6 packet. The setting of the UDP
+	// source port is outside the scope of this specification.
+	localAddr := netip.AddrPortFrom(srcIP, echoServerPort)
+	remoteAddr := netip.AddrPortFrom(dstIP, echoServerPort)
+
+	s.logger.WithFields(log.Fields{
+		types.LocalAddressField:  localAddr,
+		types.RemoteAddressField: remoteAddr,
+		types.PeerAddressField:   cfg.PeerAddress,
+		types.InterfaceNameField: cfg.Interface,
+	}).Debug("Creating BFD Echo client connection")
+
+	return createEchoClientConnection(localAddr, remoteAddr, cfg.PeerAddress, cfg.Interface)
+}
+
+// lookupInterfaceIP looks up first interface IP address matching BFD peer's address family.
+func (s *BFDServer) lookupInterfaceIP(cfg *types.BFDPeerConfig) (netip.Addr, error) {
+	iface, err := net.InterfaceByName(cfg.Interface)
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("interface lookup failed: %w", err)
+	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("failed listing interface addresses: %w", err)
+	}
+	for _, a := range addrs {
+		if prefix, err := netip.ParsePrefix(a.String()); err == nil {
+			if prefix.Addr().Is4() == cfg.PeerAddress.Is4() { // match peer's address family
+				if cfg.PeerAddress.Is6() && cfg.PeerAddress.IsLinkLocalUnicast() != prefix.Addr().IsLinkLocalUnicast() {
+					continue // for IPv6, match link-local address based on whether the peer is link-local or not
+				}
+				return prefix.Addr(), nil
+			}
+		}
+	}
+	return netip.Addr{}, fmt.Errorf("could not auto-detect interface IP (interface %s)", cfg.Interface)
+}
+
+// ensureListeners ensures necessary connection listeners exist for the session
+// - for both Control and Echo connection (if Echo mode is enabled).
+func (s *BFDServer) ensureListeners(peerCfg *types.BFDPeerConfig) error {
+	err := s.ensureListener(peerCfg, false)
+	if err != nil {
+		return err
+	}
+	if peerCfg.EchoTransmitInterval > 0 {
+		err = s.ensureListener(peerCfg, true)
+		if err != nil {
+			s.releaseListener(peerCfg, false)
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureListener starts a new server listener for the given BFD peering,
-// if a matching listener does not already exist.
-func (s *BFDServer) ensureListener(peerCfg *types.BFDPeerConfig) error {
+// if a matching listener does not already exist. If echo is true, Echo connection listener is assumed.
+func (s *BFDServer) ensureListener(peerCfg *types.BFDPeerConfig, echo bool) error {
 	s.listenersMu.Lock()
 	defer s.listenersMu.Unlock()
 
-	listenAddr := s.getListenAddress(peerCfg)
+	listenAddr := s.getListenAddress(peerCfg, echo)
 	listenAddrIface := addrPortInterface{AddrPort: listenAddr, ifName: peerCfg.Interface}
-	minTTL := s.getMinTTL(peerCfg)
+	minTTL := s.getMinTTL(peerCfg, echo)
 
 	if l, ok := s.listeners[listenAddrIface]; ok {
 		// listener already found, increment the session count
@@ -357,11 +488,11 @@ func (s *BFDServer) ensureListener(peerCfg *types.BFDPeerConfig) error {
 }
 
 // releaseListener stops the server listener if there is no other peering that is using it.
-func (s *BFDServer) releaseListener(peerCfg *types.BFDPeerConfig) {
+func (s *BFDServer) releaseListener(peerCfg *types.BFDPeerConfig, echo bool) {
 	s.listenersMu.Lock()
 	defer s.listenersMu.Unlock()
 
-	listenAddr := s.getListenAddress(peerCfg)
+	listenAddr := s.getListenAddress(peerCfg, echo)
 	listenAddrIface := addrPortInterface{AddrPort: listenAddr, ifName: peerCfg.Interface}
 
 	if l, ok := s.listeners[listenAddrIface]; ok {
@@ -374,8 +505,13 @@ func (s *BFDServer) releaseListener(peerCfg *types.BFDPeerConfig) {
 }
 
 // getListenAddress returns listen address and port that should be used for the given BFD peering.
-func (s *BFDServer) getListenAddress(peerCfg *types.BFDPeerConfig) netip.AddrPort {
-	port := bfdServerPort(peerCfg.Multihop)
+func (s *BFDServer) getListenAddress(peerCfg *types.BFDPeerConfig, echo bool) netip.AddrPort {
+	var port uint16
+	if echo {
+		port = echoServerPort
+	} else {
+		port = bfdServerPort(peerCfg.Multihop)
+	}
 	if peerCfg.LocalAddress.IsValid() {
 		return netip.AddrPortFrom(peerCfg.LocalAddress, port)
 	}
@@ -392,7 +528,12 @@ func bfdServerPort(multihop bool) uint16 {
 	return singleHopServerPort
 }
 
-func (s *BFDServer) getMinTTL(peerCfg *types.BFDPeerConfig) int {
+func (s *BFDServer) getMinTTL(peerCfg *types.BFDPeerConfig, echo bool) int {
+	// For Echo connection, minimum TTL is 254, to allow exactly one hop (looping back by the remote system).
+	if echo {
+		return 254
+	}
+
 	// For multi-hop, we use configured minimum TTL
 	if peerCfg.Multihop {
 		return int(peerCfg.MinimumTTL)
@@ -417,6 +558,15 @@ func (s *BFDServer) demultiplexPacket(inPkt *receivedPacket) {
 	s.sessionsMu.RLock()
 	defer s.sessionsMu.RUnlock()
 
+	if inPkt.localPort == echoServerPort {
+		// this is an Echo packet, deliver based on MyDiscriminator set by us when sending
+		session := s.sessionsByDiscr[uint32(inPkt.pkt.MyDiscriminator)]
+		if session != nil {
+			s.deliverEchoPacket(inPkt.pkt, session)
+		}
+		return
+	}
+
 	if inPkt.pkt == nil {
 		return
 	}
@@ -434,7 +584,7 @@ func (s *BFDServer) demultiplexPacket(inPkt *receivedPacket) {
 		for _, session := range s.sessionsByDiscr {
 			// check if the packet matches with the session, and if yes, deliver it to the session
 			if matched := s.matchPktWithSession(inPkt, session); matched {
-				s.deliverPacket(inPkt.pkt, session)
+				s.deliverControlPacket(inPkt.pkt, session)
 				break
 			}
 		}
@@ -445,7 +595,7 @@ func (s *BFDServer) demultiplexPacket(inPkt *receivedPacket) {
 
 		session := s.sessionsByDiscr[uint32(inPkt.pkt.YourDiscriminator)]
 		if session != nil {
-			s.deliverPacket(inPkt.pkt, session)
+			s.deliverControlPacket(inPkt.pkt, session)
 		}
 	}
 }
@@ -479,13 +629,24 @@ func (s *BFDServer) matchPktWithSession(inPkt *receivedPacket, session *bfdSessi
 	return true
 }
 
-// deliverPacket delivers an incoming packet to the given session
-func (s *BFDServer) deliverPacket(pkt *ControlPacket, session *bfdSession) {
+// deliverPacket delivers an incoming Control packet to the given session
+func (s *BFDServer) deliverControlPacket(pkt *ControlPacket, session *bfdSession) {
 	// do not block if the session's packet channel is full, drop the packet & warn
 	select {
 	case session.inPacketsCh <- pkt:
 	default:
 		s.logger.WithField(types.DiscriminatorField, session.local.discriminator).Warn(
 			"BFD session's packet channel full, dropping incoming BFD packet. Consider using higher ReceiveInterval.")
+	}
+}
+
+// deliverEchoPacket delivers an incoming Echo packet to the given session
+func (s *BFDServer) deliverEchoPacket(pkt *ControlPacket, session *bfdSession) {
+	// do not block if the session's packet channel is full, drop the packet & warn
+	select {
+	case session.inEchoPacketsCh <- pkt:
+	default:
+		s.logger.WithField(types.DiscriminatorField, session.local.discriminator).Warn(
+			"BFD session's Echo packet channel full, dropping incoming Echo packet. Consider using higher EchoReceiveInterval.")
 	}
 }

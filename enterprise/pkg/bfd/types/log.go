@@ -23,6 +23,12 @@ const (
 	// ListenAddressField is the log field key used for BFD listen address.
 	ListenAddressField = "listen_address"
 
+	// LocalAddressField is the log field key used for BFD local address.
+	LocalAddressField = "local_address"
+
+	// RemoteAddressField is the log field key used for BFD remote address.
+	RemoteAddressField = "remote_address"
+
 	// PeerAddressField is the log field key used for BFD peer IP address.
 	PeerAddressField = "peer_address"
 

@@ -20,23 +20,43 @@ import (
 	"github.com/cilium/stream"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	"github.com/cilium/cilium/pkg/inctimer"
+	"github.com/cilium/cilium/pkg/testutils"
 )
 
 const (
 	testTimeout = 5 * time.Second
 )
 
+var (
+	testIf1Name     = "bfd-test1"
+	testIf1IPv4Addr = netip.MustParsePrefix("172.16.100.1/24")
+	testIf1IPv6Addr = netip.MustParsePrefix("fc00::100/64")
+
+	testIf2Name     = "bfd-test2"
+	testIf2IPv4Addr = netip.MustParsePrefix("172.16.100.2/24")
+	testIf2IPv6Addr = netip.MustParsePrefix("fc00::101/64")
+)
+
 func Test_BFDServer(t *testing.T) {
-	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond) // 50ms to speed up the tests
+	testutils.PrivilegedTest(t)
+
 	logger := log.StandardLogger()
 	logger.SetLevel(log.DebugLevel)
 
-	localIPv6Addr := firstLocalIPv6Addr()
+	err := setupLinks()
+	t.Cleanup(func() {
+		teardownLinks()
+	})
+	require.NoError(t, err)
 
-	var steps = []struct {
+	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond) // 50ms to speed up the tests
+
+	steps := []struct {
 		description   string
 		s1Peers       []types.BFDPeerConfig
 		s2Peers       []types.BFDPeerConfig
@@ -46,8 +66,8 @@ func Test_BFDServer(t *testing.T) {
 			description: "single session IPv4, both active mode",
 			s1Peers: []types.BFDPeerConfig{
 				{
-					LocalAddress:     netip.MustParseAddr("127.0.0.100"),
-					PeerAddress:      netip.MustParseAddr("127.0.0.200"),
+					LocalAddress:     testIf1IPv4Addr.Addr(),
+					PeerAddress:      testIf2IPv4Addr.Addr(),
 					ReceiveInterval:  20 * time.Millisecond,
 					TransmitInterval: 20 * time.Millisecond,
 					DetectMultiplier: 3,
@@ -56,8 +76,8 @@ func Test_BFDServer(t *testing.T) {
 			},
 			s2Peers: []types.BFDPeerConfig{
 				{
-					LocalAddress:     netip.MustParseAddr("127.0.0.200"),
-					PeerAddress:      netip.MustParseAddr("127.0.0.100"),
+					LocalAddress:     testIf2IPv4Addr.Addr(),
+					PeerAddress:      testIf1IPv4Addr.Addr(),
 					ReceiveInterval:  20 * time.Millisecond,
 					TransmitInterval: 20 * time.Millisecond,
 					DetectMultiplier: 3,
@@ -69,8 +89,8 @@ func Test_BFDServer(t *testing.T) {
 			description: "single session IPv6, s1 active mode",
 			s1Peers: []types.BFDPeerConfig{
 				{
-					LocalAddress:     localIPv6Addr,
-					PeerAddress:      netip.MustParseAddr("::1"),
+					LocalAddress:     testIf1IPv6Addr.Addr(),
+					PeerAddress:      testIf2IPv6Addr.Addr(),
 					ReceiveInterval:  20 * time.Millisecond,
 					TransmitInterval: 20 * time.Millisecond,
 					DetectMultiplier: 3,
@@ -79,12 +99,45 @@ func Test_BFDServer(t *testing.T) {
 			},
 			s2Peers: []types.BFDPeerConfig{
 				{
-					LocalAddress:     netip.MustParseAddr("::1"),
-					PeerAddress:      localIPv6Addr,
+					LocalAddress:     testIf2IPv6Addr.Addr(),
+					PeerAddress:      testIf1IPv6Addr.Addr(),
 					ReceiveInterval:  20 * time.Millisecond,
 					TransmitInterval: 20 * time.Millisecond,
 					DetectMultiplier: 3,
 					PassiveMode:      true,
+				},
+			},
+		},
+		{
+			description: "single session, update",
+			s1Peers: []types.BFDPeerConfig{
+				{
+					LocalAddress:     testIf1IPv4Addr.Addr(),
+					PeerAddress:      testIf2IPv4Addr.Addr(),
+					ReceiveInterval:  20 * time.Millisecond,
+					TransmitInterval: 20 * time.Millisecond,
+					DetectMultiplier: 3,
+					PassiveMode:      false,
+				},
+			},
+			s1UpdatePeers: []types.BFDPeerConfig{
+				{
+					LocalAddress:     testIf1IPv4Addr.Addr(),
+					PeerAddress:      testIf2IPv4Addr.Addr(),
+					ReceiveInterval:  15 * time.Millisecond,
+					TransmitInterval: 15 * time.Millisecond,
+					DetectMultiplier: 2,
+					PassiveMode:      false,
+				},
+			},
+			s2Peers: []types.BFDPeerConfig{
+				{
+					LocalAddress:     testIf2IPv4Addr.Addr(),
+					PeerAddress:      testIf1IPv4Addr.Addr(),
+					ReceiveInterval:  20 * time.Millisecond,
+					TransmitInterval: 20 * time.Millisecond,
+					DetectMultiplier: 3,
+					PassiveMode:      false,
 				},
 			},
 		},
@@ -144,39 +197,6 @@ func Test_BFDServer(t *testing.T) {
 			},
 		},
 		{
-			description: "single session, update",
-			s1Peers: []types.BFDPeerConfig{
-				{
-					LocalAddress:     netip.MustParseAddr("127.0.0.100"),
-					PeerAddress:      netip.MustParseAddr("127.0.0.200"),
-					ReceiveInterval:  20 * time.Millisecond,
-					TransmitInterval: 20 * time.Millisecond,
-					DetectMultiplier: 3,
-					PassiveMode:      false,
-				},
-			},
-			s1UpdatePeers: []types.BFDPeerConfig{
-				{
-					LocalAddress:     netip.MustParseAddr("127.0.0.100"),
-					PeerAddress:      netip.MustParseAddr("127.0.0.200"),
-					ReceiveInterval:  15 * time.Millisecond,
-					TransmitInterval: 15 * time.Millisecond,
-					DetectMultiplier: 2,
-					PassiveMode:      false,
-				},
-			},
-			s2Peers: []types.BFDPeerConfig{
-				{
-					LocalAddress:     netip.MustParseAddr("127.0.0.200"),
-					PeerAddress:      netip.MustParseAddr("127.0.0.100"),
-					ReceiveInterval:  20 * time.Millisecond,
-					TransmitInterval: 20 * time.Millisecond,
-					DetectMultiplier: 3,
-					PassiveMode:      false,
-				},
-			},
-		},
-		{
 			description: "Multiple sessions, multihop, different minimum TTL",
 			s1Peers: []types.BFDPeerConfig{
 				{
@@ -202,14 +222,64 @@ func Test_BFDServer(t *testing.T) {
 			},
 			s2Peers: nil,
 		},
+		{
+			description: "single session IPv4, echo mode",
+			s1Peers: []types.BFDPeerConfig{
+				{
+					PeerAddress:          testIf2IPv4Addr.Addr(),
+					Interface:            testIf2Name,
+					ReceiveInterval:      50 * time.Millisecond,
+					TransmitInterval:     50 * time.Millisecond,
+					DetectMultiplier:     3,
+					PassiveMode:          false,
+					EchoReceiveInterval:  10 * time.Millisecond,
+					EchoTransmitInterval: 10 * time.Millisecond,
+				},
+			},
+			s2Peers: []types.BFDPeerConfig{
+				{
+					PeerAddress:          testIf1IPv4Addr.Addr(),
+					Interface:            testIf1Name,
+					ReceiveInterval:      50 * time.Millisecond,
+					TransmitInterval:     50 * time.Millisecond,
+					DetectMultiplier:     3,
+					PassiveMode:          false,
+					EchoReceiveInterval:  10 * time.Millisecond,
+					EchoTransmitInterval: 10 * time.Millisecond,
+				},
+			},
+		},
+		{
+			description: "single session IPv6, echo mode",
+			s1Peers: []types.BFDPeerConfig{
+				{
+					PeerAddress:          testIf2IPv6Addr.Addr(),
+					Interface:            testIf2Name,
+					ReceiveInterval:      50 * time.Millisecond,
+					TransmitInterval:     50 * time.Millisecond,
+					DetectMultiplier:     3,
+					PassiveMode:          false,
+					EchoReceiveInterval:  10 * time.Millisecond,
+					EchoTransmitInterval: 10 * time.Millisecond,
+				},
+			},
+			s2Peers: []types.BFDPeerConfig{
+				{
+					PeerAddress:          testIf1IPv6Addr.Addr(),
+					Interface:            testIf1Name,
+					ReceiveInterval:      50 * time.Millisecond,
+					TransmitInterval:     50 * time.Millisecond,
+					DetectMultiplier:     3,
+					PassiveMode:          false,
+					EchoReceiveInterval:  10 * time.Millisecond,
+					EchoTransmitInterval: 10 * time.Millisecond,
+				},
+			},
+		},
 	}
 
 	for _, step := range steps {
 		t.Run(step.description, func(t *testing.T) {
-			if step.s1Peers[0].LocalAddress.IsUnspecified() {
-				t.Skip("no local IP address") // skips the IPv6 test if there is no local IPv6 address detected
-			}
-
 			testCtx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			t.Cleanup(func() {
 				cancel()
@@ -242,10 +312,10 @@ func Test_BFDServer(t *testing.T) {
 			if step.s2Peers != nil {
 				// all sessions should transition into Up state (may transit via Init)
 				for range step.s1Peers {
-					assertEventualState(t, ch1, types.BFDStateUp)
+					assertEventualState(t, ch1, types.BFDStateUp, types.BFDDiagnosticNoDiagnostic)
 				}
 				for range step.s2Peers {
-					assertEventualState(t, ch2, types.BFDStateUp)
+					assertEventualState(t, ch2, types.BFDStateUp, types.BFDDiagnosticNoDiagnostic)
 				}
 			}
 
@@ -262,55 +332,94 @@ func Test_BFDServer(t *testing.T) {
 			}
 
 			// all sessions on server 2 should go down
-			for range step.s2Peers {
-				assertEventualState(t, ch2, types.BFDStateDown)
+			for _, peer := range step.s2Peers {
+				if peer.EchoTransmitInterval > 0 {
+					assertEventualState(t, ch2, types.BFDStateDown, types.BFDDiagnosticEchoFunctionFailed)
+				} else {
+					assertEventualState(t, ch2, types.BFDStateDown, types.BFDDiagnosticControlDetectionTimeExpired)
+				}
 			}
 		})
 	}
 }
 
-func firstLocalIPv6Addr() netip.Addr {
-	ifaces, err := net.Interfaces()
+func setupLinks() error {
+	teardownLinks() // cleanup leftovers, e.g. in case of a killed test
+
+	err := netlink.LinkAdd(&netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: testIf1Name,
+		},
+		PeerName: testIf2Name,
+	})
 	if err != nil {
-		return netip.IPv6Unspecified()
+		return err
 	}
-	for _, i := range ifaces {
-		addrs, err := i.Addrs()
+	err = setupLinkIPs(testIf1Name, testIf1IPv4Addr, testIf1IPv6Addr)
+	if err != nil {
+		return err
+	}
+	err = setupLinkIPs(testIf2Name, testIf2IPv4Addr, testIf2IPv6Addr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupLinkIPs(name string, ips ...netip.Prefix) error {
+	l, err := netlink.LinkByName(name)
+	if err != nil {
+		return err
+	}
+	for _, ip := range ips {
+		addr := &netlink.Addr{
+			IPNet: &net.IPNet{
+				IP:   ip.Addr().AsSlice(),
+				Mask: net.CIDRMask(ip.Bits(), ip.Addr().BitLen()),
+			},
+		}
+		if ip.Addr().Is6() {
+			addr.Flags = unix.IFA_F_NODAD // disable duplicate address detection so that we can use the address immediately
+		}
+		err = netlink.AddrAdd(l, addr)
 		if err != nil {
-			continue
-		}
-		for _, a := range addrs {
-			switch ipAddr := a.(type) {
-			case *net.IPNet:
-				if ipAddr.IP.To4() == nil && !ipAddr.IP.IsLoopback() && !ipAddr.IP.IsLinkLocalUnicast() {
-					if res, ok := netip.AddrFromSlice(ipAddr.IP); ok {
-						return res
-					}
-				}
-			}
+			return err
 		}
 	}
-	return netip.IPv6Unspecified()
+	return netlink.LinkSetUp(l)
+}
+
+func teardownLinks() {
+	teardownLink(testIf1Name)
+	teardownLink(testIf2Name)
+}
+
+func teardownLink(name string) error {
+	return netlink.LinkDel(&netlink.Dummy{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: name,
+		},
+	})
 }
 
 func assertStateTransition(t *testing.T, ch <-chan types.BFDPeerStatus, expState types.BFDState) {
 	select {
 	case e := <-ch:
 		require.Equal(t, expState.String(), e.Local.State.String())
-	case <-time.After(5 * time.Duration(slowDesiredMinTxInterval) * time.Microsecond):
+	case <-inctimer.After(5 * time.Duration(slowDesiredMinTxInterval) * time.Microsecond):
 		require.Failf(t, "missed state change", "%s expected", expState)
 	}
 }
 
-func assertEventualState(t *testing.T, ch <-chan types.BFDPeerStatus, expState types.BFDState) {
+func assertEventualState(t *testing.T, ch <-chan types.BFDPeerStatus, expState types.BFDState, expDiagnostic types.BFDDiagnostic) {
 	for {
 		select {
 		case e := <-ch:
-			if expState == e.Local.State {
+			if expState == e.Local.State && expDiagnostic == e.Local.Diagnostic {
 				return
 			}
 		case <-inctimer.After(5 * time.Duration(slowDesiredMinTxInterval) * time.Microsecond):
-			require.Failf(t, "missed state change", "%s expected", expState)
+			require.Failf(t, "missed state change", "%s (%s) expected", expState, expDiagnostic)
 		}
 	}
 }

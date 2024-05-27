@@ -57,11 +57,17 @@ type bfdSession struct {
 	// statusCh is used to deliver session status updates upon each status change
 	statusCh chan types.BFDPeerStatus
 
-	// inPacketsCh is used to deliver incoming BFD packets de-multiplexed to this session
+	// inPacketsCh is used to deliver incoming BFD Control packets de-multiplexed to this session
 	inPacketsCh chan *ControlPacket
 
-	// outConn is the packet connection associated with this session used for sending outgoing BFD packets
-	outConn bfdConnection
+	// inEchoPacketsCh is used to deliver incoming BFD Echo packets de-multiplexed to this session
+	inEchoPacketsCh chan *ControlPacket
+
+	// outConn is the packet connection associated with this session used for sending outgoing BFD Control packets
+	outConn bfdClientConnection
+
+	// outEchoConn is the packet connection associated with this session used for sending outgoing BFD Echo packets
+	outEchoConn bfdClientConnection
 
 	// peerAddress is the remote peer's IP address
 	peerAddress netip.Addr
@@ -73,9 +79,17 @@ type bfdSession struct {
 	curTransmitInterval time.Duration
 	transmitTimer       *time.Timer
 
+	// current calculated Echo transmission interval & Echo transmit timer
+	curEchoTransmitInterval time.Duration
+	echoTransmitTimer       *time.Timer
+
 	// current calculated detection time & detection timer
 	curDetectionTime  time.Duration
 	curDetectionTimer *time.Timer
+
+	// current calculated Echo detection time & Echo detection timer
+	curEchoDetectionTime  time.Duration
+	curEchoDetectionTimer *time.Timer
 
 	// lastPacketReceived is the time of receipt of last BFD Control packet
 	lastPacketReceived time.Time
@@ -149,7 +163,7 @@ type bfdLocalState struct {
 	requiredMinRxInterval uint32
 
 	// configuredRequiredMinRxInterval holds configured value for the RequiredMinRxInterval,
-	// as the currently used value may be different from the configured once during the Poll Sequence.
+	// as the currently used value may be different from the configured one during the Poll Sequence.
 	configuredRequiredMinRxInterval uint32
 
 	// detectMultiplier represents the bfd.DetectMult state variable:
@@ -169,7 +183,6 @@ type bfdLocalState struct {
 	// transmitting BFD Echo packets, less any jitter applied.
 	// Non-zero value enables the Echo Function in the direction towards the remote system.
 	// Zero value disables the Echo function in the direction towards the remote system.
-	// NOTE: not supported yet, the value will be ignored.
 	desiredMinEchoTxInterval uint32
 }
 
@@ -218,7 +231,7 @@ type bfdRemoteState struct {
 }
 
 // newBFDSession creates a new BFD session with provided configuration.
-func newBFDSession(logger log.FieldLogger, cfg *types.BFDPeerConfig, conn bfdConnection, localDiscr uint32, statusUpdateCh chan types.BFDPeerStatus) (*bfdSession, error) {
+func newBFDSession(logger log.FieldLogger, cfg *types.BFDPeerConfig, conn, echoConn bfdClientConnection, localDiscr uint32, statusUpdateCh chan types.BFDPeerStatus) (*bfdSession, error) {
 	if cfg.PeerAddress.IsUnspecified() {
 		return nil, fmt.Errorf("PeerAddress not specified")
 	}
@@ -240,7 +253,9 @@ func newBFDSession(logger log.FieldLogger, cfg *types.BFDPeerConfig, conn bfdCon
 		peerAddress:      cfg.PeerAddress,
 		networkInterface: cfg.Interface,
 		outConn:          conn,
+		outEchoConn:      echoConn,
 		inPacketsCh:      make(chan *ControlPacket, inPacketChannelSize),
+		inEchoPacketsCh:  make(chan *ControlPacket, inPacketChannelSize),
 		stopChan:         make(chan struct{}),
 		statusCh:         statusUpdateCh,
 		local: bfdLocalState{
@@ -252,6 +267,7 @@ func newBFDSession(logger log.FieldLogger, cfg *types.BFDPeerConfig, conn bfdCon
 			desiredMinTxInterval:            uint32(cfg.TransmitInterval / time.Microsecond),
 			configuredDesiredMinTxInterval:  uint32(cfg.TransmitInterval / time.Microsecond),
 			requiredMinEchoRxInterval:       uint32(cfg.EchoReceiveInterval / time.Microsecond),
+			desiredMinEchoTxInterval:        uint32(cfg.EchoTransmitInterval / time.Microsecond),
 			sessionState:                    types.BFDStateDown, // RFC 5880 6.8.1. State Variables: This variable MUST be initialized to Down.
 		},
 		remote: bfdRemoteState{
@@ -294,6 +310,8 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 		return fmt.Errorf("DetectMultiplier is zero")
 	}
 
+	echoDetectTimeAffected := false // tracks whether Echo detection time has been affected and needs an update
+
 	// 6.8.3.  Timer Manipulation
 	// If either bfd.DesiredMinTxInterval is changed or bfd.RequiredMinRxInterval is changed,
 	// a Poll Sequence MUST be initiated (see section 6.5).
@@ -328,7 +346,10 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 	// 6.8.12.  Detect Multiplier Change
 	// The new value will be transmitted with the next BFD Control packet, and the use of
 	// a Poll Sequence is not necessary.
-	s.local.detectMultiplier = cfg.DetectMultiplier
+	if s.local.detectMultiplier != cfg.DetectMultiplier {
+		s.local.detectMultiplier = cfg.DetectMultiplier
+		echoDetectTimeAffected = true
+	}
 
 	// 6.8.13.  Enabling or Disabling The Echo Function
 	// If it is desired to enable or disable the looping back of received
@@ -336,6 +357,19 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 	// of Required Min Echo RX Interval to zero or nonzero in outgoing BFD
 	// Control packets.
 	s.local.requiredMinEchoRxInterval = uint32(cfg.EchoReceiveInterval / time.Microsecond)
+
+	// update echo transmit interval, which is only a local matter
+	echoTransmitInterval := uint32(cfg.EchoTransmitInterval / time.Microsecond)
+	if s.local.desiredMinEchoTxInterval != echoTransmitInterval {
+		s.local.desiredMinEchoTxInterval = echoTransmitInterval
+		echoDetectTimeAffected = true
+	}
+
+	if echoDetectTimeAffected {
+		// if the Echo detection time was affected, update it immediately
+		s.updateEchoTransmitInterval()
+		s.updateEchoDetectionTime()
+	}
 
 	s.notifyStatusChange()
 
@@ -395,7 +429,13 @@ func (s *bfdSession) worker() {
 
 	// initialize timers
 	s.curDetectionTimer = time.NewTimer(time.Duration(math.MaxInt64))
-	s.updateTrasmitInterval()
+	s.curEchoDetectionTimer = time.NewTimer(time.Duration(math.MaxInt64))
+	s.curEchoDetectionTimer.Stop() // echo is stopped by default
+	s.transmitTimer = time.NewTimer(time.Duration(math.MaxInt64))
+	s.echoTransmitTimer = time.NewTimer(time.Duration(math.MaxInt64))
+	s.echoTransmitTimer.Stop() // echo is stopped by default
+	s.updateTransmitInterval()
+	s.updateEchoTransmitInterval()
 
 	// send initial session state update
 	s.lastStateChange = time.Now()
@@ -407,16 +447,28 @@ loop:
 	for {
 		select {
 		case pkt := <-s.inPacketsCh:
-			s.handleIncomingPacket(pkt)
+			s.handleIncomingControlPacket(pkt)
+		case pkt := <-s.inEchoPacketsCh:
+			s.handleIncomingEchoPacket(pkt)
 		case <-s.transmitTimer.C:
 			err := s.sendPeriodicControlPacket()
 			if err != nil {
-				s.logger.WithError(err).Error("Error by sending BFD control packet")
+				s.logger.WithError(err).Error("Error by sending BFD Control packet")
+			}
+		case <-s.echoTransmitTimer.C:
+			err := s.sendPeriodicEchoPacket()
+			if err != nil {
+				s.logger.WithError(err).Error("Error by sending BFD Echo packet")
 			}
 		case <-s.curDetectionTimer.C:
 			err := s.handleDetectionTimerExpiration()
 			if err != nil {
 				s.logger.WithError(err).Error("Error by handling BFD detection timer expiration")
+			}
+		case <-s.curEchoDetectionTimer.C:
+			err := s.handleEchoDetectionTimerExpiration()
+			if err != nil {
+				s.logger.WithError(err).Error("Error by handling BFD Echo detection timer expiration")
 			}
 		case <-s.stopChan:
 			break loop
@@ -426,12 +478,14 @@ loop:
 	// stop timers
 	s.Lock()
 	s.transmitTimer.Stop()
+	s.echoTransmitTimer.Stop()
 	s.curDetectionTimer.Stop()
+	s.curEchoDetectionTimer.Stop()
 	s.Unlock()
 }
 
-// handleIncomingPacket handles an incoming packet for this session.
-func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
+// handleIncomingControlPacket handles an incoming Control packet for this session.
+func (s *bfdSession) handleIncomingControlPacket(pkt *ControlPacket) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -475,10 +529,12 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 	}
 
 	// Update the transmit interval as described in section 6.8.2.
-	s.updateTrasmitInterval()
+	s.updateTransmitInterval()
+	s.updateEchoTransmitInterval()
 
 	// Update the Detection Time as described in section 6.8.4.
 	s.updateDetectionTime(pkt)
+	s.updateEchoDetectionTime()
 
 	// If bfd.SessionState is AdminDown Discard the packet (section 6.8.6.)
 	if s.local.sessionState == types.BFDStateAdminDown {
@@ -567,14 +623,23 @@ func (s *bfdSession) handleIncomingPacket(pkt *ControlPacket) {
 				// been sent
 				s.local.inPollSequence = true
 			}
-			s.updateTrasmitInterval()
+			s.updateTransmitInterval()
 		}
+		s.updateEchoTransmitInterval() // if the session state changed, we may need to update echo transmit interval
 	}
 
 	// notify if any session status changes were detected
 	if notifyStatusChange {
 		s.notifyStatusChange()
 	}
+}
+
+// handleIncomingEchoPacket handles an incoming Echo packet for this session.
+func (s *bfdSession) handleIncomingEchoPacket(pkt *ControlPacket) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.resetEchoDetectionTimer()
 }
 
 // changeStateIfAllowed changes session state to the provided value if it is allowed
@@ -651,6 +716,37 @@ func (s *bfdSession) sendPeriodicControlPacket() error {
 	return nil
 }
 
+// sendPeriodicEchoPacket sends a periodic Echo packet for the session.
+func (s *bfdSession) sendPeriodicEchoPacket() error {
+	s.Lock()
+	defer s.Unlock()
+
+	// BFD Echo packets MUST NOT be transmitted when bfd.SessionState is not Up.
+	if s.local.sessionState != types.BFDStateUp {
+		return nil
+	}
+
+	// BFD Echo packets MUST NOT be transmitted unless the last BFD
+	// Control packet received from the remote system contains a nonzero
+	// value in Required Min Echo RX Interval.
+	if s.remote.requiredMinEchoRxInterval == 0 {
+		return nil
+	}
+
+	pkt := s.createControlPacket(false)
+
+	err := s.outEchoConn.Write(pkt)
+	if err != nil {
+		// the peer may be already down, just log this
+		s.logger.WithError(err).Debug("Error by writing to BFD Echo connection")
+	}
+
+	// set a timer for the next packet
+	s.setEchoTransmitTimer()
+
+	return nil
+}
+
 // handleDetectionTimerExpiration handles expiration of the detection timer.
 func (s *bfdSession) handleDetectionTimerExpiration() error {
 	s.Lock()
@@ -670,6 +766,8 @@ func (s *bfdSession) handleDetectionTimerExpiration() error {
 	// gone down -- the local system MUST set bfd.SessionState to Down and
 	// bfd.LocalDiag to 1 (Control Detection Time Expired).
 	if s.local.sessionState == types.BFDStateUp || s.local.sessionState == types.BFDStateInit {
+		s.logger.Debug("Control detection timer expired, session Down")
+
 		// change the state (as the detection timer expired, we don't need to check if it needs to be preserved)
 		s.changeState(types.BFDStateDown, types.BFDDiagnosticControlDetectionTimeExpired)
 
@@ -680,19 +778,49 @@ func (s *bfdSession) handleDetectionTimerExpiration() error {
 		}
 
 		s.notifyStatusChange()
-
 		if err := s.sendStateUpdatePacket(); err != nil {
 			// peer most likely down, just log this
 			s.logger.WithError(err).Debug("Error sending state update to BFD peer")
 		}
-
-		return nil
 	}
 
 	return nil
 }
 
-func (s *bfdSession) updateTrasmitInterval() {
+// handleEchoDetectionTimerExpiration handles expiration of the Echo detection timer.
+func (s *bfdSession) handleEchoDetectionTimerExpiration() error {
+	s.Lock()
+	defer s.Unlock()
+
+	// 6.8.5.  Detecting Failures with the Echo Function
+	//   When the Echo function is active and a sufficient number of Echo
+	//   packets have not arrived as they should, the session has gone down --
+	//   the local system MUST set bfd.SessionState to Down and bfd.LocalDiag
+	//   to 2 (Echo Function Failed).
+
+	if s.curEchoTransmitInterval > 0 && s.local.sessionState == types.BFDStateUp {
+		s.logger.Debug("Echo detection timer expired, session Down")
+
+		// change the state (as the detection timer expired, we don't need to check if it needs to be preserved)
+		s.changeState(types.BFDStateDown, types.BFDDiagnosticEchoFunctionFailed)
+
+		// When bfd.SessionState is not Up, the system MUST set bfd.DesiredMinTxInterval
+		// to a value of not less than one second (1,000,000 microseconds).
+		if s.local.desiredMinTxInterval < minNotUpDesiredMinTxInterval {
+			s.local.desiredMinTxInterval = slowDesiredMinTxInterval
+		}
+
+		s.notifyStatusChange()
+		if err := s.sendStateUpdatePacket(); err != nil {
+			// peer most likely down, just log this
+			s.logger.WithError(err).Debug("Error sending state update to BFD peer")
+		}
+	}
+
+	return nil
+}
+
+func (s *bfdSession) updateTransmitInterval() {
 	oldInterval := s.curTransmitInterval
 
 	// RFC 5880 6.8.2. + 6.8.7.
@@ -710,6 +838,38 @@ func (s *bfdSession) updateTrasmitInterval() {
 
 	if s.curTransmitInterval != oldInterval {
 		s.setTransmitTimer()
+	}
+}
+
+func (s *bfdSession) updateEchoTransmitInterval() {
+	oldInterval := s.curEchoTransmitInterval
+
+	if s.local.sessionState != types.BFDStateUp || s.local.desiredMinEchoTxInterval == 0 || s.remote.requiredMinEchoRxInterval == 0 {
+		// RFC 5880 6.8.9.
+		//   BFD Echo packets MUST NOT be transmitted when bfd.SessionState is not
+		//   Up.  BFD Echo packets MUST NOT be transmitted unless the last BFD
+		//   Control packet received from the remote system contains a nonzero
+		//   value in Required Min Echo RX Interval.
+		s.curEchoTransmitInterval = 0
+	} else {
+		// RFC 5880 6.8.9.
+		//   The interval between transmitted BFD Echo packets MUST NOT be less than
+		//   the value advertised by the remote system in Required Min Echo RX Interval
+		if s.local.desiredMinEchoTxInterval > s.remote.requiredMinEchoRxInterval {
+			s.curEchoTransmitInterval = time.Duration(s.local.desiredMinEchoTxInterval) * time.Microsecond
+		} else {
+			s.curEchoTransmitInterval = time.Duration(s.remote.requiredMinEchoRxInterval) * time.Microsecond
+		}
+	}
+
+	if s.curEchoTransmitInterval != oldInterval {
+		if oldInterval == 0 {
+			// echo transmit is just being enabled, reset the connection and detection timer
+			s.outEchoConn.Reset()
+			s.updateEchoDetectionTime()
+			s.resetEchoDetectionTimer()
+		}
+		s.setEchoTransmitTimer()
 	}
 }
 
@@ -742,6 +902,24 @@ func (s *bfdSession) setTransmitTimer() {
 	s.transmitTimer = time.NewTimer(nextInterval)
 }
 
+func (s *bfdSession) setEchoTransmitTimer() {
+	if s.curEchoTransmitInterval == 0 {
+		// stop the timer if echo transmit is disabled
+		s.echoTransmitTimer.Stop()
+		return
+	}
+
+	// RFC 5880  6.8.9.  Transmission of BFD Echo Packets
+	//   A 25% jitter MAY be applied to the rate of transmission, such that
+	//   the actual interval MAY be between 75% and 100% of the advertised value.
+
+	quarterInterval := s.curEchoTransmitInterval / 4
+	// 75% + 0-25%
+	nextInterval := (quarterInterval * 3) + time.Duration(rand.Int64N(int64(quarterInterval)))
+
+	s.echoTransmitTimer = time.NewTimer(nextInterval)
+}
+
 func (s *bfdSession) updateDetectionTime(pkt *ControlPacket) {
 	// RFC 5880 6.8.4.
 	// In Asynchronous mode, the Detection Time calculated in the local
@@ -759,9 +937,29 @@ func (s *bfdSession) updateDetectionTime(pkt *ControlPacket) {
 	s.curDetectionTime = time.Duration(uint32(pkt.DetectMultiplier)*remoteTransmitInterval) * time.Microsecond
 }
 
+func (s *bfdSession) updateEchoDetectionTime() {
+	// RFC 5880 6.8.5.
+	//   The means by which the Echo function failures are detected is outside
+	//   of the scope of this specification.  Any means that will detect a
+	//   communication failure are acceptable.
+
+	// We use the actual transmit interval * local detect multiplier as the detection time
+
+	s.curEchoDetectionTime = s.curEchoTransmitInterval * time.Duration(s.local.detectMultiplier)
+}
+
 func (s *bfdSession) resetDetectionTimer() {
 	if !s.curDetectionTimer.Reset(s.curDetectionTime) {
 		s.curDetectionTimer = time.NewTimer(s.curDetectionTime)
+	}
+}
+
+func (s *bfdSession) resetEchoDetectionTimer() {
+	if s.curEchoDetectionTime == 0 {
+		return // do not reset if already disabled
+	}
+	if !s.curEchoDetectionTimer.Reset(s.curEchoDetectionTime) {
+		s.curEchoDetectionTimer = time.NewTimer(s.curEchoDetectionTime)
 	}
 }
 

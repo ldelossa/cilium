@@ -22,42 +22,36 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 )
 
-type fakeControlConn struct {
+type fakeClientConn struct {
 	localAddrPort  netip.AddrPort
 	remoteAddrPort netip.AddrPort
-	inPkt          chan *ControlPacket
 	outPkt         chan *ControlPacket
 }
 
-func (conn *fakeControlConn) Read() (*ControlPacket, netip.AddrPort, error) {
-	pkt := <-conn.inPkt
-	return pkt, conn.remoteAddrPort, nil
-}
-
-func (conn *fakeControlConn) Write(pkt *ControlPacket) error {
+func (conn *fakeClientConn) Write(pkt *ControlPacket) error {
 	conn.outPkt <- pkt
 	return nil
 }
 
-func (conn *fakeControlConn) LocalAddrPort() netip.AddrPort {
+func (conn *fakeClientConn) LocalAddrPort() netip.AddrPort {
 	return conn.localAddrPort
 }
 
-func (conn *fakeControlConn) RemoteAddrPort() netip.AddrPort {
+func (conn *fakeClientConn) RemoteAddrPort() netip.AddrPort {
 	return conn.remoteAddrPort
 }
 
-func (conn *fakeControlConn) UpdateMinTTL(minTTL int) error {
+func (conn *fakeClientConn) Close() error {
 	return nil
 }
 
-func (conn *fakeControlConn) Close() error {
-	return nil
+func (conn *fakeClientConn) Reset() {
+	return
 }
 
 type testFixture struct {
-	conn     *fakeControlConn
-	statusCh chan types.BFDPeerStatus
+	controlConn, echoConn *fakeClientConn
+	statusCh              chan types.BFDPeerStatus
 
 	sessionCfg          *types.BFDPeerConfig
 	session             *bfdSession
@@ -65,7 +59,7 @@ type testFixture struct {
 	remoteDiscriminator uint32
 }
 
-func newTestFixture(t *testing.T) *testFixture {
+func newTestFixture(t *testing.T, echoEnabled bool) *testFixture {
 	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond) // 50ms to speed up the tests
 	logger := log.StandardLogger()
 	logger.SetLevel(log.DebugLevel)
@@ -75,8 +69,10 @@ func newTestFixture(t *testing.T) *testFixture {
 		remoteDiscriminator: 56789,
 	}
 
-	f.conn = &fakeControlConn{
-		inPkt:  make(chan *ControlPacket, 10),
+	f.controlConn = &fakeClientConn{
+		outPkt: make(chan *ControlPacket, 10),
+	}
+	f.echoConn = &fakeClientConn{
 		outPkt: make(chan *ControlPacket, 10),
 	}
 	f.sessionCfg = &types.BFDPeerConfig{
@@ -84,9 +80,13 @@ func newTestFixture(t *testing.T) *testFixture {
 		TransmitInterval: 11 * time.Millisecond,
 		DetectMultiplier: 3,
 	}
+	if echoEnabled {
+		f.sessionCfg.EchoReceiveInterval = 15 * time.Millisecond
+		f.sessionCfg.EchoTransmitInterval = 16 * time.Millisecond
+	}
 	f.statusCh = make(chan types.BFDPeerStatus, 10)
 
-	s, err := newBFDSession(logger, f.sessionCfg, f.conn, f.localDiscriminator, f.statusCh)
+	s, err := newBFDSession(logger, f.sessionCfg, f.controlConn, f.echoConn, f.localDiscriminator, f.statusCh)
 	require.NoError(t, err)
 	f.session = s
 
@@ -94,7 +94,7 @@ func newTestFixture(t *testing.T) *testFixture {
 }
 
 func Test_BFDSessionStateMachine(t *testing.T) {
-	f := newTestFixture(t)
+	f := newTestFixture(t, false)
 	f.session.start()
 	defer f.session.stop()
 
@@ -221,7 +221,7 @@ func Test_BFDSessionStateMachine(t *testing.T) {
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
 	f.session.inPacketsCh <- inPkt
 	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
-	assertEventualState(t, f.statusCh, types.BFDStateUp)
+	assertEventualState(t, f.statusCh, types.BFDStateUp, types.BFDDiagnosticNoDiagnostic)
 	require.EqualValues(t, types.BFDDiagnosticNoDiagnostic, outPkt.Diagnostic)
 	require.EqualValues(t, f.localDiscriminator, outPkt.MyDiscriminator)
 	require.EqualValues(t, f.sessionCfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
@@ -284,7 +284,7 @@ func Test_BFDSessionStateMachine(t *testing.T) {
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
 	f.session.inPacketsCh <- inPkt
 	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
-	assertEventualState(t, f.statusCh, types.BFDStateUp)
+	assertEventualState(t, f.statusCh, types.BFDStateUp, types.BFDDiagnosticNoDiagnostic)
 	require.EqualValues(t, types.BFDDiagnosticNoDiagnostic, outPkt.Diagnostic)
 	require.EqualValues(t, f.localDiscriminator, outPkt.MyDiscriminator)
 	require.EqualValues(t, f.sessionCfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
@@ -418,7 +418,7 @@ func Test_BFDSessionStateMachine(t *testing.T) {
 }
 
 func Test_BFDSessionUpdate(t *testing.T) {
-	f := newTestFixture(t)
+	f := newTestFixture(t, false)
 	f.session.start()
 	defer f.session.stop()
 
@@ -545,7 +545,7 @@ func Test_BFDSessionUpdate(t *testing.T) {
 }
 
 func Test_BFDStatePreservation(t *testing.T) {
-	f := newTestFixture(t)
+	f := newTestFixture(t, false)
 	f.session.start()
 	defer f.session.stop()
 
@@ -576,6 +576,106 @@ func Test_BFDStatePreservation(t *testing.T) {
 	require.EqualValues(t, outPkt.State, types.BFDStateDown)
 }
 
+func Test_BFDSessionEchoFunction(t *testing.T) {
+	f := newTestFixture(t, true)
+	f.session.start()
+	defer f.session.stop()
+
+	assertStateTransition(t, f.statusCh, types.BFDStateDown)
+
+	// L: Down (R: Down) -> Init
+	inPkt := createTestControlPacket(f.remoteDiscriminator, 0, layers.BFDStateDown)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	f.session.inPacketsCh <- inPkt
+	outPkt := waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateInit)
+	require.EqualValues(t, f.sessionCfg.EchoReceiveInterval/time.Microsecond, outPkt.RequiredMinEchoRxInterval)
+
+	assertNoEgressEchoPacket(t, f.session) // not yet Up
+
+	// L: Init (R: Down) -> Init
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateDown)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateInit)
+	require.EqualValues(t, f.sessionCfg.EchoReceiveInterval/time.Microsecond, outPkt.RequiredMinEchoRxInterval)
+
+	assertNoEgressEchoPacket(t, f.session) // not yet Up
+
+	// L: Init (R: Init) -> Up
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+
+	echoPkt := waitFirstEgressEchoPacket(t, f.session)
+	require.EqualValues(t, f.localDiscriminator, echoPkt.MyDiscriminator)
+
+	// L: Up (R: Up) -> Up
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateUp)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	inPkt.Final = true // end Poll sequence after moving to Up to proceed with shorter detection time
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+
+	// only Echo packets back-and-forth, let control detection time expire
+	attempts := 0
+	for {
+		// generate incoming echo packet
+		inEchoPkt := createTestControlPacket(f.localDiscriminator, f.remoteDiscriminator, layers.BFDStateUp)
+		f.session.inEchoPacketsCh <- inEchoPkt
+
+		outPkt = waitFirstEgressPacket(t, f.session)
+		if outPkt.State == layers.BFDStateDown {
+			// session went down due to control detection time expiration
+			require.EqualValues(t, types.BFDDiagnosticControlDetectionTimeExpired, outPkt.Diagnostic)
+			break
+		}
+
+		// make sure we do not loop indefinitely
+		attempts++
+		if attempts > 10 {
+			require.Fail(t, "failed waiting for control detection time expiration")
+		}
+	}
+
+	// drain echo packets channel
+	drainEgressEchoPackets(f.session)
+
+	// L: Down (R: Init) -> Up - zero remote RequiredMinEchoRxInterval
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+
+	assertNoEgressEchoPacket(t, f.session) // zero remote RequiredMinEchoRxInterval
+
+	// L: Up (R: Up) -> Up - zero remote RequiredMinEchoRxInterval
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateUp)
+	inPkt.Final = true // end Poll sequence after moving to Up to proceed with shorter detection time
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+
+	assertNoEgressEchoPacket(t, f.session) // zero remote RequiredMinEchoRxInterval
+
+	// L: Up (R: Up) -> Up
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateUp)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+
+	inEchoPkt = createTestControlPacket(f.localDiscriminator, f.remoteDiscriminator, layers.BFDStateUp)
+	f.session.inEchoPacketsCh <- inEchoPkt
+	echoPkt = waitFirstEgressEchoPacket(t, f.session)
+
+	// only control packets back-and-forth, let echo detection time expire
+
+	// L: Up (R: Up) -> Down (Echo function failed)
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateUp)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateDown)
+	require.EqualValues(t, types.BFDDiagnosticEchoFunctionFailed, outPkt.Diagnostic)
+}
+
 func createTestControlPacket(myDiscriminator, yourDiscriminator uint32, state layers.BFDState) *ControlPacket {
 	pkt := &ControlPacket{
 		&layers.BFD{
@@ -596,17 +696,51 @@ func createTestControlPacket(myDiscriminator, yourDiscriminator uint32, state la
 
 // waitFirstEgressPacket waits for and returns the first egress packet generated by the session.
 func waitFirstEgressPacket(t *testing.T, session *bfdSession) *ControlPacket {
-	// fail if the expected state is not reached within this timeframe
+	// fail if no packet is received within this timeframe
 	failTimer := time.NewTimer(5 * time.Duration(slowDesiredMinTxInterval) * time.Microsecond)
 
-	conn := session.outConn.(*fakeControlConn)
-	for {
-		select {
-		case pkt := <-conn.outPkt:
-			return pkt
-		case <-failTimer.C:
-			require.Fail(t, "missed egress packet")
-		}
+	conn := session.outConn.(*fakeClientConn)
+	select {
+	case pkt := <-conn.outPkt:
+		return pkt
+	case <-failTimer.C:
+		require.Fail(t, "missed egress packet")
+	}
+	return nil
+}
+
+// waitFirstEgressPacket waits for and returns the first egress packet generated by the session.
+func waitFirstEgressEchoPacket(t *testing.T, session *bfdSession) *ControlPacket {
+	// fail if no packet is received within this timeframe
+	failTimer := time.NewTimer(5 * time.Duration(slowDesiredMinTxInterval) * time.Microsecond)
+
+	conn := session.outEchoConn.(*fakeClientConn)
+	select {
+	case pkt := <-conn.outPkt:
+		return pkt
+	case <-failTimer.C:
+		require.Fail(t, "missed egress Echo packet")
+	}
+	return nil
+}
+
+// assertNoEgressEchoPacket asserts that there was no egress echo packet generated by the session
+// since session creation / echo packets drain.
+func assertNoEgressEchoPacket(t *testing.T, session *bfdSession) {
+	conn := session.outEchoConn.(*fakeClientConn)
+	select {
+	case <-conn.outPkt:
+		require.Fail(t, "unexpected Echo packet was sent")
+	default:
+		return
+	}
+}
+
+// drainEchoPackets drains egress echo packets channel of the session.
+func drainEgressEchoPackets(session *bfdSession) {
+	conn := session.outEchoConn.(*fakeClientConn)
+	for len(conn.outPkt) > 0 {
+		<-conn.outPkt
 	}
 }
 
@@ -624,7 +758,7 @@ func waitEgressPacketWithState(t *testing.T, session *bfdSession, inPkt *Control
 	}
 	remoteTxTimer := time.NewTimer(remoteTxTime)
 
-	conn := session.outConn.(*fakeControlConn)
+	conn := session.outConn.(*fakeClientConn)
 	for {
 		select {
 		case pkt := <-conn.outPkt:

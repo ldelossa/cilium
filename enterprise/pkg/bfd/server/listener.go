@@ -26,7 +26,7 @@ import (
 type bfdListener struct {
 	logger log.FieldLogger
 
-	connection bfdConnection
+	connection bfdServerConnection
 	pktCh      chan<- *receivedPacket
 
 	listenAddrPortIf netip.AddrPort
