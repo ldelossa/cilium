@@ -89,7 +89,7 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
 
         helm repo add isovalent https://helm.isovalent.com
         helm repo update
-        helm search repo isovalent/cilium --versions | grep X.Y.Y
+        helm search repo isovalent/cilium --versions | grep X.Y.Z
 
 - [ ] Update the "umbrella" [helm-charts]
   - Clone the [helm-charts] repository locally. Check out branch `master` for the latest Cilium version, or branch `vX.Y` otherwise.
