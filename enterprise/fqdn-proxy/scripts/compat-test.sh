@@ -21,7 +21,7 @@ function deploy_dnsproxy() {
 }
 
 function apply_policy() {
-    kubectl apply -f ./compat/policy.yaml
+    kubectl apply -f ./compat/fqdn-policy-egress.yaml
 }
 
 function remove_policy() {

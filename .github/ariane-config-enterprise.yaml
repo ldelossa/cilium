@@ -7,6 +7,7 @@ triggers:
     - enterprise-clustermesh-mixed-routing.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
     - enterprise-fqdn-ha.yaml
+    - enterprise-fqdn-ha-upgrade.yaml
     - enterprise-multi-network.yaml
     - enterprise-srv6-datapath.yaml
     - enterprise-multicast.yaml
@@ -26,6 +27,9 @@ triggers:
   /ci-fqdn-ha:
     workflows:
     - enterprise-fqdn-ha.yaml
+  /ci-fqdn-ha-upgrade:
+    workflows:
+    - enterprise-fqdn-ha-upgrade.yaml
   /ci-srv6-datapath:
     workflows:
     - enterprise-srv6-datapath.yaml
@@ -42,6 +46,8 @@ workflows:
   enterprise-clustermesh-overlapping-podcidr.yaml:
     paths-ignore-regex: (test|Documentation)/
   enterprise-fqdn-ha.yaml:
+    paths-ignore-regex: (test|Documentation)/
+  enterprise-fqdn-ha-upgrade.yaml:
     paths-ignore-regex: (test|Documentation)/
   enterprise-multi-network.yaml:
     paths-ignore-regex: (test|Documentation)/

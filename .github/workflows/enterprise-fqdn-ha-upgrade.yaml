@@ -1,0 +1,406 @@
+name: Enterprise FQDN HA Upgrade (ci-fqdn-ha-upgrade)
+
+# Any change in triggers needs to be reflected in the concurrency group.
+on:
+  workflow_dispatch:
+    inputs:
+      PR-number:
+        description: "Pull request number."
+        required: true
+      context-ref:
+        description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
+        required: true
+      SHA:
+        description: "SHA under test (head of the PR branch)."
+        required: true
+      extra-args:
+        description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
+        required: false
+        default: '{}'
+  # Run every 6 hours
+  schedule:
+    - cron: '0 4/6 * * *'
+
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # Required by the telemetry collection step
+  actions: read
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # To be able to set commit status
+  statuses: write
+
+concurrency:
+  # Structure:
+  # - Workflow name
+  # - Event type
+  # - A unique identifier depending on event type:
+  #   - schedule: SHA
+  #   - workflow_dispatch: PR number
+  #
+  # This structure ensures a unique concurrency group name is generated for each
+  # type of testing, such that re-runs will cancel the previous run.
+  group: |
+    ${{ github.workflow }}
+    ${{ github.event_name }}
+    ${{
+      (github.event_name == 'schedule' && github.sha) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.PR-number)
+    }}
+  cancel-in-progress: true
+
+env:
+  cilium_cli_ci_version:
+  kind_config: .github/kind-config.yaml
+
+jobs:
+  echo-inputs:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Echo Workflow Dispatch Inputs
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Echo Workflow Dispatch Inputs
+        run: |
+          echo '${{ tojson(inputs) }}'
+
+  commit-status-start:
+    name: Commit Status Start
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set initial commit status
+        uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+
+  upgrade-and-downgrade:
+    name: "Upgrade and Downgrade Test"
+    runs-on: ubuntu-latest-4cores-16gb
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ['minor', 'patch']
+    steps:
+      - name: Checkout context ref (trusted)
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set Environment Variables
+        uses: ./.github/actions/set-env-variables
+
+      - name: Set up job variables
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHA="${{ inputs.SHA }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+          echo sha=${SHA} >> $GITHUB_OUTPUT
+          if [ "${{ matrix.mode }}" = "minor" ]; then
+            CILIUM_DOWNGRADE_VERSION=$(contrib/scripts/print-downgrade-version.sh stable)
+          else
+            # Upgrade from / downgrade to patch release.
+            # In some cases we expect to fail to get the version number, do not
+            # fail the workflow in such case. This is typically the case on
+            # main branch where we don't have preceeding patch releases.
+            CILIUM_DOWNGRADE_VERSION=$(contrib/scripts/print-downgrade-version.sh patch || true)
+          fi
+          echo "CILIUM_DOWNGRADE_VERSION: ${CILIUM_DOWNGRADE_VERSION}"
+          if [ -z "${CILIUM_DOWNGRADE_VERSION}" ]; then
+            echo "::notice::No CILIUM_DOWNGRADE_VERSION returned; skipping remaining steps"
+          fi
+          echo stable_version=${CILIUM_DOWNGRADE_VERSION} >> $GITHUB_OUTPUT
+
+          # Base cilium installation config
+          CILIUM_BASE_INSTALL=" \
+            --namespace=kube-system \
+            --wait \
+            --helm-set=debug.enabled=true \
+            --helm-set-string=extraConfig.external-dns-proxy=true \
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}' \
+            --helm-set=image.useDigest=false \
+            --helm-set=operator.image.useDigest=false \
+            --helm-set=hubble.relay.image.useDigest=false \
+          "
+
+          # Stable cilium installation config
+          CILIUM_STABLE_INSTALL=" \
+            ${CILIUM_BASE_INSTALL} \
+            --chart-directory=./untrusted/cilium-stable/install/kubernetes/cilium \
+          "
+          echo "cilium_stable_install=${CILIUM_STABLE_INSTALL}" >> $GITHUB_OUTPUT
+
+          # Newest cilium installation config
+          CILIUM_NEWEST_INSTALL=" \
+            ${CILIUM_BASE_INSTALL} \
+            --chart-directory=./untrusted/cilium-newest/install/kubernetes/cilium \
+            --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
+            --helm-set=image.tag=${SHA} \
+            --helm-set=operator.image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator \
+            --helm-set=operator.image.suffix=-ci \
+            --helm-set=operator.image.tag=${SHA} \
+            --helm-set=hubble.relay.image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/hubble-relay-ci \
+            --helm-set=hubble.relay.image.tag=${SHA} \
+          "
+          echo "cilium_newest_install=${CILIUM_NEWEST_INSTALL}" >> $GITHUB_OUTPUT
+
+          # Base cilium-dnsproxy installation config
+          DNSPROXY_BASE_INSTALL=" \
+            -n kube-system \
+            --set metrics.enabled=true \
+            --set debug=true \
+          "
+
+          # Stable cilium-dnsproxy installation config
+          DNSPROXY_STABLE_INSTALL=" \
+            ${DNSPROXY_BASE_INSTALL} \
+            cilium-dnsproxy ./untrusted/cilium-stable/enterprise/fqdn-proxy/installation \
+          "
+          echo "dnsproxy_stable_install=${DNSPROXY_STABLE_INSTALL}" >> $GITHUB_OUTPUT
+
+          # Newest cilium-dnsproxy installation config
+          DNSPROXY_NEWEST_INSTALL=" \
+            ${DNSPROXY_BASE_INSTALL} \
+            --set image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-dnsproxy-ci \
+            --set image.tag=${SHA} \
+            cilium-dnsproxy ./untrusted/cilium-newest/enterprise/fqdn-proxy/installation \
+          "
+          echo "dnsproxy_newest_install=${DNSPROXY_NEWEST_INSTALL}" >> $GITHUB_OUTPUT
+
+          # Run only a limited subset of tests to reduce the amount of time
+          # required. The full suite is run in other workflows already.
+          CONNECTIVITY_TEST_DEFAULTS=" \
+            --namespace kube-system \
+            --hubble=false \
+            --flow-validation=disabled \
+            --test='no-interrupted-connections' \
+            --test='no-unexpected-packet-drops' \
+            --test='dns-only' \
+            --test='to-fqdns' \
+            --test='external-cilium-dns-proxy' \
+            --collect-sysdump-on-failure \
+          "
+          echo "connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS}" >> $GITHUB_OUTPUT
+
+      - name: Install Cilium CLI
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        uses: cilium/cilium-cli@13cf0683b2662c27c691f4330c2ac0f48b429ce5 # v0.16.7
+        with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
+          release-version: ${{ env.CILIUM_CLI_VERSION }}
+          ci-version: ${{ env.cilium_cli_ci_version }}
+
+      - name: Create kind cluster
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
+        with:
+          version: ${{ env.KIND_VERSION }}
+          node_image: ${{ env.KIND_K8S_IMAGE }}
+          kubectl_version: ${{ env.KIND_K8S_VERSION }}
+          config: ${{ env.kind_config }}
+          wait: 0 # The control-plane never becomes ready, since no CNI is present
+
+      # Warning: since this is a privileged workflow, subsequent workflow job
+      # steps must take care not to execute untrusted code.
+      - name: Checkout pull request branch (NOT TRUSTED)
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        with:
+          ref: ${{ steps.vars.outputs.sha }}
+          persist-credentials: false
+          path: untrusted/cilium-newest
+          sparse-checkout: |
+            install/kubernetes/cilium
+            enterprise/fqdn-proxy/installation
+
+      - name: Checkout ${{ steps.vars.outputs.stable_version }} branch
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+        with:
+          ref: ${{ steps.vars.outputs.stable_version }}
+          persist-credentials: false
+          path: untrusted/cilium-stable
+          sparse-checkout: |
+            install/kubernetes/cilium
+            enterprise/fqdn-proxy/installation
+
+      - name: Wait for CI images to be available
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          for image in cilium-ci operator-generic-ci hubble-relay-ci cilium-dnsproxy-ci; do
+            until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
+          done
+
+      # Step 1: Install latest stable (patch or minor, depending on matrix
+      # mode) Cilium and FQDN HA and run FQDN HA specific tests.
+
+      - name: 1. Install Cilium ${{ steps.vars.outputs.stable_version }}
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium install ${{ steps.vars.outputs.cilium_stable_install }}
+          cilium status --wait
+
+      - name: 1. Install Cilium DNS proxy ${{ steps.vars.outputs.stable_version }}
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          helm install ${{ steps.vars.outputs.dnsproxy_stable_install }}
+          kubectl rollout status -n kube-system ds/cilium-dnsproxy --timeout 5m --watch
+
+      - name: 1. Run FQDN connectivity tests
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }}
+
+      - name: 1. Apply policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl apply -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
+
+      - name: 1. Run tests before Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      - name: 1. Bring Cilium down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/bring-cilium-down.sh
+
+      - name: 1. Run tests after Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      # Step 2: Upgrade Cilium to PR/HEAD and run FQDN HA specific tests.
+
+      - name: 2. Upgrade Cilium ${{ steps.vars.outputs.sha }}
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium uninstall --wait
+          cilium install ${{ steps.vars.outputs.cilium_newest_install }}
+          cilium status --wait
+
+      - name: 2. Run FQDN connectivity tests
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }}
+
+      - name: 2. Apply policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl apply -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
+
+      - name: 2. Run tests before Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      - name: 2. Bring Cilium down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/bring-cilium-down.sh
+
+      - name: 2. Run tests after Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      # Step 3: Upgrade FQDN HA to PR/HEAD and run FQDN HA specific tests.
+
+      - name: 3. Bring Cilium up
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium uninstall --wait
+          cilium install ${{ steps.vars.outputs.cilium_newest_install }}
+          cilium status --wait
+
+      - name: 3. Upgrade Cilium DNS proxy ${{ steps.vars.outputs.sha }}
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          helm upgrade --install ${{ steps.vars.outputs.dnsproxy_newest_install }}
+          kubectl rollout status -n kube-system ds/cilium-dnsproxy --timeout 5m --watch
+          kubectl rollout restart -n kube-system ds/cilium
+          cilium status --wait
+
+      - name: 3. Run FQDN connectivity tests
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }}
+
+      - name: 3. Apply policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl apply -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
+
+      - name: 3. Run tests before Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      - name: 3. Bring Cilium down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/bring-cilium-down.sh
+
+      - name: 3. Run tests after Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      # Step 4: Downgrade Cilium to stable and run FQDN HA specific tests.
+
+      - name: 4. Downgrade Cilium ${{ steps.vars.outputs.stable_version }}
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium uninstall --wait
+          cilium install ${{ steps.vars.outputs.cilium_stable_install }}
+          cilium status --wait
+
+      - name: 4. Run FQDN connectivity tests
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }}
+
+      - name: 4. Apply policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl apply -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
+
+      - name: 4. Run tests before Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      - name: 4. Bring Cilium down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/bring-cilium-down.sh
+
+      - name: 4. Run tests after Cilium pods are down
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+  commit-status-final:
+    name: Commit Status Final
+    if: ${{ always() }}
+    needs: upgrade-and-downgrade
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set final commit status
+        uses: myrotvorets/set-commit-status-action@3730c0a348a2ace3c110851bed53331bc6406e9f # v2.0.1
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+          status: ${{ needs.upgrade-and-downgrade.result }}
