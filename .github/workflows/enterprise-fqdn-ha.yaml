@@ -178,63 +178,20 @@ jobs:
 
       - name: Apply policy
         run: |
-          cat << EOF > fqdn-policy-egress.yaml
-          apiVersion: cilium.io/v2
-          kind: CiliumNetworkPolicy
-          metadata:
-            name: client-egress-to-fqdns-cilium-io
-            namespace: cilium-test
-          spec:
-            egress:
-            - toFQDNs:
-              - matchName: cilium.io
-            - toEndpoints:
-              - matchLabels:
-                  k8s:io.kubernetes.pod.namespace: kube-system
-                  k8s:k8s-app: kube-dns
-              - matchLabels:
-                  k8s:io.kubernetes.pod.namespace: kube-system
-                  k8s:k8s-app: coredns
-              toPorts:
-              - ports:
-                - port: "53"
-                  protocol: ANY
-                rules:
-                  dns:
-                  - matchPattern: '*'
-                  - matchPattern: '*.-name.com'
-            endpointSelector:
-              matchLabels:
-                any:kind: client
-          EOF
-
-          kubectl apply -f fqdn-policy-egress.yaml
+          kubectl apply -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
           sleep 10
 
       - name: Run tests before Cilium pods are down
         run: |
-          cat << EOF > test-fqdn-ha.sh
-          kubectl exec -n cilium-test deploy/client -- nslookup cilium.io
-          kubectl exec -n cilium-test deploy/client -- curl --max-time 10 cilium.io
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
 
-          kubectl exec -n cilium-test deploy/client -- nslookup google.com
-
-          if kubectl exec -n cilium-test deploy/client -- curl --max-time 10 google.com ; then
-            echo "google.com reached despite being blocked by fqdn policy"
-            exit 1
-          fi
-          EOF
-
-          chmod 755 ./test-fqdn-ha.sh
-          ./test-fqdn-ha.sh
-
-      - name: Kill Cilium pods
+      - name: Bring Cilium down
         run: |
-          KUBE_EDITOR="sed -i s/cilium-ci/pc-load-letter-no-such-image/g" kubectl -n kube-system edit ds/cilium
+          ./enterprise/fqdn-proxy/scripts/bring-cilium-down.sh
 
       - name: Run tests after Cilium pods are down
         run: |
-          ./test-fqdn-ha.sh
+          ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
 
       - name: Post-test information gathering
         if: ${{ !success() }}
