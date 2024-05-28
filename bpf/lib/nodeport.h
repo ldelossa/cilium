@@ -559,27 +559,6 @@ nodeport_dsr_lookup_v6_nat_entry(const struct ipv6_ct_tuple *nat_tuple)
 	return snat_v6_lookup(nat_tuple);
 }
 
-static __always_inline int xlate_dsr_v6(struct __ctx_buff *ctx,
-					const struct ipv6_ct_tuple *tuple,
-					int l4_off)
-{
-	struct ipv6_ct_tuple nat_tup = *tuple;
-	struct ipv6_nat_entry *entry;
-
-	nat_tup.flags = NAT_DIR_EGRESS;
-	nat_tup.sport = tuple->dport;
-	nat_tup.dport = tuple->sport;
-
-	entry = nodeport_dsr_lookup_v6_nat_entry(&nat_tup);
-	if (!entry)
-		return 0;
-
-	ctx_snat_done_set(ctx);
-	return snat_v6_rewrite_headers(ctx, nat_tup.nexthdr, ETH_HLEN, l4_off,
-				       &nat_tup.saddr, &entry->to_saddr, IPV6_SADDR_OFF,
-				       nat_tup.sport, entry->to_sport, TCP_SPORT_OFF);
-}
-
 static __always_inline int dsr_reply_icmp6(struct __ctx_buff *ctx,
 					   const struct ipv6hdr *ip6 __maybe_unused,
 					   const union v6addr *svc_addr __maybe_unused,
@@ -682,7 +661,7 @@ static __always_inline int dsr_reply_icmp6(struct __ctx_buff *ctx,
 	return ctx_redirect(ctx, ctx_get_ifindex(ctx), 0);
 drop_err:
 #endif
-	return send_drop_notify_error(ctx, 0, code, CTX_ACT_DROP,
+	return send_drop_notify_error(ctx, UNKNOWN_ID, code, CTX_ACT_DROP,
 				      METRIC_EGRESS);
 }
 
@@ -766,7 +745,7 @@ int tail_nodeport_ipv6_dsr(struct __ctx_buff *ctx)
 		return ret;
 	}
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
@@ -875,7 +854,7 @@ int tail_nat_ipv46(struct __ctx_buff *ctx)
 		return ret;
 	}
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
@@ -906,7 +885,7 @@ int tail_nat_ipv64(struct __ctx_buff *ctx)
 		return ret;
 	}
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 #endif /* ENABLE_NAT_46X64_GATEWAY */
@@ -1067,7 +1046,8 @@ int tail_nodeport_rev_dnat_ingress_ipv6(struct __ctx_buff *ctx)
 	cilium_capture_out(ctx);
 	return ret;
 drop:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP, METRIC_EGRESS);
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
+					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
 __section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_NAT_INGRESS)
@@ -1272,7 +1252,7 @@ fib_ipv4:
 		return ret;
 	}
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
@@ -1303,7 +1283,7 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 		if (ctx_is_xdp())
 			return CTX_ACT_OK;
 
-		send_trace_notify(ctx, TRACE_TO_PROXY, src_sec_identity, 0,
+		send_trace_notify(ctx, TRACE_TO_PROXY, src_sec_identity, UNKNOWN_ID,
 				  bpf_ntohs((__u16)svc->l7_lb_proxy_port),
 				  TRACE_IFINDEX_UNKNOWN,
 				  TRACE_REASON_POLICY, monitor);
@@ -1561,7 +1541,7 @@ int tail_handle_snat_fwd_ipv6(struct __ctx_buff *ctx)
 
 	ret = nodeport_snat_fwd_ipv6(ctx, &saddr, &trace, &ext_err);
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+		return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
 
 	/* contrary to tail_handle_snat_fwd_ipv4, we don't check for
@@ -1572,7 +1552,8 @@ int tail_handle_snat_fwd_ipv6(struct __ctx_buff *ctx)
 	 * for IPv6, and so it's not possible yet for masqueraded traffic to get
 	 * redirected to another interface
 	 */
-	send_trace_notify6(ctx, obs_point, 0, 0, &saddr, 0, NATIVE_DEV_IFINDEX,
+	send_trace_notify6(ctx, obs_point, UNKNOWN_ID, UNKNOWN_ID, &saddr,
+			   TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
 			   trace.reason, trace.monitor);
 
 	return ret;
@@ -1630,11 +1611,12 @@ int tail_handle_nat_fwd_ipv6(struct __ctx_buff *ctx)
 
 	ret = handle_nat_fwd_ipv6(ctx, &trace, &ext_err);
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+		return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
 
 	if (ret == CTX_ACT_OK)
-		send_trace_notify(ctx, obs_point, 0, 0, 0, NATIVE_DEV_IFINDEX,
+		send_trace_notify(ctx, obs_point, UNKNOWN_ID, UNKNOWN_ID,
+				  TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
 				  trace.reason, trace.monitor);
 
 	return ret;
@@ -1714,7 +1696,21 @@ static __always_inline int nodeport_snat_fwd_ipv4(struct __ctx_buff *ctx,
 	if (IS_ERR(ret))
 		goto out;
 
+#if defined(ENABLE_EGRESS_GATEWAY_COMMON) && defined(IS_BPF_HOST)
+	if (target.egress_gateway) {
+		/* Send packet to the correct egress interface, and SNAT it there. */
+		ret = egress_gw_fib_lookup_and_redirect(ctx, target.addr,
+							tuple.daddr, ext_err);
+		if (ret != CTX_ACT_OK)
+			return ret;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip4))
+			return DROP_INVALID;
+	}
+#endif
+
 apply_snat:
+
 	*saddr = tuple.saddr;
 	ret = snat_v4_nat(ctx, &tuple, ip4, l4_off, ipv4_has_l4_header(ip4),
 			  &target, trace, ext_err);
@@ -1731,11 +1727,6 @@ apply_snat:
 	 */
 	if (is_defined(IS_BPF_HOST))
 		ctx_snat_done_set(ctx);
-
-#if defined(ENABLE_EGRESS_GATEWAY_COMMON) && defined(IS_BPF_HOST)
-	if (target.egress_gateway)
-		return egress_gw_fib_lookup_and_redirect(ctx, target.addr, tuple.daddr, ext_err);
-#endif
 
 out:
 	if (ret == NAT_PUNT_TO_STACK)
@@ -2121,27 +2112,6 @@ nodeport_dsr_lookup_v4_nat_entry(const struct ipv4_ct_tuple *nat_tuple)
 	return snat_v4_lookup(nat_tuple);
 }
 
-static __always_inline int xlate_dsr_v4(struct __ctx_buff *ctx,
-					const struct ipv4_ct_tuple *tuple,
-					int l4_off, bool has_l4_header)
-{
-	struct ipv4_ct_tuple nat_tup = *tuple;
-	struct ipv4_nat_entry *entry;
-
-	nat_tup.flags = NAT_DIR_EGRESS;
-	nat_tup.sport = tuple->dport;
-	nat_tup.dport = tuple->sport;
-
-	entry = nodeport_dsr_lookup_v4_nat_entry(&nat_tup);
-	if (!entry)
-		return 0;
-
-	ctx_snat_done_set(ctx);
-	return snat_v4_rewrite_headers(ctx, nat_tup.nexthdr, ETH_HLEN, has_l4_header, l4_off,
-				       nat_tup.saddr, entry->to_saddr, IPV4_SADDR_OFF,
-				       nat_tup.sport, entry->to_sport, TCP_SPORT_OFF);
-}
-
 static __always_inline int dsr_reply_icmp4(struct __ctx_buff *ctx,
 					   struct iphdr *ip4 __maybe_unused,
 					   __be32 svc_addr __maybe_unused,
@@ -2255,7 +2225,7 @@ static __always_inline int dsr_reply_icmp4(struct __ctx_buff *ctx,
 	return ctx_redirect(ctx, ctx_get_ifindex(ctx), 0);
 drop_err:
 #endif
-	return send_drop_notify_error(ctx, 0, code, CTX_ACT_DROP,
+	return send_drop_notify_error(ctx, UNKNOWN_ID, code, CTX_ACT_DROP,
 				      METRIC_EGRESS);
 }
 
@@ -2312,7 +2282,7 @@ int tail_nodeport_ipv4_dsr(struct __ctx_buff *ctx)
 		return ret;
 	}
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
@@ -2573,7 +2543,7 @@ int tail_nodeport_rev_dnat_ingress_ipv4(struct __ctx_buff *ctx)
 	return ret;
 
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
@@ -2799,7 +2769,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 		return ret;
 	}
 drop_err:
-	return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  CTX_ACT_DROP, METRIC_EGRESS);
 }
 
@@ -2837,7 +2807,7 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 		if (ctx_is_xdp())
 			return CTX_ACT_OK;
 
-		send_trace_notify(ctx, TRACE_TO_PROXY, src_sec_identity, 0,
+		send_trace_notify(ctx, TRACE_TO_PROXY, src_sec_identity, UNKNOWN_ID,
 				  bpf_ntohs((__u16)svc->l7_lb_proxy_port),
 				  TRACE_IFINDEX_UNKNOWN,
 				  TRACE_REASON_POLICY, monitor);
@@ -3177,7 +3147,7 @@ int tail_handle_snat_fwd_ipv4(struct __ctx_buff *ctx)
 
 	ret = nodeport_snat_fwd_ipv4(ctx, cluster_id, &saddr, &trace, &ext_err);
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+		return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
 
 	/* Don't emit a trace event if the packet has been redirected to another
@@ -3186,7 +3156,8 @@ int tail_handle_snat_fwd_ipv4(struct __ctx_buff *ctx)
 	 * the interface to which the egress IP is assigned to.
 	 */
 	if (ret == CTX_ACT_OK)
-		send_trace_notify4(ctx, obs_point, 0, 0, saddr, 0, NATIVE_DEV_IFINDEX,
+		send_trace_notify4(ctx, obs_point, UNKNOWN_ID, UNKNOWN_ID, saddr,
+				   TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
 				   trace.reason, trace.monitor);
 
 	return ret;
@@ -3249,11 +3220,12 @@ int tail_handle_nat_fwd_ipv4(struct __ctx_buff *ctx)
 
 	ret = handle_nat_fwd_ipv4(ctx, &trace, &ext_err);
 	if (IS_ERR(ret))
-		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
+		return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
 
 	if (ret == CTX_ACT_OK)
-		send_trace_notify(ctx, obs_point, 0, 0, 0, NATIVE_DEV_IFINDEX,
+		send_trace_notify(ctx, obs_point, UNKNOWN_ID, UNKNOWN_ID,
+				  TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
 				  trace.reason, trace.monitor);
 
 	return ret;

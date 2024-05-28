@@ -488,8 +488,6 @@ endif
 	$(QUIET) contrib/scripts/check-log-newlines.sh
 	@$(ECHO_CHECK) contrib/scripts/check-test-tags.sh
 	$(QUIET) contrib/scripts/check-test-tags.sh
-	@$(ECHO_CHECK) contrib/scripts/check-assert-deep-equals.sh
-	$(QUIET) contrib/scripts/check-assert-deep-equals.sh
 	@$(ECHO_CHECK) contrib/scripts/lock-check.sh
 	$(QUIET) contrib/scripts/lock-check.sh
 	@$(ECHO_CHECK) contrib/scripts/check-viper.sh
@@ -498,8 +496,6 @@ ifeq ($(SKIP_CUSTOMVET_CHECK),"false")
 	@$(ECHO_CHECK) contrib/scripts/custom-vet-check.sh
 	$(QUIET) contrib/scripts/custom-vet-check.sh
 endif
-	@$(ECHO_CHECK) contrib/scripts/rand-check.sh
-	$(QUIET) contrib/scripts/rand-check.sh
 	@$(ECHO_CHECK) contrib/scripts/check-time.sh
 	$(QUIET) contrib/scripts/check-time.sh
 	@$(ECHO_CHECK) contrib/scripts/check-go-testdata.sh

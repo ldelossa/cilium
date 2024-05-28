@@ -80,16 +80,26 @@ func (p *HealthProvider) ForModule(mid cell.FullModuleID) cell.Health {
 			s.Count = 1
 			// If a similar status already exists, increment count, otherwise start back
 			// at zero.
-			if found && old.Level == s.Level && old.Message == s.Message {
+			if found && old.Level == s.Level && old.Message == s.Message && old.Error == s.Error {
 				s.Count = old.Count + 1
 			}
 			if _, _, err := p.statusTable.Insert(tx, s); err != nil {
 				return fmt.Errorf("upsert status %s: %w", s, err)
 			}
 
-			logger.WithField("reporter-id", s.ID.String()).
-				WithField("status", s).
-				Debugf("upserting health status")
+			// To avoid excess debug logs, only report upserts if it's a new status,
+			// is not-OK or is a state change (ex. Degraded -> OK).
+			if !found || s.Level != types.LevelOK || old.Level != s.Level {
+				lastLevel := "none"
+				if old.Level != "" {
+					lastLevel = string(old.Level)
+				}
+				logger.WithField("reporter-id", s.ID.String()).
+					WithField("lastLevel", lastLevel).
+					WithField("status", s.Level).
+					Debugf("upserting health status")
+			}
+
 			tx.Commit()
 			return nil
 		},
@@ -100,7 +110,7 @@ func (p *HealthProvider) ForModule(mid cell.FullModuleID) cell.Health {
 			tx := p.db.WriteTxn(p.statusTable)
 			defer tx.Abort()
 			q := PrimaryIndex.Query(types.HealthID(i.String()))
-			iter, _ := p.statusTable.LowerBound(tx, q)
+			iter, _ := p.statusTable.Prefix(tx, q)
 			var deleted int
 			for {
 				o, _, ok := iter.Next()
@@ -127,8 +137,12 @@ func (p *HealthProvider) ForModule(mid cell.FullModuleID) cell.Health {
 			}
 			tx := p.db.WriteTxn(p.statusTable)
 			defer tx.Abort()
-			old, _, found := p.statusTable.Get(tx, PrimaryIndex.QueryFromObject(types.Status{ID: i}))
-			if found && !old.Stopped.IsZero() {
+			old, _, found := p.statusTable.Get(tx, PrimaryIndex.Query(i.HealthID()))
+			if !found {
+				// Nothing to do.
+				return nil
+			}
+			if !old.Stopped.IsZero() {
 				return fmt.Errorf("reporting for %q has been stopped", i)
 			}
 			old.Stopped = time.Now()
@@ -199,6 +213,7 @@ func (r *moduleReporter) Degraded(msg string, err error) {
 	if err := r.upsert(types.Status{
 		ID:      r.id,
 		Level:   types.LevelDegraded,
+		Message: msg,
 		Error:   err.Error(),
 		Updated: time.Now(),
 	}); err != nil {

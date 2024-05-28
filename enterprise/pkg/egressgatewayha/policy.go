@@ -16,6 +16,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/netip"
 	"slices"
 	"sort"
@@ -39,7 +40,6 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/rand"
 )
 
 // groupConfig is the internal representation of an egress group, describing
@@ -374,7 +374,7 @@ func selectActiveGWs(seed string, maxGW int, healthyGWs []string) ([]string, err
 		return nil, err
 	}
 	s := binary.BigEndian.Uint64(h.Sum(nil))
-	r := rand.NewSafeRand(int64(s))
+	r := rand.New(rand.NewPCG(s, 0))
 	for _, p := range r.Perm(len(healthyGWs)) {
 		activeGWs = append(activeGWs, healthyGWs[p])
 		if maxGW != 0 && len(activeGWs) == maxGW {

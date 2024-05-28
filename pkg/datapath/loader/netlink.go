@@ -4,7 +4,6 @@
 package loader
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -37,21 +36,8 @@ func directionToParent(dir string) uint32 {
 	return 0
 }
 
-type progDefinition struct {
-	progName  string
-	direction string
-}
-
-type replaceDatapathOptions struct {
-	device   string           // name of the netlink interface we attach to
-	elf      string           // path to object file
-	programs []progDefinition // programs that we want to attach/replace
-	xdpMode  string           // XDP driver mode, only applies when attaching XDP programs
-	linkDir  string           // path to bpffs dir holding bpf_links for the device/endpoint
-	tcx      bool             // attempt attaching skb programs using tcx
-}
-
-// replaceDatapath replaces the qdisc and BPF program for an endpoint or XDP program.
+// loadDatapath returns a Collection given the ELF obj, renames maps according
+// to mapRenames and overrides the given constants.
 //
 // When successful, returns a finalizer to allow the map cleanup operation to be
 // deferred by the caller. On error, any maps pending migration are immediately
@@ -64,54 +50,29 @@ type replaceDatapathOptions struct {
 // For example, this is the case with from-netdev and to-netdev. If eth0:to-netdev
 // gets its program and maps replaced and unpinned, its eth0:from-netdev counterpart
 // will miss tail calls (and drop packets) until it has been replaced as well.
-func replaceDatapath(ctx context.Context, opts replaceDatapathOptions) (_ func(), err error) {
-	// Avoid unnecessarily loading a prog.
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	if opts.linkDir == "" {
-		return nil, errors.New("opts.linkDir not set in replaceDatapath")
-	}
-
-	link, err := netlink.LinkByName(opts.device)
-	if err != nil {
-		return nil, fmt.Errorf("getting interface %s by name: %w", opts.device, err)
-	}
-
-	l := log.WithField("device", opts.device).WithField("objPath", opts.elf).
-		WithField("ifindex", link.Attrs().Index)
-
-	// Load the ELF from disk.
-	l.Debug("Loading CollectionSpec from ELF")
-	spec, err := bpf.LoadCollectionSpec(opts.elf)
-	if err != nil {
-		return nil, fmt.Errorf("loading eBPF ELF %s: %w", opts.elf, err)
-	}
-
+func loadDatapath(spec *ebpf.CollectionSpec, mapRenames map[string]string, constants map[string]uint64) (_ *ebpf.Collection, _ func(), err error) {
 	revert := func() {
 		// Program replacement unsuccessful, revert bpffs migration.
-		l.Debug("Reverting bpffs map migration")
+		log.Debug("Reverting bpffs map migration")
 		if err := bpf.FinalizeBPFFSMigration(bpf.TCGlobalsPath(), spec, true); err != nil {
-			l.WithError(err).Error("Failed to revert bpffs map migration")
+			log.WithError(err).Error("Failed to revert bpffs map migration")
 		}
 	}
 
-	for _, prog := range opts.programs {
-		if spec.Programs[prog.progName] == nil {
-			return nil, fmt.Errorf("no program %s found in eBPF ELF", prog.progName)
-		}
+	spec, err = renameMaps(spec, mapRenames)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Unconditionally repin cilium_calls_* maps to prevent them from being
 	// repopulated by the loader.
-	for key, ms := range spec.Maps {
+	for _, ms := range spec.Maps {
 		if !strings.HasPrefix(ms.Name, "cilium_calls_") {
 			continue
 		}
 
-		if err := bpf.RepinMap(bpf.TCGlobalsPath(), key, ms); err != nil {
-			return nil, fmt.Errorf("repinning map %s: %w", key, err)
+		if err := bpf.RepinMap(bpf.TCGlobalsPath(), ms.Name, ms); err != nil {
+			return nil, nil, fmt.Errorf("repinning map %s: %w", ms.Name, err)
 		}
 
 		defer func() {
@@ -121,8 +82,8 @@ func replaceDatapath(ctx context.Context, opts replaceDatapathOptions) (_ func()
 				revert = true
 			}
 
-			if err := bpf.FinalizeMap(bpf.TCGlobalsPath(), key, revert); err != nil {
-				l.WithError(err).Error("Could not finalize map")
+			if err := bpf.FinalizeMap(bpf.TCGlobalsPath(), ms.Name, revert); err != nil {
+				log.WithError(err).Error("Could not finalize map")
 			}
 		}()
 
@@ -148,43 +109,55 @@ func replaceDatapath(ctx context.Context, opts replaceDatapathOptions) (_ func()
 	// bpffs in the process.
 	finalize := func() {}
 	pinPath := bpf.TCGlobalsPath()
-	collOpts := ebpf.CollectionOptions{
-		Maps: ebpf.MapOptions{PinPath: pinPath},
+	collOpts := bpf.CollectionOptions{
+		CollectionOptions: ebpf.CollectionOptions{
+			Maps: ebpf.MapOptions{PinPath: pinPath},
+		},
+		Constants: constants,
 	}
 	if err := bpf.MkdirBPF(pinPath); err != nil {
-		return nil, fmt.Errorf("creating bpffs pin path: %w", err)
+		return nil, nil, fmt.Errorf("creating bpffs pin path: %w", err)
 	}
-	l.Debug("Loading Collection into kernel")
-	coll, err := bpf.LoadCollection(spec, collOpts)
+	log.Debug("Loading Collection into kernel")
+	coll, err := bpf.LoadCollection(spec, &collOpts)
 	if errors.Is(err, ebpf.ErrMapIncompatible) {
 		// Temporarily rename bpffs pins of maps whose definitions have changed in
 		// a new version of a datapath ELF.
-		l.Debug("Starting bpffs map migration")
+		log.Debug("Starting bpffs map migration")
 		if err := bpf.StartBPFFSMigration(bpf.TCGlobalsPath(), spec); err != nil {
-			return nil, fmt.Errorf("Failed to start bpffs map migration: %w", err)
+			return nil, nil, fmt.Errorf("Failed to start bpffs map migration: %w", err)
 		}
 
 		finalize = func() {
-			l.Debug("Finalizing bpffs map migration")
+			log.Debug("Finalizing bpffs map migration")
 			if err := bpf.FinalizeBPFFSMigration(bpf.TCGlobalsPath(), spec, false); err != nil {
-				l.WithError(err).Error("Could not finalize bpffs map migration")
+				log.WithError(err).Error("Could not finalize bpffs map migration")
 			}
 		}
 
 		// Retry loading the Collection after starting map migration.
-		l.Debug("Retrying loading Collection into kernel after map migration")
-		coll, err = bpf.LoadCollection(spec, collOpts)
+		log.Debug("Retrying loading Collection into kernel after map migration")
+		coll, err = bpf.LoadCollection(spec, &collOpts)
 	}
 	var ve *ebpf.VerifierError
 	if errors.As(err, &ve) {
 		if _, err := fmt.Fprintf(os.Stderr, "Verifier error: %s\nVerifier log: %+v\n", err, ve); err != nil {
-			return nil, fmt.Errorf("writing verifier log to stderr: %w", err)
+			revert()
+			return nil, nil, fmt.Errorf("writing verifier log to stderr: %w", err)
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("loading eBPF collection into the kernel: %w", err)
+		revert()
+		return nil, nil, fmt.Errorf("loading eBPF collection into the kernel: %w", err)
 	}
-	defer coll.Close()
+
+	// TODO(tb): Reverts don't really make sense after this point. Once a policy
+	// prog is inserted, the new Collection will be handling some part of the
+	// datapath. Reverting will clear the new prog array and result in missed tail
+	// calls in the 'new' code path, so the whole endpoint will break anyway.
+	// Since there is no atomicity in attaching a program, let's not create the
+	// illusion that reverts are actually possible. As a follow-up, remove the
+	// map migration system in favor of a 'commit' system.
 
 	// If an ELF contains one of the policy call maps, resolve and insert the
 	// programs it refers to into the map. This always needs to happen _before_
@@ -201,43 +174,17 @@ func replaceDatapath(ctx context.Context, opts replaceDatapathOptions) (_ func()
 	// first, or we risk missing tail calls.
 	if len(policyProgs) != 0 {
 		if err := resolveAndInsertCalls(coll, policymap.PolicyCallMapName, policyProgs); err != nil {
-			revert()
-			return nil, fmt.Errorf("inserting policy programs: %w", err)
+			return nil, nil, fmt.Errorf("inserting policy programs: %w", err)
 		}
 	}
 
 	if len(egressPolicyProgs) != 0 {
 		if err := resolveAndInsertCalls(coll, policymap.PolicyEgressCallMapName, egressPolicyProgs); err != nil {
-			revert()
-			return nil, fmt.Errorf("inserting egress policy programs: %w", err)
+			return nil, nil, fmt.Errorf("inserting egress policy programs: %w", err)
 		}
 	}
 
-	// Finally, attach the endpoint's tc or xdp entry points to allow traffic to
-	// flow in.
-	for _, prog := range opts.programs {
-		scopedLog := l.WithField("progName", prog.progName).WithField("direction", prog.direction)
-
-		if err := bpf.MkdirBPF(opts.linkDir); err != nil {
-			return nil, fmt.Errorf("creating bpffs link dir for device %s: %w", link.Attrs().Name, err)
-		}
-
-		if opts.xdpMode != "" {
-			scopedLog.Debug("Attaching XDP program to interface")
-			err = attachXDPProgram(link, coll.Programs[prog.progName], prog.progName, opts.linkDir, xdpConfigModeToFlag(opts.xdpMode))
-		} else {
-			scopedLog.Debug("Attaching SKB program to interface")
-			err = attachSKBProgram(link, coll.Programs[prog.progName], prog.progName, opts.linkDir, directionToParent(prog.direction), opts.tcx)
-		}
-
-		if err != nil {
-			revert()
-			return nil, fmt.Errorf("program %s: %w", prog.progName, err)
-		}
-		scopedLog.Debug("Successfully attached program to interface")
-	}
-
-	return finalize, nil
+	return coll, finalize, nil
 }
 
 // resolveAndInsertCalls resolves a given slice of ebpf.MapKV containing u32 keys

@@ -478,13 +478,7 @@ func (k *K8sWatcher) ResourceGroups() (resourceGroups, waitForCachesOnly []strin
 // already been registered.
 func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context, resources []string, cachesOnly []string, cachesSynced chan struct{}) {
 	log.Info("Enabling k8s event listener")
-	if err := k.enableK8sWatchers(ctx, resources); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			log.WithError(err).Fatal("Unable to start K8s watchers for Cilium")
-		}
-		// If the context was canceled it means the daemon is being stopped
-		return
-	}
+	k.enableK8sWatchers(ctx, resources)
 	close(k.controllersStarted)
 
 	go func() {
@@ -503,10 +497,10 @@ type WatcherConfiguration interface {
 }
 
 // enableK8sWatchers starts watchers for given resources.
-func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []string) error {
+func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []string) {
 	if !k.clientset.IsEnabled() {
 		log.Debug("Not enabling k8s event listener because k8s is not enabled")
-		return nil
+		return
 	}
 	asyncControllers := &sync.WaitGroup{}
 
@@ -539,7 +533,6 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 	}
 
 	asyncControllers.Wait()
-	return nil
 }
 
 func (k *K8sWatcher) k8sServiceHandler() {
@@ -568,13 +561,9 @@ func (k *K8sWatcher) k8sServiceHandler() {
 
 		switch event.Action {
 		case k8s.UpdateService:
-			if err := k.addK8sSVCs(event.ID, event.OldService, svc, event.Endpoints); err != nil {
-				scopedLog.WithError(err).Error("Unable to add/update service to implement k8s event")
-			}
+			k.addK8sSVCs(event.ID, event.OldService, svc, event.Endpoints)
 		case k8s.DeleteService:
-			if err := k.delK8sSVCs(event.ID, event.Service, event.Endpoints); err != nil {
-				scopedLog.WithError(err).Error("Unable to delete service to implement k8s event")
-			}
+			k.delK8sSVCs(event.ID, event.Service)
 		}
 	}
 	for {
@@ -598,10 +587,10 @@ func (k *K8sWatcher) StopK8sServiceHandler() {
 	close(k.stop)
 }
 
-func (k *K8sWatcher) delK8sSVCs(svc k8s.ServiceID, svcInfo *k8s.Service, se *k8s.Endpoints) error {
+func (k *K8sWatcher) delK8sSVCs(svc k8s.ServiceID, svcInfo *k8s.Service) {
 	// Headless services do not need any datapath implementation
 	if svcInfo.IsHeadless {
-		return nil
+		return
 	}
 
 	scopedLog := log.WithFields(logrus.Fields{
@@ -656,7 +645,6 @@ func (k *K8sWatcher) delK8sSVCs(svc k8s.ServiceID, svcInfo *k8s.Service, se *k8s
 			scopedLog.Debugf("# cilium lb delete-service %s %d 0", fe.AddrCluster.String(), fe.Port)
 		}
 	}
-	return nil
 }
 
 func genCartesianProduct(
@@ -817,10 +805,10 @@ func hashSVCMap(svcs []loadbalancer.SVC) map[string]loadbalancer.L3n4Addr {
 	return m
 }
 
-func (k *K8sWatcher) addK8sSVCs(svcID k8s.ServiceID, oldSvc, svc *k8s.Service, endpoints *k8s.Endpoints) error {
+func (k *K8sWatcher) addK8sSVCs(svcID k8s.ServiceID, oldSvc, svc *k8s.Service, endpoints *k8s.Endpoints) {
 	// Headless services do not need any datapath implementation
 	if svc.IsHeadless {
-		return nil
+		return
 	}
 
 	scopedLog := log.WithFields(logrus.Fields{
@@ -877,7 +865,6 @@ func (k *K8sWatcher) addK8sSVCs(svcID k8s.ServiceID, oldSvc, svc *k8s.Service, e
 			}
 		}
 	}
-	return nil
 }
 
 // K8sEventProcessed is called to do metrics accounting for each processed
