@@ -10,6 +10,7 @@
   "includePaths": [
     ".github/actions/set-env-variables/enterprise-overrides.sh",
     ".github/workflows/enterprise-*",
+    "enterprise/**",
     "images/cilium/download-hubble-enterprise.sh"
   ],
   "pinDigests": true,
