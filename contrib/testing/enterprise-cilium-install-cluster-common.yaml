@@ -13,6 +13,7 @@ clustermesh:
   useAPIServer: true
 debug:
   enabled: true
+  verbose: datapath
 endpointHealthChecking:
   enabled: false
 endpointStatus:
