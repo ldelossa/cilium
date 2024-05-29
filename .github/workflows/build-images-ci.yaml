@@ -180,7 +180,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:e985420dd5dd8ac000d579948515ba4cfec3181e@sha256:03b5082f32b8e3d9680b5ae004457be238b6972d7ca67abc88517bf77d03058c
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:01b57a0530a11b07ca7f1264032e1a7b878697de@sha256:e37588cdc8bf0f6646b2ecd910c820d1e4f54f2eea15715d9bd49b3ffcbbc723
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -223,7 +223,7 @@ jobs:
         # It would even fail because `steps.docker_build_ci*.outputs.digest` isn't set in case
         # neither push nor load are set in the docker/build-push-action action.
         if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
-        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        uses: anchore/sbom-action@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
         with:
           artifact-name: sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
@@ -231,7 +231,7 @@ jobs:
 
       - name: Generate SBOM (race)
         if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
-        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        uses: anchore/sbom-action@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
         with:
           artifact-name: sbom_ci_race_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_race_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
@@ -239,7 +239,7 @@ jobs:
 
       - name: Generate SBOM (unstripped)
         if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
-        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        uses: anchore/sbom-action@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
         with:
           artifact-name: sbom_ci_unstripped_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_unstripped_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
@@ -325,7 +325,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:e985420dd5dd8ac000d579948515ba4cfec3181e@sha256:03b5082f32b8e3d9680b5ae004457be238b6972d7ca67abc88517bf77d03058c
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:01b57a0530a11b07ca7f1264032e1a7b878697de@sha256:e37588cdc8bf0f6646b2ecd910c820d1e4f54f2eea15715d9bd49b3ffcbbc723
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -356,7 +356,7 @@ jobs:
 
       - name: Generate SBOM
         if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
-        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        uses: anchore/sbom-action@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
         with:
           artifact-name: sbom_ci_pr_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_pr_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
@@ -364,7 +364,7 @@ jobs:
 
       - name: Generate SBOM (race)
         if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
-        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        uses: anchore/sbom-action@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
         with:
           artifact-name: sbom_ci_pr_race_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_pr_race_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
@@ -372,7 +372,7 @@ jobs:
 
       - name: Generate SBOM (unstripped)
         if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
-        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        uses: anchore/sbom-action@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
         with:
           artifact-name: sbom_ci_pr_unstripped_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_pr_unstripped_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json

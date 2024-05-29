@@ -271,7 +271,7 @@
    * - :spelling:ignore:`bgpControlPlane`
      - This feature set enables virtual BGP routers to be created via CiliumBGPPeeringPolicy CRDs.
      - object
-     - ``{"enabled":false,"secretsNamespace":{"create":false,"name":"kube-system"},"v2Enabled":false}``
+     - ``{"enabled":false,"secretsNamespace":{"create":false,"name":"kube-system"}}``
    * - :spelling:ignore:`bgpControlPlane.enabled`
      - Enables the BGP control plane.
      - bool
@@ -288,10 +288,6 @@
      - The name of the secret namespace to which Cilium agents are given read access
      - string
      - ``"kube-system"``
-   * - :spelling:ignore:`bgpControlPlane.v2Enabled`
-     - Enable the BGPv2 APIs.
-     - bool
-     - ``false``
    * - :spelling:ignore:`bpf.authMapMax`
      - Configure the maximum number of entries in auth map.
      - int
@@ -448,6 +444,14 @@
      - Configure cgroup root where cgroup2 filesystem is mounted on the host (see also: ``cgroup.autoMount``\ )
      - string
      - ``"/run/cilium/cgroupv2"``
+   * - :spelling:ignore:`ciliumEndpointSlice.enabled`
+     - Enable Cilium EndpointSlice feature.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`ciliumEndpointSlice.rateLimits`
+     - List of rate limit options to be used for the CiliumEndpointSlice controller. Each object in the list must have the following fields: nodes: Count of nodes at which to apply the rate limit. limit: The sustained request rate in requests per second. The maximum rate that can be configured is 50. burst: The burst request rate in requests per second. The maximum burst that can be configured is 100.
+     - list
+     - ``[{"burst":20,"limit":10,"nodes":0},{"burst":15,"limit":7,"nodes":100},{"burst":10,"limit":5,"nodes":500}]``
    * - :spelling:ignore:`cleanBpfState`
      - Clean all eBPF datapath state from the initContainer of the cilium-agent DaemonSet.  WARNING: Use with care!
      - bool
@@ -688,6 +692,10 @@
      - Annotations for the clustermesh-apiserver For GKE LoadBalancer, use annotation cloud.google.com/load-balancer-type: "Internal" For EKS LoadBalancer, use annotation service.beta.kubernetes.io/aws-load-balancer-internal: "true"
      - object
      - ``{}``
+   * - :spelling:ignore:`clustermesh.apiserver.service.enableSessionAffinity`
+     - Defines when to enable session affinity. Each replica in a clustermesh-apiserver deployment runs its own discrete etcd cluster. Remote clients connect to one of the replicas through a shared Kubernetes Service. A client reconnecting to a different backend will require a full resync to ensure data integrity. Session affinity can reduce the likelihood of this happening, but may not be supported by all cloud providers. Possible values:  - "HAOnly" (default) Only enable session affinity for deployments with more than 1 replica.  - "Always" Always enable session affinity.  - "Never" Never enable session affinity. Useful in environments where            session affinity is not supported, but may lead to slightly            degraded performance due to more frequent reconnections.
+     - string
+     - ``"HAOnly"``
    * - :spelling:ignore:`clustermesh.apiserver.service.externalTrafficPolicy`
      - The externalTrafficPolicy of service used for apiserver access.
      - string
@@ -949,7 +957,7 @@
      - string
      - ``"1s"``
    * - :spelling:ignore:`enableCiliumEndpointSlice`
-     - Enable CiliumEndpointSlice feature.
+     - Enable CiliumEndpointSlice feature (deprecated, please use ``ciliumEndpointSlice.enabled`` instead).
      - bool
      - ``false``
    * - :spelling:ignore:`enableCriticalPriorityClass`
@@ -1239,7 +1247,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:39a8c05091870b98ea65cb19331b2e0c06e59834fcc95e10631624ae1e561860","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.4-7358b6402193a155ea3450f2bb1de8e69006732a","useDigest":true}``
+     - ``{"digest":"sha256:7fcc55ed1b73e4333f8a21d82d38ca603ebd0d8d85fe1ad1c95b9af3a5e30ae9","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.4-801c612e442298b3be55f1a1089c44386570880d","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -3007,7 +3015,7 @@
    * - :spelling:ignore:`preflight.tolerations`
      - Node tolerations for preflight scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
      - list
-     - ``[{"effect":"NoSchedule","key":"node.kubernetes.io/not-ready"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/master"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/control-plane"},{"effect":"NoSchedule","key":"node.cloudprovider.kubernetes.io/uninitialized","value":"true"},{"key":"CriticalAddonsOnly","operator":"Exists"}]``
+     - ``[{"operator":"Exists"}]``
    * - :spelling:ignore:`preflight.updateStrategy`
      - preflight update strategy
      - object

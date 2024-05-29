@@ -41,10 +41,9 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 
 	maps := cectnat.NewFakePerCluster(true, true)
 	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
-		Config:               cmcommon.Config{ClusterMeshConfig: t.TempDir()},
-		ClusterInfo:          cmtypes.ClusterInfo{ID: 99, Name: "foo"},
-		ConfigValidationMode: cmtypes.Strict,
-		ClusterIDsManager:    newClusterIDManager(logging.DefaultLogger, maps),
+		Config:            cmcommon.Config{ClusterMeshConfig: t.TempDir()},
+		ClusterInfo:       cmtypes.ClusterInfo{ID: 99, Name: "foo"},
+		ClusterIDsManager: newClusterIDManager(logging.DefaultLogger, maps),
 
 		RemoteIdentityWatcher: mgr,
 		StoreFactory:          store.NewFactory(store.MetricsProvider()),
@@ -61,17 +60,17 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 	cfg := cmtypes.CiliumClusterConfig{ID: 1}
 	ready := make(chan error, 1)
 	rc := cm.NewRemoteCluster("cluster1", nil)
-	rc.Run(ctx, kvstore.Client(), &cfg, ready)
+	rc.Run(ctx, kvstore.Client(), cfg, ready)
 	require.NoError(t, <-ready)
 
 	// Ensure that a cluster without config can't connect
 	ready = make(chan error, 1)
-	cm.NewRemoteCluster("cluster2", nil).Run(ctx, kvstore.Client(), nil, ready)
-	require.ErrorContains(t, <-ready, "remote cluster is missing cluster configuration")
+	cm.NewRemoteCluster("cluster2", nil).Run(ctx, kvstore.Client(), cmtypes.CiliumClusterConfig{}, ready)
+	require.ErrorContains(t, <-ready, "ClusterID 0 is reserved")
 
 	// Ensure that a cluster with the same ClusterID can't connect
 	ready = make(chan error, 1)
-	cm.NewRemoteCluster("cluster3", nil).Run(ctx, kvstore.Client(), &cfg, ready)
+	cm.NewRemoteCluster("cluster3", nil).Run(ctx, kvstore.Client(), cfg, ready)
 	require.ErrorContains(t, <-ready, "clusterID 1 is already used")
 
 	// Ensure that per-cluster maps are created for cluster1
@@ -81,7 +80,7 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 	// Reconnect cluster with changed ClusterID
 	newcfg := cmtypes.CiliumClusterConfig{ID: 255}
 	ready = make(chan error, 1)
-	rc.Run(ctx, kvstore.Client(), &newcfg, ready)
+	rc.Run(ctx, kvstore.Client(), newcfg, ready)
 	require.NoError(t, <-ready)
 
 	// Ensure the old per-cluster maps are deleted and new per-cluster maps are created
@@ -118,10 +117,9 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 
 	idsMgr := newClusterIDManager(logging.DefaultLogger, maps)
 	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
-		Config:               cmcommon.Config{ClusterMeshConfig: t.TempDir()},
-		ClusterInfo:          cmtypes.ClusterInfo{ID: 99, Name: "foo"},
-		ConfigValidationMode: cmtypes.Strict,
-		ClusterIDsManager:    idsMgr,
+		Config:            cmcommon.Config{ClusterMeshConfig: t.TempDir()},
+		ClusterInfo:       cmtypes.ClusterInfo{ID: 99, Name: "foo"},
+		ClusterIDsManager: idsMgr,
 
 		RemoteIdentityWatcher: mgr,
 		StoreFactory:          store.NewFactory(store.MetricsProvider()),
@@ -137,7 +135,7 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 	// "Connect" a new cluster
 	cfg := cmtypes.CiliumClusterConfig{ID: 1}
 	ready := make(chan error, 1)
-	cm.NewRemoteCluster("cluster1", nil).Run(ctx, kvstore.Client(), &cfg, ready)
+	cm.NewRemoteCluster("cluster1", nil).Run(ctx, kvstore.Client(), cfg, ready)
 	require.NoError(t, <-ready)
 
 	// Trigger cleanup
@@ -150,4 +148,23 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 	// Ensure that the stale maps are deleted
 	require.False(t, maps.CT().Has(oldcfg.ID), "CT maps not released correctly")
 	require.False(t, maps.NAT().Has(oldcfg.ID), "NAT maps not released correctly")
+}
+
+func TestClusterIDManagerReserved(t *testing.T) {
+	maps := cectnat.NewFakePerCluster(true, true)
+	mgr := newClusterIDManager(logging.DefaultLogger, maps)
+
+	require.Error(t, mgr.ReserveClusterID(cmtypes.ClusterIDUnset), "Reserving ClusterID 0 should fail")
+	require.False(t, maps.CT().Has(cmtypes.ClusterIDUnset), "CT maps should not be created for ClusterID 0")
+	require.False(t, maps.NAT().Has(cmtypes.ClusterIDUnset), "CT maps should not be created for ClusterID 0")
+
+	// Releasing ClusterID 0 should be a no-op
+	err := maps.CT().CreateClusterCTMaps(cmtypes.ClusterIDUnset)
+	require.NoError(t, err, "Failed to update CT maps")
+	err = maps.NAT().CreateClusterNATMaps(cmtypes.ClusterIDUnset)
+	require.NoError(t, err, "Failed to update NAT maps")
+
+	mgr.ReleaseClusterID(cmtypes.ClusterIDUnset)
+	require.True(t, maps.CT().Has(cmtypes.ClusterIDUnset), "CT maps should not be deleted for ClusterID 0")
+	require.True(t, maps.NAT().Has(cmtypes.ClusterIDUnset), "CT maps should not be deleted for ClusterID 0")
 }

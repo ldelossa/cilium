@@ -40,21 +40,16 @@ type remoteCluster struct {
 	synced synced
 }
 
-func (rc *remoteCluster) Run(ctx context.Context, backend kvstore.BackendOperations, config *types.CiliumClusterConfig, ready chan<- error) {
-	var capabilities types.CiliumClusterConfigCapabilities
-	if config != nil {
-		capabilities = config.Capabilities
-	}
-
+func (rc *remoteCluster) Run(ctx context.Context, backend kvstore.BackendOperations, config types.CiliumClusterConfig, ready chan<- error) {
 	var mgr store.WatchStoreManager
-	if capabilities.SyncedCanaries {
+	if config.Capabilities.SyncedCanaries {
 		mgr = rc.storeFactory.NewWatchStoreManager(backend, rc.name)
 	} else {
 		mgr = store.NewWatchStoreManagerImmediate(rc.name)
 	}
 
 	adapter := func(prefix string) string { return prefix }
-	if capabilities.Cached {
+	if config.Capabilities.Cached {
 		adapter = kvstore.StateToCachePrefix
 	}
 
@@ -81,10 +76,7 @@ func (rc *remoteCluster) Remove() {
 	// is removed, and not in case the operator is shutting down, otherwise we
 	// would break existing connections on restart.
 	rc.remoteServices.Drain()
-	rc.globalServices.OnClusterDelete(rc.name)
 }
-
-func (rc *remoteCluster) ClusterConfigRequired() bool { return false }
 
 type synced struct {
 	wait.SyncedCommon

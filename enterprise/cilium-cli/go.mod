@@ -44,7 +44,7 @@ require (
 	github.com/cilium/hive v0.0.0-20240425092031-f6d2f20c979b // indirect
 	github.com/cilium/hubble v0.13.3 // indirect
 	github.com/cilium/proxy v0.0.0-20240418093727-2c7164c53e26 // indirect
-	github.com/cilium/statedb v0.0.0-20240509073038-89f2ff26b7ba // indirect
+	github.com/cilium/statedb v0.0.0-20240524102653-156050e2e9c8 // indirect
 	github.com/cilium/stream v0.0.0-20240226091623-f979d32855f8 // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
 	github.com/cloudflare/cfssl v1.6.5 // indirect
@@ -185,9 +185,9 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.13 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
-	go.opentelemetry.io/otel v1.26.0 // indirect
-	go.opentelemetry.io/otel/metric v1.26.0 // indirect
-	go.opentelemetry.io/otel/trace v1.26.0 // indirect
+	go.opentelemetry.io/otel v1.27.0 // indirect
+	go.opentelemetry.io/otel/metric v1.27.0 // indirect
+	go.opentelemetry.io/otel/trace v1.27.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
 	go.uber.org/dig v1.17.1 // indirect
@@ -195,7 +195,7 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/crypto v0.23.0 // indirect
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
@@ -205,7 +205,7 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240415180920-8c6c420018be // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240515191416-fc5f0ca64291 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240521202816-d264139d666e // indirect
 	google.golang.org/grpc v1.64.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
