@@ -144,31 +144,33 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 			   __u32 dst_id, __s8 *ext_err)
 {
 	__u8 policy_match_type = 0;
+	int verdict = CTX_ACT_OK;
 	__u16 proxy_port = 0;
 	__u8 audited = 0;
-	int verdict = CTX_ACT_OK;
-	int l4_off;
 
+	struct ct_state ct_state_new = {};
 	struct ipv4_ct_tuple tuple = {};
+	bool has_l4_header = true;
 	int ct_status;
 	__u32 monitor;
-	struct ct_state ct_state_new = {};
+	int l4_off;
+	int ret;
 
 	l4_off = ETH_HLEN + ipv4_hdrlen(ip4);
+
 	tuple.nexthdr = ip4->protocol;
-	tuple.daddr = ip4->daddr;
-	tuple.saddr = ip4->saddr;
+	tuple.saddr = ip4->daddr;
+	tuple.daddr = ip4->saddr;
+	ret = ct_extract_ports4(ctx, ip4, l4_off, CT_EGRESS, &tuple, &has_l4_header);
+	if (ret < 0)
+		return ret;
+	ipv4_ct_tuple_swap_ports(&tuple);
 
-	ct_status = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, ip4, l4_off,
-				    CT_EGRESS, NULL, &monitor);
-
+	ct_status = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, false, l4_off, true,
+				    CT_SERVICE, SCOPE_REVERSE, CT_ENTRY_ANY, NULL, &monitor);
 	if (ct_status < 0)
 		return ct_status;
 
-	/* excluding reply traffic from policy enforcement is not really needed
-	 * at the moment, as only packets in the original direction (i.e. no
-	 * reply traffic) go thorugh the CM ingress policy logic.
-	 */
 	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
 		goto out;
 
@@ -180,10 +182,15 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 		/* XXX: implement me */
 	}
 
+	ct_status = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, false, l4_off, true,
+				    CT_EGRESS, SCOPE_FORWARD, CT_ENTRY_ANY, NULL, &monitor);
+	if (ct_status < 0)
+		return ct_status;
+
 	if (ct_status == CT_NEW && verdict == CTX_ACT_OK) {
+		ct_state_new.src_sec_id = dst_id;
 		ct_status = ct_create4(get_ct_map4(&tuple), &CT_MAP_ANY4, &tuple, ctx, CT_EGRESS,
 				       &ct_state_new, ext_err);
-
 		if (IS_ERR(ct_status))
 			return ct_status;
 	}
