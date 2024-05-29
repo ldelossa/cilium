@@ -6,7 +6,7 @@ go 1.22.0
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.16.0-pre.2
-	github.com/cilium/cilium-cli v0.16.7
+	github.com/cilium/cilium-cli v0.16.8
 	github.com/google/go-cmp v0.6.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
@@ -39,10 +39,9 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20240503000404-89896efdd729 // indirect
+	github.com/cilium/charts v0.0.0-20240517144447-a8ec8771aab8 // indirect
 	github.com/cilium/ebpf v0.15.0 // indirect
 	github.com/cilium/hive v0.0.0-20240425092031-f6d2f20c979b // indirect
-	github.com/cilium/hubble v0.13.3 // indirect
 	github.com/cilium/proxy v0.0.0-20240418093727-2c7164c53e26 // indirect
 	github.com/cilium/statedb v0.0.0-20240524102653-156050e2e9c8 // indirect
 	github.com/cilium/stream v0.0.0-20240226091623-f979d32855f8 // indirect
@@ -92,6 +91,7 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
+	github.com/google/gops v0.3.28 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
@@ -212,14 +212,14 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.14.4 // indirect
+	helm.sh/helm/v3 v3.15.1 // indirect
 	k8s.io/apiextensions-apiserver v0.30.0 // indirect
 	k8s.io/apiserver v0.30.0 // indirect
-	k8s.io/cli-runtime v0.29.0 // indirect
+	k8s.io/cli-runtime v0.30.0 // indirect
 	k8s.io/component-base v0.30.0 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
-	k8s.io/kubectl v0.29.0 // indirect
+	k8s.io/kubectl v0.30.0 // indirect
 	oras.land/oras-go v1.2.5 // indirect
 	sigs.k8s.io/controller-runtime v0.17.1-0.20240327193027-21368602d84b // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
