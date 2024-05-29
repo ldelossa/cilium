@@ -42,8 +42,6 @@
 
 #define overlay_ingress_policy_hook(ctx, ip4, identity, ext_err) CTX_ACT_OK
 
-#include "enterprise_bpf_overlay.h"
-
 #ifdef ENABLE_IPV6
 static __always_inline int handle_ipv6(struct __ctx_buff *ctx,
 				       __u32 *identity,
