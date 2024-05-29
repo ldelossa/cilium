@@ -66,6 +66,12 @@ type IsovalentEgressGatewayPolicySpec struct {
 	// +kubebuilder:validation:Optional
 	ExcludedCIDRs []IPv4CIDR `json:"excludedCIDRs"`
 
+	// EgressCIDRs is a list of IPv4 CIDRs from which to allocate IPs to active gateways.
+	// Each active gateway is assigned a different IP.
+	//
+	// +kubebuilder:validation:Optional
+	EgressCIDRs []IPv4CIDR `json:"egressCIDRs,omitempty"`
+
 	// EgressGroup represents a group of nodes which will act as egress
 	// gateway for the given policy.
 	EgressGroups []EgressGroup `json:"egressGroups"`
@@ -139,6 +145,16 @@ type EgressGroup struct {
 type IsovalentEgressGatewayPolicyStatus struct {
 	ObservedGeneration int64                                     `json:"observedGeneration,omitempty"`
 	GroupStatuses      []IsovalentEgressGatewayPolicyGroupStatus `json:"groupStatuses"`
+
+	// Conditions represents the current status of the IP allocations from egress CIDR.
+	//
+	// +optional
+	// +deepequal-gen=false
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // IsovalentEgressGatewayPolicyGroupStatus is the status of a Isovalent egress gateway
@@ -149,4 +165,5 @@ type IsovalentEgressGatewayPolicyGroupStatus struct {
 	// +deepequal-gen=false
 	ActiveGatewayIPsByAZ map[string][]string `json:"activeGatewayIPsByAZ,omitempty"`
 	HealthyGatewayIPs    []string            `json:"healthyGatewayIPs,omitempty"`
+	EgressIPByGatewayIP  map[string]string   `json:"egressIPByGatewayIP,omitempty"`
 }

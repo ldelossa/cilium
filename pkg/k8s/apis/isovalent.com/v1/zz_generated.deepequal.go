@@ -121,6 +121,27 @@ func (in *IsovalentEgressGatewayPolicyGroupStatus) DeepEqual(other *IsovalentEgr
 		}
 	}
 
+	if ((in.EgressIPByGatewayIP != nil) && (other.EgressIPByGatewayIP != nil)) || ((in.EgressIPByGatewayIP == nil) != (other.EgressIPByGatewayIP == nil)) {
+		in, other := &in.EgressIPByGatewayIP, &other.EgressIPByGatewayIP
+		if other == nil {
+			return false
+		}
+
+		if len(*in) != len(*other) {
+			return false
+		} else {
+			for key, inValue := range *in {
+				if otherValue, present := (*other)[key]; !present {
+					return false
+				} else {
+					if inValue != otherValue {
+						return false
+					}
+				}
+			}
+		}
+	}
+
 	return true
 }
 
@@ -167,6 +188,23 @@ func (in *IsovalentEgressGatewayPolicySpec) DeepEqual(other *IsovalentEgressGate
 
 	if ((in.ExcludedCIDRs != nil) && (other.ExcludedCIDRs != nil)) || ((in.ExcludedCIDRs == nil) != (other.ExcludedCIDRs == nil)) {
 		in, other := &in.ExcludedCIDRs, &other.ExcludedCIDRs
+		if other == nil {
+			return false
+		}
+
+		if len(*in) != len(*other) {
+			return false
+		} else {
+			for i, inElement := range *in {
+				if inElement != (*other)[i] {
+					return false
+				}
+			}
+		}
+	}
+
+	if ((in.EgressCIDRs != nil) && (other.EgressCIDRs != nil)) || ((in.EgressCIDRs == nil) != (other.EgressCIDRs == nil)) {
+		in, other := &in.EgressCIDRs, &other.EgressCIDRs
 		if other == nil {
 			return false
 		}

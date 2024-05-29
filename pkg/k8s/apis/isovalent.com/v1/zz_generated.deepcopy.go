@@ -10,6 +10,7 @@ package v1
 
 import (
 	metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
+	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -116,6 +117,13 @@ func (in *IsovalentEgressGatewayPolicyGroupStatus) DeepCopyInto(out *IsovalentEg
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.EgressIPByGatewayIP != nil {
+		in, out := &in.EgressIPByGatewayIP, &out.EgressIPByGatewayIP
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 
@@ -182,6 +190,11 @@ func (in *IsovalentEgressGatewayPolicySpec) DeepCopyInto(out *IsovalentEgressGat
 		*out = make([]IPv4CIDR, len(*in))
 		copy(*out, *in)
 	}
+	if in.EgressCIDRs != nil {
+		in, out := &in.EgressCIDRs, &out.EgressCIDRs
+		*out = make([]IPv4CIDR, len(*in))
+		copy(*out, *in)
+	}
 	if in.EgressGroups != nil {
 		in, out := &in.EgressGroups, &out.EgressGroups
 		*out = make([]EgressGroup, len(*in))
@@ -208,6 +221,13 @@ func (in *IsovalentEgressGatewayPolicyStatus) DeepCopyInto(out *IsovalentEgressG
 	if in.GroupStatuses != nil {
 		in, out := &in.GroupStatuses, &out.GroupStatuses
 		*out = make([]IsovalentEgressGatewayPolicyGroupStatus, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]apismetav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
