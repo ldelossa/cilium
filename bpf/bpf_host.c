@@ -57,6 +57,8 @@
 
  #define host_egress_policy_hook(ctx, src_sec_identity, ext_err) CTX_ACT_OK
 
+#include "enterprise_bpf_host.h"
+
 /* Bit 0 is skipped for robustness, as it's used in some places to indicate from_host itself. */
 #define FROM_HOST_FLAG_NEED_HOSTFW (1 << 1)
 #define FROM_HOST_FLAG_HOST_ID (1 << 2)
