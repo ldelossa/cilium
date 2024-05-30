@@ -6,6 +6,8 @@ package egressgatewayha
 import (
 	"context"
 	"fmt"
+	"maps"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -14,11 +16,14 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	cilium_fake "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/fake"
+	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 )
 
@@ -119,12 +124,17 @@ type gatewayStatus struct {
 	activeGatewayIPs     []string
 	activeGatewayIPsByAZ map[string][]string
 	healthyGatewayIPs    []string
+	egressIPByGatewayIP  map[string]string
 }
 
 func (k *EgressGatewayOperatorTestSuite) assertIegpGatewayStatus(tb testing.TB, gs gatewayStatus) {
+	k.assertIegpGatewayStatusFromPolicy(tb, "policy-1", gs)
+}
+
+func (k *EgressGatewayOperatorTestSuite) assertIegpGatewayStatusFromPolicy(tb testing.TB, policy string, gs gatewayStatus) {
 	var err error
 	for i := 0; i < 10; i++ {
-		if err = tryAssertIegpGatewayStatus(k.fakeSet, gs); err == nil {
+		if err = tryAssertIegpGatewayStatus(k.fakeSet, policy, gs); err == nil {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -133,8 +143,8 @@ func (k *EgressGatewayOperatorTestSuite) assertIegpGatewayStatus(tb testing.TB, 
 	assert.Nil(tb, err)
 }
 
-func tryAssertIegpGatewayStatus(fakeSet *k8sClient.FakeClientset, gs gatewayStatus) error {
-	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), "policy-1", metav1.GetOptions{})
+func tryAssertIegpGatewayStatus(fakeSet *k8sClient.FakeClientset, policy string, gs gatewayStatus) error {
+	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), policy, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -151,6 +161,48 @@ func tryAssertIegpGatewayStatus(fakeSet *k8sClient.FakeClientset, gs gatewayStat
 
 	if !cmp.Equal(gs.healthyGatewayIPs, iegpGs.HealthyGatewayIPs, cmpopts.EquateEmpty()) {
 		return fmt.Errorf("healthy gateway IPs don't match expected ones: %v vs expected %v", iegpGs.HealthyGatewayIPs, gs.healthyGatewayIPs)
+	}
+
+	if !cmp.Equal(gs.egressIPByGatewayIP, iegpGs.EgressIPByGatewayIP, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("egress IPs by gateway IPs don't match expected ones: %v vs expected %v", iegpGs.EgressIPByGatewayIP, gs.egressIPByGatewayIP)
+	}
+
+	return nil
+}
+
+func (k *EgressGatewayOperatorTestSuite) assertIegpStatusConditions(tb testing.TB, conds []metav1.Condition) {
+	k.assertIegpStatusConditionsFromPolicy(tb, "policy-1", conds)
+}
+
+func (k *EgressGatewayOperatorTestSuite) assertIegpStatusConditionsFromPolicy(tb testing.TB, policy string, conds []metav1.Condition) {
+	var err error
+	for i := 0; i < 10; i++ {
+		if err = tryAssertIegpStatusConditions(k.fakeSet, policy, conds); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	assert.Nil(tb, err)
+}
+
+func tryAssertIegpStatusConditions(fakeSet *k8sClient.FakeClientset, policy string, conds []metav1.Condition) error {
+	iegp, err := fakeSet.CiliumFakeClientset.IsovalentV1().IsovalentEgressGatewayPolicies().Get(context.TODO(), policy, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	if len(conds) != len(iegp.Status.Conditions) {
+		return fmt.Errorf("expected %d conditions, got %d", len(conds), len(iegp.Status.Conditions))
+	}
+	for _, cond := range conds {
+		found := meta.FindStatusCondition(iegp.Status.Conditions, cond.Type)
+		if found == nil {
+			return fmt.Errorf("unable to find expected condition type %s", cond.Type)
+		}
+		if found.Status != cond.Status {
+			return fmt.Errorf("expected condition type %s to have status %s, got %s", cond.Type, cond.Status, found.Status)
+		}
 	}
 
 	return nil
@@ -1416,6 +1468,7 @@ func TestEgressGatewayOperatorManagerHAGroupAZAffinityLocalPriority(t *testing.T
 		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
 	})
 }
+
 func TestEgressGatewayOperatorManagerNodeRestartScenarioLocalPriority(t *testing.T) {
 	k := setupEgressGatewayOperatorTestSuite(t)
 
@@ -1515,4 +1568,382 @@ func TestEgressGatewayOperatorManagerNodeRestartScenarioLocalPriority(t *testing
 		},
 		healthyGatewayIPs: []string{node2IP, node4IP, node5IP},
 	})
+}
+
+func TestEgressCIDRConflictsDetection(t *testing.T) {
+	testCases := []struct {
+		name     string
+		policies []v1.IsovalentEgressGatewayPolicy
+		expected map[policyEgressCIDR]policyEgressCIDR
+	}{
+		{
+			name: "no egress cidrs",
+			policies: []v1.IsovalentEgressGatewayPolicy{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "policy-1",
+						UID:  policy1UID,
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs:      []v1.IPv4CIDR{},
+					},
+				},
+			},
+			expected: map[policyEgressCIDR]policyEgressCIDR{},
+		},
+		{
+			name: "internal conflict for repeated egress cidr",
+			policies: []v1.IsovalentEgressGatewayPolicy{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "policy-1",
+						UID:  policy1UID,
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs: []v1.IPv4CIDR{
+							v1.IPv4CIDR("10.100.255.48/30"),
+							v1.IPv4CIDR("10.100.255.48/30"),
+							v1.IPv4CIDR("10.100.255.48/30"),
+						},
+					},
+				},
+			},
+			expected: map[policyEgressCIDR]policyEgressCIDR{
+				{policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")}: {policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")},
+			},
+		},
+		{
+			name: "internal conflict",
+			policies: []v1.IsovalentEgressGatewayPolicy{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "policy-1",
+						UID:  policy1UID,
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs: []v1.IPv4CIDR{
+							v1.IPv4CIDR("10.100.255.48/30"),
+							v1.IPv4CIDR("10.100.255.49/30"),
+						},
+					},
+				},
+			},
+			expected: map[policyEgressCIDR]policyEgressCIDR{
+				{policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")}: {policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.49/30")},
+				{policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.49/30")}: {policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")},
+			},
+		},
+		{
+			name: "external conflict",
+			policies: []v1.IsovalentEgressGatewayPolicy{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "policy-1",
+						UID:               policy1UID,
+						CreationTimestamp: metav1.NewTime(time.Now()),
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs: []v1.IPv4CIDR{
+							v1.IPv4CIDR("10.100.255.48/30"),
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "policy-2",
+						UID:               policy2UID,
+						CreationTimestamp: metav1.NewTime(time.Now().Add(time.Second)),
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs: []v1.IPv4CIDR{
+							v1.IPv4CIDR("10.100.255.49/30"),
+						},
+					},
+				},
+			},
+			expected: map[policyEgressCIDR]policyEgressCIDR{
+				{policyID{Name: "policy-2"}, netip.MustParsePrefix("10.100.255.49/30")}: {policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")},
+			},
+		},
+		{
+			name: "internal conflict overrides external",
+			policies: []v1.IsovalentEgressGatewayPolicy{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "policy-1",
+						UID:  policy1UID,
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs: []v1.IPv4CIDR{
+							v1.IPv4CIDR("10.100.255.48/30"),
+							v1.IPv4CIDR("10.100.255.49/30"),
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "policy-2",
+						UID:  policy2UID,
+					},
+					Spec: v1.IsovalentEgressGatewayPolicySpec{
+						DestinationCIDRs: []v1.IPv4CIDR{destCIDR},
+						EgressCIDRs: []v1.IPv4CIDR{
+							v1.IPv4CIDR("10.100.255.49/30"),
+						},
+					},
+				},
+			},
+			expected: map[policyEgressCIDR]policyEgressCIDR{
+				{policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")}: {policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.49/30")},
+				{policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.49/30")}: {policyID{Name: "policy-1"}, netip.MustParsePrefix("10.100.255.48/30")},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := OperatorManager{
+				policyConfigs: make(map[policyID]*PolicyConfig),
+			}
+
+			for i, policy := range tc.policies {
+				// EgressGroups cannot be empty when parsing IEGP
+				policy.Spec.EgressGroups = []v1.EgressGroup{
+					{
+						NodeSelector: &slimv1.LabelSelector{
+							MatchLabels: noNodeGroup,
+						},
+					},
+				}
+
+				policyCfg, err := ParseIEGP(&policy)
+				if err != nil {
+					t.Fatalf("failed to parse policy %d: %s", i, err)
+				}
+				manager.policyConfigs[policyCfg.id] = policyCfg
+			}
+
+			manager.updateEgressCIDRConflicts()
+
+			if !maps.Equal(manager.cidrConflicts, tc.expected) {
+				t.Fatalf("expected conflicts:\n%v\nfound:\n%v", tc.expected, manager.cidrConflicts)
+			}
+		})
+	}
+}
+
+func TestEgressCIDRAllocation(t *testing.T) {
+	k := setupEgressGatewayOperatorTestSuite(t)
+
+	k.addNode(t, node1Name, node1IP, nodeGroup1Labels)
+	k.addNode(t, node2Name, node2IP, nodeGroup1Labels)
+	k.addNode(t, node3Name, node3IP, nodeGroup1Labels)
+	k.addNode(t, node4Name, node4IP, nodeGroup1Labels)
+
+	// Create a new HA policy that selects all four nodes and request IPs from
+	// CIDR "10.100.255.48/30"
+	policy := k.addPolicy(t, &policyParams{
+		name:            "policy-1",
+		uid:             policy1UID,
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		egressCIDRs:     []string{"10.100.255.48/30"},
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
+
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:  []string{node4IP, node2IP, node1IP, node3IP},
+		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+		egressIPByGatewayIP: map[string]string{
+			node1IP: "10.100.255.48",
+			node2IP: "10.100.255.49",
+			node3IP: "10.100.255.50",
+			node4IP: "10.100.255.51",
+		},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionTrue,
+		},
+	})
+
+	// Adding one node should lead to only 4 IPs allocated, since the pool is a "/30" CIDR
+	k.addNode(t, node5Name, node5IP, nodeGroup1Labels)
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:  []string{node4IP, node2IP, node1IP, node3IP, node5IP},
+		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP, node5IP},
+		egressIPByGatewayIP: map[string]string{
+			node1IP: "10.100.255.48",
+			node2IP: "10.100.255.49",
+			node3IP: "10.100.255.50",
+			node4IP: "10.100.255.51",
+		},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionFalse,
+		},
+		{
+			Type:   egwIPAMPoolExhausted,
+			Status: metav1.ConditionUnknown,
+		},
+	})
+
+	// If 3 nodes goes unhealthy, IPs will be allocated only for the 2 nodes still healthy
+	k.makeNodesUnhealthy("k8s2")
+	k.makeNodesUnhealthy("k8s3")
+	k.makeNodesUnhealthy("k8s4")
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:  []string{node1IP, node5IP},
+		healthyGatewayIPs: []string{node1IP, node5IP},
+		egressIPByGatewayIP: map[string]string{
+			node1IP: "10.100.255.48",
+			node5IP: "10.100.255.49",
+		},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionTrue,
+		},
+	})
+
+	// When 2 out of the 3 nodes become healthy again, the previous active gateways (k8s1 and k8s5)
+	// retain the allocated IP
+	k.makeNodesHealthy("k8s2")
+	k.makeNodesHealthy("k8s3")
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:  []string{node1IP, node5IP, node3IP, node2IP},
+		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node5IP},
+		egressIPByGatewayIP: map[string]string{
+			node1IP: "10.100.255.48",
+			node5IP: "10.100.255.49",
+			node2IP: "10.100.255.50",
+			node3IP: "10.100.255.51",
+		},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionTrue,
+		},
+	})
+
+	// Update the policy to allow at most 1 gateway, only a single IP will be allocated
+	k.updatePolicyMaxGatewayNodes(t, policy, 1)
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:  []string{node5IP},
+		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node5IP},
+		egressIPByGatewayIP: map[string]string{
+			node5IP: "10.100.255.48",
+		},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionTrue,
+		},
+	})
+}
+
+func TestEgressCIDRAllocationWithConflicts(t *testing.T) {
+	k := setupEgressGatewayOperatorTestSuite(t)
+
+	k.addNode(t, node1Name, node1IP, nodeGroup1Labels)
+	k.addNode(t, node2Name, node2IP, nodeGroup1Labels)
+
+	// Create a new HA policy that selects nodes k8s1 and k8s2 and request IPs from
+	// CIDR "10.100.255.48/30"
+	policy1 := k.addPolicy(t, &policyParams{
+		name:            "policy-1",
+		uid:             policy1UID,
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		egressCIDRs:     []string{"10.100.255.48/30"},
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
+
+	k.addNode(t, node3Name, node3IP, nodeGroup2Labels)
+	k.addNode(t, node4Name, node4IP, nodeGroup2Labels)
+
+	// Create a new HA policy that selects nodes k8s3 and k8s4 and request IPs from
+	// the same CIDR "10.100.255.48/30"
+	policy2 := k.addPolicy(t, &policyParams{
+		name:            "policy-2",
+		uid:             policy2UID,
+		endpointLabels:  ep2Labels,
+		destinationCIDR: destCIDR,
+		egressCIDRs:     []string{"10.100.255.48/30"},
+		nodeLabels:      nodeGroup2Labels,
+		iface:           testInterface1,
+	})
+
+	// since policy2 is requesting allocations from a conflicting CIDR, it won't get any IP
+	k.assertIegpGatewayStatusFromPolicy(t, policy1.name, gatewayStatus{
+		activeGatewayIPs:  []string{node2IP, node1IP},
+		healthyGatewayIPs: []string{node1IP, node2IP},
+		egressIPByGatewayIP: map[string]string{
+			node1IP: "10.100.255.48",
+			node2IP: "10.100.255.49",
+		},
+	})
+	k.assertIegpStatusConditionsFromPolicy(t, policy1.name, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionTrue,
+		},
+	})
+	k.assertIegpGatewayStatusFromPolicy(t, policy2.name, gatewayStatus{
+		activeGatewayIPs:    []string{node4IP, node3IP},
+		healthyGatewayIPs:   []string{node3IP, node4IP},
+		egressIPByGatewayIP: map[string]string{},
+	})
+	k.assertIegpStatusConditionsFromPolicy(t, policy2.name, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionFalse,
+		},
+		{
+			Type:   egwIPAMPoolConflicting,
+			Status: metav1.ConditionUnknown,
+		},
+	})
+}
+
+func TestEgressCIDRAllocationWithoutCIDRs(t *testing.T) {
+	k := setupEgressGatewayOperatorTestSuite(t)
+
+	k.addNode(t, node1Name, node1IP, nodeGroup1Labels)
+	k.addNode(t, node2Name, node2IP, nodeGroup1Labels)
+	k.addNode(t, node3Name, node3IP, nodeGroup1Labels)
+	k.addNode(t, node4Name, node4IP, nodeGroup1Labels)
+
+	// Create a new HA policy that selects all four nodes and do not specify
+	// any egress CIDRs (no IPAM)
+	k.addPolicy(t, &policyParams{
+		name:            "policy-1",
+		uid:             policy1UID,
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	})
+
+	// no egress IPs and no Condition should be found in Status
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:    []string{node4IP, node2IP, node1IP, node3IP},
+		healthyGatewayIPs:   []string{node1IP, node2IP, node3IP, node4IP},
+		egressIPByGatewayIP: map[string]string{},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{})
 }

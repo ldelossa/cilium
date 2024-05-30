@@ -5,6 +5,7 @@ package egressgatewayha
 
 import (
 	"context"
+	"net/netip"
 	"sort"
 	"strings"
 
@@ -94,6 +95,14 @@ type OperatorManager struct {
 
 	// policyConfigs stores policy configs indexed by policyID
 	policyConfigs map[policyID]*PolicyConfig
+
+	// cidrConflicts stores all egressCIDRs conflicts, that is,
+	// all conflicts that originate from any couple of overlapping CIDRs
+	// requested in policies spec.
+	// The map key is one of the two conflicting cidrs, and the map value
+	// is the other one. Each conflicting CIDR is identified by the policyID
+	// where it appears and the CIDR itself.
+	cidrConflicts map[policyEgressCIDR]policyEgressCIDR
 
 	// healthchecker checks the health status of the nodes configured as
 	// gateway by at least one policy
@@ -359,6 +368,85 @@ func (operatorManager *OperatorManager) updatePolicesGroupStatuses() {
 	}
 }
 
+// policyEgressCIDR uniquely identifies a user specified egress CIDR in a policy
+type policyEgressCIDR struct {
+	origin policyID
+	cidr   netip.Prefix
+}
+
+func (pec policyEgressCIDR) String() string {
+	return pec.origin.String() + "-" + pec.cidr.String()
+}
+
+func (operatorManager *OperatorManager) updateEgressCIDRConflicts() {
+	operatorManager.cidrConflicts = make(map[policyEgressCIDR]policyEgressCIDR)
+
+	var egressCIDRs []policyEgressCIDR
+
+	// internal conflicts
+	for policyID, policyCfg := range operatorManager.policyConfigs {
+		for _, egressCIDR := range policyCfg.egressCIDRs {
+			egressCIDRs = append(egressCIDRs, policyEgressCIDR{
+				origin: policyID,
+				cidr:   egressCIDR,
+			})
+		}
+
+		if len(policyCfg.egressCIDRs) <= 1 {
+			continue
+		}
+
+		for i := 0; i < len(policyCfg.egressCIDRs)-1; i++ {
+			for j := i + 1; j < len(policyCfg.egressCIDRs); j++ {
+				if policyCfg.egressCIDRs[i].Overlaps(policyCfg.egressCIDRs[j]) {
+					first, second := policyEgressCIDR{policyID, policyCfg.egressCIDRs[i]}, policyEgressCIDR{policyID, policyCfg.egressCIDRs[j]}
+					operatorManager.cidrConflicts[first] = second
+					operatorManager.cidrConflicts[second] = first
+				}
+			}
+		}
+	}
+
+	if len(egressCIDRs) <= 1 {
+		return
+	}
+
+	// external conflicts
+	for i := 0; i < len(egressCIDRs)-1; i++ {
+		// egressCIDR[i] is already conflicting
+		if _, found := operatorManager.cidrConflicts[egressCIDRs[i]]; found {
+			continue
+		}
+
+		for j := i + 1; j < len(egressCIDRs); j++ {
+			// egressCIDR[j] is already conflicting
+			if _, found := operatorManager.cidrConflicts[egressCIDRs[j]]; found {
+				continue
+			}
+
+			if egressCIDRs[i].origin == egressCIDRs[j].origin {
+				// no need to check CIDRs from the same policy, internal conflicts
+				// have already been found
+				continue
+			}
+
+			if egressCIDRs[i].cidr.Overlaps(egressCIDRs[j].cidr) {
+				first, second := policyEgressCIDR{egressCIDRs[i].origin, egressCIDRs[i].cidr}, policyEgressCIDR{egressCIDRs[j].origin, egressCIDRs[j].cidr}
+
+				policy1 := operatorManager.policyConfigs[egressCIDRs[i].origin]
+				policy2 := operatorManager.policyConfigs[egressCIDRs[j].origin]
+
+				// mark the most recent policy as conflicting
+				if policy1.creationTimestamp.Before(policy2.creationTimestamp) {
+					operatorManager.cidrConflicts[second] = first
+				} else {
+					operatorManager.cidrConflicts[first] = second
+				}
+			}
+		}
+	}
+}
+
 // Whenever it encounters an error, it will just log it and move to the next
 // item, in order to reconcile as many states as possible.
 func (operatorManager *OperatorManager) reconcileLocked() {
@@ -369,5 +457,6 @@ func (operatorManager *OperatorManager) reconcileLocked() {
 	operatorManager.regenerateGatewayNodesList()
 	operatorManager.healthchecker.UpdateNodeList(operatorManager.gatewayNodeDataStore)
 
+	operatorManager.updateEgressCIDRConflicts()
 	operatorManager.updatePolicesGroupStatuses()
 }

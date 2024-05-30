@@ -17,6 +17,9 @@ const (
 	// CiliumEgressGatewayPolicyName is the name of a CiliumEgressGatewayPolicy
 	IsovalentEgressGatewayPolicyName = "isovalentEgressGatewayPolicyName"
 
+	// EgressCIDR is a CIDR used in IEGP for egress-gateway IPAM
+	EgressCIDR = "egressCIDR"
+
 	// K8sGeneration is the metadata.generation of a k8s resource.
 	K8sGeneration = "k8sGeneration"
 

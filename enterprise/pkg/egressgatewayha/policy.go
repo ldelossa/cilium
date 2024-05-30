@@ -27,6 +27,7 @@ import (
 	"go4.org/netipx"
 	"golang.org/x/exp/maps"
 	core_v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -40,6 +41,16 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/time"
+)
+
+const (
+	// egress gateway IPAM condition types to be set in IEGP status after allocation attempts
+	egwIPAMRequestSatisfied = "isovalent.com/IPAMRequestSatisfied"
+
+	egwIPAMInvalidCIDR     = "isovalent.com/InvalidCIDR"
+	egwIPAMPoolExhausted   = "isovalent.com/PoolExhausted"
+	egwIPAMPoolConflicting = "isovalent.com/PoolConflict"
 )
 
 // groupConfig is the internal representation of an egress group, describing
@@ -108,6 +119,7 @@ type groupStatus struct {
 	activeGatewayIPs     []netip.Addr
 	activeGatewayIPsByAZ map[string][]netip.Addr
 	healthyGatewayIPs    []netip.Addr
+	egressIPByGatewayIP  map[netip.Addr]netip.Addr
 }
 
 type azAffinityMode int
@@ -156,8 +168,9 @@ func (m azAffinityMode) enabled() bool {
 // PolicyConfig is the internal representation of IsovalentEgressGatewayPolicy.
 type PolicyConfig struct {
 	// id is the parsed config name and namespace
-	id  types.NamespacedName
-	uid types.UID
+	id                types.NamespacedName
+	uid               types.UID
+	creationTimestamp time.Time
 
 	apiVersion string
 	generation int64
@@ -166,6 +179,7 @@ type PolicyConfig struct {
 	endpointSelectors []api.EndpointSelector
 	dstCIDRs          []netip.Prefix
 	excludedCIDRs     []netip.Prefix
+	egressCIDRs       []netip.Prefix
 
 	azAffinity azAffinityMode
 
@@ -207,13 +221,14 @@ func (config *groupConfig) selectsNodeAsGateway(node nodeTypes.Node) bool {
 	return config.nodeSelector.Matches(k8sLabels.Set(node.Labels))
 }
 
-func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []groupStatus) *Policy {
+func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []groupStatus, conditions []meta_v1.Condition) *Policy {
 	iegpGroupStatuses := make([]v1.IsovalentEgressGatewayPolicyGroupStatus, 0, len(groupStatuses))
 	for _, gs := range groupStatuses {
 		iegpGroupStatuses = append(iegpGroupStatuses, v1.IsovalentEgressGatewayPolicyGroupStatus{
 			ActiveGatewayIPs:     toStringSlice(gs.activeGatewayIPs),
 			ActiveGatewayIPsByAZ: toStringMapStringSlice(gs.activeGatewayIPsByAZ),
 			HealthyGatewayIPs:    toStringSlice(gs.healthyGatewayIPs),
+			EgressIPByGatewayIP:  toStringMap(gs.egressIPByGatewayIP),
 		})
 	}
 
@@ -223,12 +238,13 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []groupStatus) *Policy {
 			APIVersion: iegp.APIVersion,
 		},
 		ObjectMeta: meta_v1.ObjectMeta{
-			Name:            iegp.GetName(),
-			Namespace:       iegp.GetNamespace(),
-			ResourceVersion: iegp.GetResourceVersion(),
-			UID:             iegp.GetUID(),
-			Labels:          iegp.GetLabels(),
-			Annotations:     iegp.GetAnnotations(),
+			Name:              iegp.GetName(),
+			Namespace:         iegp.GetNamespace(),
+			ResourceVersion:   iegp.GetResourceVersion(),
+			UID:               iegp.GetUID(),
+			CreationTimestamp: iegp.GetCreationTimestamp(),
+			Labels:            iegp.GetLabels(),
+			Annotations:       iegp.GetAnnotations(),
 			// The Generation isn't needed in production code, as UpdateStatus ignores the generation.
 			// See the comment for the Spec bellow.
 			Generation: iegp.GetGeneration(),
@@ -242,6 +258,10 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []groupStatus) *Policy {
 			ObservedGeneration: iegp.GetGeneration(),
 			GroupStatuses:      iegpGroupStatuses,
 		},
+	}
+
+	for _, cond := range conditions {
+		meta.SetStatusCondition(&policy.Status.Conditions, cond)
 	}
 
 	return policy
@@ -501,6 +521,148 @@ func excludeCurrentActiveGWsFromHealthyGWs(currentActiveGWs, healthyGWs []netip.
 	return result
 }
 
+func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, groupStatuses []groupStatus) ([]groupStatus, []meta_v1.Condition) {
+	egressCIDRs := make([]netip.Prefix, 0, len(config.egressCIDRs))
+	for _, cidr := range config.egressCIDRs {
+		// detect conflicting CIDRs
+		if conflicting, found := operatorManager.cidrConflicts[policyEgressCIDR{config.id, cidr}]; found {
+			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
+				{
+					Type:               egwIPAMPoolConflicting,
+					Status:             meta_v1.ConditionUnknown,
+					ObservedGeneration: config.generation,
+					LastTransitionTime: meta_v1.Now(),
+					Reason:             "noreason",
+					Message: fmt.Sprintf(
+						"egress CIDR %s in policy %s overlaps with egress group %s in policy %s",
+						cidr, config.id, conflicting.cidr, conflicting.origin,
+					),
+				},
+			}...)
+		}
+		egressCIDRs = append(egressCIDRs, cidr)
+	}
+
+	egressPool, err := newPool(egressCIDRs...)
+	if err != nil {
+		return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
+			{
+				Type:               egwIPAMInvalidCIDR,
+				Status:             meta_v1.ConditionUnknown,
+				ObservedGeneration: config.generation,
+				LastTransitionTime: meta_v1.Now(),
+				Reason:             "noreason",
+				Message:            fmt.Sprintf("found invalid egress CIDR: %s", err),
+			},
+		}...)
+	}
+
+	haveSeenLatestIEGP := config.groupStatusesGeneration == config.generation
+
+	for i := range groupStatuses {
+		// check if this group has at least one active gateway, otherwise there is nothing to allocate
+		if len(groupStatuses[i].activeGatewayIPs) == 0 {
+			continue
+		}
+
+		// For all still-active gateways we strive to keep the same allocated Egress IP as before.
+		var prevEgressIPs map[netip.Addr]netip.Addr
+		if haveSeenLatestIEGP && i < len(config.groupStatuses) {
+			prevEgressIPs = config.groupStatuses[i].egressIPByGatewayIP
+		}
+
+		// Sort the active gateway IPs so that the allocation algorithm is deterministic.
+		activeGatewayIPs := make([]netip.Addr, len(groupStatuses[i].activeGatewayIPs))
+		copy(activeGatewayIPs, groupStatuses[i].activeGatewayIPs)
+		slices.SortFunc(activeGatewayIPs, func(a, b netip.Addr) int {
+			return a.Compare(b)
+		})
+
+		groupStatuses[i].egressIPByGatewayIP, err = allocateEgressIPsForGroup(egressPool, activeGatewayIPs, prevEgressIPs)
+		if err != nil {
+			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
+				{
+					Type:               egwIPAMPoolExhausted,
+					Status:             meta_v1.ConditionUnknown,
+					ObservedGeneration: config.generation,
+					LastTransitionTime: meta_v1.Now(),
+					Reason:             "noreason",
+					Message:            fmt.Sprintf("unable to fulfill allocations: %s", err),
+				},
+			}...)
+		}
+	}
+
+	return groupStatuses, conditionsForSuccess(config.generation)
+}
+
+func conditionsForFailure(generation int64, conditions ...meta_v1.Condition) []meta_v1.Condition {
+	return append(
+		conditions,
+		meta_v1.Condition{
+			Type:               egwIPAMRequestSatisfied,
+			Status:             meta_v1.ConditionFalse,
+			ObservedGeneration: generation,
+			LastTransitionTime: meta_v1.Now(),
+			Reason:             "noreason",
+			Message:            "allocation requests not satisfied",
+		},
+	)
+}
+
+func conditionsForSuccess(generation int64, conditions ...meta_v1.Condition) []meta_v1.Condition {
+	return append(
+		conditions,
+		meta_v1.Condition{
+			Type:               egwIPAMRequestSatisfied,
+			Status:             meta_v1.ConditionTrue,
+			ObservedGeneration: generation,
+			LastTransitionTime: meta_v1.Now(),
+			Reason:             "noreason",
+			Message:            "allocation requests satisfied",
+		},
+	)
+}
+
+func allocateEgressIPsForGroup(egressPool *pool, activeGatewayIPs []netip.Addr, prevEgressIPs map[netip.Addr]netip.Addr) (map[netip.Addr]netip.Addr, error) {
+	egressIPs := make(map[netip.Addr]netip.Addr)
+
+	newActiveGatewayIPs := make([]netip.Addr, 0, len(activeGatewayIPs))
+
+	// First, try to reserve the same egress IPs previously allocated
+	for _, gatewayIP := range activeGatewayIPs {
+		if egressIP, found := prevEgressIPs[gatewayIP]; found {
+			// in case of failure, discard the error from the allocation attempt
+			// and go ahead with a further attempt using a fresh egress IP
+			if err := egressPool.allocate(egressIP); err == nil {
+				egressIPs[gatewayIP] = egressIP
+				continue
+			}
+		}
+		newActiveGatewayIPs = append(newActiveGatewayIPs, gatewayIP)
+	}
+
+	// then, back-fill as needed
+	for _, gatewayIP := range newActiveGatewayIPs {
+		if egressIP, found := prevEgressIPs[gatewayIP]; found {
+			// in case of failure, discard the error from the allocation attempt
+			// and go ahead with a further attempt using a fresh egress IP
+			if err := egressPool.allocate(egressIP); err == nil {
+				egressIPs[gatewayIP] = egressIP
+				continue
+			}
+		}
+
+		egressIP, err := egressPool.allocateNext()
+		if err != nil {
+			return egressIPs, err
+		}
+		egressIPs[gatewayIP] = egressIP
+	}
+
+	return egressIPs, nil
+}
+
 // updateGroupStatuses updates the list of active and healthy gateway IPs in the
 // IEGP k8s resource for the receiver PolicyConfig
 func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager) error {
@@ -516,7 +678,13 @@ func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager
 		if err != nil {
 			return err
 		}
+
 		groupStatuses = append(groupStatuses, gs)
+	}
+
+	var conditions []meta_v1.Condition
+	if len(config.egressCIDRs) > 0 {
+		groupStatuses, conditions = config.allocateEgressIPs(operatorManager, groupStatuses)
 	}
 
 	// After building the list of active and healthy gateway IPs, update the
@@ -530,7 +698,7 @@ func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager
 		return nil
 	}
 
-	newIEGP := getIEGPForStatusUpdate(operatorManager.policyCache[config.id], groupStatuses)
+	newIEGP := getIEGPForStatusUpdate(operatorManager.policyCache[config.id], groupStatuses, conditions)
 
 	// if the IEGP's status is already up to date, that is:
 	// - ObservedGeneration is already equal to the IEGP Generation
@@ -795,6 +963,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 	var endpointSelectorList []api.EndpointSelector
 	var dstCidrList []netip.Prefix
 	var excludedCIDRs []netip.Prefix
+	var egressCIDRs []netip.Prefix
 
 	allowAllNamespacesRequirement := slim_metav1.LabelSelectorRequirement{
 		Key:      k8sConst.PodNamespaceLabel,
@@ -861,6 +1030,14 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		excludedCIDRs = append(excludedCIDRs, cidr)
 	}
 
+	for _, cidrString := range iegp.Spec.EgressCIDRs {
+		cidr, err := netip.ParsePrefix(string(cidrString))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse egress CIDR %s: %w", cidr, err)
+		}
+		egressCIDRs = append(egressCIDRs, cidr)
+	}
+
 	for _, egressRule := range iegp.Spec.Selectors {
 		if egressRule.NamespaceSelector != nil {
 			prefixedNsSelector := egressRule.NamespaceSelector
@@ -917,6 +1094,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		activeGatewayIPs := []netip.Addr{}
 		activeGatewayIPsByAZ := map[string][]netip.Addr{}
 		healthyGatewayIPs := []netip.Addr{}
+		egressIPByGatewayIP := make(map[netip.Addr]netip.Addr)
 
 		for _, gwIP := range policyGroupStatus.ActiveGatewayIPs {
 			activeGatewayIP, err := netip.ParseAddr(gwIP)
@@ -950,10 +1128,27 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 			healthyGatewayIPs = append(healthyGatewayIPs, healthyGatewayIP)
 		}
 
+		for gwIP, egressIP := range policyGroupStatus.EgressIPByGatewayIP {
+			gwAddr, err := netip.ParseAddr(gwIP)
+			if err != nil {
+				log.WithError(err).Error("Cannot parse gateway IP")
+				continue
+			}
+
+			egressAddr, err := netip.ParseAddr(egressIP)
+			if err != nil {
+				log.WithError(err).Error("Cannot parse allocated egress IP")
+				continue
+			}
+
+			egressIPByGatewayIP[gwAddr] = egressAddr
+		}
+
 		gs = append(gs, groupStatus{
 			activeGatewayIPs,
 			activeGatewayIPsByAZ,
 			healthyGatewayIPs,
+			egressIPByGatewayIP,
 		})
 	}
 
@@ -962,6 +1157,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		endpointSelectors:       endpointSelectorList,
 		dstCIDRs:                dstCidrList,
 		excludedCIDRs:           excludedCIDRs,
+		egressCIDRs:             egressCIDRs,
 		matchedEndpoints:        make(map[endpointID]*endpointMetadata),
 		azAffinity:              azAffinity,
 		groupConfigs:            gcs,
@@ -970,9 +1166,10 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		id: types.NamespacedName{
 			Name: name,
 		},
-		uid:        uid,
-		apiVersion: "isovalent.com/v1",
-		generation: iegp.GetGeneration(),
+		uid:               uid,
+		creationTimestamp: iegp.CreationTimestamp.Time,
+		apiVersion:        "isovalent.com/v1",
+		generation:        iegp.GetGeneration(),
 	}, nil
 }
 

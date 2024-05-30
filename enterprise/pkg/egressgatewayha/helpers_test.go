@@ -253,6 +253,7 @@ type policyParams struct {
 	endpointLabels       map[string]string
 	destinationCIDR      string
 	excludedCIDRs        []string
+	egressCIDRs          []string
 	nodeLabels           map[string]string
 	iface                string
 	egressIP             string
@@ -345,12 +346,18 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		excludedCIDRs = append(excludedCIDRs, v1.IPv4CIDR(excludedCIDR))
 	}
 
+	egressCIDRs := []v1.IPv4CIDR{}
+	for _, egressCIDR := range params.egressCIDRs {
+		egressCIDRs = append(egressCIDRs, v1.IPv4CIDR(egressCIDR))
+	}
+
 	iegp := &Policy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       params.name,
-			UID:        params.uid,
-			Generation: params.generation,
-			Labels:     params.labels,
+			Name:              params.name,
+			UID:               params.uid,
+			CreationTimestamp: metav1.Now(),
+			Generation:        params.generation,
+			Labels:            params.labels,
 		},
 		Spec: v1.IsovalentEgressGatewayPolicySpec{
 			Selectors: []v1.EgressRule{
@@ -364,6 +371,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 				v1.IPv4CIDR(params.destinationCIDR),
 			},
 			ExcludedCIDRs: excludedCIDRs,
+			EgressCIDRs:   egressCIDRs,
 			AZAffinity:    params.azAffinity.toString(),
 
 			EgressGroups: []v1.EgressGroup{
