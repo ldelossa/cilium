@@ -14,7 +14,6 @@ import (
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
-	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/option"
 
@@ -28,12 +27,6 @@ var Cell = cell.Module(
 	cell.Config(cecmcfg.Config{}),
 
 	cell.Provide(
-		// Strictly require that the cluster-config is always exposed by
-		// remote clusters when overlapping PodCIDR support is enabled.
-		func(cfg cecmcfg.Config) cmtypes.ValidationMode {
-			return cmtypes.ValidationMode(cfg.EnableClusterAwareAddressing)
-		},
-
 		// Inject the ClusterIDManager implementation with the extended logic
 		// to handle per-cluster maps creation and removal.
 		newClusterIDManager,

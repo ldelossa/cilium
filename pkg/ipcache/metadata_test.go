@@ -5,12 +5,18 @@ package ipcache
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
+	"math"
+	"math/rand/v2"
 	"net/netip"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/cilium/cilium/pkg/container/bitlpm"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache/types"
@@ -711,6 +717,93 @@ func TestMetadataWaitForRevision(t *testing.T) {
 	wg.Wait()
 }
 
+func TestUpsertMetadataInheritedCIDRPrefix(t *testing.T) {
+	cancel := setupTest(t)
+	defer cancel()
+
+	ctx := context.Background()
+
+	// Simulate CIDR policy
+	parent := netip.MustParsePrefix("10.0.0.0/8")
+	prefixes := IPIdentityCache.metadata.upsertLocked(parent, source.Kubernetes, "cidr-policy", labels.GetCIDRLabels(parent))
+	remaining, err := IPIdentityCache.InjectLabels(ctx, prefixes)
+	require.NoError(t, err)
+	require.Len(t, remaining, 0)
+
+	// Simulate first FQDN lookup
+	fqdnLabels := labels.NewLabelsFromSortedList("fqdn:*.internal")
+	child := netip.MustParsePrefix("10.10.0.1/32")
+	prefixes = IPIdentityCache.metadata.upsertLocked(child, source.Generated, "fqdn-lookup", fqdnLabels)
+	remaining, err = IPIdentityCache.InjectLabels(ctx, prefixes)
+	require.NoError(t, err)
+	require.Len(t, remaining, 0)
+
+	id, ok := IPIdentityCache.LookupByPrefix(child.String())
+	ident := IPIdentityCache.IdentityAllocator.LookupIdentityByID(context.TODO(), id.ID)
+	require.True(t, ok)
+	require.NotNil(t, ident)
+	require.Equal(t, "cidr:10.0.0.0/8,fqdn:*.internal,reserved:world-ipv4", ident.Labels.String())
+
+	// Add second fqdn ip, it should get the same identity
+	sibling := netip.MustParsePrefix("10.10.0.2/32")
+	prefixes = IPIdentityCache.metadata.upsertLocked(sibling, source.Generated, "fqdn-lookup", fqdnLabels)
+	remaining, err = IPIdentityCache.InjectLabels(ctx, prefixes)
+	require.NoError(t, err)
+	require.Len(t, remaining, 0)
+
+	newID, ok := IPIdentityCache.LookupByPrefix(child.String())
+	require.True(t, ok)
+	require.Equal(t, id.ID, newID.ID)
+
+	// Removing the parent should update the child identities
+	prefixes = IPIdentityCache.metadata.remove(parent, "cidr-policy", labels.Labels{})
+	remaining, err = IPIdentityCache.InjectLabels(ctx, prefixes)
+	assert.NoError(t, err)
+	assert.Len(t, remaining, 0)
+
+	// Check that identities for both children have changed
+	id, ok = IPIdentityCache.LookupByPrefix(child.String())
+	ident = IPIdentityCache.IdentityAllocator.LookupIdentityByID(context.TODO(), id.ID)
+	require.True(t, ok)
+	require.NotNil(t, ident)
+	require.Equal(t, "fqdn:*.internal", ident.Labels.String())
+	newID, ok = IPIdentityCache.LookupByPrefix(child.String())
+	require.True(t, ok)
+	require.Equal(t, id.ID, newID.ID)
+
+	// Re-add different CIDR policy
+	parent = netip.MustParsePrefix("10.10.0.0/16")
+	prefixes = IPIdentityCache.metadata.upsertLocked(parent, source.Kubernetes, "cidr-policy", labels.GetCIDRLabels(parent))
+	remaining, err = IPIdentityCache.InjectLabels(ctx, prefixes)
+	require.NoError(t, err)
+	require.Len(t, remaining, 0)
+
+	// Check that identities for both children have changed yet again
+	id, ok = IPIdentityCache.LookupByPrefix(child.String())
+	ident = IPIdentityCache.IdentityAllocator.LookupIdentityByID(context.TODO(), id.ID)
+	require.True(t, ok)
+	require.NotNil(t, ident)
+	require.Equal(t, "cidr:10.10.0.0/16,fqdn:*.internal,reserved:world-ipv4", ident.Labels.String())
+	newID, ok = IPIdentityCache.LookupByPrefix(child.String())
+	require.True(t, ok)
+	require.Equal(t, id.ID, newID.ID)
+
+	// Remove fqdn-lookups
+	prefixes = IPIdentityCache.metadata.remove(child, "fqdn-lookup", labels.Labels{})
+	prefixes = append(prefixes, IPIdentityCache.metadata.remove(sibling, "fqdn-lookup", labels.Labels{})...)
+	remaining, err = IPIdentityCache.InjectLabels(ctx, prefixes)
+	assert.NoError(t, err)
+	assert.Len(t, remaining, 0)
+
+	_, ok = IPIdentityCache.LookupByPrefix(child.String())
+	require.False(t, ok)
+	_, ok = IPIdentityCache.LookupByPrefix(sibling.String())
+	require.False(t, ok)
+
+	ident = IPIdentityCache.IdentityAllocator.LookupIdentity(context.TODO(), ident.Labels)
+	assert.Nil(t, ident)
+}
+
 func setupTest(t *testing.T) (cleanup func()) {
 	t.Helper()
 
@@ -757,4 +850,390 @@ type mockTriggerer struct{}
 
 func (m *mockTriggerer) UpdatePolicyMaps(ctx context.Context, wg *sync.WaitGroup) *sync.WaitGroup {
 	return wg
+}
+
+func Test_canonicalPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		prefix netip.Prefix
+		want   netip.Prefix
+	}{
+		{
+			name:   "identity",
+			prefix: netip.MustParsePrefix("10.10.10.10/32"),
+			want:   netip.MustParsePrefix("10.10.10.10/32"),
+		},
+		{
+			name:   "masked",
+			prefix: netip.MustParsePrefix("10.10.10.10/16"),
+			want:   netip.MustParsePrefix("10.10.0.0/16"),
+		},
+		{
+			name:   "v4inv6",
+			prefix: netip.MustParsePrefix("::ffff:10.10.10.10/24"),
+			want:   netip.MustParsePrefix("10.10.10.0/24"),
+		},
+		{
+			name:   "ipv6",
+			prefix: netip.MustParsePrefix("2001:db8::dead/32"),
+			want:   netip.MustParsePrefix("2001:db8::/32"),
+		},
+		{
+			name:   "invalid",
+			prefix: netip.PrefixFrom(netip.MustParseAddr("::ffff:10.10.10.10"), -1),
+			want:   netip.PrefixFrom(netip.MustParseAddr("::ffff:10.10.10.10"), -1),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, canonicalPrefix(tt.prefix), "canonicalPrefix(%v)", tt.prefix)
+		})
+	}
+}
+
+func Test_isParentPrefix(t *testing.T) {
+	type args struct {
+		child  netip.Prefix
+		parent netip.Prefix
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "is child",
+			args: args{
+				parent: netip.MustParsePrefix("1.1.0.0/16"),
+				child:  netip.MustParsePrefix("1.1.1.1/32"),
+			},
+			want: true,
+		},
+		{
+			name: "is not child",
+			args: args{
+				parent: netip.MustParsePrefix("1.1.0.0/16"),
+				child:  netip.MustParsePrefix("1.0.0.0/8"),
+			},
+			want: false,
+		},
+		{
+			name: "siblings",
+			args: args{
+				parent: netip.MustParsePrefix("1.1.0.0/16"),
+				child:  netip.MustParsePrefix("1.2.0.0/16"),
+			},
+			want: false,
+		},
+		{
+			name: "non-canonical parent",
+			args: args{
+				parent: netip.MustParsePrefix("1.1.1.1/16"),
+				child:  netip.MustParsePrefix("1.1.1.1/32"),
+			},
+			want: true,
+		},
+		{
+			name: "non-canonical child",
+			args: args{
+				parent: netip.MustParsePrefix("1.0.0.0/8"),
+				child:  netip.MustParsePrefix("1.1.1.1/16"),
+			},
+			want: true,
+		},
+		{
+			name: "child is parent of itself",
+			args: args{
+				parent: netip.MustParsePrefix("1.1.0.0/16"),
+				child:  netip.MustParsePrefix("1.1.0.0/16"),
+			},
+			want: true,
+		},
+		{
+			name: "ipv6",
+			args: args{
+				parent: netip.MustParsePrefix("::/0"),
+				child:  netip.MustParsePrefix("c0ff::ee/128"),
+			},
+			want: true,
+		},
+		{
+			name: "mixed family has no relation",
+			args: args{
+				parent: netip.MustParsePrefix("::/0"),
+				child:  netip.MustParsePrefix("127.0.0.1/32"),
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, isChildPrefix(tt.args.parent, tt.args.child), "isChildPrefix(%v, %v)", tt.args.parent, tt.args.child)
+		})
+	}
+}
+
+func Test_metadata_findCIDRParentPrefix(t *testing.T) {
+	tests := []struct {
+		name       string
+		m          map[netip.Prefix]prefixInfo
+		prefix     netip.Prefix
+		wantParent netip.Prefix
+		wantOk     bool
+	}{
+		{
+			name:   "empty",
+			m:      nil,
+			prefix: netip.MustParsePrefix("1.1.1.1/32"),
+			wantOk: false,
+		},
+		{
+			name:   "no underflow",
+			m:      nil,
+			prefix: netip.MustParsePrefix("0.0.0.0/0"),
+			wantOk: false,
+		},
+		{
+			name: "no self-match",
+			m: map[netip.Prefix]prefixInfo{
+				netip.MustParsePrefix("1.1.1.1/32"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("1.1.1.1/32")),
+					},
+				},
+			},
+			prefix: netip.MustParsePrefix("1.1.1.1/32"),
+			wantOk: false,
+		},
+		{
+			name: "match first parent",
+			m: map[netip.Prefix]prefixInfo{
+				netip.MustParsePrefix("1.1.0.0/16"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("1.1.0.0/16")),
+					},
+				},
+				netip.MustParsePrefix("1.0.0.0/8"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "other-test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("1.0.0.0/8")),
+					},
+				},
+			},
+			prefix:     netip.MustParsePrefix("1.1.1.1/32"),
+			wantParent: netip.MustParsePrefix("1.1.0.0/16"),
+			wantOk:     true,
+		},
+		{
+			name: "only match CIDR parents",
+			m: map[netip.Prefix]prefixInfo{
+				netip.MustParsePrefix("1.1.0.0/16"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "test-pol"): {
+						labels: labels.LabelWorld,
+					},
+				},
+				netip.MustParsePrefix("1.0.0.0/8"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "other-test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("1.0.0.0/8")),
+					},
+				},
+			},
+			prefix:     netip.MustParsePrefix("1.1.1.1/32"),
+			wantParent: netip.MustParsePrefix("1.0.0.0/8"),
+			wantOk:     true,
+		},
+		{
+			name: "match for non-canonical prefix",
+			m: map[netip.Prefix]prefixInfo{
+				netip.MustParsePrefix("1.1.0.0/16"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("1.1.0.0/16")),
+					},
+				},
+			},
+			prefix:     netip.MustParsePrefix("::ffff:1.1.1.1/24"),
+			wantParent: netip.MustParsePrefix("1.1.0.0/16"),
+			wantOk:     true,
+		},
+		{
+			name: "skip world",
+			m: map[netip.Prefix]prefixInfo{
+				netip.MustParsePrefix("0.0.0.0/0"): {
+					types.NewResourceID(types.ResourceKindDaemon, "", ""): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("0.0.0.0/0")),
+					},
+				},
+			},
+			prefix: netip.MustParsePrefix("1.1.1.1/32"),
+			wantOk: false,
+		},
+		{
+			name: "ipv6",
+			m: map[netip.Prefix]prefixInfo{
+				netip.MustParsePrefix("fd00:ef::/48"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("fd00:ef::/56")),
+					},
+				},
+				netip.MustParsePrefix("fd00:ef::/56"): {
+					types.NewResourceID(types.ResourceKindCNP, "test-ns", "other-test-pol"): {
+						labels: labels.GetCIDRLabels(netip.MustParsePrefix("fd00:ef::/56")),
+					},
+				},
+			},
+			prefix:     netip.MustParsePrefix("fd00:ef::1/128"),
+			wantParent: netip.MustParsePrefix("fd00:ef::/56"),
+			wantOk:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &metadata{
+				m: tt.m,
+			}
+			gotParent, gotOk := m.findCIDRParentPrefix(tt.prefix)
+			assert.Equalf(t, tt.wantParent, gotParent, "findCIDRParentPrefix(%v)", tt.prefix)
+			assert.Equalf(t, tt.wantOk, gotOk, "findCIDRParentPrefix(%v)", tt.prefix)
+		})
+	}
+}
+
+func findAffectedChildPrefixesInMap(parent netip.Prefix, m map[netip.Prefix]prefixInfo) (children []netip.Prefix) {
+	for child := range m {
+		if isChildPrefix(parent, child) {
+			children = append(children, child)
+		}
+	}
+
+	return children
+}
+
+func findAffectedChildPrefixesInTrie(parent netip.Prefix, m *bitlpm.CIDRTrie[prefixInfo]) (children []netip.Prefix) {
+	m.Descendants(parent, func(child netip.Prefix, _ prefixInfo) bool {
+		children = append(children, child)
+		return true
+	})
+
+	return children
+}
+
+func generatePrefixes(t testing.TB, numChildren, numParents int, sparseness float64, yield func(prefix netip.Prefix, info prefixInfo)) {
+	t.Helper()
+	if !(sparseness > 0 && sparseness <= 1) {
+		t.Fatalf("sparseness needs to be between >0 and 1, got %f", sparseness)
+	}
+
+	numTotal := numChildren + numParents
+
+	randSrc := rand.NewPCG(0, 0)
+	randGen := rand.New(randSrc)
+	randRange := uint32(math.Ceil(float64(numTotal) * (1.0 / sparseness)))
+
+	// Adjust parent prefix size to be able to generate at least parentsToGenerate unique CIDRs
+	parentBits := 32 - int(math.Ceil(math.Log2(float64(numTotal/numParents))))
+
+	base := binary.BigEndian.Uint32(netip.MustParseAddr("10.0.0.0").AsSlice())
+	generatedAddr := map[uint32]struct{}{}
+	randomAddr := func() netip.Addr {
+		for {
+			addr := base + randGen.Uint32N(randRange)
+			if _, found := generatedAddr[addr]; found {
+				continue
+			}
+
+			generatedAddr[addr] = struct{}{}
+			a := [4]byte{}
+			binary.BigEndian.PutUint32(a[:], addr)
+			return netip.AddrFrom4(a)
+		}
+	}
+
+	generatedPrefix := map[uint32]struct{}{}
+	randomPrefix := func(bits int) netip.Prefix {
+		mask := ^uint32(0) << (32 - bits)
+		for {
+			prefix := (base + randGen.Uint32N(randRange)) & mask
+			if _, found := generatedPrefix[prefix]; found {
+				continue
+			}
+
+			generatedPrefix[prefix] = struct{}{}
+			a := [4]byte{}
+			binary.BigEndian.PutUint32(a[:], prefix)
+			return netip.PrefixFrom(netip.AddrFrom4(a), bits)
+		}
+	}
+
+	// generate parent prefixes
+	for i := 0; i < numParents; i++ {
+		prefix := randomPrefix(parentBits)
+		yield(prefix, prefixInfo{})
+	}
+
+	// generate child prefixes
+	for i := 0; i < numChildren; i++ {
+		addr := randomAddr()
+		yield(netip.PrefixFrom(addr, addr.BitLen()), prefixInfo{})
+	}
+}
+
+func BenchmarkFindAffectedChildPrefixes(b *testing.B) {
+	benchmarks := []struct {
+		numChildren int
+		numParents  int
+
+		sparseness float64
+
+		useTrie bool
+	}{
+		{numChildren: 1_000_000, numParents: 10000, sparseness: 0.33, useTrie: false},
+		{numChildren: 1_000_000, numParents: 10000, sparseness: 0.33, useTrie: true},
+
+		{numChildren: 100_000, numParents: 1000, sparseness: 0.33, useTrie: false},
+		{numChildren: 100_000, numParents: 1000, sparseness: 0.33, useTrie: true},
+
+		{numChildren: 10_000, numParents: 100, sparseness: 0.33, useTrie: false},
+		{numChildren: 10_000, numParents: 100, sparseness: 0.33, useTrie: true},
+
+		{numChildren: 1_000, numParents: 10, sparseness: 0.33, useTrie: false},
+		{numChildren: 1_000, numParents: 10, sparseness: 0.33, useTrie: true},
+	}
+	for _, bm := range benchmarks {
+		name := fmt.Sprintf("%d/%d/Sparseness_%f/Trie_%t", bm.numChildren, bm.numParents, bm.sparseness, bm.useTrie)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+
+			var parents []netip.Prefix
+			hashMap := make(map[netip.Prefix]prefixInfo)
+			trieMap := bitlpm.NewCIDRTrie[prefixInfo]()
+
+			generatePrefixes(b, bm.numChildren, bm.numParents, bm.sparseness,
+				func(prefix netip.Prefix, info prefixInfo) {
+					if !prefix.IsSingleIP() {
+						parents = append(parents, prefix)
+					}
+
+					if bm.useTrie {
+						trieMap.Upsert(prefix, info)
+					} else {
+						hashMap[prefix] = info
+					}
+				})
+
+			randSrc := rand.NewPCG(0, 0)
+			randGen := rand.New(randSrc)
+
+			b.ResetTimer()
+			if bm.useTrie {
+				for i := 0; i < b.N; i++ {
+					p := randGen.IntN(len(parents))
+					_ = findAffectedChildPrefixesInTrie(parents[p], trieMap)
+				}
+			} else {
+				for i := 0; i < b.N; i++ {
+					p := randGen.IntN(len(parents))
+					_ = findAffectedChildPrefixesInMap(parents[p], hashMap)
+				}
+			}
+		})
+	}
 }

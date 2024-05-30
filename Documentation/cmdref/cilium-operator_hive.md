@@ -12,15 +12,9 @@ cilium-operator hive [flags]
 
 ```
       --auto-create-default-pod-network                              Automatically creates the default IsovalentPodNetwork on startup (default true)
-      --bgp-v2-api-enabled                                           Enables BGPv2 APIs in Cilium
-      --ces-dynamic-rate-limit-nodes strings                         List of nodes used for the dynamic rate limit steps
-      --ces-dynamic-rate-limit-qps-burst strings                     List of qps burst used for the dynamic rate limit steps
-      --ces-dynamic-rate-limit-qps-limit strings                     List of qps limits used for the dynamic rate limit steps
-      --ces-enable-dynamic-rate-limit                                Flag to enable dynamic rate limit specified in separate fields instead of the static one
       --ces-max-ciliumendpoints-per-ces int                          Maximum number of CiliumEndpoints allowed in a CES (default 100)
+      --ces-rate-limits string                                       Configure rate limits for the CES controller. Accepts a list of rate limit configurations, must be a JSON formatted string. (default "[{\"nodes\":0,\"limit\":10,\"burst\":20}]")
       --ces-slice-mode string                                        Slicing mode defines how CiliumEndpoints are grouped into CES: either batched by their Identity ("cesSliceModeIdentity") or batched on a "First Come, First Served" basis ("cesSliceModeFCFS") (default "cesSliceModeIdentity")
-      --ces-write-qps-burst int                                      CES work queue burst rate. Ignored when ces-enable-dynamic-rate-limit is set (default 20)
-      --ces-write-qps-limit float                                    CES work queue rate limit. Ignored when ces-enable-dynamic-rate-limit is set (default 10)
       --cluster-id uint32                                            Unique identifier of the cluster
       --cluster-name string                                          Name of the cluster (default "default")
       --clustermesh-concurrent-service-endpoint-syncs int            The number of remote cluster service syncing operations that will be done concurrently. Larger number = faster endpoint slice updating, but more CPU (and network) load. (default 5)
@@ -29,6 +23,7 @@ cilium-operator hive [flags]
       --clustermesh-enable-mcs-api                                   Whether or not the MCS API support is enabled.
       --clustermesh-endpoint-updates-batch-period duration           The length of endpoint slice updates batching period for remote cluster services. Processing of pod changes will be delayed by this duration to join them with potential upcoming updates and reduce the overall number of endpoints updates. Larger number = higher endpoint programming latency, but lower number of endpoints revision generated. (default 500ms)
       --clustermesh-endpoints-per-slice int                          The maximum number of endpoints that will be added to a remote cluster's EndpointSlice . More endpoints per slice will result in less endpoint slices, but larger resources. (default 100)
+      --clustermesh-sync-timeout duration                            Timeout waiting for the initial synchronization of information from remote clusters (default 1m0s)
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
       --dns-server-addresses strings                                 A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form "<ip>:<port>". When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.
       --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)

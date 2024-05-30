@@ -55,6 +55,10 @@ func (mgr ClusterIDsManager) ReserveClusterID(clusterID uint32) error {
 }
 
 func (mgr ClusterIDsManager) ReleaseClusterID(clusterID uint32) {
+	if clusterID == types.ClusterIDUnset {
+		return
+	}
+
 	if err := mgr.maps.Delete(clusterID); err != nil {
 		mgr.logger.WithField(logfields.ClusterID, clusterID).WithError(err).
 			Warning("Failed to cleanup per-cluster maps")
