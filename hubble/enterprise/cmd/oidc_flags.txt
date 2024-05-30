@@ -1,0 +1,5 @@
+OIDC Flags:
+      --issuer-ca string    CA to validate OIDC issuer against.
+      --token-file string   Path to a file that contains an authentication token to pass along when doing requests.
+      --token-type string   Define the type of token that is expected in specified token file. (default "Bearer")
+

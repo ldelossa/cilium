@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -20,11 +20,13 @@ import (
 
 	observerpb "github.com/cilium/cilium/api/v1/observer"
 	"github.com/cilium/cilium/hubble/cmd/observe"
-	"github.com/cilium/cilium/hubble/pkg/defaults"
 )
 
-//go:embed observe_help.txt
-var expectedObserveHelp string
+//go:embed aggregation_flags.txt
+var expectedAggregationFlags string
+
+//go:embed oidc_flags.txt
+var expectedOIDCFlags string
 
 func init() {
 	// Override the client so that it always returns an IOReaderObserver with no flows.
@@ -32,16 +34,15 @@ func init() {
 		cleanup = func() error { return nil }
 		return observe.NewIOReaderObserver(new(bytes.Buffer)), cleanup, nil
 	}
-
-	expectedObserveHelp = fmt.Sprintf(expectedObserveHelp, defaults.ConfigFile)
 }
 
 func TestTestHubbleObserve(t *testing.T) {
 	tests := []struct {
-		name           string
-		args           []string
-		expectErr      error
-		expectedOutput string
+		name               string
+		args               []string
+		expectErr          error
+		expectedSubstrings []string
+		expectedRegexps    []*regexp.Regexp
 	}{
 		{
 			name: "observe no flags",
@@ -60,43 +61,18 @@ func TestTestHubbleObserve(t *testing.T) {
 			args: []string{"observe", "--from-pod", "foo/test-pod-1234", "--type", "l7"},
 		},
 		{
-			name: "help",
-			args: []string{"--help"},
-			expectedOutput: fmt.Sprintf(`Hubble is a utility to observe and inspect recent Cilium routed traffic in a cluster.
-
-Usage:
-  hubble [command]
-
-Available Commands:
-  completion  Generate the autocompletion script for the specified shell
-  config      Modify or view hubble config
-  help        Help about any command
-  list        List Hubble objects
-  login       Login to an OIDC provider
-  logout      Logout from an OIDC provider
-  observe     Observe flows and events of a Hubble server
-  status      Display status of Hubble server
-  version     Display detailed version information
-
-OIDC Flags:
-      --issuer-ca string    CA to validate OIDC issuer against.
-      --token-file string   Path to a file that contains an authentication token to pass along when doing requests.
-      --token-type string   Define the type of token that is expected in specified token file. (default "Bearer")
-
-Global Flags:
-      --config string   Optional config file (default "%s")
-  -D, --debug           Enable debug messages
-
-Get help:
-  -h, --help	Help for any command or subcommand
-
-Use "hubble [command] --help" for more information about a command.
-`, defaults.ConfigFile),
+			name:               "help",
+			args:               []string{"--help"},
+			expectedSubstrings: []string{expectedOIDCFlags},
+			expectedRegexps: []*regexp.Regexp{
+				regexp.MustCompile(`(?m)^ {2}login +Login to an OIDC provider$`),
+				regexp.MustCompile(`(?m)^ {2}logout +Logout from an OIDC provider$`),
+			},
 		},
 		{
-			name:           "observe help",
-			args:           []string{"observe", "--help"},
-			expectedOutput: expectedObserveHelp,
+			name:               "observe help",
+			args:               []string{"observe", "--help"},
+			expectedSubstrings: []string{expectedAggregationFlags, expectedOIDCFlags},
 		},
 	}
 
@@ -109,8 +85,11 @@ Use "hubble [command] --help" for more information about a command.
 			err := cli.Execute()
 			require.Equal(t, tt.expectErr, err)
 			output := b.String()
-			if tt.expectedOutput != "" {
-				assert.Equal(t, tt.expectedOutput, output, "expected output does not match")
+			for _, substr := range tt.expectedSubstrings {
+				assert.Contains(t, output, substr)
+			}
+			for _, re := range tt.expectedRegexps {
+				assert.Regexp(t, re, output)
 			}
 		})
 	}

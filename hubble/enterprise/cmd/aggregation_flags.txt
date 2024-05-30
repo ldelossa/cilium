@@ -1,0 +1,6 @@
+Aggregation Flags:
+      --aggregate strings                  Apply aggregation logic before returning list of flows. Valid options: identity and connection.
+      --aggregate-ignore-source-port       Ignore source port when aggregating.
+      --aggregation-state-filter strings   The state changes to include while aggregating (default [new,first_error,error,closed])
+      --aggregation-ttl duration           TTL to use when aggregating. Set to 0 to only see a flow once for each state change, or non-zero to see non-state changes periodically.
+
