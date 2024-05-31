@@ -24,8 +24,10 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
+	"github.com/cilium/cilium/pkg/k8s/client"
 	cilium_client_v2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/k8s/utils"
 )
 
 // manager is responsible for handling IsovalentFQDNGroup events. It will spin
@@ -257,4 +259,12 @@ func (mgr *manager) syncResolvers(fqdnGroup string, fqdns []string) error {
 	}
 
 	return nil
+}
+
+func isovalentFQDNGroup(lc cell.Lifecycle, cs client.Clientset) (resource.Resource[*v1alpha1.IsovalentFQDNGroup], error) {
+	if !cs.IsEnabled() {
+		return nil, nil
+	}
+	lw := utils.ListerWatcherFromTyped[*v1alpha1.IsovalentFQDNGroupList](cs.IsovalentV1alpha1().IsovalentFQDNGroups())
+	return resource.New[*v1alpha1.IsovalentFQDNGroup](lc, lw, resource.WithMetric("IsovalentFQDNGroup")), nil
 }

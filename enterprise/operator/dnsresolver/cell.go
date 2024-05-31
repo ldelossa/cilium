@@ -39,6 +39,7 @@ var Cell = cell.Module(
 	"Isovalent DNS resolvers manager",
 
 	cell.Config(defaultConfig),
+	cell.Provide(isovalentFQDNGroup),
 	cell.Invoke(newManager),
 	metrics.Metric(newMetrics),
 )
