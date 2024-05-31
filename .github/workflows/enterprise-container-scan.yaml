@@ -1,0 +1,93 @@
+name: Enterprise container vulnerability scan
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-scan:
+    name: scan-container
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    outputs:
+      scan_result: ${{ steps.failure-flag.outputs.scan_result }}
+    strategy:
+      matrix:
+        image: [cilium, clustermesh-apiserver, docker-plugin, hubble-relay, operator-generic]
+        branch: [v1.13, v1.14, v1.15]
+        include:
+          - image: kvstoremesh
+            branch: v1.14
+    steps:
+      - name: Checkout code to scan
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        with:
+          ref: ${{ matrix.branch }}
+          persist-credentials: false
+      - name: Checkout latest VEX data
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        with:
+          sparse-checkout: |
+            .github/enterprise/.openvex.json
+            .github/enterprise/.grype.yaml
+          sparse-checkout-cone-mode: false
+          path: vex
+      - name: Download Grype
+        id: grype
+        uses: anchore/scan-action/download-grype@3343887d815d7b07465f6fdcd395bd66508d486a #v3.6.4
+      - name: Scan image
+        id: scan
+        run: |
+          ${{ steps.grype.outputs.cmd }} quay.io/cilium/${{ matrix.image }}-ci:${{ matrix.branch }} \
+            --output json=results.json --output table=results.txt --fail-on medium \
+            --vex vex/.github/enterprise/.openvex.json \
+            --config vex/.github/enterprise/.grype.yaml
+      - name: Set failure flag if necessary
+        id: failure-flag
+        if: ${{ failure() }}
+        run: echo "scan_result=failure" >> $GITHUB_OUTPUT
+      - name: Extract scan results
+        if: ${{ failure() }}
+        run: |
+          jq '[.matches[]
+              | select(.vulnerability.severity == "Medium" or .vulnerability.severity == "High" or .vulnerability.severity == "Critical")
+              | {id: .vulnerability.id,
+                image: "${{ matrix.image }}-${{ matrix.branch }}",
+                severity: .vulnerability.severity,
+                name: .artifact.name,
+                version: .artifact.version,
+                purl: .artifact.purl,
+                paths: [.artifact.locations[].path]}]' \
+              results.json > ${{ matrix.image }}-${{ matrix.branch }}.json
+      - name: Output scan results
+        if: ${{ failure() }}
+        run: |
+          cat ${{ matrix.image }}-${{ matrix.branch }}.json
+          exit 1
+      - name: Upload result summary
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: ${{ matrix.image }}-${{ matrix.branch }}.json
+          path: ${{ matrix.image }}-${{ matrix.branch }}.json
+          if-no-files-found: ignore
+
+  check-scan-results:
+      # Fails the entire workflow if any scanning job run has failed, despite the
+      # use of `continue-on-error` in the previous job.
+      name: Check Scan Results
+      runs-on: ubuntu-22.04
+      needs: container-scan
+      steps:
+        - name: Check if any scans failed
+          run: |
+            if [ "${{ needs.container-scan.outputs.scan_result }}" = "failure" ]; then
+              echo "One or more container scans failed. Check the uploaded artifacts to" \
+              "view the CVEs causing the failures."
+              exit 1
+            else
+              echo "All container scans succeeded."
+            fi

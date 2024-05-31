@@ -1,0 +1,14 @@
+ignore:
+  - vex-status: not_affected
+  # clustermesh-apiserver - there is no newer etcd version to upgrade to
+  - vulnerability: CVE-2024-24789
+    package:
+      location: /usr/bin/etcd
+  # clustermesh-apiserver - there is no newer etcd version to upgrade to
+  - vulnerability: CVE-2024-24790
+    package:
+      location: /usr/bin/etcd
+  # clustermesh-apiserver - there is no newer etcd version to upgrade to
+  - vulnerability: GHSA-4v7x-pqxf-cx7m
+    package:
+      location: /usr/bin/etcd

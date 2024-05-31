@@ -667,8 +667,10 @@ Vagrantfile @cilium/ci-structure
 **/*enterprise* @isovalent/void
 /.github/**/*enterprise* @isovalent/infrastructure
 /.github/ISSUE_TEMPLATE/enterprise_release_template.md @isovalent/release-managers
+/.github/enterprise/.grype.yaml @isovalent/security
+/.github/enterprise/.openvex.json @isovalent/security
 /.github/workflows/enterprise-clustermesh-*yaml @isovalent/clustermesh
-/.github/workflows/enterprise-container-scan-twistcli.yaml @isovalent/security
+/.github/workflows/enterprise-container-scan.yaml @isovalent/security
 /.github/workflows/enterprise-*fqdn-ha*.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-kind.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
