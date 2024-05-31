@@ -36,12 +36,21 @@ const (
 	// (When bfd.SessionState is not Up, the system MUST set bfd.DesiredMinTxInterval
 	// to a value of not less than one second (1,000,000 microseconds)
 	minNotUpDesiredMinTxInterval = uint32(time.Second / time.Microsecond)
+
+	// minEchoActiveRequiredMinRxInterval is the minimal value for the RequiredMinRxInterval when Echo Function is active
+	// (When the Echo function is active, a system SHOULD set bfd.RequiredMinRxInterval to a value
+	// of not less than one second (1,000,000 microseconds))
+	minEchoActiveRequiredMinRxInterval = uint32(time.Second / time.Microsecond)
 )
 
 var (
 	// slowDesiredMinTxInterval is the value of the bfd.DesiredMinTxInterval used if the session is not Up.
 	// This is hold in a variable (instead of const) just to allow overriding it in tests to speed them up.
 	slowDesiredMinTxInterval = minNotUpDesiredMinTxInterval
+
+	// slowRequiredMinRxInterval is the value of the bfd.RequiredMinRxInterval used when Echo Function is active.
+	// This is hold in a variable (instead of const) just to allow overriding it in tests to speed them up.
+	slowRequiredMinRxInterval = minEchoActiveRequiredMinRxInterval
 )
 
 // bfdSession represents a single BFD session between the local system and a remote peer.
@@ -153,8 +162,13 @@ type bfdLocalState struct {
 	desiredMinTxInterval uint32
 
 	// configuredDesiredMinTxInterval holds configured (desired) value for the bfd.DesiredMinTxInterval,
-	// as the actual value may be changed if the session is not Up.
+	// as the actual value may be changed if the session is not Up, or if the Poll sequence needs to finish
+	// before applying new value.
 	configuredDesiredMinTxInterval uint32
+
+	// desiredMinTxIntervalApplied is true if the configuredDesiredMinTxInterval has been applied to desiredMinTxInterval,
+	// false if this has not happened yet - if the Poll sequence was needed before applying and has not finished yet.
+	desiredMinTxIntervalApplied bool
 
 	// requiredMinRxInterval represents the bfd.RequiredMinRxInterval state variable:
 	//   The minimum interval, in microseconds, between received BFD
@@ -165,6 +179,10 @@ type bfdLocalState struct {
 	// configuredRequiredMinRxInterval holds configured value for the RequiredMinRxInterval,
 	// as the currently used value may be different from the configured one during the Poll Sequence.
 	configuredRequiredMinRxInterval uint32
+
+	// requiredMinRxIntervalApplied is true if the configuredRequiredMinRxInterval has been applied to requiredMinRxInterval,
+	// false if this has not happened yet - if the Poll sequence was needed before applying and has not finished yet.
+	requiredMinRxIntervalApplied bool
 
 	// detectMultiplier represents the bfd.DetectMult state variable:
 	//   The desired Detection Time multiplier for BFD Control packets on
@@ -264,8 +282,10 @@ func newBFDSession(logger log.FieldLogger, cfg *types.BFDPeerConfig, conn, echoC
 			detectMultiplier:                cfg.DetectMultiplier,
 			requiredMinRxInterval:           uint32(cfg.ReceiveInterval / time.Microsecond),
 			configuredRequiredMinRxInterval: uint32(cfg.ReceiveInterval / time.Microsecond),
+			requiredMinRxIntervalApplied:    true,
 			desiredMinTxInterval:            uint32(cfg.TransmitInterval / time.Microsecond),
 			configuredDesiredMinTxInterval:  uint32(cfg.TransmitInterval / time.Microsecond),
+			desiredMinTxIntervalApplied:     true,
 			requiredMinEchoRxInterval:       uint32(cfg.EchoReceiveInterval / time.Microsecond),
 			desiredMinEchoTxInterval:        uint32(cfg.EchoTransmitInterval / time.Microsecond),
 			sessionState:                    types.BFDStateDown, // RFC 5880 6.8.1. State Variables: This variable MUST be initialized to Down.
@@ -312,17 +332,15 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 
 	echoDetectTimeAffected := false // tracks whether Echo detection time has been affected and needs an update
 
+	cfgTransmitInterval := uint32(cfg.TransmitInterval / time.Microsecond)
+	cfgReceiveInterval := uint32(cfg.ReceiveInterval / time.Microsecond)
+
 	// 6.8.3.  Timer Manipulation
 	// If either bfd.DesiredMinTxInterval is changed or bfd.RequiredMinRxInterval is changed,
 	// a Poll Sequence MUST be initiated (see section 6.5).
 
-	if s.local.configuredDesiredMinTxInterval != uint32(cfg.TransmitInterval/time.Microsecond) ||
-		s.local.configuredRequiredMinRxInterval != uint32(cfg.ReceiveInterval/time.Microsecond) {
-
-		// If periodic BFD Control packets are already being sent (the remote
-		// system is not in Demand mode), the Poll Sequence MUST be performed by
-		// setting the Poll (P) bit on those scheduled periodic transmissions;
-		// additional packets MUST NOT be sent.
+	if s.local.configuredDesiredMinTxInterval != cfgTransmitInterval ||
+		s.local.configuredRequiredMinRxInterval != cfgReceiveInterval {
 		s.local.inPollSequence = true
 	}
 
@@ -331,7 +349,13 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 	//   Sequence described above has terminated.  This is to ensure that the
 	//   remote system updates its Detection Time before the transmission
 	//   interval increases.
-	//
+	if s.local.configuredDesiredMinTxInterval < cfgTransmitInterval && s.local.sessionState == types.BFDStateUp {
+		s.local.desiredMinTxIntervalApplied = false
+	} else {
+		s.local.desiredMinTxInterval = cfgTransmitInterval
+	}
+	s.local.configuredDesiredMinTxInterval = cfgTransmitInterval
+
 	//   If bfd.RequiredMinRxInterval is reduced and bfd.SessionState is Up,
 	//   the previous value of bfd.RequiredMinRxInterval MUST be used when
 	//   calculating the Detection Time for the remote system until the Poll
@@ -339,9 +363,12 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 	//   remote system is transmitting packets at the higher rate (and those
 	//   packets are being received) prior to the Detection Time being
 	//   reduced.
-
-	s.local.configuredDesiredMinTxInterval = uint32(cfg.TransmitInterval / time.Microsecond)
-	s.local.configuredRequiredMinRxInterval = uint32(cfg.ReceiveInterval / time.Microsecond)
+	if s.local.configuredRequiredMinRxInterval > cfgReceiveInterval && s.local.sessionState == types.BFDStateUp {
+		s.local.requiredMinRxIntervalApplied = false
+	} else {
+		s.local.requiredMinRxInterval = cfgReceiveInterval
+	}
+	s.local.configuredRequiredMinRxInterval = cfgReceiveInterval
 
 	// 6.8.12.  Detect Multiplier Change
 	// The new value will be transmitted with the next BFD Control packet, and the use of
@@ -366,7 +393,7 @@ func (s *bfdSession) update(cfg *types.BFDPeerConfig) error {
 	}
 
 	if echoDetectTimeAffected {
-		// if the Echo detection time was affected, update it immediately
+		// if the Echo detection time was affected, update Echo transmit & detection times immediately
 		s.updateEchoTransmitInterval()
 		s.updateEchoDetectionTime()
 	}
@@ -399,7 +426,8 @@ func (s *bfdSession) setAdminDown() {
 	// When bfd.SessionState is not Up, the system MUST set bfd.DesiredMinTxInterval
 	// to a value of not less than one second (1,000,000 microseconds).
 	if s.local.desiredMinTxInterval < minNotUpDesiredMinTxInterval {
-		s.local.desiredMinTxInterval = slowDesiredMinTxInterval
+		s.local.desiredMinTxInterval = slowDesiredMinTxInterval // session not up - no need to wait until Poll terminates
+		s.local.inPollSequence = true
 	}
 
 	s.notifyStatusChange()
@@ -521,11 +549,17 @@ func (s *bfdSession) handleIncomingControlPacket(pkt *ControlPacket) {
 	// MUST be terminated.
 	if s.local.inPollSequence && pkt.Final {
 		s.local.inPollSequence = false
-
-		// if the desiredMinTxInterval or requiredMinRxInterval were changed, they will become affective now
-		s.local.desiredMinTxInterval = s.local.configuredDesiredMinTxInterval
-		s.local.requiredMinRxInterval = s.local.configuredRequiredMinRxInterval
 		notifyStatusChange = true
+
+		// if the desiredMinTxInterval or requiredMinRxInterval were changed, they will become effective now
+		if !s.local.desiredMinTxIntervalApplied {
+			s.local.desiredMinTxInterval = s.local.configuredDesiredMinTxInterval
+			s.local.desiredMinTxIntervalApplied = true
+		}
+		if !s.local.requiredMinRxIntervalApplied {
+			s.local.requiredMinRxInterval = s.local.configuredRequiredMinRxInterval
+			s.local.requiredMinRxIntervalApplied = true
+		}
 	}
 
 	// Update the transmit interval as described in section 6.8.2.
@@ -603,12 +637,14 @@ func (s *bfdSession) handleIncomingControlPacket(pkt *ControlPacket) {
 			// When bfd.SessionState is not Up, the system MUST set bfd.DesiredMinTxInterval
 			// to a value of not less than one second (1,000,000 microseconds).
 			if s.local.desiredMinTxInterval < minNotUpDesiredMinTxInterval {
+				// DesiredMinTxInterval is increased, but session not Up - no need to wait until Poll terminates
 				s.local.desiredMinTxInterval = slowDesiredMinTxInterval
 				txIntervalChanged = true
 			}
 		} else {
-			// if the session went Up, start using configured DesiredMinTxInterval
+			// if the session went Up, start using configured DesiredMinTxInterval if it differs from the actual one
 			if s.local.desiredMinTxInterval != s.local.configuredDesiredMinTxInterval {
+				// DesiredMinTxInterval is lowered here from slowDesiredMinTxInterval - no need to wait until Poll terminates
 				s.local.desiredMinTxInterval = s.local.configuredDesiredMinTxInterval
 				txIntervalChanged = true
 			}
@@ -868,6 +904,32 @@ func (s *bfdSession) updateEchoTransmitInterval() {
 			s.outEchoConn.Reset()
 			s.updateEchoDetectionTime()
 			s.resetEchoDetectionTimer()
+
+			// When the Echo function is active, a system SHOULD set
+			// bfd.RequiredMinRxInterval to a value of not less than one second
+			// (1,000,000 microseconds).
+			if s.local.requiredMinRxInterval < slowRequiredMinRxInterval {
+				// RequiredMinRxInterval is increased - non need to wait for Poll no terminate
+				s.local.requiredMinRxInterval = slowRequiredMinRxInterval
+				s.local.inPollSequence = true
+			}
+		}
+		if s.curEchoTransmitInterval == 0 {
+			// echo transmit is just being disabled
+			if s.local.requiredMinRxInterval > s.local.configuredRequiredMinRxInterval {
+				// need to lower RequiredMinRxInterval from slowRequiredMinRxInterval
+
+				// If bfd.RequiredMinRxInterval is reduced and bfd.SessionState is Up,
+				//   the previous value of bfd.RequiredMinRxInterval MUST be used when
+				//   calculating the Detection Time for the remote system until the Poll
+				//   Sequence described above has terminated
+				if s.local.sessionState == types.BFDStateUp {
+					s.local.requiredMinRxIntervalApplied = false // lower after poll sequence terminates
+				} else {
+					s.local.requiredMinRxInterval = s.local.configuredRequiredMinRxInterval // lower immediately
+				}
+				s.local.inPollSequence = true
+			}
 		}
 		s.setEchoTransmitTimer()
 	}
@@ -1051,9 +1113,19 @@ func (s *bfdSession) createControlPacket(final bool) *ControlPacket {
 
 	// Set Desired Min TX Interval to bfd.DesiredMinTxInterval.
 	newPkt.DesiredMinTxInterval = layers.BFDTimeInterval(s.local.desiredMinTxInterval)
+	if newPkt.Poll && !s.local.desiredMinTxIntervalApplied {
+		// if the configured value has not been applied yet, we advertise the configured value,
+		// it will be applied when the Poll sequence terminates
+		newPkt.DesiredMinTxInterval = layers.BFDTimeInterval(s.local.configuredDesiredMinTxInterval)
+	}
 
 	// Set Required Min RX Interval to bfd.RequiredMinRxInterval.
 	newPkt.RequiredMinRxInterval = layers.BFDTimeInterval(s.local.requiredMinRxInterval)
+	if newPkt.Poll && !s.local.requiredMinRxIntervalApplied {
+		// if the configured value has not been applied yet, we advertise the configured value,
+		// it will be applied when the Poll sequence terminates
+		newPkt.RequiredMinRxInterval = layers.BFDTimeInterval(s.local.configuredRequiredMinRxInterval)
+	}
 
 	// Set Required Min Echo RX Interval to the minimum required Echo packet receive interval for this
 	// session. If this field is set to zero, the local system is

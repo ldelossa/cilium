@@ -46,7 +46,6 @@ func (conn *fakeClientConn) Close() error {
 }
 
 func (conn *fakeClientConn) Reset() {
-	return
 }
 
 type testFixture struct {
@@ -60,7 +59,9 @@ type testFixture struct {
 }
 
 func newTestFixture(t *testing.T, echoEnabled bool) *testFixture {
-	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond) // 50ms to speed up the tests
+	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond)  // 50ms to speed up the tests
+	slowRequiredMinRxInterval = uint32(15 * time.Millisecond / time.Microsecond) // 15ms to speed up the tests
+
 	logger := log.StandardLogger()
 	logger.SetLevel(log.DebugLevel)
 
@@ -501,13 +502,16 @@ func Test_BFDSessionUpdate(t *testing.T) {
 	require.True(t, outPkt.Poll)
 	require.False(t, outPkt.Final)
 	f.session.Lock()
-	require.EqualValues(t, f.session.local.desiredMinTxInterval, outPkt.DesiredMinTxInterval)
-	require.EqualValues(t, f.session.local.requiredMinRxInterval, outPkt.RequiredMinRxInterval)
 	require.EqualValues(t, cfg.DetectMultiplier, outPkt.DetectMultiplier)
-	require.NotEqualValues(t, cfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
-	require.NotEqualValues(t, cfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
-	require.NotEqualValues(t, f.session.local.configuredDesiredMinTxInterval, outPkt.DesiredMinTxInterval)
-	require.NotEqualValues(t, f.session.local.configuredRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
+	// DesiredMinTxInterval was increased and session state is Up,
+	// the actual transmission interval used MUST NOT change until the Poll Sequence has terminated.
+	require.NotEqualValues(t, f.session.local.desiredMinTxInterval, outPkt.DesiredMinTxInterval)
+	require.EqualValues(t, cfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
+	require.EqualValues(t, f.session.local.configuredDesiredMinTxInterval, outPkt.DesiredMinTxInterval)
+	// RequiredMinRxInterval was increased, should apply immediately
+	require.EqualValues(t, f.session.local.requiredMinRxInterval, outPkt.RequiredMinRxInterval)
+	require.EqualValues(t, cfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
+	require.EqualValues(t, f.session.local.configuredRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
 	f.session.Unlock()
 
 	// Remote replies without Final -> resend Poll
@@ -517,13 +521,16 @@ func Test_BFDSessionUpdate(t *testing.T) {
 	require.True(t, outPkt.Poll)
 	require.False(t, outPkt.Final)
 	f.session.Lock()
-	require.EqualValues(t, f.session.local.desiredMinTxInterval, outPkt.DesiredMinTxInterval)
-	require.EqualValues(t, f.session.local.requiredMinRxInterval, outPkt.RequiredMinRxInterval)
 	require.EqualValues(t, cfg.DetectMultiplier, outPkt.DetectMultiplier)
-	require.NotEqualValues(t, cfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
-	require.NotEqualValues(t, cfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
-	require.NotEqualValues(t, f.session.local.configuredDesiredMinTxInterval, outPkt.DesiredMinTxInterval)
-	require.NotEqualValues(t, f.session.local.configuredRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
+	// DesiredMinTxInterval was increased and session state is Up,
+	// the actual transmission interval used MUST NOT change until the Poll Sequence has terminated.
+	require.NotEqualValues(t, f.session.local.desiredMinTxInterval, outPkt.DesiredMinTxInterval)
+	require.EqualValues(t, cfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
+	require.EqualValues(t, f.session.local.configuredDesiredMinTxInterval, outPkt.DesiredMinTxInterval)
+	// RequiredMinRxInterval was increased, should apply immediately
+	require.EqualValues(t, f.session.local.requiredMinRxInterval, outPkt.RequiredMinRxInterval)
+	require.EqualValues(t, cfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
+	require.EqualValues(t, f.session.local.configuredRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
 	f.session.Unlock()
 
 	// Remote replies with Final -> send Poll & Final cleared (Poll sequence terminated, new values applied)
@@ -534,12 +541,14 @@ func Test_BFDSessionUpdate(t *testing.T) {
 	require.False(t, outPkt.Poll)
 	require.False(t, outPkt.Final)
 	f.session.Lock()
-	require.EqualValues(t, f.session.local.desiredMinTxInterval, outPkt.DesiredMinTxInterval)
-	require.EqualValues(t, f.session.local.requiredMinRxInterval, outPkt.RequiredMinRxInterval)
 	require.EqualValues(t, cfg.DetectMultiplier, outPkt.DetectMultiplier)
-	require.EqualValues(t, cfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
+
+	require.EqualValues(t, f.session.local.desiredMinTxInterval, outPkt.DesiredMinTxInterval)
 	require.EqualValues(t, cfg.TransmitInterval/time.Microsecond, outPkt.DesiredMinTxInterval)
 	require.EqualValues(t, f.session.local.configuredDesiredMinTxInterval, outPkt.DesiredMinTxInterval)
+
+	require.EqualValues(t, f.session.local.requiredMinRxInterval, outPkt.RequiredMinRxInterval)
+	require.EqualValues(t, cfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
 	require.EqualValues(t, f.session.local.configuredRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
 	f.session.Unlock()
 }
@@ -605,7 +614,7 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
 	inPkt.RequiredMinEchoRxInterval = 10000
 	f.session.inPacketsCh <- inPkt
-	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
 
 	echoPkt := waitFirstEgressEchoPacket(t, f.session)
 	require.EqualValues(t, f.localDiscriminator, echoPkt.MyDiscriminator)
@@ -615,7 +624,7 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	inPkt.RequiredMinEchoRxInterval = 10000
 	inPkt.Final = true // end Poll sequence after moving to Up to proceed with shorter detection time
 	f.session.inPacketsCh <- inPkt
-	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
 
 	// only Echo packets back-and-forth, let control detection time expire
 	attempts := 0
@@ -644,7 +653,7 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	// L: Down (R: Init) -> Up - zero remote RequiredMinEchoRxInterval
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
 	f.session.inPacketsCh <- inPkt
-	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
 
 	assertNoEgressEchoPacket(t, f.session) // zero remote RequiredMinEchoRxInterval
 
@@ -652,7 +661,7 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateUp)
 	inPkt.Final = true // end Poll sequence after moving to Up to proceed with shorter detection time
 	f.session.inPacketsCh <- inPkt
-	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
 
 	assertNoEgressEchoPacket(t, f.session) // zero remote RequiredMinEchoRxInterval
 
@@ -660,11 +669,11 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateUp)
 	inPkt.RequiredMinEchoRxInterval = 10000
 	f.session.inPacketsCh <- inPkt
-	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
 
-	inEchoPkt = createTestControlPacket(f.localDiscriminator, f.remoteDiscriminator, layers.BFDStateUp)
+	inEchoPkt := createTestControlPacket(f.localDiscriminator, f.remoteDiscriminator, layers.BFDStateUp)
 	f.session.inEchoPacketsCh <- inEchoPkt
-	echoPkt = waitFirstEgressEchoPacket(t, f.session)
+	waitFirstEgressEchoPacket(t, f.session)
 
 	// only control packets back-and-forth, let echo detection time expire
 
