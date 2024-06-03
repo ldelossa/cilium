@@ -47,6 +47,18 @@ rules:
     - watch
     - get
 {{- end }}
+{{- if .Values.enterprise.bgpControlPlane.enabled }}
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentbgppeerconfigs
+  - isovalentbgpadvertisements
+  - isovalentbgpnodeconfigs
+  verbs:
+  - list
+  - watch
+  - get
+{{- end }}
 - apiGroups:
   - isovalent.com
   resources:
