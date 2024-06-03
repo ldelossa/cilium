@@ -64,6 +64,21 @@ const (
 
 	// IsovalentBFDNodeConfigCRDName is the full name of the IsovalentBFDNodeConfig CRD.
 	IsovalentBFDNodeConfigCRDName = k8sconstv1alpha1.IsovalentBFDNodeConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBGPClusterConfigCRDName is the full name of the IsovalentBGPClusterConfig CRD.
+	IsovalentBGPClusterConfigCRDName = k8sconstv1alpha1.IsovalentBGPClusterConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBGPPeerConfigCRDName is the full name of the IsovalentBGPPeerConfig CRD.
+	IsovalentBGPPeerConfigCRDName = k8sconstv1alpha1.IsovalentBGPPeerConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBGPAdvertisementCRDName is the full name of the IsovalentBGPAdvertisement CRD.
+	IsovalentBGPAdvertisementCRDName = k8sconstv1alpha1.IsovalentBGPAdvertisementKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBGPNodeConfigCRDName is the full name of the IsovalentBGPNodeConfig CRD.
+	IsovalentBGPNodeConfigCRDName = k8sconstv1alpha1.IsovalentBGPNodeConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBGPNodeConfigOverrideCRDName is the full name of the IsovalentBGPNodeConfigOverride CRD.
+	IsovalentBGPNodeConfigOverrideCRDName = k8sconstv1alpha1.IsovalentBGPNodeConfigOverrideKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -77,18 +92,23 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv1alpha1.IFGName):                    createIFGCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):         createSRv6SIDManagerCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):        createSRv6LocatorPoolCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName):       createSRv6EgressPolicyCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.VRFName):                    createVRFCRD,
-		synced.CRDResourceName(k8sconstv1.IEGPName):                         createIEGPCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IPNName):                    createIPNCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):         createMulticastGroupCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):          createMulticastNodeCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IsovalentMeshEndpointName):  createIsovalentMeshEndpointCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDProfileName):    createBFDProfileCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDNodeConfigName): createBFDNodeConfigCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IFGName):                            createIFGCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):                 createSRv6SIDManagerCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName):                createSRv6LocatorPoolCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6EgressPolicyName):               createSRv6EgressPolicyCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.VRFName):                            createVRFCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):                                 createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IPNName):                            createIPNCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastGroupName):                 createMulticastGroupCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.MulticastNodeName):                  createMulticastNodeCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentMeshEndpointName):          createIsovalentMeshEndpointCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDProfileName):            createBFDProfileCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDNodeConfigName):         createBFDNodeConfigCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPClusterConfigName):      createBGPClusterConfigCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPPeerConfigName):         createBGPPeerConfigCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPAdvertisementName):      createBGPAdvertisementCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPNodeConfigName):         createBGPNodeConfigCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPNodeConfigOverrideName): createBGPNodeConfigOverrideCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -139,6 +159,21 @@ var (
 
 	//go:embed crds/v1alpha1/isovalentbfdnodeconfigs.yaml
 	crdsv1Alpha1IsovalentBFDNodeConfig []byte
+
+	//go:embed crds/v1alpha1/isovalentbgpclusterconfigs.yaml
+	crdsv1Alpha1IsovalentBGPClusterConfigs []byte
+
+	//go:embed crds/v1alpha1/isovalentbgppeerconfigs.yaml
+	crdsv1Alpha1IsovalentBGPPeerConfigs []byte
+
+	//go:embed crds/v1alpha1/isovalentbgpadvertisements.yaml
+	crdsv1Alpha1IsovalentBGPAdvertisements []byte
+
+	//go:embed crds/v1alpha1/isovalentbgpnodeconfigs.yaml
+	crdsv1Alpha1IsovalentBGPNodeConfigs []byte
+
+	//go:embed crds/v1alpha1/isovalentbgpnodeconfigoverrides.yaml
+	crdsv1Alpha1IsovalentBGPNodeConfigOverrides []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -178,6 +213,16 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentBFDProfile
 	case IsovalentBFDNodeConfigCRDName:
 		crdBytes = crdsv1Alpha1IsovalentBFDNodeConfig
+	case IsovalentBGPClusterConfigCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBGPClusterConfigs
+	case IsovalentBGPPeerConfigCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBGPPeerConfigs
+	case IsovalentBGPAdvertisementCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBGPAdvertisements
+	case IsovalentBGPNodeConfigCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBGPNodeConfigs
+	case IsovalentBGPNodeConfigOverrideCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBGPNodeConfigOverrides
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -341,6 +386,71 @@ func createBFDNodeConfigCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IsovalentBFDNodeConfigName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBGPClusterConfigCRD creates and updates the IsovalentBGPClusterConfig CRD.
+func createBGPClusterConfigCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBGPClusterConfigCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBGPClusterConfigName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBGPPeerConfigCRD creates and updates the IsovalentBGPPeerConfig CRD.
+func createBGPPeerConfigCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBGPPeerConfigCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBGPPeerConfigName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBGPAdvertisementCRD creates and updates the IsovalentBGPAdvertisement CRD.
+func createBGPAdvertisementCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBGPAdvertisementCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBGPAdvertisementName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBGPNodeConfigCRD creates and updates the IsovalentBGPNodeConfig CRD.
+func createBGPNodeConfigCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBGPNodeConfigCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBGPNodeConfigName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBGPNodeConfigOverrideCRD creates and updates the IsovalentBGPNodeConfigOverride CRD.
+func createBGPNodeConfigOverrideCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBGPNodeConfigOverrideCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBGPNodeConfigOverrideName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

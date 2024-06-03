@@ -15,6 +15,16 @@ type Interface interface {
 	IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInformer
 	// IsovalentBFDProfiles returns a IsovalentBFDProfileInformer.
 	IsovalentBFDProfiles() IsovalentBFDProfileInformer
+	// IsovalentBGPAdvertisements returns a IsovalentBGPAdvertisementInformer.
+	IsovalentBGPAdvertisements() IsovalentBGPAdvertisementInformer
+	// IsovalentBGPClusterConfigs returns a IsovalentBGPClusterConfigInformer.
+	IsovalentBGPClusterConfigs() IsovalentBGPClusterConfigInformer
+	// IsovalentBGPNodeConfigs returns a IsovalentBGPNodeConfigInformer.
+	IsovalentBGPNodeConfigs() IsovalentBGPNodeConfigInformer
+	// IsovalentBGPNodeConfigOverrides returns a IsovalentBGPNodeConfigOverrideInformer.
+	IsovalentBGPNodeConfigOverrides() IsovalentBGPNodeConfigOverrideInformer
+	// IsovalentBGPPeerConfigs returns a IsovalentBGPPeerConfigInformer.
+	IsovalentBGPPeerConfigs() IsovalentBGPPeerConfigInformer
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
 	// IsovalentMeshEndpoints returns a IsovalentMeshEndpointInformer.
@@ -54,6 +64,31 @@ func (v *version) IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInformer {
 // IsovalentBFDProfiles returns a IsovalentBFDProfileInformer.
 func (v *version) IsovalentBFDProfiles() IsovalentBFDProfileInformer {
 	return &isovalentBFDProfileInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBGPAdvertisements returns a IsovalentBGPAdvertisementInformer.
+func (v *version) IsovalentBGPAdvertisements() IsovalentBGPAdvertisementInformer {
+	return &isovalentBGPAdvertisementInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBGPClusterConfigs returns a IsovalentBGPClusterConfigInformer.
+func (v *version) IsovalentBGPClusterConfigs() IsovalentBGPClusterConfigInformer {
+	return &isovalentBGPClusterConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBGPNodeConfigs returns a IsovalentBGPNodeConfigInformer.
+func (v *version) IsovalentBGPNodeConfigs() IsovalentBGPNodeConfigInformer {
+	return &isovalentBGPNodeConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBGPNodeConfigOverrides returns a IsovalentBGPNodeConfigOverrideInformer.
+func (v *version) IsovalentBGPNodeConfigOverrides() IsovalentBGPNodeConfigOverrideInformer {
+	return &isovalentBGPNodeConfigOverrideInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBGPPeerConfigs returns a IsovalentBGPPeerConfigInformer.
+func (v *version) IsovalentBGPPeerConfigs() IsovalentBGPPeerConfigInformer {
+	return &isovalentBGPPeerConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.

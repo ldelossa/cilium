@@ -13,6 +13,26 @@ type IsovalentBFDNodeConfigListerExpansion interface{}
 // IsovalentBFDProfileLister.
 type IsovalentBFDProfileListerExpansion interface{}
 
+// IsovalentBGPAdvertisementListerExpansion allows custom methods to be added to
+// IsovalentBGPAdvertisementLister.
+type IsovalentBGPAdvertisementListerExpansion interface{}
+
+// IsovalentBGPClusterConfigListerExpansion allows custom methods to be added to
+// IsovalentBGPClusterConfigLister.
+type IsovalentBGPClusterConfigListerExpansion interface{}
+
+// IsovalentBGPNodeConfigListerExpansion allows custom methods to be added to
+// IsovalentBGPNodeConfigLister.
+type IsovalentBGPNodeConfigListerExpansion interface{}
+
+// IsovalentBGPNodeConfigOverrideListerExpansion allows custom methods to be added to
+// IsovalentBGPNodeConfigOverrideLister.
+type IsovalentBGPNodeConfigOverrideListerExpansion interface{}
+
+// IsovalentBGPPeerConfigListerExpansion allows custom methods to be added to
+// IsovalentBGPPeerConfigLister.
+type IsovalentBGPPeerConfigListerExpansion interface{}
+
 // IsovalentFQDNGroupListerExpansion allows custom methods to be added to
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}

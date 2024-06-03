@@ -17,6 +17,11 @@ type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	IsovalentBFDNodeConfigsGetter
 	IsovalentBFDProfilesGetter
+	IsovalentBGPAdvertisementsGetter
+	IsovalentBGPClusterConfigsGetter
+	IsovalentBGPNodeConfigsGetter
+	IsovalentBGPNodeConfigOverridesGetter
+	IsovalentBGPPeerConfigsGetter
 	IsovalentFQDNGroupsGetter
 	IsovalentMeshEndpointsGetter
 	IsovalentMulticastGroupsGetter
@@ -39,6 +44,26 @@ func (c *IsovalentV1alpha1Client) IsovalentBFDNodeConfigs() IsovalentBFDNodeConf
 
 func (c *IsovalentV1alpha1Client) IsovalentBFDProfiles() IsovalentBFDProfileInterface {
 	return newIsovalentBFDProfiles(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBGPAdvertisements() IsovalentBGPAdvertisementInterface {
+	return newIsovalentBGPAdvertisements(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBGPClusterConfigs() IsovalentBGPClusterConfigInterface {
+	return newIsovalentBGPClusterConfigs(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBGPNodeConfigs() IsovalentBGPNodeConfigInterface {
+	return newIsovalentBGPNodeConfigs(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBGPNodeConfigOverrides() IsovalentBGPNodeConfigOverrideInterface {
+	return newIsovalentBGPNodeConfigOverrides(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBGPPeerConfigs() IsovalentBGPPeerConfigInterface {
+	return newIsovalentBGPPeerConfigs(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterface {

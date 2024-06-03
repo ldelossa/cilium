@@ -9,6 +9,16 @@ type IsovalentBFDNodeConfigExpansion interface{}
 
 type IsovalentBFDProfileExpansion interface{}
 
+type IsovalentBGPAdvertisementExpansion interface{}
+
+type IsovalentBGPClusterConfigExpansion interface{}
+
+type IsovalentBGPNodeConfigExpansion interface{}
+
+type IsovalentBGPNodeConfigOverrideExpansion interface{}
+
+type IsovalentBGPPeerConfigExpansion interface{}
+
 type IsovalentFQDNGroupExpansion interface{}
 
 type IsovalentMeshEndpointExpansion interface{}

@@ -23,6 +23,26 @@ func (c *FakeIsovalentV1alpha1) IsovalentBFDProfiles() v1alpha1.IsovalentBFDProf
 	return &FakeIsovalentBFDProfiles{c}
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentBGPAdvertisements() v1alpha1.IsovalentBGPAdvertisementInterface {
+	return &FakeIsovalentBGPAdvertisements{c}
+}
+
+func (c *FakeIsovalentV1alpha1) IsovalentBGPClusterConfigs() v1alpha1.IsovalentBGPClusterConfigInterface {
+	return &FakeIsovalentBGPClusterConfigs{c}
+}
+
+func (c *FakeIsovalentV1alpha1) IsovalentBGPNodeConfigs() v1alpha1.IsovalentBGPNodeConfigInterface {
+	return &FakeIsovalentBGPNodeConfigs{c}
+}
+
+func (c *FakeIsovalentV1alpha1) IsovalentBGPNodeConfigOverrides() v1alpha1.IsovalentBGPNodeConfigOverrideInterface {
+	return &FakeIsovalentBGPNodeConfigOverrides{c}
+}
+
+func (c *FakeIsovalentV1alpha1) IsovalentBGPPeerConfigs() v1alpha1.IsovalentBGPPeerConfigInterface {
+	return &FakeIsovalentBGPPeerConfigs{c}
+}
+
 func (c *FakeIsovalentV1alpha1) IsovalentFQDNGroups() v1alpha1.IsovalentFQDNGroupInterface {
 	return &FakeIsovalentFQDNGroups{c}
 }

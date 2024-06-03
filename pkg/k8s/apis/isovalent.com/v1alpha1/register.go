@@ -73,6 +73,23 @@ const (
 	IsovalentBFDNodeConfigPluralName     = "isovalentbfdnodeconfigs"
 	IsovalentBFDNodeConfigKindDefinition = "IsovalentBFDNodeConfig"
 	IsovalentBFDNodeConfigName           = IsovalentBFDNodeConfigPluralName + "." + CustomResourceDefinitionGroup
+
+	// Isovalent BGPv2 CRDs
+	IsovalentBGPClusterConfigPluralName          = "isovalentbgpclusterconfigs"
+	IsovalentBGPPeerConfigPluralName             = "isovalentbgppeerconfigs"
+	IsovalentBGPAdvertisementPluralName          = "isovalentbgpadvertisements"
+	IsovalentBGPNodeConfigPluralName             = "isovalentbgpnodeconfigs"
+	IsovalentBGPNodeConfigOverridePluralName     = "isovalentbgpnodeconfigoverrides"
+	IsovalentBGPClusterConfigKindDefinition      = "IsovalentBGPClusterConfig"
+	IsovalentBGPPeerConfigKindDefinition         = "IsovalentBGPPeerConfig"
+	IsovalentBGPAdvertisementKindDefinition      = "IsovalentBGPAdvertisement"
+	IsovalentBGPNodeConfigKindDefinition         = "IsovalentBGPNodeConfig"
+	IsovalentBGPNodeConfigOverrideKindDefinition = "IsovalentBGPNodeConfigOverride"
+	IsovalentBGPClusterConfigName                = IsovalentBGPClusterConfigPluralName + "." + CustomResourceDefinitionGroup
+	IsovalentBGPPeerConfigName                   = IsovalentBGPPeerConfigPluralName + "." + CustomResourceDefinitionGroup
+	IsovalentBGPAdvertisementName                = IsovalentBGPAdvertisementPluralName + "." + CustomResourceDefinitionGroup
+	IsovalentBGPNodeConfigName                   = IsovalentBGPNodeConfigPluralName + "." + CustomResourceDefinitionGroup
+	IsovalentBGPNodeConfigOverrideName           = IsovalentBGPNodeConfigOverridePluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -138,6 +155,16 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentBFDProfileList{},
 		&IsovalentBFDNodeConfig{},
 		&IsovalentBFDNodeConfigList{},
+		&IsovalentBGPClusterConfig{},
+		&IsovalentBGPClusterConfigList{},
+		&IsovalentBGPPeerConfig{},
+		&IsovalentBGPPeerConfigList{},
+		&IsovalentBGPAdvertisement{},
+		&IsovalentBGPAdvertisementList{},
+		&IsovalentBGPNodeConfig{},
+		&IsovalentBGPNodeConfigList{},
+		&IsovalentBGPNodeConfigOverride{},
+		&IsovalentBGPNodeConfigOverrideList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

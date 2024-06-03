@@ -101,6 +101,16 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBFDNodeConfigs().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentbfdprofiles"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBFDProfiles().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentbgpadvertisements"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBGPAdvertisements().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentbgpclusterconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBGPClusterConfigs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentbgpnodeconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBGPNodeConfigs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentbgpnodeconfigoverrides"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBGPNodeConfigOverrides().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("isovalentbgppeerconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentBGPPeerConfigs().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentfqdngroups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1alpha1().IsovalentFQDNGroups().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentmeshendpoints"):
