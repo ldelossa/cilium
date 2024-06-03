@@ -1749,6 +1749,20 @@
           "properties": {
             "enableServiceHealthChecking": {
               "type": "boolean"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "secretsNamespace": {
+              "properties": {
+                "create": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "type": "object"

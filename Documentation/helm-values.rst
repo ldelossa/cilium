@@ -1148,6 +1148,22 @@
      - Enables BGP integration with service health-checking.
      - bool
      - ``false``
+   * - :spelling:ignore:`enterprise.bgpControlPlane.enabled`
+     - Enables enterprise BGP control plane
+     - bool
+     - ``false``
+   * - :spelling:ignore:`enterprise.bgpControlPlane.secretsNamespace`
+     - SecretsNamespace is the namespace which BGP support will retrieve secrets from.
+     - object
+     - ``{"create":false,"name":"kube-system"}``
+   * - :spelling:ignore:`enterprise.bgpControlPlane.secretsNamespace.create`
+     - Create secrets namespace for BGP secrets.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`enterprise.bgpControlPlane.secretsNamespace.name`
+     - The name of the secret namespace to which Cilium agents are given read access
+     - string
+     - ``"kube-system"``
    * - :spelling:ignore:`enterprise.ciliummesh.enabled`
      - Enables Cilium Mesh
      - bool

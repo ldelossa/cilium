@@ -3635,8 +3635,16 @@ enterprise:
     # -- Enables custom SRv6 SID locator pool operator support.
     locatorPoolEnabled: false
   bgpControlPlane:
+    # -- Enables enterprise BGP control plane
+    enabled: false
     # -- Enables BGP integration with service health-checking.
     enableServiceHealthChecking: false
+    # -- SecretsNamespace is the namespace which BGP support will retrieve secrets from.
+    secretsNamespace:
+      # -- Create secrets namespace for BGP secrets.
+      create: false
+      # -- The name of the secret namespace to which Cilium agents are given read access
+      name: kube-system
   bfd:
     # -- Enables Bidirectional Forwarding Detection (BFD) feature.
     enabled: false

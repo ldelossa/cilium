@@ -337,6 +337,10 @@ contributors across the globe, there is almost always someone available to help.
 | eni.updateEC2AdapterLimitViaAPI | bool | `true` | Update ENI Adapter limits from the EC2 API |
 | enterprise.bfd.enabled | bool | `false` | Enables Bidirectional Forwarding Detection (BFD) feature. |
 | enterprise.bgpControlPlane.enableServiceHealthChecking | bool | `false` | Enables BGP integration with service health-checking. |
+| enterprise.bgpControlPlane.enabled | bool | `false` | Enables enterprise BGP control plane |
+| enterprise.bgpControlPlane.secretsNamespace | object | `{"create":false,"name":"kube-system"}` | SecretsNamespace is the namespace which BGP support will retrieve secrets from. |
+| enterprise.bgpControlPlane.secretsNamespace.create | bool | `false` | Create secrets namespace for BGP secrets. |
+| enterprise.bgpControlPlane.secretsNamespace.name | string | `"kube-system"` | The name of the secret namespace to which Cilium agents are given read access |
 | enterprise.ciliummesh.enabled | bool | `false` | Enables Cilium Mesh |
 | enterprise.clustermesh.enableOverlappingPodCIDRSupport | bool | `false` | Enable overlapping PodCIDR support |
 | enterprise.clustermesh.mixedRoutingMode.enabled | bool | `false` | Enable meshing clusters configured with a different primary routing mode. Inter-cluster traffic is forwarded according to the locally configured mode when matching that of the target cluster, native routing if both clusters use native routing, tunnel if both clusters use tunnel, and defaults to tunnel in the case of a mismatch. The tunnel protocol must be configured to the same value in all clusters. Limited to Cluster Scope or Kubernetes Host Scope IPAM modes. Incompatible with the Direct Server Return (DSR) LB mode. |
