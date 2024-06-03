@@ -195,7 +195,7 @@ type policyGenerateResult struct {
 //
 // Returns a result that should be passed to setDesiredPolicy after the endpoint's
 // write lock has been acquired, or err if recomputing policy failed.
-func (e *Endpoint) regeneratePolicy() (*policyGenerateResult, error) {
+func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics) (*policyGenerateResult, error) {
 	var err error
 
 	// lock the endpoint, read our values, then unlock
@@ -229,11 +229,6 @@ func (e *Endpoint) regeneratePolicy() (*policyGenerateResult, error) {
 	e.runlock()
 
 	e.getLogger().Debug("Starting policy recalculation...")
-	stats := &policyRegenerationStatistics{}
-	stats.totalTime.Start()
-	defer func() {
-		e.updatePolicyRegenerationStatistics(stats, forcePolicyCompute, err)
-	}()
 
 	stats.waitingForPolicyRepository.Start()
 	repo := e.policyGetter.GetPolicyRepository()
@@ -335,31 +330,6 @@ func (e *Endpoint) setDesiredPolicy(res *policyGenerateResult) error {
 	e.desiredPolicy = res.endpointPolicy
 
 	return nil
-}
-
-func (e *Endpoint) updatePolicyRegenerationStatistics(stats *policyRegenerationStatistics, forceRegeneration bool, err error) {
-	success := err == nil
-
-	stats.totalTime.End(success)
-	stats.success = success
-
-	stats.SendMetrics()
-
-	fields := logrus.Fields{
-		"waitingForIdentityCache":    &stats.waitingForIdentityCache,
-		"waitingForPolicyRepository": &stats.waitingForPolicyRepository,
-		"policyCalculation":          &stats.policyCalculation,
-		"forcedRegeneration":         forceRegeneration,
-	}
-
-	if err != nil {
-		e.getLogger().WithFields(fields).WithError(err).Warn("Regeneration of policy failed")
-		return
-	}
-
-	if logger := e.getLogger(); logging.CanLogAt(logger.Logger, logrus.DebugLevel) {
-		logger.WithFields(fields).Debug("Completed endpoint policy recalculation")
-	}
 }
 
 // updateAndOverrideEndpointOptions updates the boolean configuration options for the endpoint

@@ -20,7 +20,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/pkg/bpf"
-	loader "github.com/cilium/cilium/pkg/datapath/loader/types"
+	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
@@ -43,7 +43,7 @@ type ciliumMeshPolicyParams struct {
 
 	Config Config
 
-	Loader loader.Loader
+	Loader types.Loader
 
 	Lifecycle cell.Lifecycle
 	Logger    logrus.FieldLogger
@@ -124,7 +124,7 @@ type CiliumMeshPolicyValue struct{ Fd uint32 }
 //
 // The specified name allows non-standard map paths to be used, for instance
 // for testing purposes.
-func createWithName(lc cell.Lifecycle, loadr loader.Loader, name string) *ciliumMeshPolicyMap {
+func createWithName(lc cell.Lifecycle, loadr types.Loader, name string) *ciliumMeshPolicyMap {
 	innerMapSpec := &ebpf.MapSpec{
 		Name:       innerMapName,
 		Type:       ebpf.LPMTrie,

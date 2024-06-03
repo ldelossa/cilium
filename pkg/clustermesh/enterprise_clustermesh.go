@@ -13,7 +13,6 @@ package clustermesh
 import (
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s"
-	"github.com/cilium/cilium/pkg/source"
 
 	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 	nodeStore "github.com/cilium/cilium/pkg/node/store"
@@ -35,7 +34,7 @@ func InjectCEServiceMerger(cm *ClusterMesh, cmcfg cmcfg.Config, sc *k8s.ServiceC
 // before starting the clustermesh subsystem.
 func InjectCENodeObserver(cm *ClusterMesh, mgr nodeStore.NodeManager) {
 	if cm != nil {
-		cm.conf.NodeObserver = nodeStore.NewNodeObserver(mgr, source.ClusterMesh)
+		cm.conf.NodeObserver = mgr
 	}
 }
 

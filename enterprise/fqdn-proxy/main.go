@@ -282,18 +282,23 @@ func main() {
 	if err := re.InitRegexCompileLRU(*FQDNRegexCompileLRUSize); err != nil {
 		log.WithError(err).Fatal("failed to start DNS proxy: failed to init regex LRU cache")
 	}
+	dnsProxyConfig := dnsproxy.DNSProxyConfig{
+		Address:                "",
+		Port:                   10001,
+		IPv4:                   *enableIPV4,
+		IPv6:                   *enableIPV6,
+		EnableDNSCompression:   *enableDNSCompression,
+		MaxRestoreDNSIPs:       0,
+		ConcurrencyLimit:       *concurrencyLimit,
+		ConcurrencyGracePeriod: *concurrencyGracePeriod,
+	}
 	proxy, err = dnsproxy.StartDNSProxy(
-		"",
-		10001,
-		*enableIPV4, *enableIPV6,
-		*enableDNSCompression,
-		0,
+		dnsProxyConfig,
 		LookupEndpointIDByIP,
 		LookupSecIDByIP,
 		LookupIPsBySecID,
 		NotifyOnDNSMsg,
-		*concurrencyLimit,
-		*concurrencyGracePeriod)
+	)
 
 	if err != nil {
 		log.Fatalf("Failed to start dns proxy: %v", err)

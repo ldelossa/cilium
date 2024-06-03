@@ -744,6 +744,10 @@
      - base64 encoded PEM values for the clustermesh-apiserver client certificate and private key. Used if 'auto' is not enabled.
      - object
      - ``{"cert":"","key":""}``
+   * - :spelling:ignore:`clustermesh.apiserver.tls.enableSecrets`
+     - Allow users to provide their own certificates Users may need to provide their certificates using  a mechanism that requires they provide their own secrets. This setting does not apply to any of the auto-generated  mechanisms below, it only restricts the creation of secrets via the ``tls-provided`` templates.
+     - bool
+     - ``true``
    * - :spelling:ignore:`clustermesh.apiserver.tls.remote`
      - base64 encoded PEM values for the clustermesh-apiserver remote cluster certificate and private key. Used if 'auto' is not enabled.
      - object
@@ -1548,6 +1552,10 @@
      - Additional agent volumes.
      - list
      - ``[]``
+   * - :spelling:ignore:`gatewayAPI.enableAlpn`
+     - Enable ALPN for all listeners configured with Gateway API. ALPN will attempt HTTP/2, then HTTP 1.1. Note that this will also enable ``appProtocol`` support, and services that wish to use HTTP/2 will need to indicate that via their ``appProtocol``.
+     - bool
+     - ``false``
    * - :spelling:ignore:`gatewayAPI.enableAppProtocol`
      - Enable Backend Protocol selection support (GEP-1911) for Gateway API via appProtocol.
      - bool
