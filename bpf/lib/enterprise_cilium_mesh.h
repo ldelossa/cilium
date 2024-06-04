@@ -22,7 +22,7 @@ static __always_inline void *cilium_mesh_endpoint_policy_map(__u32 ip __maybe_un
 }
 
 static __always_inline int
-__cilium_mesh_policy_can_access(struct __ctx_buff *ctx, __be32 ip, __u32 dst_id,
+__cilium_mesh_policy_can_access(struct __ctx_buff *ctx, __be32 ip, __u32 sec_identity,
 				__be16 dport, __u8 proto, int l4_off, __u8 *match_type, int dir,
 				__u8 *audited, __s8 *ext_err, __u16 *proxy_port)
 {
@@ -39,13 +39,13 @@ __cilium_mesh_policy_can_access(struct __ctx_buff *ctx, __be32 ip, __u32 dst_id,
 	/* shouldn't this be set here instead? XXX: check with the normal path */
 	*audited = 0;
 
-	ret = __policy_can_access(map, ctx, local_id, dst_id, ethertype, dport, proto,
+	ret = __policy_can_access(map, ctx, local_id, sec_identity, ethertype, dport, proto,
 				  l4_off, dir, is_untracked_fragment, match_type,
 				  ext_err, proxy_port);
 	if (ret >= 0)
 		return ret;
 
-	cilium_dbg(ctx, DBG_POLICY_DENIED, local_id, dst_id);
+	cilium_dbg(ctx, DBG_POLICY_DENIED, local_id, sec_identity);
 
 #ifdef POLICY_AUDIT_MODE
 	if (IS_ERR(ret)) {
