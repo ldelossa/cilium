@@ -768,6 +768,7 @@ Makefile* @cilium/build
 /enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
 /enterprise/cilium-dbg/cmd/*bfd_* @isovalent/traffic-engineering
 /enterprise/daemon/ @isovalent/cilium-agent
+/enterprise/datapath/tables/egressip.go @isovalent/egress-gateway
 /enterprise/featurelist/ @isovalent/cilium-agent
 /enterprise/fips/ @isovalent/cilium-agent
 /enterprise/fqdn-proxy/ @isovalent/dns-proxy

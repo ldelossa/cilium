@@ -4,6 +4,7 @@
 package egressgatewayha
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/netip"
@@ -11,16 +12,20 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/hivetest"
+	"github.com/cilium/statedb"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/cilium/cilium/enterprise/datapath/tables"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
+	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/identity"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
@@ -70,8 +75,7 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 		},
 	})
 
-	var err error
-	k.manager, err = newEgressGatewayManager(Params{
+	manager, err := newEgressGatewayManager(Params{
 		Lifecycle:         lc,
 		Config:            Config{2 * time.Second, 1 * time.Millisecond},
 		DaemonConfig:      &option.DaemonConfig{},
@@ -86,7 +90,28 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 		Sysctl:            k.sysctl,
 	})
 	require.NoError(t, err)
-	require.NotNil(t, k.manager)
+	require.NotNil(t, manager)
+
+	k.manager = manager
+
+	// create a hive to provide statedb and egress-ips table
+	h := hive.New(
+		cell.Provide(
+			tables.NewEgressIPTable,
+		),
+
+		cell.Invoke(func(db *statedb.DB, table statedb.RWTable[*tables.EgressIPEntry]) {
+			k.manager.db = db
+			k.manager.egressIPTable = table
+		}),
+	)
+
+	tlog := hivetest.Logger(t)
+	require.NoError(t, h.Start(tlog, context.TODO()))
+
+	t.Cleanup(func() {
+		require.NoError(t, h.Stop(tlog, context.TODO()))
+	})
 
 	k.reconciliationEventsCount = k.manager.reconciliationEventsCount.Load()
 

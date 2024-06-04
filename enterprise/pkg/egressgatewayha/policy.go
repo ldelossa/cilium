@@ -21,16 +21,21 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/cilium/statedb"
+	"github.com/cilium/statedb/reconciler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"go4.org/netipx"
 	"golang.org/x/exp/maps"
 	core_v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/cilium/cilium/enterprise/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/linux/netdevice"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
@@ -194,6 +199,11 @@ type PolicyConfig struct {
 
 // PolicyID includes policy name and namespace
 type policyID = types.NamespacedName
+
+type gwEgressIPConfig struct {
+	addr  netip.Addr
+	iface string
+}
 
 // matchesEndpointLabels determines if the given endpoint is a match for the
 // policy config based on matching labels.
@@ -784,6 +794,8 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 		return
 	}
 
+	var egressIPs []gwEgressIPConfig
+
 	gwc := &config.gatewayConfig
 	for groupIndex, gc := range config.groupConfigs {
 		groupStatus := &config.groupStatuses[groupIndex]
@@ -823,30 +835,81 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 			}
 		}
 
+		logger := log.WithFields(logrus.Fields{
+			logfields.IsovalentEgressGatewayPolicyName: config.id,
+			logfields.Interface:                        gc.iface,
+			logfields.EgressIP:                         gc.egressIP,
+		})
+
 		if localNodeMatchesGatewayIP {
-			if err := gwc.deriveFromGroupConfig(&gc); err != nil {
-				log.WithFields(logrus.Fields{
-					logfields.IsovalentEgressGatewayPolicyName: config.id,
-					logfields.Interface:                        gc.iface,
-					logfields.EgressIP:                         gc.egressIP,
-				}).WithError(err).Error("Failed to derive policy gateway configuration")
+			// If localNodeConfiguredAsGateway is already set it means that another
+			// egress group for the same policy has already selected it as gateway. In
+			// this case don't regenerate a new gatewayConfig and return an error
+			if gwc.localNodeConfiguredAsGateway {
+				logger.WithError(err).Error("Local node selected by multiple egress gateway groups from the same policy")
 			}
+
+			if egressIP, found := groupStatus.egressIPByGatewayIP[localNodeK8sAddr]; found {
+				var (
+					iface netlink.Link
+					err   error
+				)
+				if gc.iface != "" {
+					iface, err = netlink.LinkByName(gc.iface)
+				} else {
+					iface, err = route.NodeDeviceWithDefaultRoute(true, false)
+				}
+				if err != nil {
+					logger.WithError(err).Error("Failed to find interface while updating node egress IP config")
+					continue
+				}
+
+				egressIPs = append(egressIPs, gwEgressIPConfig{egressIP, iface.Attrs().Name})
+
+				gwc.ifaceName = iface.Attrs().Name
+				gwc.egressIP = egressIP
+			} else if err := gwc.deriveFromGroupConfig(&gc); err != nil {
+				logger.WithError(err).Error("Failed to derive policy gateway configuration")
+			}
+
+			gwc.localNodeConfiguredAsGateway = true
 		}
 	}
+
+	nextEgressIPs := sets.New(egressIPs...)
+	curEgressIPs := manager.egressConfigsByPolicy[config.id]
+	toAdd, toDel := nextEgressIPs.Difference(curEgressIPs), curEgressIPs.Difference(nextEgressIPs)
+	updateEgressIPsConfig(manager.db, manager.egressIPTable, toAdd, toDel)
+	manager.egressConfigsByPolicy[config.id] = nextEgressIPs
+
+}
+
+func updateEgressIPsConfig(db *statedb.DB, table statedb.RWTable[*tables.EgressIPEntry], toAdd, toDel sets.Set[gwEgressIPConfig]) {
+	txn := db.WriteTxn(table)
+	defer txn.Abort()
+
+	for _, config := range toDel.UnsortedList() {
+		table.Delete(txn, &tables.EgressIPEntry{
+			Addr:      config.addr,
+			Interface: config.iface,
+		})
+	}
+
+	for _, config := range toAdd.UnsortedList() {
+		table.Insert(txn, &tables.EgressIPEntry{
+			Addr:      config.addr,
+			Interface: config.iface,
+			Status:    reconciler.StatusPending(),
+		})
+	}
+
+	txn.Commit()
 }
 
 // deriveFromGroupConfig retrieves all the missing gateway configuration data
 // (such as egress IP or interface) given a policy group config
 func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
-	// If localNodeConfiguredAsGateway is already set it means that another
-	// egress group for the same policy has already selected it as gateway. In
-	// this case don't regenerate a new gatewayConfig and return an error
-	if gwc.localNodeConfiguredAsGateway {
-		return fmt.Errorf("local node selected by multiple egress gateway groups from the same policy")
-	}
-
 	var err error
-	gwc.localNodeConfiguredAsGateway = false
 
 	switch {
 	case gc.iface != "":
@@ -882,8 +945,6 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
 	}
-
-	gwc.localNodeConfiguredAsGateway = true
 
 	return nil
 }

@@ -21,12 +21,16 @@ import (
 	"sync/atomic"
 
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/statedb"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"go4.org/netipx"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 
+	enterprise_tables "github.com/cilium/cilium/enterprise/datapath/tables"
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/egressipconf"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
@@ -69,6 +73,9 @@ var (
 var Cell = cell.Module(
 	"egressgatewayha",
 	"Egress Gateway allows originating traffic from specific IPv4 addresses",
+
+	egressipconf.Cell,
+
 	cell.Config(defaultConfig),
 	cell.Provide(NewEgressGatewayManager),
 )
@@ -177,6 +184,17 @@ type Manager struct {
 
 	// bgpSignaler is used to signal reconciliation events to the BGP Control Plane
 	bgpSignaler *signaler.BGPCPSignaler
+
+	// egressConfigsByPolicy stores all the configurations (addr and iface) for IPAM
+	// allocations entitled to the local node, as reported in each Egress Group Status
+	// of the IEGPs.
+	// The key of the map is the policy reporting the address allocation, the value is
+	// the set of configuration pairs <egressIP, net_inteface> for that policy.
+	egressConfigsByPolicy map[policyID]sets.Set[gwEgressIPConfig]
+
+	egressIPTable statedb.RWTable[*enterprise_tables.EgressIPEntry]
+
+	db *statedb.DB
 }
 
 type Params struct {
@@ -193,6 +211,9 @@ type Params struct {
 	LocalNodeStore    *node.LocalNodeStore
 	Sysctl            sysctl.Sysctl
 	BGPSignaler       *signaler.BGPCPSignaler
+
+	DB            *statedb.DB
+	EgressIPTable statedb.RWTable[*enterprise_tables.EgressIPEntry]
 
 	Lifecycle cell.Lifecycle
 }
@@ -249,6 +270,7 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		nodeDataStore:                 make(map[string]nodeTypes.Node),
 		policyConfigs:                 make(map[policyID]*PolicyConfig),
 		policyConfigsBySourceIP:       make(map[string][]*PolicyConfig),
+		egressConfigsByPolicy:         make(map[policyID]sets.Set[gwEgressIPConfig]),
 		epDataStore:                   make(map[endpointID]*endpointMetadata),
 		identityAllocator:             p.IdentityAllocator,
 		reconciliationTriggerInterval: p.Config.EgressGatewayHAReconciliationTriggerInterval,
@@ -260,6 +282,8 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		localNodeStore:                p.LocalNodeStore,
 		sysctl:                        p.Sysctl,
 		bgpSignaler:                   p.BGPSignaler,
+		db:                            p.DB,
+		egressIPTable:                 p.EgressIPTable,
 	}
 
 	t, err := trigger.NewTrigger(trigger.Parameters{
@@ -628,6 +652,42 @@ func (manager *Manager) policyMatches(sourceIP netip.Addr, f func(*endpointMetad
 	return false
 }
 
+func (manager *Manager) removeStaleEgressIPConfigs() {
+	for policyID := range manager.egressConfigsByPolicy {
+		if _, found := manager.policyConfigs[policyID]; found {
+			continue
+		}
+
+		// policy has been removed, so remove egress IPs and routes too
+		manager.removePolicyEgressIPs(manager.egressConfigsByPolicy[policyID])
+		delete(manager.egressConfigsByPolicy, policyID)
+	}
+}
+
+func (manager *Manager) removePolicyEgressIPs(egressIPs sets.Set[gwEgressIPConfig]) {
+	txn := manager.db.WriteTxn(manager.egressIPTable)
+	defer txn.Abort()
+
+	for _, egressIP := range egressIPs.UnsortedList() {
+		key := enterprise_tables.EgressIPKey{
+			Addr:      egressIP.addr,
+			Interface: egressIP.iface,
+		}
+		obj, _, found := manager.egressIPTable.Get(txn, enterprise_tables.EgressIPEntryIndex.Query(key))
+		if !found {
+			continue
+		}
+		if _, _, err := manager.egressIPTable.Delete(txn, obj); err != nil {
+			log.WithFields(logrus.Fields{
+				logfields.EgressIP:  egressIP.addr,
+				logfields.Interface: egressIP.iface,
+			}).WithError(err).Error("Failed to delete entry from egress-ips stateDB table")
+		}
+	}
+
+	txn.Commit()
+}
+
 func (manager *Manager) regenerateGatewayConfigs() {
 	for _, policyConfig := range manager.policyConfigs {
 		policyConfig.regenerateGatewayConfig(manager)
@@ -834,6 +894,8 @@ func (manager *Manager) reconcileLocked() {
 			manager.updateNodesByIP()
 		}
 	}
+
+	manager.removeStaleEgressIPConfigs()
 
 	if manager.eventBitmapIsSet(eventK8sSyncDone, eventAddPolicy, eventDeletePolicy, eventUpdateNode, eventDeleteNode) {
 		manager.regenerateGatewayConfigs()
