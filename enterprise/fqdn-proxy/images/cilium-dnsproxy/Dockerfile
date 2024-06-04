@@ -6,7 +6,7 @@ ARG GOLANG_IMAGE=docker.io/library/golang:1.22.4@sha256:969349b8121a56d51c74f4c2
 ARG CILIUM_BUILDER_IMAGE=quay.io/cilium/cilium-builder:874230be6e22cf9ff9c4515097b5aee80b76ee8d@sha256:940c75b1a94de9d5f529ef40fcea3f71fef592f8744984eae93862852f4870d9
 
 # This is for copying tar command.
-FROM --platform=${BUILDPLATFORM} docker.io/library/busybox:1.36.1-musl@sha256:84fbdf15839802266b3ff1420959c2efb8d10ab1f8122c31f714f977969cc801 as busybox
+FROM --platform=${BUILDPLATFORM} docker.io/library/busybox:1.36.1-musl@sha256:ede585a46e84850ffa6e3331c53ac571fe71d9b1ba9299f7925b052985db3e7f as busybox
 
 #
 # Cilium incremental build. Should be fast given builder-deps is up-to-date!
