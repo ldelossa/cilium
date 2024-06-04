@@ -809,15 +809,22 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 			return nil, fmt.Errorf("group configuration can't specify both an interface and an egress IP")
 		}
 
-		// EgressIP is not a required field.
-		egressIP, _ := netip.ParseAddr(gcSpec.EgressIP)
-
-		gcs = append(gcs, groupConfig{
+		gc := groupConfig{
 			nodeSelector:    api.NewESFromK8sLabelSelector("", gcSpec.NodeSelector),
 			iface:           gcSpec.Interface,
-			egressIP:        egressIP,
 			maxGatewayNodes: gcSpec.MaxGatewayNodes,
-		})
+		}
+
+		// EgressIP is not a required field, validate and parse it only if non-empty
+		if gcSpec.EgressIP != "" {
+			egressIP, err := netip.ParseAddr(gcSpec.EgressIP)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse egress IP %s: %w", gcSpec.EgressIP, err)
+			}
+			gc.egressIP = egressIP
+		}
+
+		gcs = append(gcs, gc)
 	}
 
 	for _, cidrString := range destinationCIDRs {
