@@ -141,7 +141,7 @@ out:
 static __always_inline int
 cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 			   struct iphdr *ip4,
-			   __u32 dst_id, __s8 *ext_err)
+			   __u32 src_sec_identity, __s8 *ext_err)
 {
 	__u8 policy_match_type = 0;
 	int verdict = CTX_ACT_OK;
@@ -174,7 +174,7 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
 		goto out;
 
-	verdict = cilium_mesh_policy_can_ingress4(ctx, ip4->daddr, dst_id, tuple.dport,
+	verdict = cilium_mesh_policy_can_ingress4(ctx, ip4->daddr, src_sec_identity, tuple.dport,
 						  ip4->protocol, l4_off, &policy_match_type,
 						  &audited, ext_err, &proxy_port);
 
@@ -188,7 +188,7 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 		return ct_status;
 
 	if (ct_status == CT_NEW && verdict == CTX_ACT_OK) {
-		ct_state_new.src_sec_id = dst_id;
+		ct_state_new.src_sec_id = src_sec_identity;
 		ct_status = ct_create4(get_ct_map4(&tuple), &CT_MAP_ANY4, &tuple, ctx, CT_EGRESS,
 				       &ct_state_new, ext_err);
 		if (IS_ERR(ct_status))
@@ -196,9 +196,9 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 	}
 
 	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
-		send_policy_verdict_notify(ctx, dst_id, tuple.dport, ip4->protocol, POLICY_INGRESS,
-					   0, verdict, proxy_port, policy_match_type, audited,
-					   0 /* auth_type */ );
+		send_policy_verdict_notify(ctx, src_sec_identity, tuple.dport, ip4->protocol,
+					   POLICY_INGRESS, 0, verdict, proxy_port,
+					   policy_match_type, audited, 0 /* auth_type */);
 
 out:
 	return verdict;
