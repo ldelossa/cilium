@@ -684,6 +684,7 @@ Vagrantfile @cilium/ci-structure
 /bpf/tests/lib/egressgw_ha.h @isovalent/egress-gateway
 /bugtool/cmd/enterprise_* @isovalent/cli
 /cilium-dbg/cmd/enterprise_* @isovalent/cli
+/contrib/scripts/enterprise-cilium-mesh-smoke-test.sh @isovalent/cilium-mesh
 /contrib/testing/kind-egressgwha-values.yaml @isovalent/egress-gateway
 /contrib/testing/enterprise-cilium-install-cluster*.yaml @isovalent/cilium-mesh
 /daemon/cmd/enterprise_fqdn_relay.go @isovalent/dns-proxy
