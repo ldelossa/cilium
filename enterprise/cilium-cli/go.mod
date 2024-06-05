@@ -6,7 +6,7 @@ go 1.22.0
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.16.0-pre.2
-	github.com/cilium/cilium-cli v0.16.8
+	github.com/cilium/cilium-cli v0.16.9
 	github.com/google/go-cmp v0.6.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
@@ -39,7 +39,7 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
-	github.com/cilium/charts v0.0.0-20240517144447-a8ec8771aab8 // indirect
+	github.com/cilium/charts v0.0.0-20240530135756-f365292ba791 // indirect
 	github.com/cilium/ebpf v0.15.0 // indirect
 	github.com/cilium/hive v0.0.0-20240529072208-d997f86e4219 // indirect
 	github.com/cilium/proxy v0.0.0-20240418093727-2c7164c53e26 // indirect
