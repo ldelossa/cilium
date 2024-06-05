@@ -34,6 +34,7 @@ import (
 	"github.com/cilium/cilium/pkg/bgp/speaker"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
+	cgroup "github.com/cilium/cilium/pkg/cgroups/manager"
 	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/common"
@@ -400,7 +401,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.EnableIPSecXfrmStateCaching)
 	option.BindEnv(vp, option.EnableIPSecXfrmStateCaching)
 
-	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.")
+	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host. Requires ipsec and tunnel mode vxlan to be enabled.")
 	option.BindEnv(vp, option.EnableIPSecEncryptedOverlay)
 
 	flags.Bool(option.EnableWireguard, false, "Enable WireGuard")
@@ -1682,6 +1683,7 @@ type daemonParams struct {
 	Prefilter           datapath.PreFilter
 	CompilationLock     datapath.CompilationLock
 	MetalLBBgpSpeaker   speaker.MetalLBBgpSpeaker
+	CGroupManager       cgroup.CGroupManager
 }
 
 func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig]) {

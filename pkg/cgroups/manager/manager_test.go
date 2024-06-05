@@ -5,8 +5,10 @@ package manager
 
 import (
 	"fmt"
+	"io"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	slimcorev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
@@ -36,7 +38,6 @@ func (pm providerMock) getContainerPath(podId string, containerId string, qos sl
 
 func (pm providerMock) getBasePath() (string, error) {
 	return "", nil
-
 }
 
 var (
@@ -120,13 +121,22 @@ var (
 	}
 )
 
-func newCgroupManagerTest(pMock providerMock, cg cgroup, events chan podEventStatus) *CgroupManager {
+func newCgroupManagerTest(t testing.TB, pMock providerMock, cg cgroup, events chan podEventStatus) CGroupManager {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+
 	// Unbuffered channel tests to detect any issues on the caller side.
-	return initManager(pMock, cg, 0, events)
+	tcm := newManager(logger, cg, pMock, 0)
+
+	tcm.podEventsDone = events
+
+	go tcm.processPodEvents()
+	t.Cleanup(tcm.Close)
+
+	return tcm
 }
 
-func setup(tb testing.TB) {
-	option.Config.EnableSocketLBTracing = true
+func setup() {
 	nodetypes.SetName("n1")
 }
 
@@ -135,7 +145,7 @@ func getFullPath(path string) string {
 }
 
 func TestGetPodMetadataOnPodAdd(t *testing.T) {
-	setup(t)
+	setup()
 
 	c1CId := uint64(1234)
 	c2CId := uint64(4567)
@@ -149,7 +159,7 @@ func TestGetPodMetadataOnPodAdd(t *testing.T) {
 		c3Id: pod2C1CgrpPath,
 	}}
 	pod10 := pod1.DeepCopy()
-	mm := newCgroupManagerTest(provMock, cgMock, nil)
+	mm := newCgroupManagerTest(t, provMock, cgMock, nil)
 
 	type test struct {
 		input  *slimcorev1.Pod
@@ -178,7 +188,7 @@ func TestGetPodMetadataOnPodAdd(t *testing.T) {
 }
 
 func TestGetPodMetadataOnPodUpdate(t *testing.T) {
-	setup(t)
+	setup()
 
 	c3CId := uint64(2345)
 	c1CId := uint64(1234)
@@ -191,7 +201,7 @@ func TestGetPodMetadataOnPodUpdate(t *testing.T) {
 		c1Id: pod3C2CgrpPath,
 	}}
 	events := make(chan podEventStatus)
-	mm := newCgroupManagerTest(provMock, cgMock, events)
+	mm := newCgroupManagerTest(t, provMock, cgMock, events)
 	deleteEv := make(chan podEventStatus)
 	go func() {
 		for status := range events {
@@ -243,7 +253,7 @@ func TestGetPodMetadataOnPodUpdate(t *testing.T) {
 func TestGetPodMetadataOnManagerDisabled(t *testing.T) {
 	// Disable the feature flag.
 	option.Config.EnableSocketLBTracing = false
-	mm := newCgroupManagerTest(providerMock{}, cgroupMock{}, nil)
+	mm := newCgroupManagerTest(t, providerMock{}, cgroupMock{}, nil)
 	c1CId := uint64(1234)
 
 	mm.OnAddPod(pod1)
@@ -260,7 +270,7 @@ func TestGetPodMetadataOnManagerDisabled(t *testing.T) {
 }
 
 func BenchmarkGetPodMetadataForContainer(b *testing.B) {
-	setup(b)
+	setup()
 	c3CId := uint64(2345)
 	c1CId := uint64(1234)
 	cgMock := cgroupMock{cgroupIds: map[string]uint64{
@@ -271,7 +281,7 @@ func BenchmarkGetPodMetadataForContainer(b *testing.B) {
 		c3Id: pod3C1CgrpPath,
 		c1Id: pod3C2CgrpPath,
 	}}
-	mm := newCgroupManagerTest(provMock, cgMock, nil)
+	mm := newCgroupManagerTest(b, provMock, cgMock, nil)
 
 	// Add pod, and check for pod metadata for their containers.
 	mm.OnAddPod(pod3)

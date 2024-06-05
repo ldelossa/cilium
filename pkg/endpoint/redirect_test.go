@@ -53,13 +53,13 @@ func setupRedirectSuite(tb testing.TB) *RedirectSuite {
 	s.mgr = cache.NewCachingIdentityAllocator(idAllocatorOwner)
 	<-s.mgr.InitIdentityAllocator(nil)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.NumericIdentity(identityBar): labelsBar,
 	}
 
 	s.do = &DummyOwner{
-		repo: policy.NewPolicyRepository(s.mgr, identityCache, nil, nil),
+		repo: policy.NewPolicyRepository(identityCache, nil, nil),
 	}
 	s.do.repo.GetSelectorCache().SetLocalIdentityNotifier(testidentity.NewDummyIdentityNotifier())
 	identitymanager.Subscribe(s.do.repo)
@@ -118,7 +118,7 @@ func (r *RedirectSuiteProxy) RemoveNetworkPolicy(ep endpoint.EndpointInfoSource)
 type DummyIdentityAllocatorOwner struct{}
 
 // UpdateIdentities does nothing.
-func (d *DummyIdentityAllocatorOwner) UpdateIdentities(added, deleted cache.IdentityCache) {
+func (d *DummyIdentityAllocatorOwner) UpdateIdentities(added, deleted identity.IdentityMap) {
 }
 
 // GetNodeSuffix does nothing.
@@ -174,7 +174,7 @@ func (d *DummyOwner) GetNodeSuffix() string {
 }
 
 // UpdateIdentities does nothing.
-func (d *DummyOwner) UpdateIdentities(added, deleted cache.IdentityCache) {}
+func (d *DummyOwner) UpdateIdentities(added, deleted identity.IdentityMap) {}
 
 const (
 	httpPort  = uint16(19001)
@@ -196,7 +196,7 @@ func (s *RedirectSuite) NewTestEndpoint(t *testing.T) *Endpoint {
 }
 
 func (s *RedirectSuite) AddRules(rules api.Rules) {
-	s.do.repo.AddList(rules)
+	s.do.repo.MustAddList(rules)
 }
 
 func (s *RedirectSuite) TearDownTest(t *testing.T) {
@@ -348,7 +348,6 @@ var (
 		HTTP: []api.PortRuleHTTP{
 			{Method: "GET", Path: "/"},
 		},
-		L7Proto: policy.ParserTypeHTTP.String(),
 	}
 
 	lblsL3DenyFoo = labels.ParseLabelArray("l3-deny")
@@ -557,6 +556,8 @@ func TestRedirectWithPriority(t *testing.T) {
 	s := setupRedirectSuite(t)
 
 	ep := s.NewTestEndpoint(t)
+	api.TestAllowIngressListener = true
+	defer func() { api.TestAllowIngressListener = false }()
 
 	s.AddRules(api.Rules{
 		ruleL4AllowListener1.WithEndpointSelector(selectBar_),
@@ -637,6 +638,8 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 
 	ep := s.NewTestEndpoint(t)
 
+	api.TestAllowIngressListener = true
+	defer func() { api.TestAllowIngressListener = false }()
 	s.AddRules(api.Rules{
 		ruleL4L7AllowListener1Priority1.WithEndpointSelector(selectBar_),
 		ruleL4AllowPort80.WithEndpointSelector(selectBar_),

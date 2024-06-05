@@ -63,7 +63,7 @@ func setupDaemonFQDNSuite(tb testing.TB) *DaemonFQDNSuite {
 	ds := &DaemonFQDNSuite{}
 	d := &Daemon{}
 	d.ctx = context.Background()
-	d.policy = policy.NewPolicyRepository(d.identityAllocator, nil, nil, nil)
+	d.policy = policy.NewPolicyRepository(nil, nil, nil)
 	d.endpointManager = endpointmanager.New(&dummyEpSyncher{}, nil, nil)
 	d.ipcache = ipcache.NewIPCache(&ipcache.Configuration{
 		Context:           context.TODO(),
@@ -129,7 +129,7 @@ func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 			ID:   uint16(i),
 			IPv4: netip.MustParseAddr(fmt.Sprintf("10.96.%d.%d", i/256, i%256)),
 			SecurityIdentity: &identity.Identity{
-				ID: identity.NumericIdentity(i % int(identity.GetMaximumAllocationIdentity())),
+				ID: identity.NumericIdentity(i % int(identity.GetMaximumAllocationIdentity(option.Config.ClusterID))),
 			},
 			DNSZombies: &fqdn.DNSZombieMappings{
 				Mutex: lock.Mutex{},

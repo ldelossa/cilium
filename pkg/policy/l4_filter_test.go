@@ -54,7 +54,7 @@ type testData struct {
 func newTestData() *testData {
 	td := &testData{
 		sc:   testNewSelectorCache(nil),
-		repo: NewPolicyRepository(nil, nil, nil, nil),
+		repo: NewPolicyRepository(nil, nil, nil),
 
 		testPolicyContext: &testPolicyContextType{},
 	}
@@ -79,7 +79,7 @@ func newTestData() *testData {
 // resetRepo clears only the policy repository.
 // Some tests rely on the accumulated state, but a clean repo.
 func (td *testData) resetRepo() *Repository {
-	td.repo = NewPolicyRepository(nil, nil, nil, nil)
+	td.repo = NewPolicyRepository(nil, nil, nil)
 	td.repo.selectorCache = td.sc
 	return td.repo
 }
@@ -164,7 +164,7 @@ func init() {
 func TestMergeAllowAllL3AndAllowAllL7(t *testing.T) {
 	td := newTestData()
 	// Case 1A: Specify WildcardEndpointSelector explicitly.
-	td.repo.AddList(api.Rules{&api.Rule{
+	td.repo.MustAddList(api.Rules{&api.Rule{
 		EndpointSelector: endpointSelectorA,
 		Ingress: []api.IngressRule{
 			{
@@ -212,7 +212,7 @@ func TestMergeAllowAllL3AndAllowAllL7(t *testing.T) {
 
 	// Case1B: an empty non-nil FromEndpoints does not select any identity.
 	td = newTestData()
-	td.repo.AddList(api.Rules{&api.Rule{
+	td.repo.MustAddList(api.Rules{&api.Rule{
 		EndpointSelector: endpointSelectorA,
 		Ingress: []api.IngressRule{
 			{
@@ -329,7 +329,7 @@ func TestMergeAllowAllL3AndShadowedL7(t *testing.T) {
 	// Case 2B: Flip order of case 2A so that rule being merged with is different
 	// than rule being consumed.
 	td = newTestData()
-	td.repo.AddList(api.Rules{&api.Rule{
+	td.repo.MustAddList(api.Rules{&api.Rule{
 		EndpointSelector: endpointSelectorA,
 		Ingress: []api.IngressRule{
 			{

@@ -13,7 +13,6 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/utils"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
@@ -52,8 +51,8 @@ func (d *dummyEndpoint) GetSecurityIdentity() (*identity.Identity, error) {
 	return d.SecurityIdentity, nil
 }
 
-func generateNumIdentities(numIdentities int) cache.IdentityCache {
-	c := make(cache.IdentityCache, numIdentities)
+func generateNumIdentities(numIdentities int) identity.IdentityMap {
+	c := make(identity.IdentityMap, numIdentities)
 	for i := 0; i < numIdentities; i++ {
 
 		identityLabel := labels.NewLabel(fmt.Sprintf("k8s:foo%d", i), "", "")
@@ -203,43 +202,11 @@ func (d DummyOwner) PolicyDebug(fields logrus.Fields, msg string) {
 	log.WithFields(fields).Info(msg)
 }
 
-/*
-func bootstrapRepo(ruleGenFunc func(int) api.Rules, numRules int, tb testing.TB) *Repository {
-	mgr := cache.NewCachingIdentityAllocator(&testidentity.IdentityAllocatorOwnerMock{})
-	ids := mgr.GetIdentityCache()
-	fakeAllocator := testidentity.NewMockIdentityAllocator(ids)
-	testRepo := NewPolicyRepository(fakeAllocator, ids, nil, nil)
-
-	SetPolicyEnabled(option.DefaultEnforcement)
-	wg := &sync.WaitGroup{}
-	testSelectorCache.UpdateIdentities(generateNumIdentities(3000), nil, wg)
-	wg.Wait()
-	testRepo.selectorCache = testSelectorCache
-	rulez, _ := testRepo.AddList(ruleGenFunc(numRules))
-
-	epSet := NewEndpointSet(map[Endpoint]struct{}{
-		&dummyEndpoint{
-			ID:               9001,
-			SecurityIdentity: fooIdentity,
-		}: {},
-	})
-
-	epsToRegen := NewEndpointSet(nil)
-	wg = &sync.WaitGroup{}
-	rulez.UpdateRulesEndpointsCaches(epSet, epsToRegen, wg)
-	wg.Wait()
-
-	require.Equal(tb, 0, epSet.Len())
-	require.Equal(tb, 1, epsToRegen.Len())
-
-	return testRepo
-}*/
-
 func (td *testData) bootstrapRepo(ruleGenFunc func(int) api.Rules, numRules int, tb testing.TB) {
 	SetPolicyEnabled(option.DefaultEnforcement)
 	wg := &sync.WaitGroup{}
 	// load in standard reserved identities
-	c := cache.IdentityCache{}
+	c := identity.IdentityMap{}
 	identity.IterateReservedIdentities(func(ni identity.NumericIdentity, id *identity.Identity) {
 		c[ni] = id.Labels.LabelArray()
 	})
@@ -247,7 +214,7 @@ func (td *testData) bootstrapRepo(ruleGenFunc func(int) api.Rules, numRules int,
 
 	td.sc.UpdateIdentities(generateNumIdentities(3000), nil, wg)
 	wg.Wait()
-	rulez, _ := td.repo.AddList(ruleGenFunc(numRules))
+	rulez, _ := td.repo.MustAddList(ruleGenFunc(numRules))
 
 	epSet := NewEndpointSet(map[Endpoint]struct{}{
 		&dummyEndpoint{
@@ -332,7 +299,7 @@ func TestL7WithIngressWildcard(t *testing.T) {
 	}
 
 	rule1.Sanitize()
-	_, _, err := repo.Add(rule1)
+	_, _, err := repo.mustAdd(rule1)
 	require.NoError(t, err)
 
 	repo.Mutex.RLock()
@@ -435,7 +402,7 @@ func TestL7WithLocalHostWildcard(t *testing.T) {
 	}
 
 	rule1.Sanitize()
-	_, _, err := repo.Add(rule1)
+	_, _, err := repo.mustAdd(rule1)
 	require.NoError(t, err)
 
 	repo.Mutex.RLock()
@@ -536,7 +503,7 @@ func TestMapStateWithIngressWildcard(t *testing.T) {
 	}
 
 	rule1.Sanitize()
-	_, _, err := repo.Add(rule1)
+	_, _, err := repo.mustAdd(rule1)
 	require.NoError(t, err)
 
 	repo.Mutex.RLock()
@@ -581,7 +548,7 @@ func TestMapStateWithIngressWildcard(t *testing.T) {
 	}
 
 	// Add new identity to test accumulation of MapChanges
-	added1 := cache.IdentityCache{
+	added1 := identity.IdentityMap{
 		identity.NumericIdentity(192): labels.ParseSelectLabelArray("id=resolve_test_1"),
 	}
 	wg := &sync.WaitGroup{}
@@ -659,7 +626,7 @@ func TestMapStateWithIngress(t *testing.T) {
 	}
 
 	rule1.Sanitize()
-	_, _, err := repo.Add(rule1)
+	_, _, err := repo.mustAdd(rule1)
 	require.NoError(t, err)
 
 	repo.Mutex.RLock()
@@ -669,7 +636,7 @@ func TestMapStateWithIngress(t *testing.T) {
 	policy := selPolicy.DistillPolicy(DummyOwner{}, false)
 
 	// Add new identity to test accumulation of MapChanges
-	added1 := cache.IdentityCache{
+	added1 := identity.IdentityMap{
 		identity.NumericIdentity(192): labels.ParseSelectLabelArray("id=resolve_test_1", "num=1"),
 		identity.NumericIdentity(193): labels.ParseSelectLabelArray("id=resolve_test_1", "num=2"),
 		identity.NumericIdentity(194): labels.ParseSelectLabelArray("id=resolve_test_1", "num=3"),
@@ -679,7 +646,7 @@ func TestMapStateWithIngress(t *testing.T) {
 	wg.Wait()
 	require.Len(t, policy.policyMapChanges.changes, 3)
 
-	deleted1 := cache.IdentityCache{
+	deleted1 := identity.IdentityMap{
 		identity.NumericIdentity(193): labels.ParseSelectLabelArray("id=resolve_test_1", "num=2"),
 	}
 	wg = &sync.WaitGroup{}

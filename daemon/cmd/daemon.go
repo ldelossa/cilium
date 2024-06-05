@@ -28,6 +28,7 @@ import (
 	"github.com/cilium/cilium/pkg/auth"
 	"github.com/cilium/cilium/pkg/cgroups/manager"
 	"github.com/cilium/cilium/pkg/clustermesh"
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/datapath/link"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
@@ -132,6 +133,7 @@ type Daemon struct {
 	// programs.
 	compilationLock datapath.CompilationLock
 
+	clusterInfo cmtypes.ClusterInfo
 	clustermesh *clustermesh.ClusterMesh
 
 	mtuConfig mtu.MTU
@@ -177,7 +179,7 @@ type Daemon struct {
 
 	egressGatewayManager *egressgateway.Manager
 
-	cgroupManager *manager.CgroupManager
+	cgroupManager manager.CGroupManager
 
 	ipamMetadata *ipamMetadata.Manager
 
@@ -434,6 +436,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		egressGatewayManager: params.EgressGatewayManager,
 		ipamMetadata:         params.IPAMMetadataManager,
 		cniConfigManager:     params.CNIConfigManager,
+		clusterInfo:          params.ClusterInfo,
 		clustermesh:          params.ClusterMesh,
 		monitorAgent:         params.MonitorAgent,
 		svc:                  params.ServiceManager,
@@ -446,6 +449,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		tunnelConfig:         params.TunnelConfig,
 		bwManager:            params.BandwidthManager,
 		lrpManager:           params.LRPManager,
+		cgroupManager:        params.CGroupManager,
 		preFilter:            params.Prefilter,
 	}
 
@@ -475,8 +479,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	d.endpointManager = params.EndpointManager
 
-	d.cgroupManager = manager.NewCgroupManager()
-
 	d.k8sWatcher = watchers.NewK8sWatcher(
 		params.Clientset,
 		params.K8sResourceSynced,
@@ -484,13 +486,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.endpointManager,
 		params.NodeManager,
 		&d,
-		d.policy,
 		d.svc,
 		d.lrpManager,
 		params.MetalLBBgpSpeaker,
 		option.Config,
 		d.ipcache,
-		d.cgroupManager,
+		params.CGroupManager,
 		params.Resources,
 		params.ServiceCache,
 		d.bwManager,
@@ -498,8 +499,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.nodeAddrs,
 	)
 	params.NodeDiscovery.RegisterK8sGetters(d.k8sWatcher)
-
-	d.lrpManager.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
 
 	bootstrapStats.daemonInit.End(true)
 
@@ -969,7 +968,6 @@ func (d *Daemon) Close() {
 		d.datapathRegenTrigger.Shutdown()
 	}
 	identitymanager.RemoveAll()
-	d.cgroupManager.Close()
 
 	// Ensures all controllers are stopped!
 	d.controllers.RemoveAllAndWait()
