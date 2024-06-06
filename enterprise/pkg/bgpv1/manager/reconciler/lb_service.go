@@ -41,12 +41,12 @@ const (
 	svcHealthAdvertiseThresholdDefault = 1
 )
 
-// LBServiceReconciler is an enterprise version of the OSS LBServiceReconciler,
+// lbServiceReconciler is an enterprise version of the OSS lbServiceReconciler,
 // which extends its functionality with enterprise-only features.
 // If enabled, the enterprise reconciler is called upon each Reconcile() instead of the OSS reconciler
 // (thanks to the same reconciler name and higher priority).
 // The Enterprise reconciler calls the OSS reconciler's methods on various places to avoid code duplication.
-type LBServiceReconciler struct {
+type lbServiceReconciler struct {
 	mutex lock.Mutex // to ensure that ServiceHealthUpdate() and Reconcile() are not processed concurrently
 	log   *logrus.Entry
 
@@ -66,7 +66,7 @@ type LBServiceReconciler struct {
 	svcHealthChanged map[k8s.ServiceID]struct{}             // tracks services with modified health since last reconciliation
 }
 
-type LBServiceReconcilerParams struct {
+type lbServiceReconcilerParams struct {
 	cell.In
 	Lifecycle cell.Lifecycle
 
@@ -75,7 +75,7 @@ type LBServiceReconcilerParams struct {
 	HealthCheckManager service.ServiceHealthCheckManager
 }
 
-type LBServiceReconcilerOut struct {
+type lbServiceReconcilerOut struct {
 	cell.Out
 
 	Reconciler ossreconciler.ConfigReconciler `group:"bgp-config-reconciler"`
@@ -90,13 +90,13 @@ type svcFrontendHealth struct {
 // svcFrontendHealthMap is a map of service frontend health information keyed by the frontend address
 type svcFrontendHealthMap map[loadbalancer.L3n4Addr]*svcFrontendHealth
 
-func NewLBServiceReconciler(p LBServiceReconcilerParams) LBServiceReconcilerOut {
+func newLBServiceReconciler(p lbServiceReconcilerParams) lbServiceReconcilerOut {
 	if !p.Cfg.SvcHealthCheckingEnabled {
 		// ATM, this reconciler is used only when service health checking integration is enabled.
 		// If not, this reconciler does not need to run at all - the OSS LBServiceReconciler will be used instead.
-		return LBServiceReconcilerOut{}
+		return lbServiceReconcilerOut{}
 	}
-	r := &LBServiceReconciler{
+	r := &lbServiceReconciler{
 		cfg:              p.Cfg,
 		signaler:         p.Signaler,
 		healthChecker:    p.HealthCheckManager,
@@ -105,7 +105,7 @@ func NewLBServiceReconciler(p LBServiceReconcilerParams) LBServiceReconcilerOut 
 	}
 	r.log = log.WithFields(logrus.Fields{"component": r.Name()})
 	p.Lifecycle.Append(r)
-	return LBServiceReconcilerOut{
+	return lbServiceReconcilerOut{
 		Reconciler: r,
 	}
 }
@@ -117,21 +117,21 @@ type WireLBServiceReconcilersParams struct {
 	ConfigReconcilers []ossreconciler.ConfigReconciler `group:"bgp-config-reconciler"`
 }
 
-// WireLBServiceReconcilers wires OSS LBServiceReconciler dependency in LBServiceReconciler.
+// wireLBServiceReconcilers wires OSS LBServiceReconciler dependency in LBServiceReconciler.
 // To be called from cell's Invoke function to avoid reconciler dependency loop.
-func WireLBServiceReconcilers(p WireLBServiceReconcilersParams) error {
+func wireLBServiceReconcilers(p WireLBServiceReconcilersParams) error {
 	if !p.Cfg.SvcHealthCheckingEnabled {
 		return nil
 	}
 	var (
 		ossLBServiceReconciler *ossreconciler.ServiceReconciler
-		ceeLBServiceReconciler *LBServiceReconciler
+		ceeLBServiceReconciler *lbServiceReconciler
 	)
 	for _, configReconciler := range p.ConfigReconcilers {
 		switch r := configReconciler.(type) {
 		case *ossreconciler.ServiceReconciler:
 			ossLBServiceReconciler = r
-		case *LBServiceReconciler:
+		case *lbServiceReconciler:
 			ceeLBServiceReconciler = r
 		}
 		if ossLBServiceReconciler != nil && ceeLBServiceReconciler != nil {
@@ -148,16 +148,16 @@ func WireLBServiceReconcilers(p WireLBServiceReconcilersParams) error {
 	return nil
 }
 
-func (r *LBServiceReconciler) Name() string {
+func (r *lbServiceReconciler) Name() string {
 	return r.ossLBServiceReconciler.Name() // needs to match the name of the OSS recocniler we are overriding
 }
 
-func (r *LBServiceReconciler) Priority() int {
+func (r *lbServiceReconciler) Priority() int {
 	return r.ossLBServiceReconciler.Priority() - 1 // must be lower (higher priority) than the OSS recocniler we are overriding
 }
 
 // Start is a hive lifecycle hook called when running the hive.
-func (r *LBServiceReconciler) Start(ctx cell.HookContext) error {
+func (r *lbServiceReconciler) Start(ctx cell.HookContext) error {
 	r.mutex.Lock()
 
 	// subscribe to service health-checker updates
@@ -172,7 +172,7 @@ func (r *LBServiceReconciler) Start(ctx cell.HookContext) error {
 }
 
 // Stop is a hive lifecycle hook called when stopping the hive.
-func (r *LBServiceReconciler) Stop(ctx cell.HookContext) error {
+func (r *lbServiceReconciler) Stop(ctx cell.HookContext) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -184,7 +184,7 @@ func (r *LBServiceReconciler) Stop(ctx cell.HookContext) error {
 }
 
 // ServiceHealthUpdate is called by the service health-checker upon changes in service health based on backend health-checking.
-func (r *LBServiceReconciler) ServiceHealthUpdate(svcInfo service.HealthUpdateSvcInfo) {
+func (r *lbServiceReconciler) ServiceHealthUpdate(svcInfo service.HealthUpdateSvcInfo) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -227,7 +227,7 @@ func (r *LBServiceReconciler) ServiceHealthUpdate(svcInfo service.HealthUpdateSv
 }
 
 // Reconcile is called by the BGP Manager whenever a reconciliation has been triggered.
-func (r *LBServiceReconciler) Reconcile(ctx context.Context, p ossreconciler.ReconcileParams) error {
+func (r *lbServiceReconciler) Reconcile(ctx context.Context, p ossreconciler.ReconcileParams) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -250,7 +250,7 @@ func (r *LBServiceReconciler) Reconcile(ctx context.Context, p ossreconciler.Rec
 }
 
 // fullReconciliation reconciles all services, should be called only when diff reconciliation is not possible.
-func (r *LBServiceReconciler) fullReconciliation(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, ls ossreconciler.LocalServices) error {
+func (r *lbServiceReconciler) fullReconciliation(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, ls ossreconciler.LocalServices) error {
 	toReconcile, toWithdraw, err := r.ossLBServiceReconciler.FullReconciliationServiceList(sc)
 	if err != nil {
 		return err
@@ -273,7 +273,7 @@ func (r *LBServiceReconciler) fullReconciliation(ctx context.Context, sc *instan
 
 // svcDiffReconciliation performs reconciliation, only on services which have been created, updated or deleted
 // since the last diff reconciliation.
-func (r *LBServiceReconciler) svcDiffReconciliation(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, ls ossreconciler.LocalServices) error {
+func (r *lbServiceReconciler) svcDiffReconciliation(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, ls ossreconciler.LocalServices) error {
 	toReconcile, toWithdraw, err := r.ossLBServiceReconciler.DiffReconciliationServiceList()
 	if err != nil {
 		return err
@@ -312,7 +312,7 @@ func (r *LBServiceReconciler) svcDiffReconciliation(ctx context.Context, sc *ins
 }
 
 // reconcileService gets the desired routes of a given service and makes sure that is what is being announced.
-func (r *LBServiceReconciler) reconcileService(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls ossreconciler.LocalServices) error {
+func (r *lbServiceReconciler) reconcileService(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls ossreconciler.LocalServices) error {
 
 	desiredRoutes, err := r.ossLBServiceReconciler.SvcDesiredRoutes(newc, svc, ls)
 	if err != nil {
@@ -334,7 +334,7 @@ func (r *LBServiceReconciler) reconcileService(ctx context.Context, sc *instance
 }
 
 // withdrawService withdraws all announced routes of a service, to be called when a service is deleted.
-func (r *LBServiceReconciler) withdrawService(ctx context.Context, sc *instance.ServerWithConfig, key resource.Key) error {
+func (r *lbServiceReconciler) withdrawService(ctx context.Context, sc *instance.ServerWithConfig, key resource.Key) error {
 	// delete the svc from service health caches
 	if r.cfg.SvcHealthCheckingEnabled {
 		svcID := k8s.ServiceID{Name: key.Name, Namespace: key.Namespace}
@@ -345,7 +345,7 @@ func (r *LBServiceReconciler) withdrawService(ctx context.Context, sc *instance.
 }
 
 // healthModifiedServices returns a list of services with modified health state since the last call of this method.
-func (r *LBServiceReconciler) healthModifiedServices() []*slim_corev1.Service {
+func (r *lbServiceReconciler) healthModifiedServices() []*slim_corev1.Service {
 	var modified []*slim_corev1.Service
 
 	// Deleting keys doesn't shrink the memory size, so we shrink it by recreating the map
@@ -378,7 +378,7 @@ func (r *LBServiceReconciler) healthModifiedServices() []*slim_corev1.Service {
 }
 
 // svcFrontendHealthy checks whether a service frontend is considered healthy based on the cached health state.
-func (r *LBServiceReconciler) svcFrontendHealthy(svc *slim_corev1.Service, frontendIP netip.Addr) bool {
+func (r *lbServiceReconciler) svcFrontendHealthy(svc *slim_corev1.Service, frontendIP netip.Addr) bool {
 	// if the hc probe interval annotation is not set on the service, it means that health-checking is not enabled
 	// for the service, and it is considered to be always healthy
 	if _, exists := annotation.Get(svc, enterpriseannotation.ServiceHealthProbeInterval); !exists {
@@ -418,7 +418,7 @@ func (r *LBServiceReconciler) svcFrontendHealthy(svc *slim_corev1.Service, front
 }
 
 // getSvcByID retrieves a service by the provided service ID.
-func (r *LBServiceReconciler) getSvcByID(svcID k8s.ServiceID) (*slim_corev1.Service, bool, error) {
+func (r *lbServiceReconciler) getSvcByID(svcID k8s.ServiceID) (*slim_corev1.Service, bool, error) {
 	key := resource.Key{
 		Name:      svcID.Name,
 		Namespace: svcID.Namespace,

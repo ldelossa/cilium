@@ -428,13 +428,13 @@ func TestLBServiceHealthChecker(t *testing.T) {
 			ossReconciler := reconciler.NewServiceReconciler(diffstore, epDiffStore).Reconciler.(*reconciler.ServiceReconciler)
 			serviceAnnouncements := ossReconciler.GetMetadata(testSC)
 
-			rParams := LBServiceReconcilerParams{
+			rParams := lbServiceReconcilerParams{
 				In:        cell.In{},
 				Lifecycle: &cell.DefaultLifecycle{},
 				Cfg:       Config{SvcHealthCheckingEnabled: true},
 				Signaler:  signaler.NewBGPCPSignaler(),
 			}
-			ceeReconciler := NewLBServiceReconciler(rParams).Reconciler.(*LBServiceReconciler)
+			ceeReconciler := newLBServiceReconciler(rParams).Reconciler.(*lbServiceReconciler)
 			ceeReconciler.ossLBServiceReconciler = ossReconciler
 
 			for _, svc := range tt.existingServices {

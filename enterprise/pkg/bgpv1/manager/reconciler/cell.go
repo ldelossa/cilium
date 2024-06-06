@@ -8,12 +8,10 @@
 // or reproduction of this material is strictly forbidden unless prior written
 // permission is obtained from Isovalent Inc.
 
-package manager
+package reconciler
 
 import (
 	"github.com/cilium/hive/cell"
-
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
 )
 
 // ConfigReconcilers contains cells of enterprise-only reconcilers
@@ -21,12 +19,12 @@ var ConfigReconcilers = cell.Group(
 
 	// Provide reconcilers publicly here, as they need to be injected into OSS BGPRouterManager
 	cell.Provide(
-		reconciler.NewLBServiceReconciler,
+		newLBServiceReconciler,
 	),
 
 	// Wire enterprise LB Service reconciler with the OSS version
-	cell.Invoke(reconciler.WireLBServiceReconcilers),
+	cell.Invoke(wireLBServiceReconcilers),
 
 	// config of the enterprise reconcilers
-	cell.Config(reconciler.Config{}),
+	cell.Config(Config{}),
 )

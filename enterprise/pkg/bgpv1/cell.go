@@ -13,7 +13,7 @@ package bgpv1
 import (
 	"github.com/cilium/hive/cell"
 
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager"
+	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
 )
 
 // Cell is module with Enterprise BGP Control Plane components
@@ -22,5 +22,5 @@ var Cell = cell.Module(
 	"Enterprise BGP Control Plane",
 
 	// enterprise-only reconcilers
-	manager.ConfigReconcilers,
+	reconciler.ConfigReconcilers,
 )
