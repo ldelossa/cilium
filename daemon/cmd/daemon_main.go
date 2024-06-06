@@ -31,8 +31,10 @@ import (
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/auth"
 	"github.com/cilium/cilium/pkg/aws/eni"
+	"github.com/cilium/cilium/pkg/bgp/speaker"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
+	cgroup "github.com/cilium/cilium/pkg/cgroups/manager"
 	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/common"
@@ -56,8 +58,8 @@ import (
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/flowdebug"
-	healthTypes "github.com/cilium/cilium/pkg/healthv2/types"
 	"github.com/cilium/cilium/pkg/hive"
+	healthTypes "github.com/cilium/cilium/pkg/hive/health/types"
 	"github.com/cilium/cilium/pkg/hubble/exporter/exporteroption"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/identity"
@@ -395,7 +397,11 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableIPsecKeyWatcher, defaults.EnableIPsecKeyWatcher, "Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations.")
 	option.BindEnv(vp, option.EnableIPsecKeyWatcher)
 
-	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.")
+	flags.Bool(option.EnableIPSecXfrmStateCaching, defaults.EnableIPSecXfrmStateCaching, "Enable XfrmState cache for IPSec. Significantly reduces CPU usage in large clusters.")
+	flags.MarkHidden(option.EnableIPSecXfrmStateCaching)
+	option.BindEnv(vp, option.EnableIPSecXfrmStateCaching)
+
+	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host. Requires ipsec and tunnel mode vxlan to be enabled.")
 	option.BindEnv(vp, option.EnableIPSecEncryptedOverlay)
 
 	flags.Bool(option.EnableWireguard, false, "Enable WireGuard")
@@ -439,7 +445,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Duration(option.IdentityChangeGracePeriod, defaults.IdentityChangeGracePeriod, "Time to wait before using new identity on endpoint identity change")
 	option.BindEnv(vp, option.IdentityChangeGracePeriod)
 
-	flags.Duration(option.IdentityRestoreGracePeriod, defaults.IdentityRestoreGracePeriod, "Time to wait before releasing unused restored CIDR identities during agent restart")
+	flags.Duration(option.IdentityRestoreGracePeriod, defaults.IdentityRestoreGracePeriodK8s, "Time to wait before releasing unused restored CIDR identities during agent restart")
 	option.BindEnv(vp, option.IdentityRestoreGracePeriod)
 
 	flags.String(option.IdentityAllocationMode, option.IdentityAllocationModeKVstore, "Method to use for identity allocation")
@@ -1676,10 +1682,13 @@ type daemonParams struct {
 	NodeDiscovery       *nodediscovery.NodeDiscovery
 	Prefilter           datapath.PreFilter
 	CompilationLock     datapath.CompilationLock
+	MetalLBBgpSpeaker   speaker.MetalLBBgpSpeaker
+	CGroupManager       cgroup.CGroupManager
 }
 
-func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
+func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig]) {
 	daemonResolver, daemonPromise := promise.New[*Daemon]()
+	cfgResolver, cfgPromise := promise.New[*option.DaemonConfig]()
 
 	// daemonCtx is the daemon-wide context cancelled when stopping.
 	daemonCtx, cancelDaemonCtx := context.WithCancel(context.Background())
@@ -1709,10 +1718,12 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 					daemonResolver.Reject(err)
 					cancelDaemonCtx()
 					cleaner.Clean()
+					cfgResolver.Reject(err)
 					return err
 				}
 			}
 			daemonResolver.Resolve(daemon)
+			cfgResolver.Resolve(option.Config)
 			return nil
 		},
 		OnStop: func(cell.HookContext) error {
@@ -1722,7 +1733,7 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 			return nil
 		},
 	})
-	return daemonPromise
+	return daemonPromise, cfgPromise
 }
 
 // startDaemon starts the old unmodular part of the cilium-agent.
@@ -1809,10 +1820,10 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		ms.CollectStaleMapGarbage()
 		ms.RemoveDisabledMaps()
 
-		// Sleep for the --identity-restore-grace-period (default 10 minutes), allowing
+		// Sleep for the --identity-restore-grace-period (default: 30 seconds k8s, 10 minutes kvstore), allowing
 		// the normal allocation processes to finish, before releasing restored resources.
 		time.Sleep(option.Config.IdentityRestoreGracePeriod)
-		d.releaseRestoredCIDRs()
+		d.releaseRestoredIdentities()
 	}()
 	d.endpointManager.Subscribe(d)
 	// Add the endpoint manager unsubscribe as the last step in cleanup

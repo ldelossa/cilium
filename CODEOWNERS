@@ -345,6 +345,7 @@ Makefile* @cilium/build
 /Documentation/network/kubernetes/ipam* @cilium/sig-ipam @cilium/docs-structure
 /Documentation/network/kubernetes/kubeproxy-free.rst @cilium/sig-lb @cilium/docs-structure
 /Documentation/network/lb-ipam.rst @cilium/sig-lb @cilium/docs-structure
+/Documentation/network/multicast.rst @cilium/sig-datapath @cilium/docs-structure
 /Documentation/network/servicemesh/ @cilium/sig-servicemesh @cilium/docs-structure
 /Documentation/observability/ @cilium/sig-policy @cilium/docs-structure
 /Documentation/operations/performance/ @cilium/sig-datapath @cilium/docs-structure
@@ -398,6 +399,7 @@ Makefile* @cilium/build
 /operator/pkg/ingress @cilium/sig-servicemesh
 /operator/pkg/lbipam @cilium/sig-lb
 /operator/pkg/model @cilium/sig-servicemesh
+/operator/pkg/networkpolicy @cilium/sig-policy
 /operator/pkg/secretsync @cilium/sig-servicemesh
 /operator/watchers/bgp.go @cilium/sig-bgp
 /pkg/annotation @cilium/sig-k8s
@@ -459,7 +461,6 @@ Makefile* @cilium/build
 /pkg/fqdn/ @cilium/fqdn
 /pkg/fswatcher/ @cilium/sig-datapath @cilium/sig-hubble
 /pkg/gops/ @cilium/sig-agent
-/pkg/healthv2/ @cilium/sig-foundations
 /pkg/health/ @cilium/sig-agent
 /pkg/hive/ @cilium/sig-foundations
 /pkg/hubble/ @cilium/sig-hubble

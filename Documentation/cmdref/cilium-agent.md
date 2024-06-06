@@ -136,7 +136,7 @@ cilium-agent [flags]
       --enable-ip-masq-agent                                         Enable BPF ip-masq-agent
       --enable-ipip-termination                                      Enable plain IPIP/IP6IP6 termination
       --enable-ipsec                                                 Enable IPsec support
-      --enable-ipsec-encrypted-overlay                               Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.
+      --enable-ipsec-encrypted-overlay                               Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host. Requires ipsec and tunnel mode vxlan to be enabled.
       --enable-ipsec-key-watcher                                     Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations. (default true)
       --enable-ipv4                                                  Enable IPv4 support (default true)
       --enable-ipv4-big-tcp                                          Enable IPv4 BIG TCP option which increases device's maximum GRO/GSO limits for IPv4
@@ -255,7 +255,7 @@ cilium-agent [flags]
       --hubble-tls-key-file string                                   Path to the private key file for the Hubble server. The file must contain PEM encoded data.
       --identity-allocation-mode string                              Method to use for identity allocation (default "kvstore")
       --identity-change-grace-period duration                        Time to wait before using new identity on endpoint identity change (default 5s)
-      --identity-restore-grace-period duration                       Time to wait before releasing unused restored CIDR identities during agent restart (default 10m0s)
+      --identity-restore-grace-period duration                       Time to wait before releasing unused restored CIDR identities during agent restart (default 30s)
       --ingress-secrets-namespace string                             IngressSecretsNamespace is the namespace having tls secrets used by CEC, originating from Ingress controller
       --install-no-conntrack-iptables-rules                          Install Iptables rules to skip netfilter connection tracking on all pod traffic. This option is only effective when Cilium is running in direct routing and full KPR mode. Moreover, this option cannot be enabled when Cilium is running in a managed Kubernetes environment or in a chained CNI setup.
       --ip-masq-agent-config-path string                             ip-masq-agent configuration file path (default "/etc/config/ip-masq-agent")
@@ -328,6 +328,8 @@ cilium-agent [flags]
       --mtu int                                                      Overwrite auto-detected MTU of underlying network
       --multi-network-auto-direct-node-routes                        Enable multi-network aware automatic L2 routing between nodes (experimental) (default true)
       --multicast-enabled                                            Enables multicast in Cilium
+      --nat-map-stats-entries int                                    Number k top stats entries to store locally in statedb (default 32)
+      --nat-map-stats-interval duration                              Interval upon which nat maps are iterated for stats (default 30s)
       --node-encryption-opt-out-labels string                        Label selector for nodes which will opt-out of node-to-node encryption (default "node-role.kubernetes.io/control-plane")
       --node-labels strings                                          List of label prefixes used to determine identity of a node (used only when enable-node-selector-labels is enabled)
       --node-port-bind-protection                                    Reject application bind(2) requests to service ports in the NodePort range (default true)

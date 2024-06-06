@@ -26,7 +26,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/linux/utime"
 	"github.com/cilium/cilium/pkg/datapath/loader"
-	loaderTypes "github.com/cilium/cilium/pkg/datapath/loader/types"
 	"github.com/cilium/cilium/pkg/datapath/orchestrator"
 	"github.com/cilium/cilium/pkg/datapath/prefilter"
 	"github.com/cilium/cilium/pkg/datapath/tables"
@@ -82,7 +81,7 @@ var Cell = cell.Module(
 	tables.NodeAddressCell,
 
 	// Provides the legacy accessor for the above, the NodeAddressing interface.
-	tables.NodeAddressingCell,
+	NodeAddressingCell,
 
 	// This cell periodically updates the agent liveness value in configmap.Map to inform
 	// the datapath of the liveness of the agent.
@@ -218,7 +217,7 @@ type datapathParams struct {
 
 	TunnelConfig tunnel.Config
 
-	Loader loaderTypes.Loader
+	Loader types.Loader
 
 	NodeManager nodeManager.NodeManager
 

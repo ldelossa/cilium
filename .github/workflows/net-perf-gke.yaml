@@ -46,7 +46,7 @@ env:
   gcp_zone: us-east5-a
   k8s_version: 1.28
   # renovate: datasource=docker depName=google/cloud-sdk
-  gcloud_version: 477.0.0
+  gcloud_version: 478.0.0
 
 jobs:
   installation-and-perf:
@@ -198,7 +198,7 @@ jobs:
           echo owner=${OWNER} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@13cf0683b2662c27c691f4330c2ac0f48b429ce5 # v0.16.7
+        uses: cilium/cilium-cli@d86ae1ca5755139d6ca9423b9606cb047fc8e00f # v0.16.9
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}

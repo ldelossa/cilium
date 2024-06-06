@@ -26,9 +26,9 @@ import (
 	"github.com/cilium/cilium/daemon/cmd/cni"
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/auth"
-	"github.com/cilium/cilium/pkg/bgp/speaker"
 	"github.com/cilium/cilium/pkg/cgroups/manager"
 	"github.com/cilium/cilium/pkg/clustermesh"
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/datapath/link"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
@@ -48,7 +48,7 @@ import (
 	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/eventqueue"
 	"github.com/cilium/cilium/pkg/fqdn"
-	"github.com/cilium/cilium/pkg/healthv2/types"
+	hiveHealth "github.com/cilium/cilium/pkg/hive/health/types"
 	"github.com/cilium/cilium/pkg/hubble/observer"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
@@ -133,6 +133,7 @@ type Daemon struct {
 	// programs.
 	compilationLock datapath.CompilationLock
 
+	clusterInfo cmtypes.ClusterInfo
 	clustermesh *clustermesh.ClusterMesh
 
 	mtuConfig mtu.MTU
@@ -176,11 +177,9 @@ type Daemon struct {
 
 	lrpManager *redirectpolicy.Manager
 
-	bgpSpeaker *speaker.MetalLBSpeaker
-
 	egressGatewayManager *egressgateway.Manager
 
-	cgroupManager *manager.CgroupManager
+	cgroupManager manager.CGroupManager
 
 	ipamMetadata *ipamMetadata.Manager
 
@@ -207,7 +206,7 @@ type Daemon struct {
 	// read-only map of all the hive settings
 	settings cellSettings
 
-	healthV2Provider types.Provider
+	healthProvider hiveHealth.Provider
 
 	// Tunnel-related configuration
 	tunnelConfig tunnel.Config
@@ -437,6 +436,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		egressGatewayManager: params.EgressGatewayManager,
 		ipamMetadata:         params.IPAMMetadataManager,
 		cniConfigManager:     params.CNIConfigManager,
+		clusterInfo:          params.ClusterInfo,
 		clustermesh:          params.ClusterMesh,
 		monitorAgent:         params.MonitorAgent,
 		svc:                  params.ServiceManager,
@@ -444,11 +444,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		envoyXdsServer:       params.EnvoyXdsServer,
 		authManager:          params.AuthManager,
 		settings:             params.Settings,
-		healthV2Provider:     params.HealthV2Provider,
+		healthProvider:       params.HealthV2Provider,
 		bigTCPConfig:         params.BigTCPConfig,
 		tunnelConfig:         params.TunnelConfig,
 		bwManager:            params.BandwidthManager,
 		lrpManager:           params.LRPManager,
+		cgroupManager:        params.CGroupManager,
 		preFilter:            params.Prefilter,
 	}
 
@@ -466,7 +467,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if option.Config.RestoreState && !option.Config.DryMode {
 		// this *must* be called before initMaps(), which will "hide"
 		// the "old" ipcache.
-		err := d.restoreIPCache()
+		err := d.restoreLocalIdentities()
 		if err != nil {
 			log.WithError(err).Warn("Failed to restore existing identities from the previous ipcache. This may cause policy interruptions during restart.")
 		}
@@ -478,23 +479,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	d.endpointManager = params.EndpointManager
 
-	if option.Config.BGPAnnounceLBIP || option.Config.BGPAnnouncePodCIDR {
-		log.WithField("url", "https://github.com/cilium/cilium/issues/22246").
-			Warn("You are using the legacy BGP feature, which will only receive security updates and bugfixes. " +
-				"It is recommended to migrate to the BGP Control Plane feature if possible, which has better support.")
-
-		d.bgpSpeaker, err = speaker.New(ctx, params.Clientset, speaker.Opts{
-			LoadBalancerIP: option.Config.BGPAnnounceLBIP,
-			PodCIDR:        option.Config.BGPAnnouncePodCIDR,
-		})
-		if err != nil {
-			log.WithError(err).Error("Error creating new BGP speaker")
-			return nil, nil, err
-		}
-	}
-
-	d.cgroupManager = manager.NewCgroupManager()
-
 	d.k8sWatcher = watchers.NewK8sWatcher(
 		params.Clientset,
 		params.K8sResourceSynced,
@@ -502,13 +486,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.endpointManager,
 		params.NodeManager,
 		&d,
-		d.policy,
 		d.svc,
 		d.lrpManager,
-		d.bgpSpeaker,
+		params.MetalLBBgpSpeaker,
 		option.Config,
 		d.ipcache,
-		d.cgroupManager,
+		params.CGroupManager,
 		params.Resources,
 		params.ServiceCache,
 		d.bwManager,
@@ -516,20 +499,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.nodeAddrs,
 	)
 	params.NodeDiscovery.RegisterK8sGetters(d.k8sWatcher)
-
-	if option.Config.BGPAnnounceLBIP || option.Config.BGPAnnouncePodCIDR {
-		switch option.Config.IPAMMode() {
-		case ipamOption.IPAMKubernetes:
-			d.bgpSpeaker.SubscribeToLocalNodeResource(ctx, params.Resources.LocalNode)
-		case ipamOption.IPAMClusterPool:
-			d.bgpSpeaker.SubscribeToLocalCiliumNodeResource(ctx, params.Resources.LocalCiliumNode)
-		}
-	}
-
-	d.lrpManager.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
-	if option.Config.BGPAnnounceLBIP {
-		d.bgpSpeaker.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
-	}
 
 	bootstrapStats.daemonInit.End(true)
 
@@ -803,8 +772,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 		// Launch the K8s watchers in parallel as we continue to process other
 		// daemon options.
-		resources, cacheOnly := d.k8sWatcher.ResourceGroups()
-		d.k8sWatcher.InitK8sSubsystem(d.ctx, resources, cacheOnly, params.CacheStatus)
+		d.k8sWatcher.InitK8sSubsystem(d.ctx, params.CacheStatus)
 		bootstrapStats.k8sInit.End(true)
 	} else {
 		close(params.CacheStatus)
@@ -1000,7 +968,6 @@ func (d *Daemon) Close() {
 		d.datapathRegenTrigger.Shutdown()
 	}
 	identitymanager.RemoveAll()
-	d.cgroupManager.Close()
 
 	// Ensures all controllers are stopped!
 	d.controllers.RemoveAllAndWait()

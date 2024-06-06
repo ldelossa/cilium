@@ -871,6 +871,12 @@
                     }
                   },
                   "type": "object"
+                },
+                "storageMedium": {
+                  "enum": [
+                    "Disk",
+                    "Memory"
+                  ]
                 }
               },
               "type": "object"
@@ -1250,6 +1256,9 @@
                     }
                   },
                   "type": "object"
+                },
+                "enableSecrets": {
+                  "type": "boolean"
                 },
                 "remote": {
                   "properties": {
@@ -2464,6 +2473,9 @@
     },
     "gatewayAPI": {
       "properties": {
+        "enableAlpn": {
+          "type": "boolean"
+        },
         "enableAppProtocol": {
           "type": "boolean"
         },

@@ -16,13 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/proxy/endpoint"
 	"github.com/cilium/cilium/pkg/proxy/endpoint/test"
-	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
 
@@ -182,7 +180,7 @@ var ExpectedHeaders3 = []*envoy_config_route.HeaderMatcher{
 var (
 	dummySelectorCacheUser = &DummySelectorCacheUser{}
 
-	IdentityCache = cache.IdentityCache{
+	IdentityCache = identity.IdentityMap{
 		1001: labels.LabelArray{
 			labels.NewLabel("app", "etcd", labels.LabelSourceK8s),
 			labels.NewLabel("version", "v1", labels.LabelSourceK8s),
@@ -196,8 +194,7 @@ var (
 			labels.NewLabel("version", "v1", labels.LabelSourceK8s),
 		},
 	}
-	identityAllocator = testidentity.NewMockIdentityAllocator(IdentityCache)
-	testSelectorCache = policy.NewSelectorCache(identityAllocator, IdentityCache)
+	testSelectorCache = policy.NewSelectorCache(IdentityCache)
 
 	wildcardCachedSelector, _ = testSelectorCache.AddIdentitySelector(dummySelectorCacheUser, nil, api.WildcardEndpointSelector)
 

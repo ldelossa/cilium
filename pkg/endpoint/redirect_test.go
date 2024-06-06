@@ -35,6 +35,7 @@ type RedirectSuite struct {
 	mgr             *cache.CachingIdentityAllocator
 	do              *DummyOwner
 	rsp             *RedirectSuiteProxy
+	stats           *regenerationStatistics
 }
 
 func setupRedirectSuite(tb testing.TB) *RedirectSuite {
@@ -52,13 +53,13 @@ func setupRedirectSuite(tb testing.TB) *RedirectSuite {
 	s.mgr = cache.NewCachingIdentityAllocator(idAllocatorOwner)
 	<-s.mgr.InitIdentityAllocator(nil)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.NumericIdentity(identityBar): labelsBar,
 	}
 
 	s.do = &DummyOwner{
-		repo: policy.NewPolicyRepository(s.mgr, identityCache, nil, nil),
+		repo: policy.NewPolicyRepository(identityCache, nil, nil),
 	}
 	s.do.repo.GetSelectorCache().SetLocalIdentityNotifier(testidentity.NewDummyIdentityNotifier())
 	identitymanager.Subscribe(s.do.repo)
@@ -73,6 +74,8 @@ func setupRedirectSuite(tb testing.TB) *RedirectSuite {
 		},
 		redirectPortUserMap: make(map[uint16][]string),
 	}
+
+	s.stats = new(regenerationStatistics)
 
 	tb.Cleanup(func() {
 		identitymanager.RemoveAll()
@@ -115,7 +118,7 @@ func (r *RedirectSuiteProxy) RemoveNetworkPolicy(ep endpoint.EndpointInfoSource)
 type DummyIdentityAllocatorOwner struct{}
 
 // UpdateIdentities does nothing.
-func (d *DummyIdentityAllocatorOwner) UpdateIdentities(added, deleted cache.IdentityCache) {
+func (d *DummyIdentityAllocatorOwner) UpdateIdentities(added, deleted identity.IdentityMap) {
 }
 
 // GetNodeSuffix does nothing.
@@ -171,7 +174,7 @@ func (d *DummyOwner) GetNodeSuffix() string {
 }
 
 // UpdateIdentities does nothing.
-func (d *DummyOwner) UpdateIdentities(added, deleted cache.IdentityCache) {}
+func (d *DummyOwner) UpdateIdentities(added, deleted identity.IdentityMap) {}
 
 const (
 	httpPort  = uint16(19001)
@@ -193,7 +196,7 @@ func (s *RedirectSuite) NewTestEndpoint(t *testing.T) *Endpoint {
 }
 
 func (s *RedirectSuite) AddRules(rules api.Rules) {
-	s.do.repo.AddList(rules)
+	s.do.repo.MustAddList(rules)
 }
 
 func (s *RedirectSuite) TearDownTest(t *testing.T) {
@@ -210,7 +213,7 @@ func TestAddVisibilityRedirects(t *testing.T) {
 	ep.UpdateVisibilityPolicy(func(_, _ string) (proxyVisibility string, err error) {
 		return firstAnno, nil
 	})
-	res, err := ep.regeneratePolicy()
+	res, err := ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
@@ -235,7 +238,7 @@ func TestAddVisibilityRedirects(t *testing.T) {
 	ep.UpdateVisibilityPolicy(func(_, _ string) (proxyVisibility string, err error) {
 		return secondAnno, nil
 	})
-	res, err = ep.regeneratePolicy()
+	res, err = ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
@@ -258,7 +261,7 @@ func TestAddVisibilityRedirects(t *testing.T) {
 	ep.UpdateVisibilityPolicy(func(_, _ string) (proxyVisibility string, err error) {
 		return thirdAnno, nil
 	})
-	res, err = ep.regeneratePolicy()
+	res, err = ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
@@ -309,7 +312,7 @@ func TestAddVisibilityRedirects(t *testing.T) {
 	ep.UpdateVisibilityPolicy(func(_, _ string) (proxyVisibility string, err error) {
 		return noAnno, nil
 	})
-	res, err = ep.regeneratePolicy()
+	res, err = ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
@@ -345,7 +348,6 @@ var (
 		HTTP: []api.PortRuleHTTP{
 			{Method: "GET", Path: "/"},
 		},
-		L7Proto: policy.ParserTypeHTTP.String(),
 	}
 
 	lblsL3DenyFoo = labels.ParseLabelArray("l3-deny")
@@ -400,7 +402,7 @@ func TestRedirectWithDeny(t *testing.T) {
 		ruleL4L7Allow.WithEndpointSelector(selectBar_),
 	})
 
-	res, err := ep.regeneratePolicy()
+	res, err := ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
@@ -554,6 +556,8 @@ func TestRedirectWithPriority(t *testing.T) {
 	s := setupRedirectSuite(t)
 
 	ep := s.NewTestEndpoint(t)
+	api.TestAllowIngressListener = true
+	defer func() { api.TestAllowIngressListener = false }()
 
 	s.AddRules(api.Rules{
 		ruleL4AllowListener1.WithEndpointSelector(selectBar_),
@@ -561,7 +565,7 @@ func TestRedirectWithPriority(t *testing.T) {
 		ruleL4L7AllowListener2Priority1.WithEndpointSelector(selectBar_),
 	})
 
-	res, err := ep.regeneratePolicy()
+	res, err := ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
@@ -634,13 +638,15 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 
 	ep := s.NewTestEndpoint(t)
 
+	api.TestAllowIngressListener = true
+	defer func() { api.TestAllowIngressListener = false }()
 	s.AddRules(api.Rules{
 		ruleL4L7AllowListener1Priority1.WithEndpointSelector(selectBar_),
 		ruleL4AllowPort80.WithEndpointSelector(selectBar_),
 		ruleL4L7AllowListener2Priority1.WithEndpointSelector(selectBar_),
 	})
 
-	res, err := ep.regeneratePolicy()
+	res, err := ep.regeneratePolicy(s.stats)
 	require.Nil(t, err)
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)

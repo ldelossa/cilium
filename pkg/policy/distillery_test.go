@@ -17,14 +17,12 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 	"github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/testutils"
-	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 )
 
 var (
@@ -37,7 +35,7 @@ func localIdentity(n uint32) identity.NumericIdentity {
 
 }
 func TestCacheManagement(t *testing.T) {
-	repo := NewPolicyRepository(nil, nil, nil, nil)
+	repo := NewPolicyRepository(nil, nil, nil)
 	cache := repo.policyCache
 	identity := ep1.GetSecurityIdentity()
 	require.Equal(t, identity, ep2.GetSecurityIdentity())
@@ -73,7 +71,7 @@ func TestCacheManagement(t *testing.T) {
 }
 
 func TestCachePopulation(t *testing.T) {
-	repo := NewPolicyRepository(nil, nil, nil, nil)
+	repo := NewPolicyRepository(nil, nil, nil)
 	repo.revision.Store(42)
 	cache := repo.policyCache
 
@@ -129,9 +127,16 @@ func TestCachePopulation(t *testing.T) {
 
 // Distillery integration tests
 func key(id uint32, port uint16, hdr uint8, dir uint8) Key {
+	return keyWithPortMask(id, port, 0, hdr, dir)
+}
+
+// keyWithPortMask returns a key with a specific port mask.
+// Note: This method inverts the portMask on the key for the caller.
+func keyWithPortMask(id uint32, port, portMask uint16, hdr uint8, dir uint8) Key {
 	return types.Key{
 		Identity:         id,
 		DestPort:         port,
+		InvertedPortMask: ^portMask,
 		Nexthdr:          hdr,
 		TrafficDirection: dir,
 	}
@@ -175,7 +180,6 @@ var (
 		HTTP: []api.PortRuleHTTP{
 			{Method: "GET", Path: "/"},
 		},
-		L7Proto: ParserTypeHTTP.String(),
 	}
 	// API rule definitions for default-deny, L3, L3L4, L3L4L7, L4, L4L7
 	lbls____NoAllow = labels.ParseLabelArray("no-allow")
@@ -399,9 +403,8 @@ type policyDistillery struct {
 }
 
 func newPolicyDistillery(selectorCache *SelectorCache) *policyDistillery {
-	identityAllocator := testidentity.NewMockIdentityAllocator(nil)
 	ret := &policyDistillery{
-		Repository: NewPolicyRepository(identityAllocator, nil, nil, nil),
+		Repository: NewPolicyRepository(nil, nil, nil),
 	}
 	ret.selectorCache = selectorCache
 	return ret
@@ -474,7 +477,7 @@ func Test_MergeL3(t *testing.T) {
 
 	SetPolicyEnabled(option.DefaultEnforcement)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.NumericIdentity(identityBar): labelsBar,
 	}
@@ -639,7 +642,7 @@ func Test_MergeL3(t *testing.T) {
 			round++
 
 			repo := newPolicyDistillery(selectorCache)
-			_, _ = repo.AddList(rules)
+			_, _ = repo.MustAddList(rules)
 
 			t.Run(fmt.Sprintf("permutation_%d-%d", tt.test, round), func(t *testing.T) {
 				logBuffer := new(bytes.Buffer)
@@ -1115,7 +1118,7 @@ func Test_MergeRules(t *testing.T) {
 
 	SetPolicyEnabled(option.DefaultEnforcement)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 	}
 	selectorCache := testNewSelectorCache(identityCache)
@@ -1186,7 +1189,7 @@ func Test_MergeRules(t *testing.T) {
 		for _, r := range tt.rules {
 			if r != nil {
 				rule := r.WithEndpointSelector(selectFoo_)
-				_, _ = repo.AddList(api.Rules{rule})
+				_, _ = repo.MustAddList(api.Rules{rule})
 			}
 		}
 		t.Run(fmt.Sprintf("permutation_%d", tt.test), func(t *testing.T) {
@@ -1240,7 +1243,7 @@ func Test_MergeRulesWithNamedPorts(t *testing.T) {
 
 	SetPolicyEnabled(option.DefaultEnforcement)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 	}
 	selectorCache := testNewSelectorCache(identityCache)
@@ -1293,7 +1296,7 @@ func Test_MergeRulesWithNamedPorts(t *testing.T) {
 		for _, r := range tt.rules {
 			if r != nil {
 				rule := r.WithEndpointSelector(selectFoo_)
-				_, _ = repo.AddList(api.Rules{rule})
+				_, _ = repo.MustAddList(api.Rules{rule})
 			}
 		}
 		t.Run(fmt.Sprintf("permutation_%d", tt.test), func(t *testing.T) {
@@ -1316,7 +1319,7 @@ func Test_AllowAll(t *testing.T) {
 
 	SetPolicyEnabled(option.DefaultEnforcement)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.NumericIdentity(identityBar): labelsBar,
 	}
@@ -1338,7 +1341,7 @@ func Test_AllowAll(t *testing.T) {
 		for _, r := range tt.rules {
 			if r != nil {
 				rule := r.WithEndpointSelector(tt.selector)
-				_, _ = repo.AddList(api.Rules{rule})
+				_, _ = repo.MustAddList(api.Rules{rule})
 			}
 		}
 		t.Run(fmt.Sprintf("permutation_%d", tt.test), func(t *testing.T) {
@@ -1596,6 +1599,50 @@ var (
 			mapKeyL4Port8080ProtoSCTPWorldIPEgress: struct{}{},
 		},
 	}
+
+	ruleL3AllowWorldSubnetNamedPort = api.NewRule().WithIngressRules([]api.IngressRule{{
+		ToPorts: api.PortRules{
+			api.PortRule{
+				Ports: []api.PortProtocol{
+					{
+						Port:     "http-8080",
+						Protocol: api.ProtoTCP,
+					},
+				},
+			},
+		},
+		IngressCommonRule: api.IngressCommonRule{
+			FromCIDR: api.CIDRSlice{worldSubnet},
+		},
+	}}).WithEndpointSelector(api.WildcardEndpointSelector)
+	mapKeyL3L4NamedPort8080ProtoTCPWorldSubNetIngress = key(worldSubnetIdentity.Uint32(), 8080, 6, trafficdirection.Ingress.Uint8())
+
+	ruleL3AllowWorldSubnetPortRange = api.NewRule().WithIngressRules([]api.IngressRule{{
+		ToPorts: api.PortRules{
+			api.PortRule{
+				Ports: []api.PortProtocol{
+					{
+						Port:     "64",
+						EndPort:  127,
+						Protocol: api.ProtoAny,
+					},
+					{
+						Port:     "5",
+						EndPort:  10,
+						Protocol: api.ProtoAny,
+					},
+				},
+			},
+		},
+		IngressCommonRule: api.IngressCommonRule{
+			FromCIDR: api.CIDRSlice{worldSubnet},
+		},
+	}}).WithEndpointSelector(api.WildcardEndpointSelector)
+	mapKeyL3L4Port64To127ProtoTCPWorldSubNetIngress = keyWithPortMask(worldSubnetIdentity.Uint32(), 64, 0xffc0, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port5ProtoTCPWorldSubNetIngress       = key(worldSubnetIdentity.Uint32(), 5, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port6To7ProtoTCPWorldSubNetIngress    = keyWithPortMask(worldSubnetIdentity.Uint32(), 6, 0xfffe, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port8To9ProtoTCPWorldSubNetIngress    = keyWithPortMask(worldSubnetIdentity.Uint32(), 8, 0xfffe, 6, trafficdirection.Ingress.Uint8())
+	mapKeyL3L4Port10ProtoTCPWorldSubNetIngress      = key(worldSubnetIdentity.Uint32(), 10, 6, trafficdirection.Ingress.Uint8())
 )
 
 func Test_EnsureDeniesPrecedeAllows(t *testing.T) {
@@ -1606,7 +1653,7 @@ func Test_EnsureDeniesPrecedeAllows(t *testing.T) {
 
 	SetPolicyEnabled(option.DefaultEnforcement)
 
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.ReservedIdentityWorld:        labels.LabelWorld.LabelArray(),
 		worldIPIdentity:                       lblWorldIP,                  // "192.0.2.3/32"
@@ -1671,6 +1718,14 @@ func Test_EnsureDeniesPrecedeAllows(t *testing.T) {
 			mapKeyL4Port8080ProtoUDPWorldIPEgress:   mapEntryDeny,
 			mapKeyL4Port8080ProtoSCTPWorldIPIngress: mapEntryDeny,
 			mapKeyL4Port8080ProtoSCTPWorldIPEgress:  mapEntryDeny,
+		})}, {"named_port_world_subnet", api.Rules{ruleL3AllowWorldSubnetNamedPort}, newMapState(map[Key]MapStateEntry{
+			mapKeyL3L4NamedPort8080ProtoTCPWorldSubNetIngress: mapEntryAllow,
+		})}, {"port_range_world_subnet", api.Rules{ruleL3AllowWorldSubnetPortRange}, newMapState(map[Key]MapStateEntry{
+			mapKeyL3L4Port64To127ProtoTCPWorldSubNetIngress: mapEntryAllow,
+			mapKeyL3L4Port5ProtoTCPWorldSubNetIngress:       mapEntryAllow,
+			mapKeyL3L4Port6To7ProtoTCPWorldSubNetIngress:    mapEntryAllow,
+			mapKeyL3L4Port8To9ProtoTCPWorldSubNetIngress:    mapEntryAllow,
+			mapKeyL3L4Port10ProtoTCPWorldSubNetIngress:      mapEntryAllow,
 		})},
 	}
 
@@ -1678,7 +1733,7 @@ func Test_EnsureDeniesPrecedeAllows(t *testing.T) {
 		repo := newPolicyDistillery(selectorCache)
 		for _, rule := range tt.rules {
 			if rule != nil {
-				_, _ = repo.AddList(api.Rules{rule})
+				_, _ = repo.MustAddList(api.Rules{rule})
 			}
 		}
 		t.Run(tt.test, func(t *testing.T) {
@@ -1706,7 +1761,7 @@ func Test_EnsureEntitiesSelectableByCIDR(t *testing.T) {
 	hostLabel := labels.NewFrom(labels.LabelHost)
 	hostLabel.MergeLabels(lblHostIPv4CIDR)
 	hostLabel.MergeLabels(lblHostIPv6CIDR)
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.ReservedIdentityHost:         hostLabel.LabelArray(),
 	}
@@ -1728,7 +1783,7 @@ func Test_EnsureEntitiesSelectableByCIDR(t *testing.T) {
 		repo := newPolicyDistillery(selectorCache)
 		for _, rule := range tt.rules {
 			if rule != nil {
-				_, _ = repo.AddList(api.Rules{rule})
+				_, _ = repo.MustAddList(api.Rules{rule})
 			}
 		}
 		t.Run(tt.test, func(t *testing.T) {

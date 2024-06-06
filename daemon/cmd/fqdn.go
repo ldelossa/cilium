@@ -173,11 +173,18 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 	if err := re.InitRegexCompileLRU(option.Config.FQDNRegexCompileLRUSize); err != nil {
 		return fmt.Errorf("could not initialize regex LRU cache: %w", err)
 	}
-	proxy.DefaultDNSProxy, err = dnsproxy.StartDNSProxy("", port,
-		option.Config.EnableIPv4, option.Config.EnableIPv6,
-		option.Config.ToFQDNsEnableDNSCompression,
-		option.Config.DNSMaxIPsPerRestoredRule, d.lookupEPByIP, d.ipcache.LookupSecIDByIP, d.ipcache.LookupByIdentity,
-		d.notifyOnDNSMsg, option.Config.DNSProxyConcurrencyLimit, option.Config.DNSProxyConcurrencyProcessingGracePeriod)
+	dnsProxyConfig := dnsproxy.DNSProxyConfig{
+		Address:                "",
+		Port:                   port,
+		IPv4:                   option.Config.EnableIPv4,
+		IPv6:                   option.Config.EnableIPv6,
+		EnableDNSCompression:   option.Config.ToFQDNsEnableDNSCompression,
+		MaxRestoreDNSIPs:       option.Config.DNSMaxIPsPerRestoredRule,
+		ConcurrencyLimit:       option.Config.DNSProxyConcurrencyLimit,
+		ConcurrencyGracePeriod: option.Config.DNSProxyConcurrencyProcessingGracePeriod,
+	}
+	proxy.DefaultDNSProxy, err = dnsproxy.StartDNSProxy(dnsProxyConfig, d.lookupEPByIP, d.ipcache.LookupSecIDByIP, d.ipcache.LookupByIdentity,
+		d.notifyOnDNSMsg)
 	if err == nil {
 		// Increase the ProxyPort reference count so that it will never get released.
 		err = d.l7Proxy.SetProxyPort(proxytypes.DNSProxyName, proxytypes.ProxyTypeDNS, proxy.DefaultDNSProxy.GetBindPort(), false)
@@ -324,13 +331,18 @@ func (d *Daemon) notifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epI
 	if msg.Response {
 		flowType = accesslog.TypeResponse
 		addrInfo.DstIPPort = epIPPort
-		addrInfo.DstIdentity = ep.GetIdentity()
+		addrInfo.DstEPID = ep.GetID()
+		// ignore error; log fields are best effort. Only returns error if endpoint
+		// is going away.
+		addrInfo.DstSecIdentity, _ = ep.GetSecurityIdentity()
 		addrInfo.SrcIPPort = serverAddr
 		addrInfo.SrcIdentity = serverID
 	} else {
 		flowType = accesslog.TypeRequest
 		addrInfo.SrcIPPort = epIPPort
-		addrInfo.SrcIdentity = ep.GetIdentity()
+		addrInfo.SrcEPID = ep.GetID()
+		// ignore error; same reason as above.
+		addrInfo.SrcSecIdentity, _ = ep.GetSecurityIdentity()
 		addrInfo.DstIPPort = serverAddr
 		addrInfo.DstIdentity = serverID
 	}
@@ -462,10 +474,15 @@ func (d *Daemon) notifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epI
 
 	// Ensure that there are no early returns from this function before the
 	// code below, otherwise the log record will not be made.
+	//
+	// Restrict label enrichment time to 10ms; we don't want to block DNS
+	// requests because an identity isn't in the local cache yet.
+	logContext, lcncl := context.WithTimeout(d.ctx, 10*time.Millisecond)
+	defer lcncl()
 	record := logger.NewLogRecord(flowType, false,
 		func(lr *logger.LogRecord) { lr.LogRecord.TransportProtocol = accesslog.TransportProtocol(protoID) },
 		logger.LogTags.Verdict(verdict, reason),
-		logger.LogTags.Addressing(addrInfo),
+		logger.LogTags.Addressing(logContext, addrInfo),
 		logger.LogTags.DNS(&accesslog.LogRecordDNS{
 			Query:             qname,
 			IPs:               responseIPs,

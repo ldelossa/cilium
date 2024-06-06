@@ -40,10 +40,11 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 	t.Cleanup(mgr.Close)
 
 	maps := cectnat.NewFakePerCluster(true, true)
+	cinfo := cmtypes.ClusterInfo{ID: 99, Name: "foo"}
 	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
 		Config:            cmcommon.Config{ClusterMeshConfig: t.TempDir()},
-		ClusterInfo:       cmtypes.ClusterInfo{ID: 99, Name: "foo"},
-		ClusterIDsManager: newClusterIDManager(logging.DefaultLogger, maps),
+		ClusterInfo:       cinfo,
+		ClusterIDsManager: newClusterIDManager(logging.DefaultLogger, cinfo, maps),
 
 		RemoteIdentityWatcher: mgr,
 		StoreFactory:          store.NewFactory(store.MetricsProvider()),
@@ -115,10 +116,11 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 	err = maps.NAT().CreateClusterNATMaps(oldcfg.ID)
 	require.NoError(t, err, "Failed to update NAT maps")
 
-	idsMgr := newClusterIDManager(logging.DefaultLogger, maps)
+	cinfo := cmtypes.ClusterInfo{ID: 99, Name: "foo"}
+	idsMgr := newClusterIDManager(logging.DefaultLogger, cinfo, maps)
 	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
 		Config:            cmcommon.Config{ClusterMeshConfig: t.TempDir()},
-		ClusterInfo:       cmtypes.ClusterInfo{ID: 99, Name: "foo"},
+		ClusterInfo:       cinfo,
 		ClusterIDsManager: idsMgr,
 
 		RemoteIdentityWatcher: mgr,
@@ -151,8 +153,9 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 }
 
 func TestClusterIDManagerReserved(t *testing.T) {
+	cinfo := cmtypes.ClusterInfo{ID: 99, Name: "foo"}
 	maps := cectnat.NewFakePerCluster(true, true)
-	mgr := newClusterIDManager(logging.DefaultLogger, maps)
+	mgr := newClusterIDManager(logging.DefaultLogger, cinfo, maps)
 
 	require.Error(t, mgr.ReserveClusterID(cmtypes.ClusterIDUnset), "Reserving ClusterID 0 should fail")
 	require.False(t, maps.CT().Has(cmtypes.ClusterIDUnset), "CT maps should not be created for ClusterID 0")
@@ -167,4 +170,8 @@ func TestClusterIDManagerReserved(t *testing.T) {
 	mgr.ReleaseClusterID(cmtypes.ClusterIDUnset)
 	require.True(t, maps.CT().Has(cmtypes.ClusterIDUnset), "CT maps should not be deleted for ClusterID 0")
 	require.True(t, maps.NAT().Has(cmtypes.ClusterIDUnset), "CT maps should not be deleted for ClusterID 0")
+
+	require.Error(t, mgr.ReserveClusterID(cinfo.ID), "Reserving the local ClusterID should fail")
+	require.False(t, maps.CT().Has(cinfo.ID), "CT maps should not be created for the local ClusterID")
+	require.False(t, maps.NAT().Has(cinfo.ID), "CT maps should not be created for the local ClusterID")
 }

@@ -353,12 +353,6 @@ const (
 	// EnableIPv4EgressGateway enables the IPv4 egress gateway
 	EnableIPv4EgressGateway = "enable-ipv4-egress-gateway"
 
-	// EnableIngressController enables Ingress Controller
-	EnableIngressController = "enable-ingress-controller"
-
-	// EnableGatewayAPI enables Gateway API support
-	EnableGatewayAPI = "enable-gateway-api"
-
 	// EnableEnvoyConfig enables processing of CiliumClusterwideEnvoyConfig and CiliumEnvoyConfig CRDs
 	EnableEnvoyConfig = "enable-envoy-config"
 
@@ -719,6 +713,10 @@ const (
 	// Enable watcher for IPsec key. If disabled, a restart of the agent will
 	// be necessary on key rotations.
 	EnableIPsecKeyWatcher = "enable-ipsec-key-watcher"
+
+	// Enable caching for XfrmState for IPSec. Significantly reduces CPU usage
+	// in large clusters.
+	EnableIPSecXfrmStateCaching = "enable-ipsec-xfrm-state-caching"
 
 	// IPSecKeyFileName is the name of the option for ipsec key file
 	IPSecKeyFileName = "ipsec-key-file"
@@ -1598,6 +1596,9 @@ type DaemonConfig struct {
 	// be necessary on key rotations.
 	EnableIPsecKeyWatcher bool
 
+	// EnableIPSecXfrmStateCaching enables IPSec XfrmState caching.
+	EnableIPSecXfrmStateCaching bool
+
 	// EnableIPSecEncryptedOverlay enables IPSec encryption for overlay traffic.
 	EnableIPSecEncryptedOverlay bool
 
@@ -1692,8 +1693,6 @@ type DaemonConfig struct {
 	EnableBPFClockProbe     bool
 	EnableIPv4EgressGateway bool
 	EnableEnvoyConfig       bool
-	EnableIngressController bool
-	EnableGatewayAPI        bool
 	InstallIptRules         bool
 	MonitorAggregation      string
 	PreAllocateMaps         bool
@@ -1834,6 +1833,8 @@ type DaemonConfig struct {
 	// unused after this time, they will be removed from the IP cache. Any of the restored
 	// identities that are used in network policies will remain in the IP cache until all such
 	// policies are removed.
+	//
+	// The default is 30 seconds for k8s clusters, and 10 minutes for kvstore clusters
 	IdentityRestoreGracePeriod time.Duration
 
 	// PolicyQueueSize is the size of the queues for the policy repository.
@@ -2406,7 +2407,7 @@ var (
 		KVstorePeriodicSync:             defaults.KVstorePeriodicSync,
 		KVstoreConnectivityTimeout:      defaults.KVstoreConnectivityTimeout,
 		IdentityChangeGracePeriod:       defaults.IdentityChangeGracePeriod,
-		IdentityRestoreGracePeriod:      defaults.IdentityRestoreGracePeriod,
+		IdentityRestoreGracePeriod:      defaults.IdentityRestoreGracePeriodK8s,
 		FixedIdentityMapping:            make(map[string]string),
 		KVStoreOpt:                      make(map[string]string),
 		LogOpt:                          make(map[string]string),
@@ -2525,7 +2526,8 @@ func (c *DaemonConfig) TunnelingEnabled() bool {
 // devices to implement some features.
 func (c *DaemonConfig) AreDevicesRequired() bool {
 	return c.EnableNodePort || c.EnableHostFirewall || c.EnableWireguard ||
-		c.EnableHighScaleIPcache || c.EnableL2Announcements || c.ForceDeviceRequired
+		c.EnableHighScaleIPcache || c.EnableL2Announcements || c.ForceDeviceRequired ||
+		c.EnableIPSecEncryptedOverlay
 }
 
 // When WG & encrypt-node are on, a NodePort BPF to-be forwarded request
@@ -2637,16 +2639,6 @@ func (c *DaemonConfig) AgentNotReadyNodeTaintValue() string {
 // K8sNetworkPolicyEnabled returns true if cilium agent needs to support K8s NetworkPolicy, false otherwise.
 func (c *DaemonConfig) K8sNetworkPolicyEnabled() bool {
 	return c.EnableK8sNetworkPolicy
-}
-
-// K8sIngressControllerEnabled returns true if ingress controller feature is enabled in Cilium
-func (c *DaemonConfig) K8sIngressControllerEnabled() bool {
-	return c.EnableIngressController
-}
-
-// K8sGatewayAPIEnabled returns true if Gateway API feature is enabled in Cilium
-func (c *DaemonConfig) K8sGatewayAPIEnabled() bool {
-	return c.EnableGatewayAPI
 }
 
 func (c *DaemonConfig) PolicyCIDRMatchesNodes() bool {
@@ -3048,13 +3040,12 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableIPMasqAgent = vp.GetBool(EnableIPMasqAgent)
 	c.EnableIPv4EgressGateway = vp.GetBool(EnableIPv4EgressGateway)
 	c.EnableEnvoyConfig = vp.GetBool(EnableEnvoyConfig)
-	c.EnableIngressController = vp.GetBool(EnableIngressController)
-	c.EnableGatewayAPI = vp.GetBool(EnableGatewayAPI)
 	c.IPMasqAgentConfigPath = vp.GetString(IPMasqAgentConfigPath)
 	c.InstallIptRules = vp.GetBool(InstallIptRules)
 	c.IPSecKeyFile = vp.GetString(IPSecKeyFileName)
 	c.IPsecKeyRotationDuration = vp.GetDuration(IPsecKeyRotationDuration)
 	c.EnableIPsecKeyWatcher = vp.GetBool(EnableIPsecKeyWatcher)
+	c.EnableIPSecXfrmStateCaching = vp.GetBool(EnableIPSecXfrmStateCaching)
 	c.MonitorAggregation = vp.GetString(MonitorAggregationName)
 	c.MonitorAggregationInterval = vp.GetDuration(MonitorAggregationInterval)
 	c.MTU = vp.GetInt(MTUName)
@@ -3509,6 +3500,10 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 		}
 		c.ExcludeNodeLabelPatterns = append(c.ExcludeNodeLabelPatterns, r)
 	}
+
+	if c.KVStore != "" {
+		c.IdentityRestoreGracePeriod = defaults.IdentityRestoreGracePeriodKvstore
+	}
 }
 
 func (c *DaemonConfig) populateLoadBalancerSettings(vp *viper.Viper) {
@@ -3724,12 +3719,9 @@ func (c *DaemonConfig) checkIPAMDelegatedPlugin() error {
 		if c.EnableEndpointHealthChecking {
 			return fmt.Errorf("--%s must be disabled with --%s=%s", EnableEndpointHealthChecking, IPAM, ipamOption.IPAMDelegatedPlugin)
 		}
-		// Ingress controller and envoy config require cilium-agent to create an IP address
-		// specifically for differentiating ingress and envoy traffic, which is not possible
+		// envoy config (Ingress, Gateway API, ...) require cilium-agent to create an IP address
+		// specifically for differentiating envoy traffic, which is not possible
 		// with delegated IPAM.
-		if c.EnableIngressController {
-			return fmt.Errorf("--%s must be disabled with --%s=%s", EnableIngressController, IPAM, ipamOption.IPAMDelegatedPlugin)
-		}
 		if c.EnableEnvoyConfig {
 			return fmt.Errorf("--%s must be disabled with --%s=%s", EnableEnvoyConfig, IPAM, ipamOption.IPAMDelegatedPlugin)
 		}

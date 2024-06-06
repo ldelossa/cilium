@@ -20,8 +20,10 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	nodeStore "github.com/cilium/cilium/pkg/node/store"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 	"github.com/cilium/cilium/pkg/source"
@@ -42,16 +44,12 @@ type Configuration struct {
 	// ClusterInfo is the id/name of the local cluster. This is used for logging and metrics
 	ClusterInfo cmtypes.ClusterInfo
 
-	// NodeKeyCreator is the function used to create node instances as
-	// nodes are being discovered in remote clusters
-	NodeKeyCreator store.KeyCreator
-
 	// ServiceMerger is the interface responsible to merge service and
 	// endpoints into an existing cache
 	ServiceMerger ServiceMerger
 
 	// NodeObserver reacts to node events.
-	NodeObserver store.Observer
+	NodeObserver nodeStore.NodeManager
 
 	// RemoteIdentityWatcher provides identities that have been allocated on a
 	// remote cluster.
@@ -77,6 +75,14 @@ type Configuration struct {
 	StoreFactory  store.Factory
 }
 
+// ServiceMerger is the interface to be implemented by the owner of local
+// services. The functions have to merge service updates and deletions with
+// local services to provide a shared view.
+type ServiceMerger interface {
+	MergeExternalServiceUpdate(service *serviceStore.ClusterService, swg *lock.StoppableWaitGroup)
+	MergeExternalServiceDelete(service *serviceStore.ClusterService, swg *lock.StoppableWaitGroup)
+}
+
 // RemoteIdentityWatcher is any type which provides identities that have been
 // allocated on a remote cluster.
 type RemoteIdentityWatcher interface {
@@ -85,7 +91,7 @@ type RemoteIdentityWatcher interface {
 	// identity cache. remoteName should be unique unless replacing an existing
 	// remote's backend. When cachedPrefix is set, identities are assumed to be
 	// stored under the "cilium/cache" prefix, and the watcher is adapted accordingly.
-	WatchRemoteIdentities(remoteName string, backend kvstore.BackendOperations, cachedPrefix bool) (*allocator.RemoteCache, error)
+	WatchRemoteIdentities(remoteName string, remoteID uint32, backend kvstore.BackendOperations, cachedPrefix bool) (*allocator.RemoteCache, error)
 
 	// RemoveRemoteIdentities removes any reference to a remote identity source,
 	// emitting a deletion event for all previously known identities.
@@ -160,16 +166,33 @@ func (cm *ClusterMesh) NewRemoteCluster(name string, status common.StatusFunc) c
 	}
 	rc.remoteNodes = cm.conf.StoreFactory.NewWatchStore(
 		name,
-		cm.conf.NodeKeyCreator,
-		cm.conf.NodeObserver,
+		nodeStore.ValidatingKeyCreator(
+			nodeStore.ClusterNameValidator(name),
+			nodeStore.NameValidator(),
+			nodeStore.ClusterIDValidator(&rc.clusterID),
+		),
+		nodeStore.NewNodeObserver(cm.conf.NodeObserver, source.ClusterMesh),
 		store.RWSWithOnSyncCallback(func(ctx context.Context) { close(rc.synced.nodes) }),
 		store.RWSWithEntriesMetric(cm.conf.Metrics.TotalNodes.WithLabelValues(cm.conf.ClusterInfo.Name, cm.nodeName, rc.name)),
 	)
 
 	rc.remoteServices = cm.conf.StoreFactory.NewWatchStore(
 		name,
-		func() store.Key { return new(serviceStore.ClusterService) },
-		&remoteServiceObserver{remoteCluster: rc, swg: rc.synced.services},
+		serviceStore.KeyCreator(
+			serviceStore.ClusterNameValidator(name),
+			serviceStore.NamespacedNameValidator(),
+			serviceStore.ClusterIDValidator(&rc.clusterID),
+		),
+		common.NewSharedServicesObserver(
+			log.WithField(logfields.ClusterName, name),
+			cm.globalServices,
+			func(svc *serviceStore.ClusterService) {
+				cm.conf.ServiceMerger.MergeExternalServiceUpdate(svc, rc.synced.services)
+			},
+			func(svc *serviceStore.ClusterService) {
+				cm.conf.ServiceMerger.MergeExternalServiceDelete(svc, rc.synced.services)
+			},
+		),
 		store.RWSWithOnSyncCallback(func(ctx context.Context) { rc.synced.services.Stop() }),
 	)
 

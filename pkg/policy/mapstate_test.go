@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 	"github.com/cilium/cilium/pkg/u8proto"
@@ -27,64 +26,100 @@ func Test_IsSuperSetOf(t *testing.T) {
 		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1},
 		{key(0, 0, 0, 0), key(42, 80, 6, 0), 1},
 		{key(0, 0, 0, 0), key(42, 0, 0, 0), 1},
-		{key(0, 0, 6, 0), key(42, 0, 6, 0), 2},
+		{key(0, 0, 6, 0), key(42, 0, 6, 0), 3}, // port is the same
 		{key(0, 0, 6, 0), key(42, 80, 6, 0), 2},
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 2}, // port range 64-127,80
 		{key(0, 80, 6, 0), key(42, 80, 6, 0), 3},
-		{key(0, 80, 6, 0), key(42, 80, 17, 0), 0},  // proto is different
-		{key(2, 80, 6, 0), key(42, 80, 6, 0), 0},   // id is different
-		{key(0, 8080, 6, 0), key(42, 80, 6, 0), 0}, // port is different
-		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},    // same key
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 3}, // port ranges are the same
+		{key(0, 80, 6, 0), key(42, 80, 17, 0), 0},                                        // proto is different
+		{key(2, 80, 6, 0), key(42, 80, 6, 0), 0},                                         // id is different
+		{key(0, 8080, 6, 0), key(42, 80, 6, 0), 0},                                       // port is different
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 8080, 6, 0), 0},                   // port range is different from port
+		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},                                          // same key
 		{key(42, 0, 0, 0), key(42, 0, 6, 0), 4},
 		{key(42, 0, 0, 0), key(42, 80, 6, 0), 4},
+		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(42, 80, 6, 0), 4}, // port range 64-127,80
 		{key(42, 0, 0, 0), key(42, 0, 17, 0), 4},
 		{key(42, 0, 0, 0), key(42, 80, 17, 0), 4},
+		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(42, 80, 17, 0), 4},
 		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0}, // same key
 		{key(42, 0, 6, 0), key(42, 80, 6, 0), 5},
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 5},
 		{key(42, 0, 6, 0), key(42, 8080, 6, 0), 5},
-		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0},    // same key
-		{key(42, 80, 6, 0), key(42, 8080, 6, 0), 0},  // different port
-		{key(42, 80, 6, 0), key(42, 80, 17, 0), 0},   // different proto
-		{key(42, 80, 6, 0), key(42, 8080, 17, 0), 0}, // different port and proto
+		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0},                                          // same key
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0},  // same key
+		{key(42, 80, 6, 0), key(42, 8080, 6, 0), 0},                                        // different port
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 128, 0xff80, 6, 0), 0}, // different port ranges
+		{key(42, 80, 6, 0), key(42, 80, 17, 0), 0},                                         // different proto
+		{key(42, 80, 6, 0), key(42, 8080, 17, 0), 0},                                       // different port and proto
 
 		// increasing specificity for a L3/L4 key
 		{key(0, 0, 0, 0), key(42, 80, 6, 0), 1},
+		{keyWithPortMask(0, 64, 0xffc0, 0, 0), key(42, 80, 6, 0), 1},
 		{key(0, 0, 6, 0), key(42, 80, 6, 0), 2},
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 2},
 		{key(0, 80, 6, 0), key(42, 80, 6, 0), 3},
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 3},
 		{key(42, 0, 0, 0), key(42, 80, 6, 0), 4},
+		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(42, 80, 6, 0), 4},
 		{key(42, 0, 6, 0), key(42, 80, 6, 0), 5},
-		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0}, // same key
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 5},
+		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0},                                         // same key
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0}, // same key
 
 		// increasing specificity for a L3-only key
 		{key(0, 0, 0, 0), key(42, 0, 0, 0), 1},
-		{key(0, 0, 6, 0), key(42, 0, 0, 0), 0},   // not a superset
-		{key(0, 80, 6, 0), key(42, 0, 0, 0), 0},  // not a superset
-		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},  // same key
-		{key(42, 0, 6, 0), key(42, 0, 0, 0), 0},  // not a superset
-		{key(42, 80, 6, 0), key(42, 0, 0, 0), 0}, // not a superset
+		{keyWithPortMask(0, 64, 0xffc0, 0, 0), key(42, 0, 0, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 0, 0), 0},                                            // not a superset
+		{key(0, 80, 6, 0), key(42, 0, 0, 0), 0},                                           // not a superset
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 0, 0, 0), 0},                       // not a superset
+		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},                                           // same key
+		{key(42, 0, 6, 0), key(42, 0, 0, 0), 0},                                           // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 0, 0), 0}, // not a superset
+		{key(42, 80, 6, 0), key(42, 0, 0, 0), 0},                                          // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(42, 0, 0, 0), 0},                      // not a superset
 
 		// increasing specificity for a L3/proto key
-		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1},
-		{key(0, 0, 6, 0), key(42, 0, 6, 0), 2},
-		{key(0, 80, 6, 0), key(42, 0, 6, 0), 0}, // not a superset
+		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1}, // wildcard
+		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 6, 0), 3},                                           // ports are the same
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 3}, // port ranges are the same
+		{key(0, 80, 6, 0), key(42, 0, 6, 0), 0},                                          // not a superset
+		{key(0, 80, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0},                     // not a superset
 		{key(42, 0, 0, 0), key(42, 0, 6, 0), 4},
-		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0},  // same key
-		{key(42, 80, 6, 0), key(42, 0, 6, 0), 0}, // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 0, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 4},
+		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0},                                           // same key
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0}, // same key
+		{key(42, 80, 6, 0), key(42, 0, 6, 0), 0},                                          // not a superset
+		{key(42, 80, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0},                     // not a superset
 
 		// increasing specificity for a proto-only key
 		{key(0, 0, 0, 0), key(0, 0, 6, 0), 1},
-		{key(0, 0, 6, 0), key(0, 0, 6, 0), 0},   // same key
-		{key(0, 80, 6, 0), key(0, 0, 6, 0), 0},  // not a superset
-		{key(42, 0, 0, 0), key(0, 0, 6, 0), 0},  // not a superset
-		{key(42, 0, 6, 0), key(0, 0, 6, 0), 0},  // not a superset
-		{key(42, 80, 6, 0), key(0, 0, 6, 0), 0}, // not a superset
+		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 1},
+		{key(0, 0, 6, 0), key(0, 0, 6, 0), 0},                                            // same key
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},  // same key
+		{key(0, 80, 6, 0), key(0, 0, 6, 0), 0},                                           // not a superset
+		{key(0, 80, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},                      // not a superset
+		{key(42, 0, 0, 0), key(0, 0, 6, 0), 0},                                           // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 0, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0}, // not a superset
+		{key(42, 0, 6, 0), key(0, 0, 6, 0), 0},                                           // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0}, // not a superset
+		{key(42, 80, 6, 0), key(0, 0, 6, 0), 0},                                          // not a superset
+		{key(42, 80, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},                     // not a superset
 
 		// increasing specificity for a L4-only key
 		{key(0, 0, 0, 0), key(0, 80, 6, 0), 1},
+		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 1},
 		{key(0, 0, 6, 0), key(0, 80, 6, 0), 2},
-		{key(0, 80, 6, 0), key(0, 80, 6, 0), 0},  // same key
-		{key(42, 0, 0, 0), key(0, 80, 6, 0), 0},  // not a superset
-		{key(42, 0, 6, 0), key(0, 80, 6, 0), 0},  // not a superset
-		{key(42, 80, 6, 0), key(0, 80, 6, 0), 0}, // not a superset
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(0, 80, 6, 0), 2},
+		{key(0, 80, 6, 0), key(0, 80, 6, 0), 0},                                          // same key
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},  // same key
+		{key(42, 0, 0, 0), key(0, 80, 6, 0), 0},                                          // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(0, 80, 6, 0), 0},                     // not a superset
+		{key(42, 0, 6, 0), key(0, 80, 6, 0), 0},                                          // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(0, 80, 6, 0), 0},                     // not a superset
+		{key(42, 80, 6, 0), key(0, 80, 6, 0), 0},                                         // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0}, // not a superset
 
 	}
 	for i, tt := range tests {
@@ -198,7 +233,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantOld:     map[Key]MapStateEntry{},
 		},
 		{
-			name: "test-2 - L3 allow KV should not overwrite deny entry",
+			name: "test-2a - L3 allow KV should not overwrite deny entry",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -258,7 +293,70 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantOld:     map[Key]MapStateEntry{},
 		},
 		{
-			name: "test-3 - L3-L4 allow KV should not overwrite deny entry",
+			name: "test-2b - L3 port-range allow KV should not overwrite deny entry",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{},
+			wantOld:     map[Key]MapStateEntry{},
+		},
+		{
+			name: "test-3a - L3-L4 allow KV should not overwrite deny entry",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -301,7 +399,53 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantOld:     map[Key]MapStateEntry{},
 		},
 		{
-			name: "test-4 - L3-L4 deny KV should overwrite allow entry",
+			name: "test-3b - L3-L4 port-range allow KV should not overwrite deny entry",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds:    Keys{},
+			wantDeletes: Keys{},
+			wantOld:     map[Key]MapStateEntry{},
+		},
+		{
+			name: "test-4a - L3-L4 deny KV should overwrite allow entry",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -362,7 +506,78 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			},
 		},
 		{
-			name: "test-5 - L3 deny KV should overwrite all L3-L4 allow and L3 allow entries for the same L3",
+			name: "test-4b - L3-L4 port-range deny KV should overwrite allow entry",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+		},
+		{
+			name: "test-5a - L3 deny KV should overwrite all L3-L4 allow and L3 allow entries for the same L3",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -490,7 +705,142 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			},
 		},
 		{
-			name: "test-6 - L3 egress deny KV should not overwrite any existing ingress allow",
+			name: "test-5b - L3 port-range deny KV should overwrite all L3-L4 allow and L3 allow entries for the same L3",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         2,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         2,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+				{
+					Identity:         2,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         2,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+		},
+		{
+			name: "test-6a - L3 egress deny KV should not overwrite any existing ingress allow",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -610,7 +960,134 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantOld:     map[Key]MapStateEntry{},
 		},
 		{
-			name: "test-7 - L3 ingress deny KV should not be overwritten by a L3-L4 ingress allow",
+			name: "test-6b - L3 egress port-range deny KV should not overwrite any existing ingress allow",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         2,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         2,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+				{
+					Identity:         2,
+					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         2,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{},
+			wantOld:     map[Key]MapStateEntry{},
+		},
+		{
+			name: "test-7a - L3 ingress deny KV should not be overwritten by a L3-L4 ingress allow",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -653,7 +1130,51 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantOld:     map[Key]MapStateEntry{},
 		},
 		{
-			name: "test-8 - L3 ingress deny KV should not be overwritten by a L3-L4-L7 ingress allow",
+			name: "test-7b - L3 ingress deny KV should not be overwritten by a L3-L4 port-range ingress allow",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds:    Keys{},
+			wantDeletes: Keys{},
+			wantOld:     map[Key]MapStateEntry{},
+		},
+		{
+			name: "test-8a - L3 ingress deny KV should not be overwritten by a L3-L4-L7 ingress allow",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -697,7 +1218,52 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantOld:     map[Key]MapStateEntry{},
 		},
 		{
-			name: "test-9 - L3 ingress deny KV should overwrite a L3-L4-L7 ingress allow",
+			name: "test-8b - L3 ingress deny KV should not be overwritten by a L3-L4-L7 port-range ingress allow",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds:    Keys{},
+			wantDeletes: Keys{},
+			wantOld:     map[Key]MapStateEntry{},
+		},
+		{
+			name: "test-9a - L3 ingress deny KV should overwrite a L3-L4-L7 ingress allow",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -767,7 +1333,80 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			},
 		},
 		{
-			name: "test-10 - L3 ingress deny KV should overwrite a L3-L4-L7 ingress allow and a L3-L4 deny",
+			name: "test-9b - L3 ingress deny KV should overwrite a L3-L4-L7 port-range ingress allow",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+		},
+		{
+			name: "test-10a - L3 ingress deny KV should overwrite a L3-L4-L7 ingress allow and a L3-L4 deny",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -863,7 +1502,109 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			},
 		},
 		{
-			name: "test-11 - L3 ingress allow should not be allowed if there is a L3 'all' deny",
+			name: "test-10b - L3 ingress deny KV should overwrite a L3-L4-L7 port-range ingress allow and a L3-L4 port-range deny",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+		},
+		{
+			name: "test-11a - L3 ingress allow should not be allowed if there is a L3 'all' deny",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -926,8 +1667,76 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 			wantAdds:    Keys{},
 			wantDeletes: Keys{},
 			wantOld:     map[Key]MapStateEntry{},
-		}, {
-			name: "test-12 - inserting a L3 'all' deny should delete all entries for that direction",
+		},
+		{
+			name: "test-11b - L3 ingress allow should not be allowed if there is a L3 'all' deny",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         0,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         100,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         0,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds:    Keys{},
+			wantDeletes: Keys{},
+			wantOld:     map[Key]MapStateEntry{},
+		},
+		{
+			name: "test-12a - inserting a L3 'all' deny should delete all entries for that direction",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -1045,8 +1854,137 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 					IsDeny:           false,
 				},
 			},
-		}, {
-			name: "test-13 - L3-L4-L7 ingress allow should overwrite a L3-L4-L7 ingress allow due to lower priority",
+		},
+		{
+			name: "test-12b - inserting a L3 'all' deny should delete all entries for that direction (including port ranges)",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         4,
+					InvertedPortMask: ^uint16(0xfffc), // port range 4-7
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         100,
+					DestPort:         4,
+					InvertedPortMask: ^uint16(0xfffc), // port range 4-7
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         0,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         0,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        0,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+				{
+					Identity:         100,
+					DestPort:         4,
+					InvertedPortMask: ^uint16(0xfffc), // port range 4-7
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Egress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           true,
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         0,
+					DestPort:         0,
+					Nexthdr:          0,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+				Key{
+					Identity:         1,
+					DestPort:         4,
+					InvertedPortMask: ^uint16(0xfffc), // port range 4-7
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0), // port range 64-127
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+				{
+					Identity:         1,
+					DestPort:         4,
+					InvertedPortMask: ^uint16(0xfffc), // port range 4-7
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort:        8080,
+					priority:         8080,
+					DerivedFromRules: nil,
+					IsDeny:           false,
+				},
+			},
+		},
+		{
+			name: "test-13a - L3-L4-L7 ingress allow should overwrite a L3-L4-L7 ingress allow due to lower priority",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -1105,8 +2043,75 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 					Listener:  "listener1",
 				},
 			},
-		}, {
-			name: "test-14 - L4-L7 ingress allow should overwrite a L3-L4-L7 ingress allow due to lower priority on the same port",
+		},
+		{
+			name: "test-13b - L3-L4-L7 port-range ingress allow should overwrite a L3-L4-L7 port-range ingress allow due to lower priority",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort: 8080,
+					priority:  8080,
+					Listener:  "listener1",
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort: 9090,
+					priority:  1,
+					Listener:  "listener2",
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort: 9090,
+					priority:  1,
+					Listener:  "listener2",
+				},
+			}),
+			wantAdds: Keys{
+				Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: struct{}{},
+			},
+			wantDeletes: Keys{},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort: 8080,
+					priority:  8080,
+					Listener:  "listener1",
+				},
+			},
+		},
+		{
+			name: "test-14a - L4-L7 ingress allow should overwrite a L3-L4-L7 ingress allow due to lower priority on the same port",
 			ms: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         1,
@@ -1150,6 +2155,64 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         80,
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort: 8080,
+					priority:  8080,
+					Listener:  "listener1",
+				},
+			},
+		},
+		{
+			name: "test-14b - L4-L7 port-range ingress allow should overwrite a L3-L4-L7 port-range ingress allow due to lower priority on the same port",
+			ms: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort: 8080,
+					priority:  8080,
+					Listener:  "listener1",
+				},
+			}),
+			args: args{
+				key: Key{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				},
+				entry: MapStateEntry{
+					ProxyPort: 8080,
+					priority:  1,
+					Listener:  "listener1",
+				},
+			},
+			want: newMapState(map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
+					Nexthdr:          3,
+					TrafficDirection: trafficdirection.Ingress.Uint8(),
+				}: {
+					ProxyPort: 8080,
+					priority:  1,
+					Listener:  "listener1",
+				},
+			}),
+			wantAdds:    Keys{},
+			wantDeletes: Keys{},
+			wantOld: map[Key]MapStateEntry{
+				{
+					Identity:         1,
+					DestPort:         64,
+					InvertedPortMask: ^uint16(0xffc0),
 					Nexthdr:          3,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1596,7 +2659,7 @@ func TestMapState_AccumulateMapChangesDeny(t *testing.T) {
 				proxyPort = 1
 			}
 			value := NewMapStateEntry(cs, nil, proxyPort, "", 0, x.deny, DefaultAuthType, AuthTypeDisabled)
-			policyMaps.AccumulateMapChanges(cs, adds, deletes, key, value)
+			policyMaps.AccumulateMapChanges(cs, adds, deletes, []Key{key}, value)
 		}
 		adds, deletes := policyMaps.consumeMapChanges(DummyOwner{}, policyMapState, denyRules, nil)
 		policyMapState.validatePortProto(t)
@@ -1817,7 +2880,7 @@ func TestMapState_AccumulateMapChanges(t *testing.T) {
 				proxyPort = 1
 			}
 			value := NewMapStateEntry(cs, nil, proxyPort, "", 0, x.deny, x.hasAuth, x.authType)
-			policyMaps.AccumulateMapChanges(cs, adds, deletes, key, value)
+			policyMaps.AccumulateMapChanges(cs, adds, deletes, []Key{key}, value)
 		}
 		adds, deletes := policyMaps.consumeMapChanges(DummyOwner{}, policyMapState, policyFeatures(0), nil)
 		policyMapState.validatePortProto(t)
@@ -2384,7 +3447,7 @@ func TestMapState_AccumulateMapChangesOnVisibilityKeys(t *testing.T) {
 				proxyPort = 1
 			}
 			value := NewMapStateEntry(cs, nil, proxyPort, "", 0, x.deny, DefaultAuthType, AuthTypeDisabled)
-			policyMaps.AccumulateMapChanges(cs, adds, deletes, key, value)
+			policyMaps.AccumulateMapChanges(cs, adds, deletes, []Key{key}, value)
 		}
 		adds, deletes := policyMaps.consumeMapChanges(DummyOwner{}, policyMapState, denyRules, nil)
 		changes = ChangeState{
@@ -2408,7 +3471,7 @@ func TestMapState_AccumulateMapChangesOnVisibilityKeys(t *testing.T) {
 }
 
 func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
-	identityCache := cache.IdentityCache{
+	identityCache := identity.IdentityMap{
 		identity.ReservedIdentityWorld: labels.LabelWorld.LabelArray(),
 		worldIPIdentity:                lblWorldIP,                  // "192.0.2.3/32"
 		worldSubnetIdentity:            lblWorldSubnet.LabelArray(), // "192.0.2.0/24"
@@ -2461,9 +3524,7 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		{"deny-allow: a superset a L3L4, b L3L4", reservedWorldID, worldSubnetID, true, false, 80, 6, 80, 6, insertA},
 		{"deny-allow: b superset a L3L4, b L3L4", worldIPID, worldSubnetID, true, false, 80, 6, 80, 6, insertBoth},
 
-		// deny-deny insertions: Note: We do not delete all redundant deny-deny insertions that we could.
-		// We only delete entries redundant to L3-only port protocols, all other port-protocol supersets
-		// *do not* have this effect.
+		// deny-deny insertions: Note: We do delete all redundant deny-deny insertions.
 		{"deny-deny: a superset a|b L3-only", worldSubnetID, worldIPID, true, true, 0, 0, 0, 0, insertA},
 		{"deny-deny: b superset a|b L3-only", worldSubnetID, reservedWorldID, true, true, 0, 0, 0, 0, insertB},
 		{"deny-deny: a superset a L3-only, b L4", worldSubnetID, worldIPID, true, true, 0, 0, 0, 6, insertA},
@@ -2472,17 +3533,17 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		{"deny-deny: b superset a L3-only, b L3L4", worldSubnetID, reservedWorldID, true, true, 0, 0, 80, 6, insertBoth},
 		{"deny-deny: a superset a L4, b L3-only", worldSubnetID, worldIPID, true, true, 0, 6, 0, 0, insertBoth},
 		{"deny-deny: b superset a L4, b L3-only", worldSubnetID, reservedWorldID, true, true, 0, 6, 0, 0, insertB},
-		{"deny-deny: a superset a L4, b L4", worldSubnetID, worldIPID, true, true, 0, 6, 0, 6, canDeleteBInsertsBoth},
-		{"deny-deny: b superset a L4, b L4", worldSubnetID, reservedWorldID, true, true, 0, 6, 0, 6, canDeleteAInsertsBoth},
-		{"deny-deny: a superset a L4, b L3L4", worldSubnetID, worldIPID, true, true, 0, 6, 80, 6, canDeleteBInsertsBoth},
+		{"deny-deny: a superset a L4, b L4", worldSubnetID, worldIPID, true, true, 0, 6, 0, 6, insertA},
+		{"deny-deny: b superset a L4, b L4", worldSubnetID, reservedWorldID, true, true, 0, 6, 0, 6, insertB},
+		{"deny-deny: a superset a L4, b L3L4", worldSubnetID, worldIPID, true, true, 0, 6, 80, 6, insertA},
 		{"deny-deny: b superset a L4, b L3L4", worldSubnetID, reservedWorldID, true, true, 0, 6, 80, 6, insertBoth},
 		{"deny-deny: a superset a L3L4, b L3-only", worldSubnetID, worldIPID, true, true, 80, 6, 0, 0, insertBoth},
 		{"deny-deny: b superset a L3L4, b L3-only", worldSubnetID, reservedWorldID, true, true, 80, 6, 0, 0, insertB},
 		{"deny-deny: a superset a L3L4, b L4", worldSubnetID, worldIPID, true, true, 80, 6, 0, 6, insertBoth},
-		{"deny-deny: b superset a L3L4, b L4", worldSubnetID, reservedWorldID, true, true, 80, 6, 0, 6, canDeleteAInsertsBoth},
-		{"deny-deny: a superset a L3L4, b L3L4", worldSubnetID, worldIPID, true, true, 80, 6, 80, 6, canDeleteBInsertsBoth},
-		{"deny-deny: b superset a L3L4, b L3L4", worldSubnetID, reservedWorldID, true, true, 80, 6, 80, 6, canDeleteAInsertsBoth},
-		// allow-allow insertions do not need to be tests as they will all be inserted
+		{"deny-deny: b superset a L3L4, b L4", worldSubnetID, reservedWorldID, true, true, 80, 6, 0, 6, insertB},
+		{"deny-deny: a superset a L3L4, b L3L4", worldSubnetID, worldIPID, true, true, 80, 6, 80, 6, insertA},
+		{"deny-deny: b superset a L3L4, b L3L4", worldSubnetID, reservedWorldID, true, true, 80, 6, 80, 6, insertB},
+		// allow-allow insertions do not need tests as their affect on one another does not matter.
 	}
 	for _, tt := range tests {
 		aKey := Key{Identity: tt.aIdentity, DestPort: tt.aPort, Nexthdr: tt.aProto}
@@ -2534,7 +3595,7 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		outcomeKeys.denyPreferredInsert(aKey, aEntry, selectorCache, allFeatures)
 		outcomeKeys.denyPreferredInsert(bKey, bEntry, selectorCache, allFeatures)
 		outcomeKeys.validatePortProto(t)
-		require.EqualValues(t, expectedKeys, outcomeKeys, tt.name)
+		require.True(t, expectedKeys.Equals(outcomeKeys), "%s (MapState):\n%s", tt.name, outcomeKeys.Diff(nil, expectedKeys))
 	}
 	// Now test all cases with different traffic directions.
 	// This should result in both entries being inserted with

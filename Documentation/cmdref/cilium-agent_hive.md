@@ -95,6 +95,8 @@ cilium-agent hive [flags]
       --monitor-queue-size int                                       Size of the event queue when reading monitor events
       --multi-network-auto-direct-node-routes                        Enable multi-network aware automatic L2 routing between nodes (experimental) (default true)
       --multicast-enabled                                            Enables multicast in Cilium
+      --nat-map-stats-entries int                                    Number k top stats entries to store locally in statedb (default 32)
+      --nat-map-stats-interval duration                              Interval upon which nat maps are iterated for stats (default 30s)
       --nodeport-addresses strings                                   A whitelist of CIDRs to limit which IPs are used for NodePort. If not set, primary IPv4 and/or IPv6 address of each native device is used.
       --pprof                                                        Enable serving pprof debugging API
       --pprof-address string                                         Address that pprof listens on (default "localhost")

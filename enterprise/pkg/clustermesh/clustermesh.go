@@ -31,10 +31,10 @@ type ClusterIDsManager struct {
 	maps    cectnat.PerCluster
 }
 
-func newClusterIDManager(logger logrus.FieldLogger, maps cectnat.PerCluster) ClusterIDsManager {
+func newClusterIDManager(logger logrus.FieldLogger, cinfo types.ClusterInfo, maps cectnat.PerCluster) ClusterIDsManager {
 	return ClusterIDsManager{
 		logger:  logger,
-		usedIDs: clustermesh.NewClusterMeshUsedIDs(),
+		usedIDs: clustermesh.NewClusterMeshUsedIDs(cinfo.ID),
 		maps:    maps,
 	}
 }
