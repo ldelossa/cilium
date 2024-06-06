@@ -21,7 +21,7 @@ jobs:
           {name: hubble-relay, dockerfile: ./images/hubble-relay/Dockerfile},
           {name: operator-generic, dockerfile: ./images/operator/Dockerfile},
         ]
-        branch: [v1.12-ce, v1.13-ce, v1.14-ce, v1.15-ce]
+        branch: [v1.13-ce, v1.14-ce, v1.15-ce]
         include:
           - image: {name: kvstoremesh, dockerfile: ./images/kvstoremesh/Dockerfile}
             branch: v1.14-ce

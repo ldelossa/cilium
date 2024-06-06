@@ -24,7 +24,6 @@
     "v1.15-ce",
     "v1.14-ce",
     "v1.13-ce",
-    "v1.12-ce",
   ],
   "vulnerabilityAlerts": {
     "enabled": true
@@ -105,7 +104,6 @@
       "allowedVersions": "/^v0\\.14\\.[0-9]+$/",
       "matchBaseBranches": [
         "v1.13-ce",
-        "v1.12-ce",
       ]
     },
     {

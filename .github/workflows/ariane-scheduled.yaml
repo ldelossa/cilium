@@ -23,8 +23,6 @@ jobs:
         include:
         # DON'T USE hourModulo=0 to avoid running ariane scheduled-workflows
         # at the same time as regular main scheduled workflows
-          - branch: '1.12-ce'
-            hourModulo: 1
           - branch: '1.13-ce'
             hourModulo: 2
           - branch: '1.14-ce'
