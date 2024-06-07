@@ -112,7 +112,7 @@ _Handy tip: If you ever feel unsure, you can always look at how the previous rel
 
 [Azure Marketplace CNAB]: https://github.com/isovalent/external-azure-marketplace-cnab
 [#azure-partnership-internal]: https://isovalent.slack.com/archives/C0354JHPVT7
-[backport PRs]: https://github.com/isovalent/cilium/labels/enterprise-backport%2FX.Y
+[backport PRs]: https://github.com/isovalent/cilium/pulls?q=is%3Apr+is%3Aopen+label%3Aenterprise-backport%2FX.Y
 [build-images-releases]: https://github.com/isovalent/cilium/actions/workflows/build-images-releases.yaml
 [cilium-enterprise-docs]: https://github.com/isovalent/cilium-enterprise-docs
 [helm-charts]: https://github.com/isovalent/helm-charts
