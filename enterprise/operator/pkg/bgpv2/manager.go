@@ -19,12 +19,20 @@ import (
 
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
+	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 )
 
 type BGPResourceMapper struct {
 	logger logrus.FieldLogger
 	jobs   job.Group
 	signal *signaler.BGPCPSignaler
+
+	// BGPv2 Resources
+	clusterConfig      store.BGPCPResourceStore[*v1alpha1.IsovalentBGPClusterConfig]
+	peerConfig         store.BGPCPResourceStore[*v1alpha1.IsovalentBGPPeerConfig]
+	advertisements     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement]
+	nodeConfigOverride store.BGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride]
 }
 
 type BGPResourceManagerParams struct {
@@ -34,6 +42,12 @@ type BGPResourceManagerParams struct {
 	Jobs   job.Group
 	Config config.Config
 	Signal *signaler.BGPCPSignaler
+
+	// BGPv2 Resources
+	ClusterConfig      store.BGPCPResourceStore[*v1alpha1.IsovalentBGPClusterConfig]
+	PeerConfig         store.BGPCPResourceStore[*v1alpha1.IsovalentBGPPeerConfig]
+	Advertisements     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement]
+	NodeConfigOverride store.BGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride]
 }
 
 func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
@@ -42,9 +56,13 @@ func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
 	}
 
 	m := &BGPResourceMapper{
-		logger: in.Logger,
-		jobs:   in.Jobs,
-		signal: in.Signal,
+		logger:             in.Logger,
+		jobs:               in.Jobs,
+		signal:             in.Signal,
+		clusterConfig:      in.ClusterConfig,
+		peerConfig:         in.PeerConfig,
+		advertisements:     in.Advertisements,
+		nodeConfigOverride: in.NodeConfigOverride,
 	}
 
 	in.Jobs.Add(
