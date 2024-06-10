@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/k8s"
+	cilium_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 )
 
@@ -27,6 +28,7 @@ var Cell = cell.Module(
 		k8s.IsovalentBGPClusterConfigResource,
 		k8s.IsovalentBGPPeerConfigResource,
 		k8s.IsovalentBGPAdvertisementResource,
+		k8s.IsovalentBGPNodeConfigResource,
 		k8s.IsovalentBGPNodeConfigOverrideResource,
 	),
 
@@ -35,6 +37,7 @@ var Cell = cell.Module(
 		store.NewBGPCPResourceStore[*v1alpha1.IsovalentBGPPeerConfig],
 		store.NewBGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement],
 		store.NewBGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride],
+		store.NewBGPCPResourceStore[*cilium_v2.CiliumNode],
 	),
 
 	cell.ProvidePrivate(signaler.NewBGPCPSignaler),

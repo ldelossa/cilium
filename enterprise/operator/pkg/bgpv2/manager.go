@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
+	cilium_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -38,11 +39,18 @@ type BGPResourceMapper struct {
 	advertisements     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement]
 	nodeConfigOverride store.BGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride]
 
+	// for BGP node config, we do not need to trigger reconciliation on changes. So,
+	// we use store.Resource instead of store.BGPCPResourceStore.
+	nodeConfigStore resource.Store[*v1alpha1.IsovalentBGPNodeConfig]
+
 	// BGPv2 OSS resources
 	ossClusterConfigStore      resource.Store[*v2alpha1.CiliumBGPClusterConfig]
 	ossPeerConfigStore         resource.Store[*v2alpha1.CiliumBGPPeerConfig]
 	ossAdvertStore             resource.Store[*v2alpha1.CiliumBGPAdvertisement]
 	ossNodeConfigOverrideStore resource.Store[*v2alpha1.CiliumBGPNodeConfigOverride]
+
+	// Cilium node resource
+	ciliumNode store.BGPCPResourceStore[*cilium_v2.CiliumNode]
 }
 
 type BGPResourceManagerParams struct {
@@ -59,12 +67,16 @@ type BGPResourceManagerParams struct {
 	PeerConfig         store.BGPCPResourceStore[*v1alpha1.IsovalentBGPPeerConfig]
 	Advertisements     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement]
 	NodeConfigOverride store.BGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride]
+	NodeConfig         resource.Resource[*v1alpha1.IsovalentBGPNodeConfig]
 
 	// BGPv2 OSS Resources
 	OSSClusterConfig      resource.Resource[*v2alpha1.CiliumBGPClusterConfig]
 	OSSPeerConfig         resource.Resource[*v2alpha1.CiliumBGPPeerConfig]
 	OSSAdvert             resource.Resource[*v2alpha1.CiliumBGPAdvertisement]
 	OSSNodeConfigOverride resource.Resource[*v2alpha1.CiliumBGPNodeConfigOverride]
+
+	// Cilium node resource
+	CiliumNode store.BGPCPResourceStore[*cilium_v2.CiliumNode]
 }
 
 func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
@@ -81,10 +93,17 @@ func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
 		peerConfig:         in.PeerConfig,
 		advertisements:     in.Advertisements,
 		nodeConfigOverride: in.NodeConfigOverride,
+		ciliumNode:         in.CiliumNode,
 	}
 
 	in.Jobs.Add(
 		job.OneShot("enterprise-bgpv2-operator-main", func(ctx context.Context, health cell.Health) (err error) {
+			// initialize node config store
+			m.nodeConfigStore, err = in.NodeConfig.Store(ctx)
+			if err != nil {
+				return err
+			}
+
 			// initialize oss stores
 			m.ossClusterConfigStore, err = in.OSSClusterConfig.Store(ctx)
 			if err != nil {
