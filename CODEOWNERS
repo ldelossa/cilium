@@ -765,7 +765,7 @@ Makefile* @cilium/build
 /enterprise/cilium-cni/ @isovalent/cilium-agent
 /enterprise/cilium-cni/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/cilium-dbg/ @isovalent/cli
-/enterprise/cilium-dbg/cmd/bpf_egress* @isovalent/egress-gateway
+/enterprise/cilium-dbg/cmd/*bpf_*egress* @isovalent/egress-gateway
 /enterprise/cilium-dbg/cmd/*bfd_* @isovalent/traffic-engineering
 /enterprise/daemon/ @isovalent/cilium-agent
 /enterprise/datapath/tables/egressip.go @isovalent/egress-gateway

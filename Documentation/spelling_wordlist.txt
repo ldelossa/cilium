@@ -411,6 +411,7 @@ ipam
 ipcache
 ipmasq
 iproute
+ips
 ipsec
 ipsets
 iptables
@@ -629,10 +630,10 @@ qede
 qemu
 queryable
 queueing
-rbac
 rST
 rateLimit
 ratelimiter
+rbac
 rc
 reStructuredText
 reachability
