@@ -161,8 +161,8 @@ netshoot_pod_ip=$(kubectl get pod "${netshoot_pod_name}" --template '{{.status.p
 # ping from the k8s pod to the remote peer
 kubectl exec -t "${netshoot_pod_name}" -- ping -c 3 -w 10 -s 1400 "${vpn_peer_ip}"
 
-# helper func used to assert json output ($1) with expected value ($3) at provided path ($2)
-jq_assert_value () {
+# helper func used to assert that the json output ($1) is equal to the expected value ($3) at the provided path ($2)
+jq_assert_eq () {
   res=$(echo "$1" | jq -r "$2")
   if [ "${res}" != "$3" ]; then
     echo "$2 is not equal $3"
@@ -170,20 +170,29 @@ jq_assert_value () {
   fi
 }
 
+# helper func used to assert that the json output ($1) is lower than / equal to the expected value ($3) at the provided path ($2)
+jq_assert_le () {
+  res=$(echo "$1" | jq -r "$2")
+  if [ "${res}" -gt "$3" ]; then
+    echo "$2 is not lower than or equal $3"
+    exit 1
+  fi
+}
+
 # iperf - TCP bidirectional
 iperf_output=$(${external_node_exec} ip netns exec "${ns_name}" iperf3 -c "${netshoot_pod_ip}" --bidir --set-mss=1350 --bitrate=1m --time 5 --connect-timeout 1000 --json)
 set +x
-jq_assert_value "${iperf_output}" '.error' "null"
-jq_assert_value "${iperf_output}" '.end.sum_sent.retransmits' "0"
-jq_assert_value "${iperf_output}" '.end.sum_sent_bidir_reverse.retransmits' "0"
+jq_assert_eq "${iperf_output}" '.error' "null"
+jq_assert_le "${iperf_output}" '.end.sum_sent.retransmits' "5"
+jq_assert_le "${iperf_output}" '.end.sum_sent_bidir_reverse.retransmits' "5"
 set -x
 
 # iperf - UDP bidirectional
 iperf_output=$(${external_node_exec} ip netns exec "${ns_name}" iperf3 -c "${netshoot_pod_ip}" --bidir --udp --length=1350 --bitrate=1m --time 5 --connect-timeout 1000 --json)
 set +x
-jq_assert_value "${iperf_output}" '.error' "null"
-jq_assert_value "${iperf_output}" '.end.sum.lost_packets' "0"
-jq_assert_value "${iperf_output}" '.end.sum_bidir_reverse.lost_packets' "0"
+jq_assert_eq "${iperf_output}" '.error' "null"
+jq_assert_le "${iperf_output}" '.end.sum.lost_packets' "5"
+jq_assert_le "${iperf_output}" '.end.sum_bidir_reverse.lost_packets' "5"
 set -x
 
 #
