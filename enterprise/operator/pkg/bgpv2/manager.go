@@ -20,34 +20,51 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
+	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
+	"github.com/cilium/cilium/pkg/k8s/client"
+	"github.com/cilium/cilium/pkg/k8s/resource"
 )
 
 type BGPResourceMapper struct {
-	logger logrus.FieldLogger
-	jobs   job.Group
-	signal *signaler.BGPCPSignaler
+	logger    logrus.FieldLogger
+	jobs      job.Group
+	signal    *signaler.BGPCPSignaler
+	clientSet client.Clientset
 
 	// BGPv2 Resources
 	clusterConfig      store.BGPCPResourceStore[*v1alpha1.IsovalentBGPClusterConfig]
 	peerConfig         store.BGPCPResourceStore[*v1alpha1.IsovalentBGPPeerConfig]
 	advertisements     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement]
 	nodeConfigOverride store.BGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride]
+
+	// BGPv2 OSS resources
+	ossClusterConfigStore      resource.Store[*v2alpha1.CiliumBGPClusterConfig]
+	ossPeerConfigStore         resource.Store[*v2alpha1.CiliumBGPPeerConfig]
+	ossAdvertStore             resource.Store[*v2alpha1.CiliumBGPAdvertisement]
+	ossNodeConfigOverrideStore resource.Store[*v2alpha1.CiliumBGPNodeConfigOverride]
 }
 
 type BGPResourceManagerParams struct {
 	cell.In
 
-	Logger logrus.FieldLogger
-	Jobs   job.Group
-	Config config.Config
-	Signal *signaler.BGPCPSignaler
+	Logger    logrus.FieldLogger
+	Jobs      job.Group
+	Config    config.Config
+	Signal    *signaler.BGPCPSignaler
+	ClientSet client.Clientset
 
 	// BGPv2 Resources
 	ClusterConfig      store.BGPCPResourceStore[*v1alpha1.IsovalentBGPClusterConfig]
 	PeerConfig         store.BGPCPResourceStore[*v1alpha1.IsovalentBGPPeerConfig]
 	Advertisements     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPAdvertisement]
 	NodeConfigOverride store.BGPCPResourceStore[*v1alpha1.IsovalentBGPNodeConfigOverride]
+
+	// BGPv2 OSS Resources
+	OSSClusterConfig      resource.Resource[*v2alpha1.CiliumBGPClusterConfig]
+	OSSPeerConfig         resource.Resource[*v2alpha1.CiliumBGPPeerConfig]
+	OSSAdvert             resource.Resource[*v2alpha1.CiliumBGPAdvertisement]
+	OSSNodeConfigOverride resource.Resource[*v2alpha1.CiliumBGPNodeConfigOverride]
 }
 
 func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
@@ -59,6 +76,7 @@ func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
 		logger:             in.Logger,
 		jobs:               in.Jobs,
 		signal:             in.Signal,
+		clientSet:          in.ClientSet,
 		clusterConfig:      in.ClusterConfig,
 		peerConfig:         in.PeerConfig,
 		advertisements:     in.Advertisements,
@@ -66,10 +84,28 @@ func RegisterBGPResourceMapper(in BGPResourceManagerParams) error {
 	}
 
 	in.Jobs.Add(
-		job.OneShot("enterprise-bgpv2-operator-main", func(ctx context.Context, health cell.Health) error {
+		job.OneShot("enterprise-bgpv2-operator-main", func(ctx context.Context, health cell.Health) (err error) {
+			// initialize oss stores
+			m.ossClusterConfigStore, err = in.OSSClusterConfig.Store(ctx)
+			if err != nil {
+				return err
+			}
+			m.ossPeerConfigStore, err = in.OSSPeerConfig.Store(ctx)
+			if err != nil {
+				return err
+			}
+			m.ossAdvertStore, err = in.OSSAdvert.Store(ctx)
+			if err != nil {
+				return err
+			}
+			m.ossNodeConfigOverrideStore, err = in.OSSNodeConfigOverride.Store(ctx)
+			if err != nil {
+				return err
+			}
+
 			m.logger.Info("Enterprise BGPv2 control plane operator started")
 			m.Run(ctx)
-			return nil
+			return
 		}),
 	)
 
