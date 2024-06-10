@@ -12,10 +12,12 @@ package bgpv2
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
@@ -25,6 +27,22 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/time"
+)
+
+var (
+	// retry options used in reconcileWithRetry method.
+	// steps will repeat for ~8.5 minutes.
+	bo = wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Jitter:   0,
+		Steps:    10,
+		Cap:      0,
+	}
+
+	// maxErrorLen is the maximum length of error message to be logged.
+	maxErrorLen = 1024
 )
 
 type BGPResourceMapper struct {
@@ -141,7 +159,49 @@ func (m *BGPResourceMapper) Run(ctx context.Context) {
 			m.logger.Info("Enterprise BGPv2 control plane operator stopped")
 			return
 		case <-m.signal.Sig:
-			// Reconcile TODO
+			err := m.reconcileWithRetry(ctx)
+			if err != nil {
+				m.logger.WithError(err).Error("BGP reconciliation failed")
+			} else {
+				m.logger.Debug("BGP reconciliation successful")
+			}
 		}
 	}
+}
+
+func (m *BGPResourceMapper) reconcileWithRetry(ctx context.Context) error {
+	retryFn := func(ctx context.Context) (bool, error) {
+		err := m.reconcile(ctx)
+		if err != nil {
+			// log error, continue retry
+			m.logger.WithError(TrimError(err, maxErrorLen)).Warn("BGP reconciliation error")
+			return false, nil
+		}
+
+		// no error, stop retry
+		return true, nil
+	}
+
+	return wait.ExponentialBackoffWithContext(ctx, bo, retryFn)
+}
+
+func (m *BGPResourceMapper) reconcile(ctx context.Context) error {
+	err := m.reconcileMappings(ctx)
+	if err != nil {
+		return err
+	}
+
+	return m.reconcileClusterConfigs(ctx)
+}
+
+// TrimError trims error message to maxLen.
+func TrimError(err error, maxLen int) error {
+	if err == nil {
+		return nil
+	}
+
+	if len(err.Error()) > maxLen {
+		return fmt.Errorf("%s... ", err.Error()[:maxLen])
+	}
+	return err
 }
