@@ -13,6 +13,7 @@ package bgpv2
 import (
 	"github.com/cilium/hive/cell"
 
+	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/k8s"
@@ -21,7 +22,7 @@ import (
 )
 
 var Cell = cell.Module(
-	"bgp-enterprise-control-plane-operator",
+	"bgp-enterprise-operator",
 	"BGP Control Plane Operator",
 
 	cell.Provide(
@@ -42,5 +43,6 @@ var Cell = cell.Module(
 
 	cell.ProvidePrivate(signaler.NewBGPCPSignaler),
 
+	cell.Config(config.Config{}),
 	cell.Invoke(RegisterBGPResourceMapper),
 )
