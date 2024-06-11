@@ -5,12 +5,15 @@ package remoteproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 
-	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	"github.com/cilium/hive/cell"
 
 	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/pkg/controller"
@@ -51,7 +54,6 @@ const (
 // that the latest update version will be sent to the fqdn-proxy.
 type RemoteFQDNProxy struct {
 	client     fqdnpb.FQDNProxyClient
-	connection *grpc.ClientConn
 	clientLock lock.Mutex
 
 	controllers *controller.Manager
@@ -116,16 +118,46 @@ func NewRemoteFQDNProxy(
 	return remoteProxy, nil
 }
 
-func (r *RemoteFQDNProxy) Start(ctx cell.HookContext) error {
-	// TODO: move this to a controller?
+func (r *RemoteFQDNProxy) Start(_ cell.HookContext) error {
+	var connection *grpc.ClientConn
+	var logOnce sync.Once
 	go func() {
-		r.resetClient()
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			<-r.done
+			cancel()
+		}()
 
 		timer, done := inctimer.New()
 		defer done()
 		for {
-			r.connection.WaitForStateChange(context.Background(), connectivity.Ready)
-			r.resetClient()
+			// a connection already exists
+			if connection != nil {
+				err := connection.Close()
+				if err != nil {
+					// Close() fails only if we try to close multiple times
+					log.WithError(err).Error("Failed to close proxy connection")
+				}
+			}
+
+			// create a new connection
+			var err error
+			connection, err = grpc.DialContext(ctx, "unix:///var/run/cilium/proxy.sock", grpc.WithInsecure())
+			if err != nil {
+				log.WithError(err).Error("Failed to dial remote proxy server")
+			} else {
+				r.clientLock.Lock()
+				r.client = fqdnpb.NewFQDNProxyClient(connection)
+				r.clientLock.Unlock()
+
+				logOnce.Do(func() {
+					log.Info("FQDN HA proxy started")
+				})
+
+				// Block while connection is ready
+				connection.WaitForStateChange(ctx, connectivity.Ready)
+			}
+
 			select {
 			case <-r.done:
 				return
@@ -134,8 +166,16 @@ func (r *RemoteFQDNProxy) Start(ctx cell.HookContext) error {
 			}
 		}
 	}()
-	log.Info("FQDN HA proxy started")
 	return nil
+}
+
+func (r *RemoteFQDNProxy) getClient() (fqdnpb.FQDNProxyClient, error) {
+	r.clientLock.Lock()
+	defer r.clientLock.Unlock()
+	if r.client == nil {
+		return nil, errors.New("remote FQDN proxy is not initialized")
+	}
+	return r.client, nil
 }
 
 func (r *RemoteFQDNProxy) Stop(ctx cell.HookContext) error {
@@ -145,7 +185,12 @@ func (r *RemoteFQDNProxy) Stop(ctx cell.HookContext) error {
 }
 
 func (r *RemoteFQDNProxy) GetRules(endpointID uint16) (restore.DNSRules, error) {
-	rules, err := r.client.GetRules(context.TODO(), &fqdnpb.EndpointID{EndpointID: uint32(endpointID)})
+	client, err := r.getClient()
+	if err != nil {
+		return nil, fmt.Errorf("RemoveRestoredRules called before proxy was initialized: %w", err)
+	}
+
+	rules, err := client.GetRules(context.TODO(), &fqdnpb.EndpointID{EndpointID: uint32(endpointID)})
 
 	if err != nil {
 		log.WithField(logfields.EndpointID, endpointID).WithError(err).Error("Failed to retrieve DNS rules from proxy")
@@ -157,7 +202,12 @@ func (r *RemoteFQDNProxy) GetRules(endpointID uint16) (restore.DNSRules, error) 
 }
 
 func (r *RemoteFQDNProxy) RemoveRestoredRules(endpointID uint16) {
-	r.client.RemoveRestoredRules(context.TODO(), &fqdnpb.EndpointID{EndpointID: uint32(endpointID)})
+	client, err := r.getClient()
+	if err != nil {
+		log.Error("RemoveRestoredRules called before proxy was initialized")
+		return
+	}
+	client.RemoveRestoredRules(context.TODO(), &fqdnpb.EndpointID{EndpointID: uint32(endpointID)})
 }
 
 func (r *RemoteFQDNProxy) UpdateAllowed(endpointID uint64, destPortProto restore.PortProto, newRules policy.L7DataMap) error {
@@ -222,13 +272,19 @@ func (r *RemoteFQDNProxy) forwardFQDNRulesUpdates(ctx context.Context) error {
 	r.fqdnRulesCacheLock.Lock()
 	defer r.fqdnRulesCacheLock.Unlock()
 
+	client, err := r.getClient()
+	if err != nil {
+		return errors.New("failed to forward FQDN rules update to remote proxy because remote proxy is not running")
+	}
+
 	for len(r.fqdnRulesCacheKeys) > 0 {
 		ctx, cancel := context.WithTimeout(ctx, fqdnRulesUpdateTimeout)
 		defer cancel()
 
 		key := r.fqdnRulesCacheKeys[0]
 		msg := r.fqdnRulesCacheMap[key]
-		if _, err := r.client.UpdateAllowed(ctx, msg); err != nil {
+
+		if _, err := client.UpdateAllowed(ctx, msg); err != nil {
 			log.WithFields(logrus.Fields{
 				"newRules":           msg.Rules,
 				logfields.EndpointID: msg.EndpointID,
@@ -260,25 +316,6 @@ func (r *RemoteFQDNProxy) SetRejectReply(_ string) {
 
 func (r *RemoteFQDNProxy) RestoreRules(op *endpoint.Endpoint) {
 	//TODO: implement that
-}
-
-// Must be called with clientLock held
-func (r *RemoteFQDNProxy) resetClient() {
-	r.clientLock.Lock()
-	defer r.clientLock.Unlock()
-
-	if r.connection != nil {
-		err := r.connection.Close()
-		if err != nil {
-			log.Errorf("Failed to close proxy connection: %v", err)
-		}
-	}
-	var err error
-	r.connection, err = grpc.Dial("unix:///var/run/cilium/proxy.sock", grpc.WithInsecure())
-	if err != nil {
-		log.Errorf("did not connect to proxy: %v", err)
-	}
-	r.client = fqdnpb.NewFQDNProxyClient(r.connection)
 }
 
 func rulesFromProtobufMsg(rules *fqdnpb.RestoredRules) restore.DNSRules {
