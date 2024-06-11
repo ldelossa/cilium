@@ -8,21 +8,16 @@
 // or reproduction of this material is strictly forbidden unless prior written
 // permission is obtained from Isovalent Inc.
 
-package bgpv1
+package reconcilerv2
 
 import (
 	"github.com/cilium/hive/cell"
-
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconcilerv2"
 )
 
-// Cell is module with Enterprise BGP Control Plane components
-var Cell = cell.Module(
-	"enterprise-bgp-cp",
-	"Enterprise BGP Control Plane",
-
-	// enterprise-only reconcilers
-	reconciler.ConfigReconcilers,
-	reconcilerv2.ConfigReconcilers,
+// ConfigReconcilers contains cells of enterprise-only reconcilers
+var ConfigReconcilers = cell.Group(
+	cell.ProvidePrivate(
+		newReconcileParamsUpgrader,
+		newIsovalentPeerAdvertisement,
+	),
 )
