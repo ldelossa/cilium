@@ -286,6 +286,28 @@ func (s *egressGatewayHA) Run(ctx context.Context, t *check.Test) {
 		i++
 	}
 
+	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP (pod to external service using DNS)
+	i = 0
+	for _, client := range ct.ClientPods() {
+		client := client
+
+		for _, externalEchoSvc := range ct.EchoExternalServices() {
+			externalEcho := externalEchoSvc.ToEchoIPService()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-service-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandWithOutput(externalEcho, features.IPFamilyV4, "-4"))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					if !clientIP.Equal(egressGatewayNodeInternalIP) {
+						t.Fatal("Request reached external echo service with wrong source IP")
+					}
+				}
+			})
+			i++
+		}
+	}
+
 	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP (pod to external service)
 	i = 0
 	for _, client := range ct.ClientPods() {
@@ -536,9 +558,45 @@ func (s *egressGatewayMultipleGateways) Run(ctx context.Context, t *check.Test) 
 	})
 
 	// run the test
+	i := 0
 	responsesByClientIP := map[string]int{}
 
-	i := 0
+	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP of one of the multiple GWs (pod to external service using DNS)
+	for _, client := range ct.ClientPods() {
+		client := client
+
+		for _, externalEchoSvc := range ct.EchoExternalServices() {
+			externalEcho := externalEchoSvc.ToEchoIPService()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-service-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandParallelWithOutput(externalEcho, features.IPFamilyV4, 100, "-4"))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					responsesByClientIP[clientIP.String()]++
+				}
+			})
+			i++
+		}
+	}
+
+	// all client IPs should be egress IPs
+	for clientIP := range responsesByClientIP {
+		if _, ok := gatewayIPsToNames[clientIP]; !ok {
+			t.Fatalf("Request reached external echo service with wrong source IP %s", clientIP)
+		}
+	}
+
+	// and traffic should go through all gateways
+	for gatewayIP := range gatewayIPsToNames {
+		if _, ok := responsesByClientIP[gatewayIP]; !ok {
+			t.Fatalf("No request has gone through gateway %s", gatewayIP)
+		}
+	}
+
+	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP of one of the multiple GWs (pod to external service)
+	i = 0
+	responsesByClientIP = map[string]int{}
 	for _, client := range ct.ClientPods() {
 		client := client
 
@@ -550,9 +608,6 @@ func (s *egressGatewayMultipleGateways) Run(ctx context.Context, t *check.Test) 
 				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
 
 				for _, clientIP := range clientIPs {
-					if _, ok := responsesByClientIP[clientIP.String()]; !ok {
-						responsesByClientIP[clientIP.String()] = 0
-					}
 					responsesByClientIP[clientIP.String()]++
 				}
 			})
