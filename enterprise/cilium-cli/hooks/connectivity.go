@@ -33,6 +33,15 @@ const (
 //go:embed manifests/allow-all-dns-loookups-policy.yaml
 var allowAllDNSLookupsPolicyYAML string
 
+//go:embed manifests/client-egress-icmp.yaml
+var clientEgressICMPYAML string
+
+//go:embed manifests/client-egress-l7-http-external-node.yaml
+var clientEgressL7HTTPAnywhereYAML string
+
+//go:embed manifests/client-egress-only-dns.yaml
+var clientEgressOnlyDNSPolicyYAML string
+
 type EnterpriseConnectivity struct {
 	externalCiliumDNSProxyPods map[string]check.Pod
 	mixedRoutingScenario       check.Scenario
@@ -142,6 +151,26 @@ func (ec *EnterpriseConnectivity) addEgressGatewayHATests(ct *check.Connectivity
 		}).
 		WithIPRoutesFromOutsideToPodCIDRs().
 		WithScenarios(enterpriseTests.EgressGatewayHA())
+
+	if versioncheck.MustCompile(">=1.16.0")(ct.CiliumVersion) {
+		newTest(ct, "egress-gateway-ha-with-l7-policy").
+			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				Name:            "iegp-sample-client",
+				PodSelectorKind: "client",
+				EgressGroup:     enterpriseCheck.SingleGateway,
+			}).
+			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				Name:            "iegp-sample-echo",
+				PodSelectorKind: "echo",
+				EgressGroup:     enterpriseCheck.SingleGateway,
+			}).
+			WithCiliumPolicy(clientEgressICMPYAML).
+			WithCiliumPolicy(clientEgressOnlyDNSPolicyYAML).  // DNS resolution only
+			WithCiliumPolicy(clientEgressL7HTTPAnywhereYAML). // L7 allow policy with HTTP introspection
+			WithIPRoutesFromOutsideToPodCIDRs().
+			WithFeatureRequirements(features.RequireEnabled(features.L7Proxy)).
+			WithScenarios(enterpriseTests.EgressGatewayHA())
+	}
 
 	newTest(ct, "egress-gateway-ha-excluded-cidrs").
 		WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
