@@ -88,6 +88,9 @@ type IsovalentEgressGatewayPolicyParams struct {
 	// PodSelectorKind is used to select the client pods. The parameter is used to select pods with a matching "kind" label
 	PodSelectorKind string
 
+	// EgressCIDRs is the list of CIDRs used to allocate egress IPs for the policy
+	EgressCIDRs []string
+
 	// EgressGroup controls how the egressGroup of the policy should be configured
 	EgressGroup EgressGroupKind
 
@@ -150,7 +153,7 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgress
 			egressGroupValue = enterpriseTests.EgressGroupLabelValue
 		}
 
-		pl[i].Spec.EgressGroups = []isovalentv1.EgressGroup{
+		eg := []isovalentv1.EgressGroup{
 			{
 				NodeSelector: &slimv1.LabelSelector{
 					MatchLabels: map[string]slimv1.MatchLabelsValue{
@@ -159,6 +162,7 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgress
 				},
 			},
 		}
+		pl[i].Spec.EgressGroups = eg
 
 		// Set the excluded CIDRs
 		pl[i].Spec.ExcludedCIDRs = []isovalentv1.IPv4CIDR{}
@@ -174,6 +178,12 @@ func (t *EnterpriseTest) WithIsovalentEgressGatewayPolicy(params IsovalentEgress
 				pl[i].Spec.ExcludedCIDRs = append(pl[i].Spec.ExcludedCIDRs, cidr)
 			}
 		}
+
+		egressCIDRs := make([]isovalentv1.IPv4CIDR, 0, len(params.EgressCIDRs))
+		for _, cidr := range params.EgressCIDRs {
+			egressCIDRs = append(egressCIDRs, isovalentv1.IPv4CIDR(cidr))
+		}
+		pl[i].Spec.EgressCIDRs = egressCIDRs
 
 		if params.AZAffinity == "" {
 			params.AZAffinity = "disabled"

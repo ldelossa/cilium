@@ -114,6 +114,46 @@ func waitForBpfPolicyEntries(ctx context.Context, t *check.Test,
 	}
 }
 
+// waitForAllocatedEgressIP waits for the operator to allocate an egress IP to the gateway node identified by its IP.
+// The allocated egress IP is looked for in the policy and egress group specified as input.
+func waitForAllocatedEgressIP(ctx context.Context, t *check.Test, policyName string, egressGroup int, gatewayIP string) net.IP {
+	ct := t.Context()
+	iegpClient := ct.K8sClient().CiliumClientset.IsovalentV1().IsovalentEgressGatewayPolicies()
+
+	w := wait.NewObserver(ctx, wait.Parameters{Timeout: 10 * time.Second})
+	defer w.Cancel()
+
+	ensureGroupEgressIP := func() (net.IP, error) {
+		p, err := iegpClient.Get(ctx, policyName, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get policy %s: %w", policyName, err)
+		}
+		if len(p.Status.GroupStatuses) <= egressGroup {
+			return nil, fmt.Errorf("not enough egress group in policy %s, found %d", policyName, len(p.Status.GroupStatuses))
+		}
+		group := p.Status.GroupStatuses[egressGroup]
+		masqueradeIP, found := group.EgressIPByGatewayIP[gatewayIP]
+		if !found {
+			return nil, fmt.Errorf("no egress ip allocated for gateway node with address %s", gatewayIP)
+		}
+
+		return net.ParseIP(masqueradeIP), nil
+	}
+
+	for {
+		masqueradeIP, err := ensureGroupEgressIP()
+		if err != nil {
+			if err := w.Retry(err); err != nil {
+				t.Fatal("Failed to ensure egress gateway policy map is properly populated:", err)
+			}
+
+			continue
+		}
+
+		return masqueradeIP
+	}
+}
+
 // getGatewayNodeInternalIP returns the k8s internal IP of the node acting as gateway for this test
 func getGatewayNodeInternalIP(ct *check.ConnectivityTest, egressGatewayNode string) net.IP {
 	gatewayNode, ok := ct.Nodes()[egressGatewayNode]
@@ -744,4 +784,73 @@ func escapePatchString(str string) string {
 	str = strings.ReplaceAll(str, "~", "~0")
 	str = strings.ReplaceAll(str, "/", "~1")
 	return str
+}
+
+func EgressGatewayHAIPAM() check.Scenario {
+	return &egressGatewayHAIPAM{}
+}
+
+type egressGatewayHAIPAM struct{}
+
+func (s *egressGatewayHAIPAM) Name() string {
+	return "egress-gateway-ha-ipam"
+}
+
+func (s *egressGatewayHAIPAM) Run(ctx context.Context, t *check.Test) {
+	ct := t.Context()
+
+	egressGatewayNode := t.EgressGatewayNode()
+	if egressGatewayNode == "" {
+		t.Fatal("Cannot get egress gateway node")
+	}
+
+	egressGatewayNodeInternalIP := getGatewayNodeInternalIP(ct, egressGatewayNode)
+	if egressGatewayNodeInternalIP == nil {
+		t.Fatal("Cannot get egress gateway node internal IP")
+	}
+
+	policyName := "iegp-sample-client"
+
+	masqueradeIP := waitForAllocatedEgressIP(ctx, t, policyName, 0, egressGatewayNodeInternalIP.String())
+
+	waitForBpfPolicyEntries(ctx, t, func(ciliumPod check.Pod) []bpfEgressGatewayPolicyEntry {
+		targetEntries := []bpfEgressGatewayPolicyEntry{}
+
+		egressIP := "0.0.0.0"
+		if ciliumPod.Pod.Spec.NodeName == egressGatewayNode {
+			egressIP = masqueradeIP.String()
+		}
+
+		for _, client := range ct.ClientPods() {
+			targetEntries = append(targetEntries,
+				bpfEgressGatewayPolicyEntry{
+					SourceIP:   client.Pod.Status.PodIP,
+					DestCIDR:   "0.0.0.0/0",
+					EgressIP:   egressIP,
+					GatewayIPs: []string{egressGatewayNodeInternalIP.String()},
+				})
+		}
+
+		return targetEntries
+	})
+
+	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP (pod to external service)
+	i := 0
+	for _, client := range ct.ClientPods() {
+		for _, externalEcho := range ct.ExternalEchoPods() {
+			externalEcho := externalEcho.ToEchoIPPod()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-pod-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandWithOutput(externalEcho, features.IPFamilyV4))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					if !clientIP.Equal(masqueradeIP) {
+						t.Fatal("Request reached external echo service with wrong source IP")
+					}
+				}
+			})
+			i++
+		}
+	}
 }

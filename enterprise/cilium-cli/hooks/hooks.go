@@ -15,6 +15,7 @@ import (
 	"slices"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/cilium-cli/api"
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
@@ -62,6 +63,12 @@ func NewEnterpriseHook() *EnterpriseHooks {
 // Isovalent Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddConnectivityTests(ct ...*check.ConnectivityTest) error {
 	return eh.ec.addConnectivityTests(ct...)
+}
+
+// AddConnectivityTestFlags registers connectivity test flags that are specific to the
+// Isovalent Enterprise for Cilium connectivity tests.
+func (eh *EnterpriseHooks) AddConnectivityTestFlags(flags *pflag.FlagSet) {
+	eh.ec.addConnectivityTestFlags(flags)
 }
 
 // AddSysdumpTasks registers sysdump tasks that are specific to Isovalent

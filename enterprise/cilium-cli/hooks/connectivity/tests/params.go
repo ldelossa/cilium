@@ -8,10 +8,14 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package defaults
+package tests
 
-// ExternalCiliumDNSProxyName is the prefix for the external Cilium DNS proxy pods (and the daemonset).
-const ExternalCiliumDNSProxyName = "cilium-dnsproxy"
+var Params Parameters
 
-// EgressGatewayCIDRsDefault is the default list of CIDRs to use when allocating egress IPs for EGW IPAM tests
-var EgressGatewayCIDRsDefault = []string{"172.18.0.8/30"}
+type Parameters struct {
+	EgressGateway EgressGatewayParameters
+}
+
+type EgressGatewayParameters struct {
+	CIDRs []string
+}

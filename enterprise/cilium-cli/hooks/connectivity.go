@@ -15,13 +15,16 @@ import (
 	"fmt"
 
 	"github.com/blang/semver/v4"
+	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/versioncheck"
 
+	"github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
 	enterpriseCheck "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/check"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
+	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
@@ -86,6 +89,10 @@ func (ec *EnterpriseConnectivity) addConnectivityTests(cts ...*check.Connectivit
 	}
 
 	return nil
+}
+
+func (ec *EnterpriseConnectivity) addConnectivityTestFlags(flags *pflag.FlagSet) {
+	flags.StringSliceVar(&tests.Params.EgressGateway.CIDRs, "egw-ipam-cidrs", defaults.EgressGatewayCIDRsDefault, "CIDRs to use to allocate Egress IPs in egress gateway ha ipam connectivity tests")
 }
 
 func (ec *EnterpriseConnectivity) addHubbleVersionTests(cts ...*check.ConnectivityTest) error {
@@ -219,6 +226,18 @@ func (ec *EnterpriseConnectivity) addEgressGatewayHATests(ct *check.Connectivity
 				AZAffinity: "localOnly",
 			}).
 			WithScenarios(enterpriseTests.EgressGatewayAZAffinity())
+	}
+
+	if versioncheck.MustCompile(">=1.16.0")(ct.CiliumVersion) {
+		newTest(ct, "egress-gateway-ha-ipam").
+			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				Name:            "iegp-sample-client",
+				PodSelectorKind: "client",
+				EgressCIDRs:     tests.Params.EgressGateway.CIDRs,
+				EgressGroup:     enterpriseCheck.SingleGateway,
+			}).
+			WithIPRoutesFromOutsideToPodCIDRs().
+			WithScenarios(enterpriseTests.EgressGatewayHAIPAM())
 	}
 
 	return nil
