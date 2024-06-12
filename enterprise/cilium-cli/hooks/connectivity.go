@@ -190,6 +190,20 @@ func (ec *EnterpriseConnectivity) addEgressGatewayHATests(ct *check.Connectivity
 		}).
 		WithScenarios(enterpriseTests.EgressGatewayMultipleGateways())
 
+	if versioncheck.MustCompile(">=1.16.0")(ct.CiliumVersion) {
+		newTest(ct, "egress-gateway-ha-multiple-gateways-with-l7-policy").
+			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				Name:            "iegp-sample-client",
+				PodSelectorKind: "client",
+				EgressGroup:     enterpriseCheck.AllCiliumNodes,
+			}).
+			WithCiliumPolicy(clientEgressICMPYAML).
+			WithCiliumPolicy(clientEgressOnlyDNSPolicyYAML).  // DNS resolution only
+			WithCiliumPolicy(clientEgressL7HTTPAnywhereYAML). // L7 allow policy with HTTP introspection
+			WithFeatureRequirements(features.RequireEnabled(features.L7Proxy)).
+			WithScenarios(enterpriseTests.EgressGatewayMultipleGateways())
+	}
+
 	if versioncheck.MustCompile(">=1.14.8")(ct.CiliumVersion) {
 		newTest(ct, "egress-gateway-ha-az-affinity").
 			WithIsovalentEgressGatewayPolicy(enterpriseCheck.IsovalentEgressGatewayPolicyParams{
