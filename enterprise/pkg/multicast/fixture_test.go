@@ -19,6 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/cilium/cilium/pkg/datapath/fake"
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
@@ -36,6 +38,7 @@ import (
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/addressing"
 	"github.com/cilium/cilium/pkg/node/types"
+	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -140,6 +143,16 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 
 		cell.Provide(func() k8sClient.Clientset {
 			return f.fakeClientSet
+		}),
+
+		// provide fake sysctl
+		cell.Provide(func() sysctl.Sysctl { return &fake.Sysctl{} }),
+
+		// provide daemon config
+		cell.Provide(func() *option.DaemonConfig {
+			return &option.DaemonConfig{
+				EnableIPSecEncryptedOverlay: true,
+			}
 		}),
 
 		cell.Invoke(func(mcastManager *MulticastManager) {

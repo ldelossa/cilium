@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	ciliumDefaults "github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/ebpf"
@@ -36,6 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	maps_multicast "github.com/cilium/cilium/pkg/maps/multicast"
 	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -59,6 +61,8 @@ type MulticastManagerParams struct {
 	JobGroup               job.Group
 	Clientset              k8sClient.Clientset
 	Cfg                    maps_multicast.Config
+	Sysctl                 sysctl.Sysctl
+	Config                 *option.DaemonConfig
 	TunnelConfig           tunnel.Config
 	MulticastMaps          maps_multicast.GroupV4Map
 	MulticastGroupResource resource.Resource[*isovalent_api_v1alpha1.IsovalentMulticastGroup]
@@ -190,6 +194,17 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 			}
 			return nil
 		}),
+
+		job.OneShot("multicast-sysctl-config", func(ctx context.Context, health cell.Health) error {
+			if p.Config.EnableIPSecEncryptedOverlay {
+				// set sysctl values
+				err := p.Sysctl.Enable("net.ipv4.conf.all.accept_local")
+				if err != nil {
+					return fmt.Errorf("failed to set accept_local sysctl: %w", err)
+				}
+			}
+			return nil
+		}, job.WithRetry(3, &job.ExponentialBackoff{Min: 100 * time.Millisecond, Max: time.Second})),
 
 		// TODO remove this timer based reconciler once we have event based updates from BPF
 		job.OneShot("timer-based-reconciler", func(ctx context.Context, health cell.Health) error {
