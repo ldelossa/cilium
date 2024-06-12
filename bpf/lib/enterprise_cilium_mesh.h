@@ -82,7 +82,7 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 			  struct iphdr *ip4 __maybe_unused,
 			  __u32 src_sec_identity __maybe_unused,
 			  __u32 dst_sec_identity __maybe_unused,
-			  struct ipv4_ct_tuple *tuple __maybe_unused,
+			  struct ipv4_ct_tuple *orig_tuple __maybe_unused,
 			  int l4_off __maybe_unused,
 			  __s8 *ext_err __maybe_unused)
 {
@@ -91,17 +91,15 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 	__u16 proxy_port = 0;
 	__u8 audited = 0;
 
-	struct ipv4_ct_tuple lookup_tuple;
+	struct ct_state ct_state_new = {};
+	struct ipv4_ct_tuple tuple;
 	int ct_status;
 	__u32 monitor;
-	struct ct_state ct_state_new = {};
 
-	memcpy(&lookup_tuple, tuple, sizeof(lookup_tuple));
-	ipv4_ct_tuple_reverse(&lookup_tuple);
-	ct_status = ct_lazy_lookup4(get_ct_map4(&lookup_tuple), &lookup_tuple, ctx,
-					 ipv4_is_fragment(ip4), l4_off, true, CT_INGRESS,
-					 SCOPE_FORWARD, CT_ENTRY_ANY, NULL, &monitor);
-
+	memcpy(&tuple, orig_tuple, sizeof(tuple));
+	ipv4_ct_tuple_reverse(&tuple);
+	ct_status = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, ipv4_is_fragment(ip4), l4_off,
+				    true, CT_INGRESS, SCOPE_FORWARD, CT_ENTRY_ANY, NULL, &monitor);
 	if (ct_status < 0)
 		return ct_status;
 
@@ -112,9 +110,10 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
 		goto out;
 
-	verdict = cilium_mesh_policy_can_egress4(ctx, ip4->saddr, dst_sec_identity, tuple->dport,
-						 ip4->protocol, l4_off, &policy_match_type,
-						 &audited, ext_err, &proxy_port);
+	verdict = cilium_mesh_policy_can_egress4(ctx, ip4->saddr, dst_sec_identity,
+						 orig_tuple->dport, ip4->protocol, l4_off,
+						 &policy_match_type, &audited, ext_err,
+						 &proxy_port);
 
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		/* XXX: implement me */
@@ -122,15 +121,14 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 
 	if (ct_status == CT_NEW && verdict == CTX_ACT_OK) {
 		ct_state_new.src_sec_id = src_sec_identity;
-		ct_status = ct_create4(get_ct_map4(&lookup_tuple), &CT_MAP_ANY4, &lookup_tuple,
-				       ctx, CT_INGRESS, &ct_state_new, ext_err);
-
+		ct_status = ct_create4(get_ct_map4(&tuple), &CT_MAP_ANY4, &tuple, ctx, CT_INGRESS,
+				       &ct_state_new, ext_err);
 		if (IS_ERR(ct_status))
 			return ct_status;
 	}
 
 	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
-		send_policy_verdict_notify(ctx, dst_sec_identity, tuple->dport, ip4->protocol,
+		send_policy_verdict_notify(ctx, dst_sec_identity, orig_tuple->dport, ip4->protocol,
 					   POLICY_EGRESS, 0, verdict, proxy_port, policy_match_type,
 					   audited, 0 /* auth_type */ );
 
