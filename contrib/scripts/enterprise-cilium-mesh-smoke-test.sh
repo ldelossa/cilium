@@ -150,22 +150,40 @@ ff_cluster_ip=$(service_ip forbidden-fruit)
 
 client_ep_id=$(kubectl -n kube-system --context kind-cluster1 exec ds/cilium -it -- cilium endpoint list -o json |
 	tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:app=client") | .id' )
+clientbad_ep_id=$(kubectl -n kube-system --context kind-cluster1 exec ds/cilium -it -- cilium endpoint list -o json |
+	tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:app=clientbad") | .id' )
 server_1_id=$(kubectl -n kube-system --context kind-cluster2 exec ds/cilium -it -- cilium endpoint list -o json |
 	tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:name=server1") | .id' )
 server_2_id=$(kubectl -n kube-system --context kind-cluster2 exec ds/cilium -it -- cilium endpoint list -o json |
 	tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:name=server2") | .id' )
+forbidden_fruit_id=$(kubectl -n kube-system --context kind-cluster2 exec ds/cilium -it -- cilium endpoint list -o json |
+	tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:name=forbidden-fruit") | .id' )
 
 docker exec -ti client curl -s --connect-timeout 2.718 ${nginx_cluster_ip} -o /dev/null ||
 	die "client should have been able to connect to nginx=${nginx_cluster_ip}"
+kubectl --namespace kube-system --context kind-cluster1 -c cilium-agent exec ds/cilium -it -- \
+	hubble observe --color never -t policy-verdict --from-identity ${client_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep "EGRESS ALLOWED" ||
+	die "no allowed egress policy verdict in hubble flows"
 kubectl --namespace kube-system --context kind-cluster2 -c cilium-agent exec ds/cilium -it -- \
-	hubble observe -t policy-verdict --from-identity ${client_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep ALLOWED || 
-	die "no ALLOWED policy verdict in hubble flows"
+	hubble observe --color never -t policy-verdict --from-identity ${client_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep "INGRESS ALLOWED" ||
+	die "no allowed ingress policy verdict in hubble flows"
 
 docker exec -ti clientbad curl --connect-timeout 3.145 ${nginx_cluster_ip} &&
 	die "clientbad should not have been able to connect to nginx=${nginx_cluster_ip}"
+kubectl --namespace kube-system --context kind-cluster2 -c cilium-agent exec ds/cilium -it -- \
+	hubble observe --color never -t policy-verdict --from-identity ${clientbad_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep "INGRESS DENIED" ||
+	die "no denied ingress policy verdict in hubble flows"
+
 docker exec -ti client     curl --connect-timeout 1.414 ${ff_cluster_ip}    &&
-	die "client should not have been able to connect to forbidden-fruit=${nginx_cluster_ip}"
+	die "client should not have been able to connect to forbidden-fruit=${ff_cluster_ip}"
+kubectl --namespace kube-system --context kind-cluster1 -c cilium-agent exec ds/cilium -it -- \
+	hubble observe --color never -t policy-verdict --from-identity ${client_ep_id} --to-identity ${forbidden_fruit_id} --last 1 | grep "EGRESS DENIED" ||
+	die "no denied egress policy verdict in hubble flows"
+
 docker exec -ti clientbad curl --connect-timeout 1.618 ${ff_cluster_ip}    &&
-	die "clientbad should not have been able to connect to forbidden-fruit=${nginx_cluster_ip}"
+	die "clientbad should not have been able to connect to forbidden-fruit=${ff_cluster_ip}"
+kubectl --namespace kube-system --context kind-cluster1 -c cilium-agent exec ds/cilium -it -- \
+	hubble observe --color never -t policy-verdict --from-identity ${clientbad_ep_id} --to-identity ${forbidden_fruit_id} --last 1 | grep "EGRESS DENIED" ||
+	die "no denied egress policy verdict in hubble flows"
 
 exit 0
