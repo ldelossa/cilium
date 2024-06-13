@@ -18,6 +18,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 
 	"github.com/cilium/cilium/pkg/fqdn/re"
@@ -30,7 +32,8 @@ import (
 )
 
 type mockFQDNProxyClient struct {
-	updateAllowedHandler func(msg *dnsproxy.FQDNRules) error
+	removeRestoredRulesHandler func(endpointID *dnsproxy.EndpointID) error
+	updateAllowedHandler       func(msg *dnsproxy.FQDNRules) error
 }
 
 func (m *mockFQDNProxyClient) UpdateAllowed(
@@ -46,7 +49,7 @@ func (m *mockFQDNProxyClient) RemoveRestoredRules(
 	in *dnsproxy.EndpointID,
 	opts ...grpc.CallOption,
 ) (*dnsproxy.Empty, error) {
-	return nil, nil
+	return nil, m.removeRestoredRulesHandler(in)
 }
 
 func (m *mockFQDNProxyClient) GetRules(
@@ -55,6 +58,90 @@ func (m *mockFQDNProxyClient) GetRules(
 	opts ...grpc.CallOption,
 ) (*dnsproxy.RestoredRules, error) {
 	return nil, nil
+}
+
+func TestRemoveRestoredRules(t *testing.T) {
+	ch := make(chan uint16)
+
+	tt := map[string]struct {
+		endpoints                  []uint16
+		hasFQDNProxyBeenReached    bool
+		mock                       func(endpointID *dnsproxy.EndpointID) error
+		expectedErr                []bool
+		expectedRulesStillToRemove map[uint16]struct{}
+	}{
+		"nominal case": {
+			endpoints:               []uint16{16, 17},
+			hasFQDNProxyBeenReached: true,
+			mock: func(endpointID *dnsproxy.EndpointID) error {
+				ch <- uint16(endpointID.EndpointID)
+				return nil
+			},
+			expectedErr:                []bool{false, false},
+			expectedRulesStillToRemove: map[uint16]struct{}{},
+		},
+		"intentional failure for all endpoints": {
+			endpoints:               []uint16{16, 17},
+			hasFQDNProxyBeenReached: true,
+			mock: func(endpointID *dnsproxy.EndpointID) error {
+				return fmt.Errorf("fqdn proxy is not available")
+			},
+			expectedErr:                []bool{true, true},
+			expectedRulesStillToRemove: map[uint16]struct{}{16: {}, 17: {}},
+		},
+		"intentional failure for the same endpoint twice": {
+			endpoints:               []uint16{16, 16},
+			hasFQDNProxyBeenReached: true,
+			mock: func(endpointID *dnsproxy.EndpointID) error {
+				return fmt.Errorf("fqdn proxy is not available")
+			},
+			expectedErr:                []bool{true, true},
+			expectedRulesStillToRemove: map[uint16]struct{}{16: {}}, // it appears only once
+		},
+		"intentional failure for one of the endpoints": {
+			endpoints:               []uint16{16, 17, 18},
+			hasFQDNProxyBeenReached: true,
+			mock: func(endpointID *dnsproxy.EndpointID) error {
+				if endpointID.EndpointID == 17 {
+					return fmt.Errorf("fqdn proxy is not available")
+				}
+				ch <- uint16(endpointID.EndpointID)
+				return nil
+			},
+			expectedErr:                []bool{false, true, false},
+			expectedRulesStillToRemove: map[uint16]struct{}{17: {}},
+		},
+		"intentional failure and connection with fqdn proxy is not established": {
+			endpoints:               []uint16{16, 17, 18},
+			hasFQDNProxyBeenReached: false,
+			mock: func(endpointID *dnsproxy.EndpointID) error {
+				return fmt.Errorf("fqdn proxy is not available")
+			},
+			expectedErr:                []bool{true, true, true},
+			expectedRulesStillToRemove: map[uint16]struct{}{16: {}, 17: {}, 18: {}},
+		},
+	}
+
+	for name, tc := range tt {
+		t.Run(name, func(t *testing.T) {
+			proxy := newRemoteFQDNProxy()
+			proxy.client = &mockFQDNProxyClient{removeRestoredRulesHandler: tc.mock}
+			proxy.hasFQDNProxyBeenReached.Store(true)
+
+			t.Cleanup(proxy.Cleanup)
+
+			for i, e := range tc.endpoints {
+				proxy.RemoveRestoredRules(e)
+
+				if !tc.expectedErr[i] {
+					require.Equal(t, e, <-ch)
+				}
+			}
+
+			fmt.Println(proxy.fqdnRestoredRulesToRemoveCache)
+			require.Equal(t, tc.expectedRulesStillToRemove, proxy.fqdnRestoredRulesToRemoveCache)
+		})
+	}
 }
 
 func TestUpdateAllowedOrdering(t *testing.T) {
