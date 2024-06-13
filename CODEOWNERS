@@ -812,6 +812,7 @@ Makefile* @cilium/build
 /pkg/bgpv1/**/*enterprise* @isovalent/traffic-engineering
 /pkg/clustermesh/enterprise_* @isovalent/clustermesh
 /pkg/datapath/ipcache/enterprise_listener.go @isovalent/clustermesh
+/pkg/datapath/linux/route/enterprise_route_linux.go @isovalent/cilium-datapath
 /pkg/fqdn/dnsproxy/enterprise_* @isovalent/dns-proxy
 /pkg/k8s/apis/isovalent.com/client/crds/v1alpha1/isovalentpodnetworks.yaml @isovalent/multi-network
 /pkg/k8s/apis/isovalent.com/client/crds/v1/isovalentegressgatewaypolicies.yaml @isovalent/egress-gateway
