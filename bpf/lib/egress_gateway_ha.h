@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
-#ifndef __LIB_EGRESS_GATEWAY_HA_H_
-#define __LIB_EGRESS_GATEWAY_HA_H_
+#pragma once
 
 #include "lib/overloadable.h"
 
@@ -190,5 +189,3 @@ egress_gw_ha_reply_matches_policy(struct iphdr *ip4 __maybe_unused)
 }
 
 #endif /* ENABLE_EGRESS_GATEWAY_COMMON */
-
-#endif /* __LIB_EGRESS_GATEWAY_HA_H_ */

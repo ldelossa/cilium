@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
-#ifndef __LIB_ENTERPRISE_CILIUM_MESH_H_
-#define __LIB_ENTERPRISE_CILIUM_MESH_H_
+#pragma once
 
 #ifdef CILIUM_MESH
 
@@ -226,4 +225,3 @@ cilium_mesh_snat_v4_needs_masquerade(struct __ctx_buff *ctx __maybe_unused,
 }
 
 #endif /* CILIUM_MESH */
-#endif /* __LIB_ENTERPRISE_CILIUM_MESH_H_ */

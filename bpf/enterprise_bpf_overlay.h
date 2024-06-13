@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
-#ifndef __ENTERPRISE_BPF_OVERLAY_H_
-#define __ENTERPRISE_BPF_OVERLAY_H_
+#pragma once
 
 #include "lib/enterprise_cilium_mesh.h"
 
@@ -19,5 +18,3 @@ overlay_ingress_policy_hook(struct __ctx_buff *ctx __maybe_unused,
 
 	return CTX_ACT_OK;
 }
-
-#endif /* __ENTERPRISE_BPF_OVERLAY_H_ */

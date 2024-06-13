@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
-#ifndef ENTERPRISE_HEADER_NAMES_TO_IDS_H_
-#define ENTERPRISE_HEADER_NAMES_TO_IDS_H_
+
+#pragma once
 
 /*
  * for documentation see __source_file_name_to_id in bpf/source_names_to_ids.h
@@ -18,5 +18,3 @@ __enterprise_source_file_name_to_id(const char *const header_name)
 
 	return 0;
 }
-
-#endif /* ENTERPRISE_HEADER_NAMES_TO_IDS_H_ */

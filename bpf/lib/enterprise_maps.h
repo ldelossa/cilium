@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
-#ifndef __LIB_ENTERPRISE_MAP_H_
-#define __LIB_ENTERPRISE_MAP_H_
+#pragma once
 
 #ifdef ENABLE_EGRESS_GATEWAY_HA
 struct {
@@ -45,5 +44,3 @@ struct {
 } CILIUM_MESH_POLICY_MAP __section_maps_btf;
 #endif
 #endif
-
-#endif /* __LIB_ENTERPRISE_MAP_H_ */

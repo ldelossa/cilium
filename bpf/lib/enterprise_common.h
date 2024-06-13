@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
-#ifndef __LIB_ENTERPRISE_COMMON_H_
-#define __LIB_ENTERPRISE_COMMON_H_
+#pragma once
 
 #if defined(ENABLE_EGRESS_GATEWAY_HA) && !defined(ENABLE_EGRESS_GATEWAY_COMMON)
 #define ENABLE_EGRESS_GATEWAY_COMMON
@@ -28,5 +27,3 @@ struct egress_gw_ha_policy_entry {
 struct egress_gw_ha_ct_entry {
 	__be32 gateway_ip;
 };
-
-#endif /* __LIB_ENTERPRISE_COMMON_H_ */

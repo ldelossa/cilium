@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
 /* Copyright Authors of Cilium */
 
-#ifndef __LIB_ENTERPRISE_NODEPORT_H_
-#define __LIB_ENTERPRISE_NODEPORT_H_
+#pragma once
 
 #include "enterprise_cilium_mesh.h"
 
@@ -68,6 +67,3 @@ nodeport_rev_dnat_ingress_ipv4_hook(struct __ctx_buff *ctx __maybe_unused,
 
 	return -1;
 }
-
-#endif /* __LIB_ENTERPRISE_NODEPORT_H_ */
-
