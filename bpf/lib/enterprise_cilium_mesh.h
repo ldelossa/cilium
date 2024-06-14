@@ -8,6 +8,81 @@
 #include "lib/policy.h"
 #include "lib/policy_log.h"
 
+/*
+ * The following is a diagram of the packet flow in the scenario where an external cilium mesh client
+ * endpoint, deployed on cluster #1, connects to a service, also backed by an external cilium mesh
+ * endpoint, deployed on cluster #2.
+ *
+ *                  │  ┌───────────────────────────────────┐  │  ┌───────────────────────────────────┐  │  ┌────────────┐
+ *                  │  │                tgw1               │  │  │                tgw2               │  │  │  service   │
+ *      ┌────────┐  │  │ ┌───────────┐       ┌───────────┐ │  │  │ ┌───────────┐       ┌───────────┐ │  │  │ ┌────────┐ │
+ *      │ client │  │  │ │[bpf_host] │   │   │[bpf_host] │ │  │  │ │[bpf_host] │    │  │[bpf_host] │ │  │  │ │ server │ │
+ *      └────────┘  │  │ │from_netdev│   │   │to_netdev  │ │  │  │ │from_netdev│    │  │to_netdev  │ │  │  │ └────────┘ │
+ *                  │  │ └───────────┘   │   └───────────┘ │  │  │ └───────────┘    │  └───────────┘ │  │  │            │
+ *                  │  └─────────────────┼─────────────────┘  │  └──────────────────┼────────────────┘  │  └────────────┘
+ *  ----------------│--------------------│--------------------│---------------------│-------------------│------------------
+ *  req:            │                    │                    │                     │                   │
+ *                  │                    │                    │                     │                   │
+ *  [ $client-ip -> │      ┌──────┐      │                    │                     │                   │
+ *    $service_ip ]─┼──────┤ DNAT │      │                    │                     │                   │
+ *                  │      └──┬───┘      │                    │                     │                   │
+ *                  │         │          │                    │                     │                   │
+ *                  │         ▼          │                    │                     │                   │
+ *                  │  cm_policy_egress  │                    │                     │                   │
+ *                  │  dir: FORWARD      │                    │                     │                   │
+ *                  │                    │                    │                     │                   │
+ *                  │  [ $client-ip ->   │                    │                     │                   │
+ *                  │    $backend-ip ]   │                    │                     │                   │
+ *                  │         │          │                    │                     │                   │
+ *                  │         ▼          │                    │                     │ cm_policy_ingress │
+ *                  │      ┌──────┐      │                    │                     │ dir: FORWARD      │
+ *                  │      │ SNAT ├──────┼───────────[ overlay tunnel ]─────────────┼─►                 │
+ *                  │      └──────┘      │                    │                     │ [ $tgw1-ip ->     │
+ *                  │                    │                    │                     │   $backend-ip ]   │
+ *                  │                    │                    │                     │        │          │
+ *                  │                    │                    │                     │     ┌──┴───┐      │
+ *                  │                    │                    │                     │     │ SNAT ├──────┼─►
+ *                  │                    │                    │                     │     └──────┘      │
+ *  ----------------│--------------------│--------------------│---------------------│-------------------│------------------
+ *  reply:          │                    │                    │                     │                   │
+ *                  │                    │                    │                     │                   │
+ *                  │                    │                    │       ┌─────────┐   │                   │ [ $backend-ip ->
+ *                  │                    │      ┌─[ overlay tunnel ]──┤ revSNAT │◄──┼───────────────────┼─  $tgw2-ip ]
+ *                  │                    │      │             │       └─────────┘   │                   │
+ *                  │                    │      ▼             │                     │                   │
+ *                  │                    │     ┌─────────┐    │                     │                   │
+ *                  │                    │     │ revDNAT†│    │                     │                   │
+ *                  │                    │     │ revSNAT │    │                     │                   │
+ *                  │                    │     └────┬────┘    │                     │                   │
+ *                  │                    │          │         │                     │                   │
+ *                  │                    │          ▼         │                     │                   │
+ *                  │                    │  cm_policy_ingress │                     │                   │
+ *                  │                    │  dir: REPLY (skip) │                     │                   │
+ *                  │                    │                    │                     │                   │
+ *                  │                    │  [ $service-ip ->  │                     │                   │
+ *                ◄─┼────────────────────┼─   $client-ip   ]  │                     │                   │
+ *                  │                    │                    │                     │
+ *                                                                                           (†) in cil_from_overlay@bpf_overlay
+ *
+ * stages a packet and a related reply go thorugh:
+ * - client sends a packet to the service IP
+ * - packet is routed to the transit gateway of cluster #1 and goes through from_netdev program in bpf_host
+ *   - service IP is DNAT'ed to the backend IP
+ *   - cilium mesh egress policies are evaluated
+ * - packet is SNAT'ed with the IP of tgw1 node and forwarded (with source identity) over the overlay tunnel to the transit gateway in the cluster #2
+ * - packet is delivered to the host and routed to the interface, where it goes thorugh to_netdev program in bpf_host
+ *   - cilium mesh ingress policies are evaluated
+ *   - packet is SNAT'ed a second time with the IP of tgw2 node, and sent to the backend
+ * - backend sends back the response
+ * - packet goes thorugh from_netdev program in bpf_host
+ *   - tgw2 source IP is rev-SNAT'ed to tgw1
+ * - packet is sent back to tgw1 over the overlay tunnel
+ * - packet goes through cil_from_overlay in bpf_overlay and gets revDNAT'ed to the service IP
+ * - packet is delivered to the host and routed to the interface, where it goes thorugh to_netdev program in bpf_host
+ *   - packet is revSNAT'ed to the original client IP
+ *   - packet goes through cilium mesh ingress policies logic, which gets skipped as it's a reply
+ */
+
 static __always_inline void *cilium_mesh_endpoint_policy_map(__u32 ip __maybe_unused)
 {
 #if !defined(SKIP_POLICY_MAP)
@@ -105,7 +180,8 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 
 	/* excluding reply traffic from policy enforcement is not really needed
 	 * at the moment, as only packets in the original direction (i.e. no
-	 * reply traffic) go thorugh the CM egress policy logic.
+	 * reply traffic) go thorugh the CM egress policy logic, as the nodeport
+	 * logic that calls this functions is skipped for reply traffic
 	 */
 	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
 		goto out;
@@ -127,6 +203,8 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 			return ct_status;
 	}
 
+	/* don't emit allow policy notifications if this is an established connection
+	 */
 	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
 		send_policy_verdict_notify(ctx, dst_sec_identity, orig_tuple->dport, ip4->protocol,
 					   POLICY_EGRESS, 0, verdict, proxy_port, policy_match_type,
@@ -164,6 +242,10 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 		return ret;
 	ipv4_ct_tuple_swap_ports(&tuple);
 
+	/* contrary to what is done in cilium_mesh_policy_egress, here we need to
+	 * perform a service CT lookup to detect if the packet is a reply, as on the
+	 * reply path cilium_mesh_policy_ingress is called after rev-DNAT
+	 */
 	ct_status = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, false, l4_off, true,
 				    CT_SERVICE, SCOPE_REVERSE, CT_ENTRY_ANY, NULL, &monitor);
 	if (ct_status < 0)
@@ -193,6 +275,8 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 			return ct_status;
 	}
 
+	/* don't emit allow policy notifications if this is an established connection
+	 */
 	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED)
 		send_policy_verdict_notify(ctx, src_sec_identity, tuple.dport, ip4->protocol,
 					   POLICY_INGRESS, 0, verdict, proxy_port,
