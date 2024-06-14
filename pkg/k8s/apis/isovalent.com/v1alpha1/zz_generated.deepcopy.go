@@ -991,6 +991,11 @@ func (in *IsovalentBGPPeerConfigList) DeepCopyObject() runtime.Object {
 func (in *IsovalentBGPPeerConfigSpec) DeepCopyInto(out *IsovalentBGPPeerConfigSpec) {
 	*out = *in
 	in.CiliumBGPPeerConfigSpec.DeepCopyInto(&out.CiliumBGPPeerConfigSpec)
+	if in.BFDProfileRef != nil {
+		in, out := &in.BFDProfileRef, &out.BFDProfileRef
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

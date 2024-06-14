@@ -41,4 +41,10 @@ type IsovalentBGPPeerConfig struct {
 
 type IsovalentBGPPeerConfigSpec struct {
 	v2alpha1.CiliumBGPPeerConfigSpec `json:",inline"`
+
+	// BFDProfileRef is the name of the BFD profile used to establish a BFD (Bidirectional Forwarding Detection)
+	// session with the peer. If not set, BFD is not used for this peer.
+	//
+	// +kubebuilder:validation:Optional
+	BFDProfileRef *string `json:"bfdProfileRef,omitempty"`
 }

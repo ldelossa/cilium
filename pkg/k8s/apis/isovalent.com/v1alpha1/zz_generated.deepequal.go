@@ -761,6 +761,14 @@ func (in *IsovalentBGPPeerConfigSpec) DeepEqual(other *IsovalentBGPPeerConfigSpe
 		return false
 	}
 
+	if (in.BFDProfileRef == nil) != (other.BFDProfileRef == nil) {
+		return false
+	} else if in.BFDProfileRef != nil {
+		if *in.BFDProfileRef != *other.BFDProfileRef {
+			return false
+		}
+	}
+
 	return true
 }
 

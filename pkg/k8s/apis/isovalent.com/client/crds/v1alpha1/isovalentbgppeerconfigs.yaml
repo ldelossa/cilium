@@ -49,6 +49,11 @@ spec:
                   a TCP authentication password for this peer. \n If not specified,
                   no authentication is used."
                 type: string
+              bfdProfileRef:
+                description: BFDProfileRef is the name of the BFD profile used to
+                  establish a BFD (Bidirectional Forwarding Detection) session with
+                  the peer. If not set, BFD is not used for this peer.
+                type: string
               ebgpMultihop:
                 default: 1
                 description: "EBGPMultihopTTL controls the multi-hop feature for eBGP
