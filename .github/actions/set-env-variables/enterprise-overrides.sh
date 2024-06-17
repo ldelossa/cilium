@@ -25,3 +25,5 @@ CILIUM_CLI_VERSION="v0.16.3-cee.1"
 echo "CILIUM_CLI_VERSION=$CILIUM_CLI_VERSION" >> "$GITHUB_ENV"
 
 echo "PUSH_TO_DOCKER_HUB=false" >> "$GITHUB_ENV"
+
+echo "GCP_PERF_RESULTS_BUCKET=gs://cilium-scale-results-cee" >> "$GITHUB_ENV"
