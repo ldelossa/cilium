@@ -5,7 +5,6 @@
 
 #include <bpf/ctx/skb.h>
 #include "pktgen.h"
-#include "config_replacement.h"
 
 /* Set ETH_HLEN to 14 to indicate that the packet has a 14 byte ethernet header */
 #define ETH_HLEN 14
@@ -289,4 +288,3 @@ int egressgw_fib_redirect_check(const struct __ctx_buff *ctx __maybe_unused)
 
 	return ret;
 }
-

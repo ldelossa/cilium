@@ -64,7 +64,7 @@ cilium-agent [flags]
       --cgroup-root string                                           Path to Cgroup2 filesystem
       --cluster-health-port int                                      TCP port for cluster-wide network connectivity health API (default 4240)
       --cluster-id uint32                                            Unique identifier of the cluster
-      --cluster-name string                                          Name of the cluster (default "default")
+      --cluster-name string                                          Name of the cluster. It must consist of at most 32 lower case alphanumeric characters and '-', start and end with an alphanumeric character. (default "default")
       --clustermesh-config string                                    Path to the ClusterMesh configuration directory
       --clustermesh-sync-timeout duration                            Timeout waiting for the initial synchronization of information from remote clusters (default 1m0s)
       --cni-chaining-mode string                                     Enable CNI chaining with the specified plugin (default "none")
@@ -79,11 +79,12 @@ cilium-agent [flags]
       --container-ip-local-reserved-ports string                     Instructs the Cilium CNI plugin to reserve the provided comma-separated list of ports in the container network namespace. Prevents the container from using these ports as ephemeral source ports (see Linux ip_local_reserved_ports). Use this flag if you observe port conflicts between transparent DNS proxy requests and host network namespace services. Value "auto" reserves the WireGuard and VXLAN ports used by Cilium (default "auto")
       --controller-group-metrics strings                             List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
       --crd-wait-timeout duration                                    Cilium will exit if CRDs are not available within this duration upon startup (default 5m0s)
-      --datapath-mode string                                         Datapath mode name (default "veth")
+      --datapath-mode string                                         Datapath mode name (veth, netkit, netkit-l2, lb-only) (default "veth")
   -D, --debug                                                        Enable debugging mode
       --debug-verbose strings                                        List of enabled verbose debug groups
       --devices strings                                              List of devices facing cluster/external network (used for BPF NodePort, BPF masquerading and host firewall); supports '+' as wildcard in device name, e.g. 'eth+'
       --direct-routing-device string                                 Device name used to connect nodes in direct routing mode (used by BPF NodePort, BPF host routing; if empty, automatically set to a device with k8s InternalIP/ExternalIP or with a default route)
+      --direct-routing-skip-unreachable                              Enable skipping L2 routes between nodes on different subnets
       --disable-endpoint-crd                                         Disable use of CiliumEndpoint CRD
       --disable-envoy-version-check                                  Do not perform Envoy version check
       --disable-external-ip-mitigation                               Disable ExternalIP mitigation (CVE-2020-8554, default false)
@@ -99,6 +100,7 @@ cilium-agent [flags]
       --egress-gateway-reconciliation-trigger-interval duration      Time between triggers of egress gateway state reconciliations (default 1s)
       --egress-masquerade-interfaces strings                         Limit iptables-based egress masquerading to interface selector
       --egress-multi-home-ip-rule-compat                             Offset routing table IDs under ENI IPAM mode to avoid collisions with reserved table IDs. If false, the offset is performed (new scheme), otherwise, the old scheme stays in-place.
+      --enable-active-connection-tracking                            Count open and active connections to services, grouped by zones defined in fixed-zone-mapping.
       --enable-auto-protect-node-port-range                          Append NodePort range to net.ipv4.ip_local_reserved_ports if it overlaps with ephemeral port range (net.ipv4.ip_local_port_range) (default true)
       --enable-bandwidth-manager                                     Enable BPF bandwidth manager
       --enable-bbr                                                   Enable BBR for the bandwidth manager
@@ -212,6 +214,7 @@ cilium-agent [flags]
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
       --feature-gates strings                                        Slice of alpha features to enable, passing AllAlpha, AllBeta, AllLimited enables all alpha, beta and limited features (respectively).
       --fixed-identity-mapping map                                   Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns
+      --force-device-detection                                       Forces the auto-detection of devices, even if specific devices are explicitly listed
       --gateway-api-secrets-namespace string                         GatewayAPISecretsNamespace is the namespace having tls secrets used by CEC, originating from Gateway API
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
   -h, --help                                                         help for cilium-agent
@@ -364,6 +367,7 @@ cilium-agent [flags]
       --service-no-backend-response string                           Response to traffic for a service without backends (default "reject")
       --socket-path string                                           Sets daemon's socket path to listen for connections (default "/var/run/cilium/cilium.sock")
       --state-dir string                                             Directory path to store runtime state (default "/var/run/cilium")
+      --static-cnp-path string                                       Directory path to watch and load static cilium network policy yaml files.
       --tofqdns-dns-reject-response-code string                      DNS response code for rejecting DNS requests, available options are '[nameError refused]' (default "refused")
       --tofqdns-enable-dns-compression                               Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present (default true)
       --tofqdns-endpoint-max-ip-per-hostname int                     Maximum number of IPs to maintain per FQDN name for each endpoint (default 50)
