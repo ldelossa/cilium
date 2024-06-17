@@ -178,14 +178,6 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 	if (ct_status < 0)
 		return ct_status;
 
-	/* excluding reply traffic from policy enforcement is not really needed
-	 * at the moment, as only packets in the original direction (i.e. no
-	 * reply traffic) go thorugh the CM egress policy logic, as the nodeport
-	 * logic that calls this functions is skipped for reply traffic
-	 */
-	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
-		goto out;
-
 	verdict = cilium_mesh_policy_can_egress4(ctx, ip4->saddr, dst_sec_identity,
 						 orig_tuple->dport, ip4->protocol, l4_off,
 						 &policy_match_type, &audited, ext_err,
@@ -210,7 +202,6 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 					   POLICY_EGRESS, 0, verdict, proxy_port, policy_match_type,
 					   audited, 0 /* auth_type */ );
 
-out:
 	return verdict;
 }
 
