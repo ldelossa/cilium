@@ -335,6 +335,7 @@ jobs:
           bash ./.github/enterprise-cilium-mesh/ep-add.sh "${{ env.contextName1 }}" "${{ env.clusterName1 }}" kind clientbad ubuntu app=clientbad "${{ steps.vars.outputs.kind_svc_cidr_1 }}"
           bash ./.github/enterprise-cilium-mesh/ep-add.sh "${{ env.contextName2 }}" "${{ env.clusterName2 }}" kind server1 nginx run=nginx "${{ steps.vars.outputs.kind_svc_cidr_2 }}"
           bash ./.github/enterprise-cilium-mesh/ep-add.sh "${{ env.contextName2 }}" "${{ env.clusterName2 }}" kind server2 nginx run=nginx "${{ steps.vars.outputs.kind_svc_cidr_2 }}"
+          bash ./.github/enterprise-cilium-mesh/ep-add.sh "${{ env.contextName2 }}" "${{ env.clusterName2 }}" kind forbidden-fruit nginx run=forbidden-fruit "${{ steps.vars.outputs.kind_svc_cidr_2 }}"
 
       - name: Configure clusters
         run: |
@@ -346,36 +347,51 @@ jobs:
 
       - name: Connectivity Test
         run: |
+          die() {
+                  echo "$@" >&2
+                  exit 1
+          }
+
           nginx_cluster_ip=$(kubectl --context "${{ env.contextName1 }}" get svc "nginx" -o json | jq -r '.spec.clusterIP')
           ff_cluster_ip=$(kubectl --context "${{ env.contextName1 }}" get svc "forbidden-fruit" -o json | jq -r '.spec.clusterIP')
 
-          # should work: allowed by both egress && ingress policies
-          if ! docker exec client curl --connect-timeout 10 ${nginx_cluster_ip}; then
-                  echo "client should have been able to connect to nginx=${nginx_cluster_ip}"
-                  exit 1
-          fi
+          client_ep_id=$(kubectl -n kube-system --context ${{ env.contextName1 }} exec ds/cilium -- cilium endpoint list -o json |
+                  tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:app=client") | .id' )
+          clientbad_ep_id=$(kubectl -n kube-system --context ${{ env.contextName1 }} exec ds/cilium -- cilium endpoint list -o json |
+                  tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:app=clientbad") | .id' )
+          server_1_id=$(kubectl -n kube-system --context ${{ env.contextName2 }} exec ds/cilium -- cilium endpoint list -o json |
+                  tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:name=server1") | .id' )
+          server_2_id=$(kubectl -n kube-system --context ${{ env.contextName2 }} exec ds/cilium -- cilium endpoint list -o json |
+                  tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:name=server2") | .id' )
+          forbidden_fruit_id=$(kubectl -n kube-system --context ${{ env.contextName2 }} exec ds/cilium -- cilium endpoint list -o json |
+                  tr -d '\n' | jq '.[].status.identity | select(.labels[] == "k8s:name=forbidden-fruit") | .id' )
 
-          # should NOT work: disallowed by the ingress policy in cluster 2
-          if docker exec clientbad curl --connect-timeout 10 ${nginx_cluster_ip}; then
-                  echo "clientbad should not have been able to connect to nginx=${nginx_cluster_ip}"
-                  exit 1
-          fi
+          docker exec client curl --connect-timeout 10 ${nginx_cluster_ip} ||
+                  die "client should have been able to connect to nginx=${nginx_cluster_ip}"
+          kubectl --namespace kube-system --context ${{ env.contextName1 }} -c cilium-agent exec ds/cilium -- \
+                  hubble observe --color never -t policy-verdict --from-identity ${client_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep "EGRESS ALLOWED" ||
+                  die "no allowed egress policy verdict in hubble flows"
+          kubectl --namespace kube-system --context ${{ env.contextName2 }} -c cilium-agent exec ds/cilium -- \
+                  hubble observe --color never -t policy-verdict --from-identity ${client_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep "INGRESS ALLOWED" ||
+                  die "no allowed ingress policy verdict in hubble flows"
 
-          # should NOT work: disallowed by the egress policy in cluster 1
-          if docker exec client     curl --connect-timeout 10 ${ff_cluster_ip}; then
-                  echo "client should not have been able to connect to forbidden-fruit=${nginx_cluster_ip}"
-                  exit 1
-          fi
+          docker exec clientbad curl --connect-timeout 10 ${nginx_cluster_ip} &&
+                  die "clientbad should not have been able to connect to nginx=${nginx_cluster_ip}"
+          kubectl --namespace kube-system --context ${{ env.contextName2 }} -c cilium-agent exec ds/cilium -- \
+                  hubble observe --color never -t policy-verdict --from-identity ${clientbad_ep_id} --to-identity ${server_1_id} --to-identity ${server_2_id} --last 1 | grep "INGRESS DENIED" ||
+                  die "no denied ingress policy verdict in hubble flows"
 
-          # should NOT work: disallowed by the egress policy in cluster 1
-          if docker exec clientbad curl --connect-timeout 10 ${ff_cluster_ip}; then
-                  echo "clientbad should not have been able to connect to forbidden-fruit=${nginx_cluster_ip}"
-                  exit 1
-          fi
+          docker exec client     curl --connect-timeout 10 ${ff_cluster_ip}    &&
+                  die "client should not have been able to connect to forbidden-fruit=${ff_cluster_ip}"
+          kubectl --namespace kube-system --context ${{ env.contextName1 }} -c cilium-agent exec ds/cilium -- \
+                  hubble observe --color never -t policy-verdict --from-identity ${client_ep_id} --to-identity ${forbidden_fruit_id} --last 1 | grep "EGRESS DENIED" ||
+                  die "no denied egress policy verdict in hubble flows"
 
-      - name: Setup tmate session
-        if: ${{ !success() }}
-        uses: mxschmitt/action-tmate@a283f9441d2d96eb62436dc46d7014f5d357ac22 # v3
+          docker exec clientbad curl --connect-timeout 10 ${ff_cluster_ip}    &&
+                  die "clientbad should not have been able to connect to forbidden-fruit=${ff_cluster_ip}"
+          kubectl --namespace kube-system --context ${{ env.contextName1 }} -c cilium-agent exec ds/cilium -- \
+                  hubble observe --color never -t policy-verdict --from-identity ${clientbad_ep_id} --to-identity ${forbidden_fruit_id} --last 1 | grep "EGRESS DENIED" ||
+                  die "no denied egress policy verdict in hubble flows"
 
       - name: Post-test information gathering
         if: ${{ !success() }}
