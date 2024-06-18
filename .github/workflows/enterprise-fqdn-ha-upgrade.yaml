@@ -393,6 +393,37 @@ jobs:
         run: |
           ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
 
+      - name: Post-test information gathering
+        if: ${{ !success() }}
+        run: |
+          kubectl get pods --all-namespaces -o wide
+          cilium status
+          cilium sysdump --output-filename cilium-sysdump-final
+        shell: bash {0} # Disable default fail-fast behaviour so that all commands run independently
+
+      - name: Upload artifacts
+        if: ${{ !success() }}
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: cilium-sysdumps-${{ matrix.mode }}
+          path: cilium-sysdump-*.zip
+
+  merge-upload:
+    if: ${{ always() }}
+    name: Merge and Upload Artifacts
+    runs-on: ubuntu-latest
+    needs: upgrade-and-downgrade
+    steps:
+      - name: Merge Sysdumps
+        if: ${{ needs.upgrade-and-downgrade.result == 'failure' }}
+        uses: actions/upload-artifact/merge@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: cilium-sysdumps
+          pattern: cilium-sysdumps-*
+          retention-days: 5
+          delete-merged: true
+        continue-on-error: true
+
   commit-status-final:
     name: Commit Status Final
     if: ${{ always() }}
