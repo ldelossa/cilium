@@ -161,7 +161,7 @@ cilium_mesh_policy_egress(struct __ctx_buff *ctx __maybe_unused,
 			  int l4_off __maybe_unused,
 			  __s8 *ext_err __maybe_unused)
 {
-	__u8 policy_match_type = 0;
+	__u8 policy_match_type = POLICY_MATCH_NONE;
 	int verdict = CTX_ACT_OK;
 	__u16 proxy_port = 0;
 	__u8 audited = 0;
@@ -210,7 +210,7 @@ cilium_mesh_policy_ingress(struct __ctx_buff *ctx,
 			   struct iphdr *ip4,
 			   __u32 src_sec_identity, __s8 *ext_err)
 {
-	__u8 policy_match_type = 0;
+	__u8 policy_match_type = POLICY_MATCH_NONE;
 	int verdict = CTX_ACT_OK;
 	__u16 proxy_port = 0;
 	__u8 audited = 0;
