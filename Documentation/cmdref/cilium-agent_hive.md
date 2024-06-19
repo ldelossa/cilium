@@ -16,7 +16,7 @@ cilium-agent hive [flags]
       --bpf-node-map-max uint32                                      Sets size of node bpf map which will be the max number of unique Node IPs in the cluster (default 16384)
       --certificates-directory string                                Root directory to find certificates specified in L7 TLS policy enforcement (default "/var/run/cilium/certs")
       --cluster-id uint32                                            Unique identifier of the cluster
-      --cluster-name string                                          Name of the cluster (default "default")
+      --cluster-name string                                          Name of the cluster. It must consist of at most 32 lower case alphanumeric characters and '-', start and end with an alphanumeric character. (default "default")
       --clustermesh-config string                                    Path to the ClusterMesh configuration directory
       --clustermesh-sync-timeout duration                            Timeout waiting for the initial synchronization of information from remote clusters (default 1m0s)
       --cni-chaining-mode string                                     Enable CNI chaining with the specified plugin (default "none")
@@ -32,6 +32,7 @@ cilium-agent hive [flags]
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
       --egress-gateway-policy-map-max int                            Maximum number of entries in egress gateway policy map (default 16384)
       --egress-gateway-reconciliation-trigger-interval duration      Time between triggers of egress gateway state reconciliations (default 1s)
+      --enable-active-connection-tracking                            Count open and active connections to services, grouped by zones defined in fixed-zone-mapping.
       --enable-bandwidth-manager                                     Enable BPF bandwidth manager
       --enable-bbr                                                   Enable BBR for the bandwidth manager
       --enable-bfd                                                   Enables BFD subsystem
@@ -63,6 +64,7 @@ cilium-agent hive [flags]
       --external-dns-proxy                                           Enable Cilium agent to use an external DNS proxy
       --fallback-routing-mode string                                 Enable fallback routing mode, used in case of mismatch between source and destination node (supported: tunnel)
       --feature-gates strings                                        Slice of alpha features to enable, passing AllAlpha, AllBeta, AllLimited enables all alpha, beta and limited features (respectively).
+      --force-device-detection                                       Forces the auto-detection of devices, even if specific devices are explicitly listed
       --gateway-api-secrets-namespace string                         GatewayAPISecretsNamespace is the namespace having tls secrets used by CEC, originating from Gateway API
       --gops-port uint16                                             Port for gops server to listen on (default 9890)
   -h, --help                                                         help for hive
@@ -116,6 +118,7 @@ cilium-agent hive [flags]
       --proxy-xff-num-trusted-hops-egress uint32                     Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the egress L7 policy enforcement Envoy listeners.
       --proxy-xff-num-trusted-hops-ingress uint32                    Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the ingress L7 policy enforcement Envoy listeners.
       --read-cni-conf string                                         CNI configuration file to use as a source for --write-cni-conf-when-ready. If not supplied, a suitable one will be generated.
+      --static-cnp-path string                                       Directory path to watch and load static cilium network policy yaml files.
       --tunnel-port uint16                                           Tunnel port (default 8472 for "vxlan" and 6081 for "geneve")
       --tunnel-protocol string                                       Encapsulation protocol to use for the overlay ("vxlan" or "geneve") (default "vxlan")
       --use-full-tls-context                                         If enabled, persist ca.crt keys into the Envoy config even in a terminatingTLS block on an L7 Cilium Policy. This is to enable compatibility with previously buggy behaviour. This flag is deprecated and will be removed in a future release.

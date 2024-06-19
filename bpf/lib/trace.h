@@ -19,8 +19,7 @@
  *
  * If TRACE_NOTIFY is not defined, the API will be compiled in as a NOP.
  */
-#ifndef __LIB_TRACE__
-#define __LIB_TRACE__
+#pragma once
 
 #include "dbg.h"
 #include "events.h"
@@ -50,7 +49,7 @@ enum trace_reason {
 	TRACE_REASON_CT_ESTABLISHED = CT_ESTABLISHED,
 	TRACE_REASON_CT_REPLY = CT_REPLY,
 	TRACE_REASON_CT_RELATED = CT_RELATED,
-	TRACE_REASON_CT_REOPENED = CT_REOPENED,
+	TRACE_REASON_RESERVED,
 	TRACE_REASON_UNKNOWN,
 	TRACE_REASON_SRV6_ENCAP,
 	TRACE_REASON_SRV6_DECAP,
@@ -318,4 +317,3 @@ send_trace_notify6(struct __ctx_buff *ctx, enum trace_point obs_point,
 	update_trace_metrics(ctx, obs_point, reason);
 }
 #endif /* TRACE_NOTIFY */
-#endif /* __LIB_TRACE__ */

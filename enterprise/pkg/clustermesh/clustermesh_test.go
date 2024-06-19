@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/cilium/hive/hivetest"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
@@ -49,6 +50,7 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 		RemoteIdentityWatcher: mgr,
 		StoreFactory:          store.NewFactory(store.MetricsProvider()),
 
+		Logger:        logrus.New(),
 		Metrics:       clustermesh.NewMetrics(),
 		CommonMetrics: cmcommon.MetricsProvider("foo")(),
 	})
@@ -126,6 +128,7 @@ func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
 		RemoteIdentityWatcher: mgr,
 		StoreFactory:          store.NewFactory(store.MetricsProvider()),
 
+		Logger:        logrus.New(),
 		Metrics:       clustermesh.NewMetrics(),
 		CommonMetrics: cmcommon.MetricsProvider("foo")(),
 	})

@@ -206,7 +206,9 @@ func (td *testData) bootstrapRepo(ruleGenFunc func(int) api.Rules, numRules int,
 	SetPolicyEnabled(option.DefaultEnforcement)
 	wg := &sync.WaitGroup{}
 	// load in standard reserved identities
-	c := identity.IdentityMap{}
+	c := identity.IdentityMap{
+		fooIdentity.ID: fooIdentity.LabelArray,
+	}
 	identity.IterateReservedIdentities(func(ni identity.NumericIdentity, id *identity.Identity) {
 		c[ni] = id.Labels.LabelArray()
 	})
@@ -225,7 +227,7 @@ func (td *testData) bootstrapRepo(ruleGenFunc func(int) api.Rules, numRules int,
 
 	epsToRegen := NewEndpointSet(nil)
 	wg = &sync.WaitGroup{}
-	rulez.UpdateRulesEndpointsCaches(epSet, epsToRegen, wg)
+	rulez.FindSelectedEndpoints(epSet, epsToRegen, wg)
 	wg.Wait()
 
 	require.Equal(tb, 0, epSet.Len())
@@ -278,6 +280,7 @@ func TestL7WithIngressWildcard(t *testing.T) {
 		idFooSelectLabels[lbl.Key] = lbl
 	}
 	fooIdentity := identity.NewIdentity(12345, idFooSelectLabels)
+	td.addIdentity(fooIdentity)
 
 	selFoo := api.NewESFromLabels(labels.ParseSelectLabel("id=foo"))
 	rule1 := api.Rule{
@@ -376,6 +379,7 @@ func TestL7WithLocalHostWildcard(t *testing.T) {
 	}
 
 	fooIdentity := identity.NewIdentity(12345, idFooSelectLabels)
+	td.addIdentity(fooIdentity)
 
 	// Emulate Kubernetes mode with allow from localhost
 	oldLocalhostOpt := option.Config.AllowLocalhost
@@ -485,6 +489,7 @@ func TestMapStateWithIngressWildcard(t *testing.T) {
 		idFooSelectLabels[lbl.Key] = lbl
 	}
 	fooIdentity := identity.NewIdentity(12345, idFooSelectLabels)
+	td.addIdentity(fooIdentity)
 
 	selFoo := api.NewESFromLabels(labels.ParseSelectLabel("id=foo"))
 	rule1 := api.Rule{
@@ -587,6 +592,7 @@ func TestMapStateWithIngress(t *testing.T) {
 		idFooSelectLabels[lbl.Key] = lbl
 	}
 	fooIdentity := identity.NewIdentity(12345, idFooSelectLabels)
+	td.addIdentity(fooIdentity)
 
 	lblTest := labels.ParseLabel("id=resolve_test_1")
 
@@ -710,12 +716,12 @@ func TestMapStateWithIngress(t *testing.T) {
 		},
 		PolicyOwner: DummyOwner{},
 		policyMapState: newMapState(map[Key]MapStateEntry{
-			{TrafficDirection: trafficdirection.Egress.Uint8()}:                              allowEgressMapStateEntry,
-			{Identity: uint32(identity.ReservedIdentityWorld), DestPort: 80, Nexthdr: 6}:     rule1MapStateEntry.WithOwners(cachedSelectorWorld),
-			{Identity: uint32(identity.ReservedIdentityWorldIPv4), DestPort: 80, Nexthdr: 6}: rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV4),
-			{Identity: uint32(identity.ReservedIdentityWorldIPv6), DestPort: 80, Nexthdr: 6}: rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV6),
-			{Identity: 192, DestPort: 80, Nexthdr: 6}:                                        rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
-			{Identity: 194, DestPort: 80, Nexthdr: 6}:                                        rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
+			{TrafficDirection: trafficdirection.Egress.Uint8(), InvertedPortMask: 0xffff /*This is a wildcard*/}: allowEgressMapStateEntry,
+			{Identity: uint32(identity.ReservedIdentityWorld), DestPort: 80, Nexthdr: 6}:                         rule1MapStateEntry.WithOwners(cachedSelectorWorld),
+			{Identity: uint32(identity.ReservedIdentityWorldIPv4), DestPort: 80, Nexthdr: 6}:                     rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV4),
+			{Identity: uint32(identity.ReservedIdentityWorldIPv6), DestPort: 80, Nexthdr: 6}:                     rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV6),
+			{Identity: 192, DestPort: 80, Nexthdr: 6}:                                                            rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
+			{Identity: 194, DestPort: 80, Nexthdr: 6}:                                                            rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
 		}),
 	}
 
@@ -806,6 +812,7 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					{
 						Identity:         0,
 						DestPort:         0,
+						InvertedPortMask: 0xffff, // This is a wildcard.
 						Nexthdr:          0,
 						TrafficDirection: trafficdirection.Ingress.Uint8(),
 					}: {},
@@ -828,6 +835,7 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					{
 						Identity:         0,
 						DestPort:         0,
+						InvertedPortMask: 0xffff, // This is a wildcard.
 						Nexthdr:          0,
 						TrafficDirection: trafficdirection.Egress.Uint8(),
 					}: {},
@@ -850,6 +858,7 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					{
 						Identity:         0,
 						DestPort:         0,
+						InvertedPortMask: 0xffff, // This is a wildcard.
 						Nexthdr:          0,
 						TrafficDirection: trafficdirection.Ingress.Uint8(),
 					}: {IsDeny: true},
@@ -872,6 +881,7 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					{
 						Identity:         0,
 						DestPort:         0,
+						InvertedPortMask: 0xffff, // This is a wildcard.
 						Nexthdr:          0,
 						TrafficDirection: trafficdirection.Ingress.Uint8(),
 					}: {IsDeny: true},
@@ -894,6 +904,7 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					{
 						Identity:         0,
 						DestPort:         0,
+						InvertedPortMask: 0xffff, // This a wildcard.
 						Nexthdr:          0,
 						TrafficDirection: trafficdirection.Egress.Uint8(),
 					}: {IsDeny: true},
@@ -916,6 +927,7 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					{
 						Identity:         0,
 						DestPort:         0,
+						InvertedPortMask: 0xffff, // This is a wildcard.
 						Nexthdr:          0,
 						TrafficDirection: trafficdirection.Egress.Uint8(),
 					}: {IsDeny: true},
