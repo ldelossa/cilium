@@ -164,6 +164,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p image-digest/
+          pattern: "*image-digest *"
 
       - name: Download digests of all images built
         uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
