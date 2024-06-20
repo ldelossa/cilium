@@ -102,7 +102,7 @@ jobs:
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
-  
+
       - name: CI Build ${{ matrix.name }}
         uses: docker/build-push-action@c382f710d39a5bb4e430307530a720f50c2d3318 # v6.0.0
         id: docker_build_ci_pr
@@ -121,7 +121,7 @@ jobs:
       - name: Sign Container Images
         run: |
           cosign sign -y quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${{ steps.docker_build_ci_pr.outputs.digest }}
-      
+
       - name: Generate SBOM
         uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
         with:
@@ -164,12 +164,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p image-digest/
-          pattern: "*image-digest *"
 
       - name: Download digests of all images built
         uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
         with:
           path: image-digest/
+          pattern: "*image-digest *"
 
       - name: Image Digests Output
         shell: bash
