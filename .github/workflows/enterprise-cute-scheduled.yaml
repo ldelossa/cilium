@@ -185,6 +185,17 @@ jobs:
             ipsec: false,
             owner: U04M8K4CXTQ # Dario
           },
+          {
+            repo: 50hertz,
+            dir: .,
+            umbrella: false,
+            oss: false,
+            region: us-west-2,
+            deploy: cute,
+            upgrade: stable,
+            ipsec: false,
+            owner: U04GD9ACYTE # Philip
+          },
         ]
     runs-on: ubuntu-latest
     steps:
