@@ -55,10 +55,6 @@ func getEndpointMetadata(endpoint *k8sTypes.CiliumEndpoint, identityLabels label
 		}
 	}
 
-	if endpoint.Identity == nil {
-		return nil, fmt.Errorf("endpoint has no identity metadata")
-	}
-
 	nodeIP, err := netip.ParseAddr(endpoint.Networking.NodeIP)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse endpoint's node IP")
