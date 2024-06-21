@@ -11,14 +11,12 @@
 package multinetwork
 
 import (
-	"errors"
 	"fmt"
 	"net"
 
 	"github.com/go-openapi/swag"
 
 	"github.com/cilium/cilium/api/v1/models"
-	"github.com/cilium/cilium/enterprise/api/v1/client/network"
 	enterpriseModels "github.com/cilium/cilium/enterprise/api/v1/models"
 	"github.com/cilium/cilium/enterprise/pkg/client"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
@@ -50,14 +48,21 @@ func (e *endpointConfigurator) GetConfigurations(p cmd.ConfigurationParams) ([]c
 		return nil, fmt.Errorf("unable to create enterprise API client: %w", err)
 	}
 
+	// check if multi-network is enabled
+	ec, err := ceeClient.EnterpriseConfig()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get enterprise configuration: %w", err)
+	}
+
+	if !ec.MultiNetwork {
+		// fall back on OSS implementation if multi-network is not enabled
+		ossImpl := cmd.DefaultConfigurator{}
+		return ossImpl.GetConfigurations(p)
+	}
+
 	// fetch network attachments
 	networks, err := ceeClient.NetworkAttachments(string(p.CniArgs.K8S_POD_NAMESPACE), string(p.CniArgs.K8S_POD_NAME))
 	if err != nil {
-		// fall back on OSS implementation
-		if errors.Is(err, network.NewGetNetworkAttachmentDisabled()) {
-			ossImpl := cmd.DefaultConfigurator{}
-			return ossImpl.GetConfigurations(p)
-		}
 		return nil, fmt.Errorf("unable to determine network attachments: %w", err)
 	}
 
