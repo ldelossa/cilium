@@ -669,10 +669,12 @@ Vagrantfile @cilium/ci-structure
 /.github/ISSUE_TEMPLATE/enterprise_release_template.md @isovalent/release-managers
 /.github/enterprise/.grype.yaml @isovalent/security
 /.github/enterprise/.openvex.json @isovalent/security
+/.github/kind-config-enterprise-hubble-rbac.yaml @isovalent/hubble
 /.github/workflows/enterprise-clustermesh-*yaml @isovalent/clustermesh
 /.github/workflows/enterprise-container-scan.yaml @isovalent/security
 /.github/workflows/enterprise-*fqdn-ha*.yaml @isovalent/dns-proxy
 /.github/workflows/enterprise-kind.yaml @isovalent/dns-proxy
+/.github/workflows/enterprise-kind-hubble-rbac.yaml @isovalent/hubble
 /.github/workflows/enterprise-multi-network.yaml @isovalent/multi-network
 /.github/workflows/enterprise-multicast.yaml @isovalent/traffic-engineering
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
@@ -734,6 +736,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/plugins/ @isovalent/hubble
 /enterprise/plugins/hubble-flow-aggregation/api @isovalent/hubble-api
 /enterprise/test/srv6/ @isovalent/traffic-engineering
+/enterprise/test/hubble-rbac/ @isovalent/hubble
 /enterprise/tools/release-notes/ @isovalent/release-managers
 /hubble/Makefile.override @isovalent/hubble
 /hubble/enterprise/ @isovalent/hubble

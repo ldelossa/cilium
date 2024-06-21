@@ -1,0 +1,46 @@
+operator:
+  replicas: 1
+
+hubble:
+  enabled: true
+  tls:
+    enabled: true
+  relay:
+    enabled: true
+    tls:
+      server:
+        enabled: true
+  rbac:
+    enabled: true
+    auth:
+      oidc:
+        issuerUrl: http://dex.test
+        clientID: test-client-id
+    policy:
+      logRoles: true
+      mode: configMap
+      configMap:
+        bindings:
+        - role: admin
+          scope: email
+          value: 'admin@example.com'
+        - role: demos
+          scope: email
+          value: 'demo@example.com'
+        roles:
+        - name: demos
+          rules:
+            - actions:
+                - get
+              contexts:
+                - field: namespace
+                  values:
+                    - kube-system
+              kind: flows
+        - name: admin
+          rules:
+            - actions:
+                - "*"
+              kind: "*"
+              allowAllContexts: true
+

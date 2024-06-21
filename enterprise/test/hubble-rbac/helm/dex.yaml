@@ -1,0 +1,45 @@
+config:
+  issuer: http://dex.test
+
+  web:
+    http: :8080
+
+  storage:
+    type: memory
+
+  enablePasswordDB: true
+
+  oauth2:
+    passwordConnector: local
+
+  staticClients:
+    - id: test-client-id
+      secret: test-client-secret
+      redirectURIs:
+      - 'http://localhost:8000'
+      name: test-client
+      public: true
+
+  staticPasswords:
+    - email: "admin@example.com"
+      # bcrypt hash of the string "password": $(echo password | htpasswd -BinC 10 admin | cut -d: -f2)
+      hash: "$2y$10$8P0SAttTDmxR7pk1SnETYetI6UgEss18UobB27eKuAeg1HZg0Iz.q"
+      username: "admin"
+      userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
+    - email: "demo@example.com"
+      # bcrypt hash of the string "demo": $(echo demo | htpasswd -BinC 10 demo | cut -d: -f2)
+      hash: "$2y$10$WrIFfElaZSWJeO9TNg/v0ee522J.Tc3K/xv/tNbsrwB0wcwVPyuDC"
+      username: "demo"
+      userID: "e8fd6d5d-71d6-4f26-b5db-c15e1e3c7090"
+
+  logger:
+    level: "debug"
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: dex.test
+      paths:
+        - path: /
+          pathType: Prefix

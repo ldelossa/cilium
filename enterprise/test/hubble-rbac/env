@@ -1,0 +1,16 @@
+export HUBBLE_TLS="true"
+export HUBBLE_TLS_ALLOW_INSECURE="true"
+export HUBBLE_ISSUER="http://dex.test"
+export HUBBLE_CLIENT_ID="test-client-id"
+export HUBBLE_CLIENT_SECRET="test-client-secret"
+export ADMIN_OIDC_USER="admin@example.com"
+export ADMIN_OIDC_PASSWORD="password"
+export DEMO_OIDC_USER="demo@example.com"
+export DEMO_OIDC_PASSWORD="demo"
+
+
+export CILIUM_CHART_REPO="oci://quay.io/isovalent-charts-dev/cilium"
+export CILIUM_VERSION="1.16.0-dev-dev.1659-main-ce-3bdf1b0fc9"
+export DEX_VERSION="0.18.0"
+export INGRESS_NGINX_VERSION="4.10.1"
+export KIND_CTRLPLANE_NAME="kind-control-plane"

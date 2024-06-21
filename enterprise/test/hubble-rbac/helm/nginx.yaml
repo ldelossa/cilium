@@ -1,0 +1,13 @@
+controller:
+  hostNetwork: true
+  service:
+    type: NodePort
+  publishService:
+    enabled: false
+  extraArgs:
+    publish-status-address: localhost
+  nodeSelector:
+    ingress-ready: "true"
+  updateStrategy:
+    type: Recreate
+  terminationGracePeriodSeconds: 30
