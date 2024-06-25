@@ -8,6 +8,9 @@ clustermesh:
       override: quay.io/isovalent-dev/clustermesh-apiserver-ci:main
       pullPolicy: Never
       useDigest: false
+    updateStrategy:
+      rollingUpdate:
+        maxUnavailable: 1
   config:
     enabled: true
   useAPIServer: true
