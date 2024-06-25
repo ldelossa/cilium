@@ -29,6 +29,7 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 
+	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/daemon"
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 )
 
@@ -54,6 +55,9 @@ func NewCiliumEnterpriseAPIAPI(spec *loads.Document) *CiliumEnterpriseAPIAPI {
 
 		JSONProducer: runtime.JSONProducer(),
 
+		DaemonGetConfigHandler: daemon.GetConfigHandlerFunc(func(params daemon.GetConfigParams) middleware.Responder {
+			return middleware.NotImplemented("operation daemon.GetConfig has not yet been implemented")
+		}),
 		GetHealthzHandler: GetHealthzHandlerFunc(func(params GetHealthzParams) middleware.Responder {
 			return middleware.NotImplemented("operation GetHealthz has not yet been implemented")
 		}),
@@ -96,6 +100,8 @@ type CiliumEnterpriseAPIAPI struct {
 	//   - application/json
 	JSONProducer runtime.Producer
 
+	// DaemonGetConfigHandler sets the operation handler for the get config operation
+	DaemonGetConfigHandler daemon.GetConfigHandler
 	// GetHealthzHandler sets the operation handler for the get healthz operation
 	GetHealthzHandler GetHealthzHandler
 	// NetworkGetNetworkAttachmentHandler sets the operation handler for the get network attachment operation
@@ -177,6 +183,9 @@ func (o *CiliumEnterpriseAPIAPI) Validate() error {
 		unregistered = append(unregistered, "JSONProducer")
 	}
 
+	if o.DaemonGetConfigHandler == nil {
+		unregistered = append(unregistered, "daemon.GetConfigHandler")
+	}
 	if o.GetHealthzHandler == nil {
 		unregistered = append(unregistered, "GetHealthzHandler")
 	}
@@ -271,6 +280,10 @@ func (o *CiliumEnterpriseAPIAPI) initHandlerCache() {
 		o.handlers = make(map[string]map[string]http.Handler)
 	}
 
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/config"] = daemon.NewGetConfig(o.context, o.DaemonGetConfigHandler)
 	if o.handlers["GET"] == nil {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}

@@ -83,7 +83,7 @@ type daemonConfig interface {
 // plugin and contains an implementation of the multi-networking-aware auto direct
 // node routes logic.
 type Manager struct {
-	config       config
+	config       Config
 	daemonConfig daemonConfig
 	sysctl       sysctl.Sysctl
 

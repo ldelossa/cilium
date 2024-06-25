@@ -47,6 +47,16 @@ paths:
         '501':
           description: Network attachment feature is disabled
           x-go-name: Disabled
+  "/config":
+    get:
+      summary: Get configuration of enterprise-only features of Cilium daemon
+      tags:
+        - daemon
+      responses:
+        '200':
+          description: Success
+          schema:
+            "$ref": "#/definitions/EnterpriseDaemonConfiguration"
 parameters:
   network-pod-name:
     name: pod-name
@@ -112,3 +122,10 @@ definitions:
       gateway:
         description: Route gateway
         type: string
+  EnterpriseDaemonConfiguration:
+    description: The current configuration of any enterprise-only features
+    type: object
+    properties:
+      multi-network:
+        description: Indicates whether multi-network support is enabled
+        type: boolean

@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/netutil"
 
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi"
+	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/daemon"
 	"github.com/cilium/cilium/enterprise/api/v1/server/restapi/network"
 	"github.com/cilium/hive/cell"
 
@@ -63,6 +64,7 @@ type apiParams struct {
 
 	Middleware middleware.Builder `name:"cilium-enterprise-api-middleware" optional:"true"`
 
+	DaemonGetConfigHandler             daemon.GetConfigHandler
 	GetHealthzHandler                  restapi.GetHealthzHandler
 	NetworkGetNetworkAttachmentHandler network.GetNetworkAttachmentHandler
 }
@@ -72,6 +74,7 @@ func newAPI(p apiParams) *restapi.CiliumEnterpriseAPIAPI {
 
 	// Construct the API from the provided handlers
 
+	api.DaemonGetConfigHandler = p.DaemonGetConfigHandler
 	api.GetHealthzHandler = p.GetHealthzHandler
 	api.NetworkGetNetworkAttachmentHandler = p.NetworkGetNetworkAttachmentHandler
 
@@ -318,8 +321,6 @@ func (s *Server) Serve() error {
 
 // Start the server
 func (s *Server) Start(cell.HookContext) (err error) {
-	s.ConfigureAPI()
-
 	if !s.hasListeners {
 		if err = s.Listen(); err != nil {
 			return err
@@ -336,6 +337,7 @@ func (s *Server) Start(cell.HookContext) (err error) {
 			return errors.New("can't create the default handler, as no api is set")
 		}
 
+		s.ConfigureAPI()
 		s.SetHandler(s.api.Serve(nil))
 	}
 

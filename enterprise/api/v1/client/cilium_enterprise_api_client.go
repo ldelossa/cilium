@@ -20,6 +20,7 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 
+	"github.com/cilium/cilium/enterprise/api/v1/client/daemon"
 	"github.com/cilium/cilium/enterprise/api/v1/client/network"
 	"github.com/cilium/cilium/enterprise/api/v1/client/restapi"
 )
@@ -66,6 +67,7 @@ func New(transport runtime.ClientTransport, formats strfmt.Registry) *CiliumEnte
 
 	cli := new(CiliumEnterpriseAPI)
 	cli.Transport = transport
+	cli.Daemon = daemon.New(transport, formats)
 	cli.Network = network.New(transport, formats)
 	cli.Restapi = restapi.New(transport, formats)
 	return cli
@@ -112,6 +114,8 @@ func (cfg *TransportConfig) WithSchemes(schemes []string) *TransportConfig {
 
 // CiliumEnterpriseAPI is a client for cilium enterprise API
 type CiliumEnterpriseAPI struct {
+	Daemon daemon.ClientService
+
 	Network network.ClientService
 
 	Restapi restapi.ClientService
@@ -122,6 +126,7 @@ type CiliumEnterpriseAPI struct {
 // SetTransport changes the transport on the client and all its subresources
 func (c *CiliumEnterpriseAPI) SetTransport(transport runtime.ClientTransport) {
 	c.Transport = transport
+	c.Daemon.SetTransport(transport)
 	c.Network.SetTransport(transport)
 	c.Restapi.SetTransport(transport)
 }

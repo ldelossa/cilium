@@ -42,6 +42,22 @@ func init() {
   },
   "basePath": "/v1enterprise",
   "paths": {
+    "/config": {
+      "get": {
+        "tags": [
+          "daemon"
+        ],
+        "summary": "Get configuration of enterprise-only features of Cilium daemon",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "$ref": "#/definitions/EnterpriseDaemonConfiguration"
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Retrieve Cilium Enterprise health",
@@ -100,6 +116,16 @@ func init() {
     }
   },
   "definitions": {
+    "EnterpriseDaemonConfiguration": {
+      "description": "The current configuration of any enterprise-only features",
+      "type": "object",
+      "properties": {
+        "multi-network": {
+          "description": "Indicates whether multi-network support is enabled",
+          "type": "boolean"
+        }
+      }
+    },
     "Error": {
       "type": "string"
     },
@@ -207,6 +233,22 @@ func init() {
   },
   "basePath": "/v1enterprise",
   "paths": {
+    "/config": {
+      "get": {
+        "tags": [
+          "daemon"
+        ],
+        "summary": "Get configuration of enterprise-only features of Cilium daemon",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "$ref": "#/definitions/EnterpriseDaemonConfiguration"
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Retrieve Cilium Enterprise health",
@@ -273,6 +315,16 @@ func init() {
     }
   },
   "definitions": {
+    "EnterpriseDaemonConfiguration": {
+      "description": "The current configuration of any enterprise-only features",
+      "type": "object",
+      "properties": {
+        "multi-network": {
+          "description": "Indicates whether multi-network support is enabled",
+          "type": "boolean"
+        }
+      }
+    },
     "Error": {
       "type": "string"
     },

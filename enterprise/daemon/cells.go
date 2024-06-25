@@ -21,6 +21,7 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	"github.com/cilium/cilium/enterprise/pkg/ciliummesh"
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
+	"github.com/cilium/cilium/enterprise/pkg/config"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/enterprise/pkg/features"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha"
@@ -86,6 +87,8 @@ var (
 		// stats cell adds CE specific metrics, such as the top-k nat stats metric
 		// that depends on the OSS maps/nat/stats.Cell.
 		stats.Cell,
+
+		config.Cell,
 	)
 
 	Datapath = cell.Module(
