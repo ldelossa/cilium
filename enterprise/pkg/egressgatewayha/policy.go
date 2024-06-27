@@ -48,9 +48,10 @@ const (
 	// egress gateway IPAM condition types to be set in IEGP status after allocation attempts
 	egwIPAMRequestSatisfied = "isovalent.com/IPAMRequestSatisfied"
 
-	egwIPAMInvalidCIDR     = "isovalent.com/InvalidCIDR"
-	egwIPAMPoolExhausted   = "isovalent.com/PoolExhausted"
-	egwIPAMPoolConflicting = "isovalent.com/PoolConflict"
+	egwIPAMInvalidCIDR         = "isovalent.com/InvalidCIDR"
+	egwIPAMUnsupportedEgressIP = "isovalent.com/UnsupportedEgressIP"
+	egwIPAMPoolExhausted       = "isovalent.com/PoolExhausted"
+	egwIPAMPoolConflicting     = "isovalent.com/PoolConflict"
 )
 
 // groupConfig is the internal representation of an egress group, describing
@@ -560,6 +561,19 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 	haveSeenLatestIEGP := config.groupStatusesGeneration == config.generation
 
 	for i := range groupStatuses {
+		if config.groupConfigs[i].egressIP.IsValid() {
+			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
+				{
+					Type:               egwIPAMUnsupportedEgressIP,
+					Status:             meta_v1.ConditionUnknown,
+					ObservedGeneration: config.generation,
+					LastTransitionTime: meta_v1.Now(),
+					Reason:             "noreason",
+					Message:            "egressIP is not supported with a non-empty egressCIDR",
+				},
+			}...)
+		}
+
 		// check if this group has at least one active gateway, otherwise there is nothing to allocate
 		if len(groupStatuses[i].activeGatewayIPs) == 0 {
 			continue

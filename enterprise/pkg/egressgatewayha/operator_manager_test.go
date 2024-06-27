@@ -1853,6 +1853,25 @@ func TestEgressCIDRAllocation(t *testing.T) {
 			Status: metav1.ConditionTrue,
 		},
 	})
+
+	// User-specified EgressIP are not supported when relying on egress-gateway IPAM
+	policy.egressIP = "10.100.255.48"
+	policy.iface = "" // clear the interface, since having both iface and egressIP is not supported
+	addPolicy(t, k.fakeSet, k.policies, policy)
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs:  []string{node5IP},
+		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node5IP},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionFalse,
+		},
+		{
+			Type:   egwIPAMUnsupportedEgressIP,
+			Status: metav1.ConditionUnknown,
+		},
+	})
 }
 
 func TestEgressCIDRAllocationWithConflicts(t *testing.T) {
