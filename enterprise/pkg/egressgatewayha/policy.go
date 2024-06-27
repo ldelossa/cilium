@@ -527,6 +527,10 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 	for _, cidr := range config.egressCIDRs {
 		// detect conflicting CIDRs
 		if conflicting, found := operatorManager.cidrConflicts[policyEgressCIDR{config.id, cidr}]; found {
+			msg := fmt.Sprintf(
+				"egress CIDR %s in policy %s overlaps with egress group %s in policy %s",
+				cidr, config.id, conflicting.cidr, conflicting.origin,
+			)
 			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
 				{
 					Type:               egwIPAMPoolConflicting,
@@ -534,10 +538,7 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 					ObservedGeneration: config.generation,
 					LastTransitionTime: meta_v1.Now(),
 					Reason:             "noreason",
-					Message: fmt.Sprintf(
-						"egress CIDR %s in policy %s overlaps with egress group %s in policy %s",
-						cidr, config.id, conflicting.cidr, conflicting.origin,
-					),
+					Message:            msg,
 				},
 			}...)
 		}
@@ -546,6 +547,7 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 
 	egressPool, err := newPool(egressCIDRs...)
 	if err != nil {
+		operatorManager.health.Degraded(fmt.Sprintf("found invalid egress CIDR in policy %s", config.id), err)
 		return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
 			{
 				Type:               egwIPAMInvalidCIDR,
@@ -561,7 +563,9 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 	haveSeenLatestIEGP := config.groupStatusesGeneration == config.generation
 
 	for i := range groupStatuses {
-		if config.groupConfigs[i].egressIP.IsValid() {
+		if addr := config.groupConfigs[i].egressIP; addr.IsValid() {
+			msg := "egressIP not supported together with egressCIDR"
+			operatorManager.health.Degraded(msg, fmt.Errorf("found egress IP %s in policy %s", addr, config.id))
 			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
 				{
 					Type:               egwIPAMUnsupportedEgressIP,
@@ -569,7 +573,7 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 					ObservedGeneration: config.generation,
 					LastTransitionTime: meta_v1.Now(),
 					Reason:             "noreason",
-					Message:            "egressIP is not supported with a non-empty egressCIDR",
+					Message:            msg,
 				},
 			}...)
 		}
@@ -594,6 +598,7 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 
 		groupStatuses[i].egressIPByGatewayIP, err = allocateEgressIPsForGroup(egressPool, activeGatewayIPs, prevEgressIPs)
 		if err != nil {
+			operatorManager.health.Degraded(fmt.Sprintf("unable to fulfill allocations for policy %s", config.id), err)
 			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
 				{
 					Type:               egwIPAMPoolExhausted,
@@ -606,6 +611,8 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 			}...)
 		}
 	}
+
+	operatorManager.health.OK(fmt.Sprintf("IP allocations completed successfully for policy %s", config.id))
 
 	return groupStatuses, conditionsForSuccess(config.generation)
 }

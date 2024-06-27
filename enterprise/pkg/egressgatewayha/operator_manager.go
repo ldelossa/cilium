@@ -51,8 +51,10 @@ func (def OperatorConfig) Flags(flags *pflag.FlagSet) {
 type OperatorParams struct {
 	cell.In
 
-	Config        OperatorConfig
-	DaemonConfig  *option.DaemonConfig
+	Config       OperatorConfig
+	DaemonConfig *option.DaemonConfig
+
+	Health        cell.Health
 	Clientset     k8sClient.Clientset
 	Policies      resource.Resource[*Policy]
 	Nodes         resource.Resource[*cilium_api_v2.CiliumNode]
@@ -63,6 +65,9 @@ type OperatorParams struct {
 
 type OperatorManager struct {
 	lock.Mutex
+
+	// manager health status reporter
+	health cell.Health
 
 	// allCachesSynced is true when all k8s objects we depend on have had
 	// their initial state synced.
@@ -133,6 +138,7 @@ func NewEgressGatewayOperatorManager(p OperatorParams) (out struct {
 
 func newEgressGatewayOperatorManager(p OperatorParams) *OperatorManager {
 	operatorManager := &OperatorManager{
+		health:               p.Health,
 		clientset:            p.Clientset,
 		policies:             p.Policies,
 		ciliumNodes:          p.Nodes,
@@ -173,6 +179,7 @@ func newEgressGatewayOperatorManager(p OperatorParams) *OperatorManager {
 		},
 		OnStop: func(hc cell.HookContext) error {
 			cancel()
+			operatorManager.health.Stopped("Context done")
 			return nil
 		},
 	})

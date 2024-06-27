@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/hivetest"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -43,8 +44,10 @@ func setupEgressGatewayOperatorTestSuite(t *testing.T) *EgressGatewayOperatorTes
 	k.nodes = make(fakeResource[*cilium_api_v2.CiliumNode])
 	k.healthcheckerMock = newHealthcheckerMock()
 
+	h, _ := cell.NewSimpleHealth()
 	k.manager = newEgressGatewayOperatorManager(OperatorParams{
 		Config:        OperatorConfig{1 * time.Millisecond},
+		Health:        h,
 		Clientset:     k.fakeSet,
 		Policies:      k.policies,
 		Nodes:         k.nodes,
