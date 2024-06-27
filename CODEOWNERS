@@ -726,6 +726,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/multinetwork/ @isovalent/multi-network
 /enterprise/pkg/mixedrouting/ @isovalent/clustermesh
 /enterprise/pkg/srv6/ @isovalent/traffic-engineering
+/enterprise/pkg/nat/ @isovalent/egress-gateway
 /enterprise/plugins/ @isovalent/hubble
 /enterprise/plugins/hubble-flow-aggregation/api @isovalent/hubble-api
 /enterprise/test/srv6/ @isovalent/traffic-engineering
