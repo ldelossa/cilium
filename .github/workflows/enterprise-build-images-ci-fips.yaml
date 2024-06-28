@@ -7,6 +7,10 @@ on:
       - opened
       - synchronize
       - reopened
+  push:
+    branches:
+      - main-ce
+      - ft/main-ce/**
 
 permissions:
   # To be able to access the repository with `actions/checkout`
@@ -82,6 +86,14 @@ jobs:
             echo tag=${{ github.sha }} >> $GITHUB_OUTPUT
           fi
 
+          if [ "${{ github.ref_name }}" == "${{ github.event.repository.default_branch }}" ]; then
+            echo floating_tag=latest >> $GITHUB_OUTPUT
+          else
+            ft="${{ github.ref_name }}"
+            # Replace all occurrences of "/" with "-"
+            echo "floating_tag=${ft//\//-}" >> $GITHUB_OUTPUT
+          fi
+
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
       - name: Checkout pull request branch (NOT TRUSTED)
@@ -103,7 +115,61 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
 
+      # main branch pushes
       - name: CI Build ${{ matrix.name }}
+        if: ${{ github.event_name != 'pull_request_target' && !startsWith(github.ref_name, 'ft/') }}
+        uses: docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445 # v6.5.0
+        id: docker_build_ci
+        with:
+          provenance: false
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.floating_tag }}-fips
+            quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-fips
+          target: release
+          build-args: |
+            OPERATOR_VARIANT=${{ matrix.name }}
+
+      - name: Sign Container Images
+        if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
+        run: |
+          cosign sign -y quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${{ steps.docker_build_ci.outputs.digest }}
+
+      - name: Generate SBOM
+        if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
+        uses: anchore/sbom-action@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
+        with:
+          artifact-name: sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}_fips.spdx.json
+          output-file: ./sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}_fips.spdx.json
+          image: quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-fips
+
+      - name: Attach SBOM to Container Images
+        if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
+        run: |
+          cosign attach sbom --sbom sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}_fips.spdx.json quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${{ steps.docker_build_ci.outputs.digest }}
+
+      - name: Sign SBOM Images
+        if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
+        run: |
+          docker_build_ci_digest="${{ steps.docker_build_ci.outputs.digest }}"
+          image_name="quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${docker_build_ci_digest/:/-}.sbom"
+          docker_build_ci_sbom_digest="sha256:$(docker buildx imagetools inspect --raw ${image_name} | sha256sum | head -c 64)"
+          cosign sign -y "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${docker_build_ci_sbom_digest}"
+
+      - name: CI Image Releases digests
+        if: ${{ github.event_name == 'push' && !startsWith(github.ref_name, 'ft/') }}
+        shell: bash
+        run: |
+          mkdir -p image-digest/
+          echo "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.floating_tag }}-fips@${{ steps.docker_build_ci.outputs.digest }}" > image-digest/${{ matrix.name }}.txt
+          echo "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-fips@${{ steps.docker_build_ci.outputs.digest }}" > image-digest/${{ matrix.name }}.txt
+
+      # PR or feature branch updates
+      - name: CI Build ${{ matrix.name }}
+        if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
         uses: docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445 # v6.5.0
         id: docker_build_ci_pr
         with:
@@ -119,10 +185,12 @@ jobs:
             OPERATOR_VARIANT=${{ matrix.name }}
 
       - name: Sign Container Images
+        if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
         run: |
           cosign sign -y quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${{ steps.docker_build_ci_pr.outputs.digest }}
 
       - name: Generate SBOM
+        if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
         uses: anchore/sbom-action@d94f46e13c6c62f59525ac9a1e147a99dc0b9bf5 # v0.17.0
         with:
           artifact-name: sbom_ci_pr_${{ matrix.name }}_${{ steps.tag.outputs.tag }}_fips.spdx.json
@@ -130,10 +198,12 @@ jobs:
           image: quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-fips
 
       - name: Attach SBOM to Container Images
+        if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
         run: |
           cosign attach sbom --sbom sbom_ci_pr_${{ matrix.name }}_${{ steps.tag.outputs.tag }}_fips.spdx.json quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${{ steps.docker_build_ci_pr.outputs.digest }}
 
       - name: Sign SBOM Images
+        if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
         run: |
           docker_build_ci_pr_digest="${{ steps.docker_build_ci_pr.outputs.digest }}"
           image_name="quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${docker_build_ci_pr_digest/:/-}.sbom"
@@ -141,6 +211,7 @@ jobs:
           cosign sign -y "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci@${docker_build_ci_pr_sbom_digest}"
 
       - name: CI Image Releases digests
+        if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'push' && startsWith(github.ref_name, 'ft/')) }}
         shell: bash
         run: |
           mkdir -p image-digest/
