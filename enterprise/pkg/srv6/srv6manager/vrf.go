@@ -71,7 +71,7 @@ func (m *Manager) getVRFKeysFromMatchingEndpoint(vrf *VRF) []srv6map.VRFKey {
 			labels, err := m.getIdentityLabels(uint32(endpoint.Identity.ID))
 			if err != nil {
 				logger.WithFields(logrus.Fields{logfields.K8sEndpointName: endpoint.Name, logfields.K8sNamespace: endpoint.Namespace}).
-					WithError(err).Error("Could not get endpoint identity labels, skipping from VRF matching")
+					WithError(err).Warning("Could not get endpoint identity labels, skipping from VRF matching")
 				continue
 			}
 			if !rule.selectsEndpoint(labels.K8sStringMap()) {
