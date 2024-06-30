@@ -19,7 +19,9 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
-var log = logging.DefaultLogger.WithField(logfields.LogSubsys, "ipam-metadata-manager")
+var (
+	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "ipam-metadata-manager")
+)
 
 type ManagerStoppedError struct{}
 
@@ -52,18 +54,14 @@ func (r *ResourceNotFound) Is(target error) bool {
 	return true
 }
 
-type Manager interface {
-	GetIPPoolForPod(owner string, family ipam.Family) (pool string, err error)
-}
-
-type manager struct {
+type Manager struct {
 	namespaceResource resource.Resource[*slim_core_v1.Namespace]
 	namespaceStore    resource.Store[*slim_core_v1.Namespace]
 	podResource       k8s.LocalPodResource
 	podStore          resource.Store[*slim_core_v1.Pod]
 }
 
-func (m *manager) Start(ctx cell.HookContext) (err error) {
+func (m *Manager) Start(ctx cell.HookContext) (err error) {
 	m.namespaceStore, err = m.namespaceResource.Store(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to obtain namespace store: %w", err)
@@ -77,7 +75,7 @@ func (m *manager) Start(ctx cell.HookContext) (err error) {
 	return nil
 }
 
-func (m *manager) Stop(ctx cell.HookContext) error {
+func (m *Manager) Stop(ctx cell.HookContext) error {
 	m.namespaceStore = nil
 	m.podStore = nil
 	return nil
@@ -116,7 +114,7 @@ func determinePoolByAnnotations(annotations map[string]string, family ipam.Famil
 	return "", false
 }
 
-func (m *manager) GetIPPoolForPod(owner string, family ipam.Family) (pool string, err error) {
+func (m *Manager) GetIPPoolForPod(owner string, family ipam.Family) (pool string, err error) {
 	if m.namespaceStore == nil || m.podStore == nil {
 		return "", &ManagerStoppedError{}
 	}

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -56,8 +56,6 @@ type NeighLink struct {
 }
 
 type linuxNodeHandler struct {
-	log *slog.Logger
-
 	mutex                lock.RWMutex
 	isInitialized        bool
 	nodeConfig           datapath.LocalNodeConfiguration
@@ -99,7 +97,6 @@ var (
 // NewNodeHandler returns a new node handler to handle node events and
 // implement the implications in the Linux datapath
 func NewNodeHandler(
-	log *slog.Logger,
 	tunnelConfig dpTunnel.Config,
 	nodeMap nodemap.MapV2,
 	nodeManager manager.NodeManager,
@@ -109,20 +106,18 @@ func NewNodeHandler(
 		TunnelDevice: tunnelConfig.DeviceName(),
 	}
 
-	handler := newNodeHandler(log, datapathConfig, nodeMap, nodeManager)
+	handler := newNodeHandler(datapathConfig, nodeMap, nodeManager)
 	return handler, handler, handler
 }
 
 // newNodeHandler returns a new node handler to handle node events and
 // implement the implications in the Linux datapath
 func newNodeHandler(
-	log *slog.Logger,
 	datapathConfig DatapathConfiguration,
 	nodeMap nodemap.MapV2,
 	nbq datapath.NodeNeighborEnqueuer,
 ) *linuxNodeHandler {
 	return &linuxNodeHandler{
-		log:                    log,
 		datapathConfig:         datapathConfig,
 		nodeConfig:             datapath.LocalNodeConfiguration{},
 		nodes:                  map[nodeTypes.Identity]*nodeTypes.Node{},
@@ -150,7 +145,7 @@ func (l *linuxNodeHandler) Name() string {
 // with encapsulation mode enabled. The CIDR and IP of both the old and new
 // node are provided as context. The caller expects the tunnel mapping in the
 // datapath to be updated.
-func updateTunnelMapping(log *slog.Logger, oldCIDR, newCIDR cmtypes.PrefixCluster, oldIP, newIP net.IP,
+func updateTunnelMapping(oldCIDR, newCIDR cmtypes.PrefixCluster, oldIP, newIP net.IP,
 	firstAddition, encapEnabled bool, oldEncryptKey, newEncryptKey uint8) error {
 	var errs error
 	if !encapEnabled {
@@ -158,7 +153,7 @@ func updateTunnelMapping(log *slog.Logger, oldCIDR, newCIDR cmtypes.PrefixCluste
 		// trigger a deletion to clean up leftover entries. The deletion happens
 		// in quiet mode as we don't know whether it exists or not
 		if newCIDR.IsValid() && firstAddition {
-			if err := deleteTunnelMapping(log, newCIDR, true); err != nil {
+			if err := deleteTunnelMapping(newCIDR, true); err != nil {
 				errs = errors.Join(errs,
 					fmt.Errorf("failed to delete tunnel mapping %q: %w", newCIDR, err))
 			}
@@ -168,16 +163,15 @@ func updateTunnelMapping(log *slog.Logger, oldCIDR, newCIDR cmtypes.PrefixCluste
 	}
 
 	if cidrNodeMappingUpdateRequired(oldCIDR, newCIDR, oldIP, newIP, oldEncryptKey, newEncryptKey) {
-		log.Debug("Updating tunnel map entry",
-			logfields.IPAddr, newIP,
-			"allocCIDR", newCIDR,
-		)
+		log.WithFields(logrus.Fields{
+			logfields.IPAddr: newIP,
+			"allocCIDR":      newCIDR,
+		}).Debug("Updating tunnel map entry")
 
 		if err := tunnel.TunnelMap().SetTunnelEndpoint(newEncryptKey, newCIDR.AddrCluster(), newIP); err != nil {
-			log.Error("bpf: Unable to update in tunnel endpoint map",
-				logfields.Error, err,
-				"allocCIDR", newCIDR,
-			)
+			log.WithError(err).WithFields(logrus.Fields{
+				"allocCIDR": newCIDR,
+			}).Error("bpf: Unable to update in tunnel endpoint map")
 			errs = errors.Join(errs,
 				fmt.Errorf("failed to update tunnel endpoint map (prefix: %s, nodeIP: %s): %w", newCIDR.AddrCluster(), newIP, err))
 		}
@@ -192,7 +186,7 @@ func updateTunnelMapping(log *slog.Logger, oldCIDR, newCIDR cmtypes.PrefixCluste
 		fallthrough
 	// Node allocation CIDR has changed
 	case oldCIDR.IsValid() && newCIDR.IsValid() && !oldCIDR.Equal(newCIDR):
-		if err := deleteTunnelMapping(log, oldCIDR, false); err != nil {
+		if err := deleteTunnelMapping(oldCIDR, false); err != nil {
 			errs = errors.Join(errs,
 				fmt.Errorf("failed to delete tunnel mapping (oldCIDR: %s, newIP: %s): %w", oldCIDR, newIP, err))
 		}
@@ -226,24 +220,23 @@ func cidrNodeMappingUpdateRequired(oldCIDR, newCIDR cmtypes.PrefixCluster, oldIP
 	return !oldCIDR.Equal(newCIDR)
 }
 
-func deleteTunnelMapping(log *slog.Logger, oldCIDR cmtypes.PrefixCluster, quietMode bool) error {
+func deleteTunnelMapping(oldCIDR cmtypes.PrefixCluster, quietMode bool) error {
 	if !oldCIDR.IsValid() {
 		return nil
 	}
 
-	log.Debug("Deleting tunnel map entry",
-		"allocPrefixCluster", oldCIDR.String(),
-		"quietMode", quietMode,
-	)
+	log.WithFields(logrus.Fields{
+		"allocPrefixCluster": oldCIDR.String(),
+		"quietMode":          quietMode,
+	}).Debug("Deleting tunnel map entry")
 
 	addrCluster := oldCIDR.AddrCluster()
 
 	if !quietMode {
 		if err := tunnel.TunnelMap().DeleteTunnelEndpoint(addrCluster); err != nil {
-			log.Error("Unable to delete in tunnel endpoint map",
-				logfields.Error, err,
-				"allocPrefixCluster", oldCIDR.String(),
-			)
+			log.WithError(err).WithFields(logrus.Fields{
+				"allocPrefixCluster": oldCIDR.String(),
+			}).Error("Unable to delete in tunnel endpoint map")
 			return fmt.Errorf("failed to delete tunnel endpoint map: %w", err)
 		}
 	} else {
@@ -252,7 +245,7 @@ func deleteTunnelMapping(log *slog.Logger, oldCIDR cmtypes.PrefixCluster, quietM
 	return nil
 }
 
-func createDirectRouteSpec(log *slog.Logger, CIDR *cidr.CIDR, nodeIP net.IP, skipUnreachable bool) (routeSpec *netlink.Route, addRoute bool, err error) {
+func createDirectRouteSpec(CIDR *cidr.CIDR, nodeIP net.IP, skipUnreachable bool) (routeSpec *netlink.Route, addRoute bool, err error) {
 	var routes []netlink.Route
 	addRoute = true
 
@@ -275,9 +268,11 @@ func createDirectRouteSpec(log *slog.Logger, CIDR *cidr.CIDR, nodeIP net.IP, ski
 
 	if routes[0].Gw != nil && !routes[0].Gw.IsUnspecified() && !routes[0].Gw.Equal(nodeIP) {
 		if skipUnreachable {
-			log.Warn("route to destination contains gateway, skipping route as not directly reachable",
-				"nodeIP", nodeIP,
-				"gateway", routes[0].Gw.String())
+			log.WithFields(logrus.Fields{
+				"nodeIP":  nodeIP,
+				"gateway": routes[0].Gw.String(),
+			}).Warningf("route to destination %s contains gateway %s, skipping route as not directly reachable",
+				nodeIP, routes[0].Gw.String())
 			addRoute = false
 		} else {
 			err = fmt.Errorf("route to destination %s contains gateway %s, must be directly reachable. Add `direct-node-routes-skip-unreachable` to skip unreachable routes",
@@ -322,8 +317,8 @@ func createDirectRouteSpec(log *slog.Logger, CIDR *cidr.CIDR, nodeIP net.IP, ski
 	return
 }
 
-func installDirectRoute(log *slog.Logger, CIDR *cidr.CIDR, nodeIP net.IP, skipUnreachable bool) (routeSpec *netlink.Route, err error) {
-	routeSpec, addRoute, err := createDirectRouteSpec(log, CIDR, nodeIP, skipUnreachable)
+func installDirectRoute(CIDR *cidr.CIDR, nodeIP net.IP, skipUnreachable bool) (routeSpec *netlink.Route, err error) {
+	routeSpec, addRoute, err := createDirectRouteSpec(CIDR, nodeIP, skipUnreachable)
 	if err != nil {
 		return
 	}
@@ -356,16 +351,16 @@ func (n *linuxNodeHandler) updateDirectRoutes(oldCIDRs, newCIDRs []*cidr.CIDR, o
 		addedCIDRs, removedCIDRs = newCIDRs, oldCIDRs
 	}
 
-	n.log.Debug("Updating direct route",
-		"newIP", newIP,
-		"oldIP", oldIP,
-		"addedCIDRs", addedCIDRs,
-		"removedCIDRs", removedCIDRs,
-	)
+	log.WithFields(logrus.Fields{
+		"newIP":        newIP,
+		"oldIP":        oldIP,
+		"addedCIDRs":   addedCIDRs,
+		"removedCIDRs": removedCIDRs,
+	}).Debug("Updating direct route")
 
 	for _, cidr := range addedCIDRs {
-		if routeSpec, err := installDirectRoute(n.log, cidr, newIP, directRouteSkipUnreachable); err != nil {
-			n.log.Warn("Unable to install direct node route", "route", routeSpec.String(), logfields.Error, err)
+		if routeSpec, err := installDirectRoute(cidr, newIP, directRouteSkipUnreachable); err != nil {
+			log.WithError(err).Warningf("Unable to install direct node route %s", routeSpec.String())
 			// In the current implementation, this often fails because updates are tried for both ip families
 			// regardless if the Node has either ip types.
 			// At the time of this change we are only interested in bubbling up errors without affecting execution flow.
@@ -415,14 +410,14 @@ func (n *linuxNodeHandler) deleteDirectRoute(CIDR *cidr.CIDR, nodeIP net.IP) err
 
 	routes, err := netlink.RouteListFiltered(family, filter, netlink.RT_FILTER_DST|netlink.RT_FILTER_GW)
 	if err != nil {
-		n.log.Error("Unable to list direct routes", logfields.Error, err)
+		log.WithError(err).Error("Unable to list direct routes")
 		return fmt.Errorf("failed to list direct routes %s: %w", familyStr, err)
 	}
 
 	var errs error
 	for _, rt := range routes {
 		if err := netlink.RouteDel(&rt); err != nil {
-			n.log.Warn("Unable to delete direct node route", "cidr", rt.String(), logfields.Error, err)
+			log.WithError(err).Warningf("Unable to delete direct node route %s", rt.String())
 			errs = errors.Join(errs, fmt.Errorf("failed to delete direct route %q: %w", rt.String(), err))
 		}
 	}
@@ -504,8 +499,7 @@ func (n *linuxNodeHandler) updateNodeRoute(prefix *cidr.CIDR, addressFamilyEnabl
 		return err
 	}
 	if err := route.Upsert(nodeRoute); err != nil {
-		n.log.Warn("Unable to update route",
-			append(nodeRoute.LogAttrs(), logfields.Error, err)...)
+		log.WithError(err).WithFields(nodeRoute.LogFields()).Warning("Unable to update route")
 		return err
 	}
 
@@ -522,8 +516,7 @@ func (n *linuxNodeHandler) deleteNodeRoute(prefix *cidr.CIDR, isLocalNode bool) 
 		return err
 	}
 	if err := route.Delete(nodeRoute); err != nil {
-		n.log.Warn("Unable to delete route",
-			append(nodeRoute.LogAttrs(), logfields.Error, err)...)
+		log.WithError(err).WithFields(nodeRoute.LogFields()).Warning("Unable to delete route")
 		return err
 	}
 
@@ -711,16 +704,18 @@ func (n *linuxNodeHandler) insertNeighbor4(ctx context.Context, newNode *nodeTyp
 	nextHopIPv4 := make(net.IP, len(newNodeIP))
 	copy(nextHopIPv4, newNodeIP)
 
+	scopedLog := log.WithFields(logrus.Fields{
+		logfields.LogSubsys: "node-neigh-debug",
+		logfields.Interface: link.Attrs().Name,
+		logfields.IPAddr:    newNodeIP,
+	})
+
 	nextHopIPv4, err := getNextHopIP(nextHopIPv4, link)
 	if err != nil {
 		return fmt.Errorf("unable to determine next hop IPv4 address for %s (%s): %w", link.Attrs().Name, newNodeIP, err)
 	}
 	nextHopStr := nextHopIPv4.String()
-	scopedLog := n.log.With(
-		logfields.LogSubsys, "node-neigh-debug",
-		logfields.Interface, link.Attrs().Name,
-		logfields.IPAddr, newNodeIP,
-		logfields.NextHop, nextHopIPv4)
+	scopedLog = scopedLog.WithField(logfields.NextHop, nextHopIPv4)
 
 	n.neighLock.Lock()
 	defer n.neighLock.Unlock()
@@ -746,10 +741,10 @@ func (n *linuxNodeHandler) insertNeighbor4(ctx context.Context, newNode *nodeTyp
 					// address and device is checked.
 					if err := netlink.NeighDel(neigh); err != nil {
 						errs = errors.Join(errs, fmt.Errorf("unable to remove next hop for IP %s (%d): %w", neigh.IP, neigh.LinkIndex, err))
-						scopedLog.Info("Unable to remove next hop",
-							logfields.NextHop, neigh.IP,
-							logfields.LinkIndex, neigh.LinkIndex,
-						)
+						scopedLog.WithFields(logrus.Fields{
+							logfields.NextHop:   neigh.IP,
+							logfields.LinkIndex: neigh.LinkIndex,
+						}).WithError(err).Info("Unable to remove next hop")
 					}
 					delete(n.neighByNextHop, existingNextHopStr)
 					delete(n.neighLastPingByNextHop, existingNextHopStr)
@@ -786,16 +781,18 @@ func (n *linuxNodeHandler) insertNeighbor6(ctx context.Context, newNode *nodeTyp
 	nextHopIPv6 := make(net.IP, len(newNodeIP))
 	copy(nextHopIPv6, newNodeIP)
 
+	scopedLog := log.WithFields(logrus.Fields{
+		logfields.LogSubsys: "node-neigh-debug",
+		logfields.Interface: link.Attrs().Name,
+		logfields.IPAddr:    newNodeIP,
+	})
+
 	nextHopIPv6, err := getNextHopIP(nextHopIPv6, link)
 	if err != nil {
 		return fmt.Errorf("unable to determine next hop IPv6 address for %s (%s): %w", link.Attrs().Name, newNodeIP, err)
 	}
 	nextHopStr := nextHopIPv6.String()
-	scopedLog := n.log.With(
-		logfields.LogSubsys, "node-neigh-debug",
-		logfields.Interface, link.Attrs().Name,
-		logfields.IPAddr, newNodeIP,
-		logfields.NextHop, nextHopIPv6)
+	scopedLog = scopedLog.WithField(logfields.NextHop, nextHopIPv6)
 
 	n.neighLock.Lock()
 	defer n.neighLock.Unlock()
@@ -822,10 +819,10 @@ func (n *linuxNodeHandler) insertNeighbor6(ctx context.Context, newNode *nodeTyp
 					// address and device is checked.
 					if err := netlink.NeighDel(neigh); err != nil {
 						errs = errors.Join(errs, fmt.Errorf("unable to remove next hop for IP %s (%d): %w", neigh.IP, neigh.LinkIndex, err))
-						scopedLog.Info("Unable to remove next hop",
-							logfields.NextHop, neigh.IP,
-							logfields.LinkIndex, neigh.LinkIndex,
-						)
+						scopedLog.WithFields(logrus.Fields{
+							logfields.NextHop:   neigh.IP,
+							logfields.LinkIndex: neigh.LinkIndex,
+						}).WithError(err).Info("Unable to remove next hop")
 					}
 					delete(n.neighByNextHop, existingNextHopStr)
 					delete(n.neighLastPingByNextHop, existingNextHopStr)
@@ -851,7 +848,7 @@ func (n *linuxNodeHandler) insertNeighbor6(ctx context.Context, newNode *nodeTyp
 	}
 
 	if err := errors.Join(errs, n.insertNeighborCommon(ctx, nh, link, refresh)); err != nil {
-		scopedLog.Debug("insert node neighbor IPv6 failed", logfields.Error, err)
+		scopedLog.WithError(err).Debug("insert node neighbor IPv6 failed")
 		return err
 	}
 
@@ -906,12 +903,11 @@ func (n *linuxNodeHandler) deleteNeighborCommon(nextHopStr string) {
 			// Neighbor's HW address is ignored on delete. Only IP
 			// address and device is checked.
 			if err := netlink.NeighDel(neigh); err != nil {
-				n.log.Info("Unable to remove next hop",
-					logfields.LogSubsys, "node-neigh-debug",
-					logfields.NextHop, neigh.IP,
-					logfields.LinkIndex, neigh.LinkIndex,
-					logfields.Error, err,
-				)
+				log.WithFields(logrus.Fields{
+					logfields.LogSubsys: "node-neigh-debug",
+					logfields.NextHop:   neigh.IP,
+					logfields.LinkIndex: neigh.LinkIndex,
+				}).WithError(err).Info("Unable to remove next hop")
 			}
 		}
 	}
@@ -1049,9 +1045,9 @@ func (n *linuxNodeHandler) nodeUpdate(oldNode, newNode *nodeTypes.Node, firstAdd
 		// Update the tunnel mapping of the node. In case the
 		// node has changed its CIDR range, a new entry in the
 		// map is created and the old entry is removed.
-		errs = errors.Join(errs, updateTunnelMapping(n.log, oldPrefixCluster4, newPrefixCluster4, oldIP4, newIP4, firstAddition, n.nodeConfig.EnableIPv4, oldKey, newKey))
+		errs = errors.Join(errs, updateTunnelMapping(oldPrefixCluster4, newPrefixCluster4, oldIP4, newIP4, firstAddition, n.nodeConfig.EnableIPv4, oldKey, newKey))
 		// Not a typo, the IPv4 host IP is used to build the IPv6 overlay
-		errs = errors.Join(errs, updateTunnelMapping(n.log, oldPrefixCluster6, newPrefixCluster6, oldIP4, newIP4, firstAddition, n.nodeConfig.EnableIPv6, oldKey, newKey))
+		errs = errors.Join(errs, updateTunnelMapping(oldPrefixCluster6, newPrefixCluster6, oldIP4, newIP4, firstAddition, n.nodeConfig.EnableIPv6, oldKey, newKey))
 
 		if err := n.updateOrRemoveNodeRoutes(oldAllIP4AllocCidrs, newAllIP4AllocCidrs, isLocalNode); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("failed to enable encapsulation: single cluster routes: ipv4: %w", err))
@@ -1119,10 +1115,10 @@ func (n *linuxNodeHandler) nodeDelete(oldNode *nodeTypes.Node) error {
 	if n.enableEncapsulation(oldNode) {
 		oldPrefix4 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv4AllocCIDR, n.prefixClusterMutatorFn(oldNode)...)
 		oldPrefix6 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv6AllocCIDR, n.prefixClusterMutatorFn(oldNode)...)
-		if err := deleteTunnelMapping(n.log, oldPrefix4, false); err != nil {
+		if err := deleteTunnelMapping(oldPrefix4, false); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("failed to remove old encapsulation config: deleting tunnel mapping for ipv4: %w", err))
 		}
-		if err := deleteTunnelMapping(n.log, oldPrefix6, false); err != nil {
+		if err := deleteTunnelMapping(oldPrefix6, false); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("failed to remove old encapsulation config: deleting tunnel mapping for ipv6: %w", err))
 		}
 
@@ -1163,13 +1159,13 @@ func (n *linuxNodeHandler) replaceHostRules() error {
 		if !option.Config.EnableEndpointRoutes {
 			rule.Mark = linux_defaults.RouteMarkDecrypt
 			if err := route.ReplaceRule(rule); err != nil {
-				n.log.Error("Replace IPv4 route decrypt rule failed", logfields.Error, err)
+				log.WithError(err).Error("Replace IPv4 route decrypt rule failed")
 				return err
 			}
 		}
 		rule.Mark = linux_defaults.RouteMarkEncrypt
 		if err := route.ReplaceRule(rule); err != nil {
-			n.log.Error("Replace IPv4 route encrypt rule failed", logfields.Error, err)
+			log.WithError(err).Error("Replace IPv4 route encrypt rule failed")
 			return err
 		}
 	}
@@ -1177,12 +1173,12 @@ func (n *linuxNodeHandler) replaceHostRules() error {
 	if n.nodeConfig.EnableIPv6 {
 		rule.Mark = linux_defaults.RouteMarkDecrypt
 		if err := route.ReplaceRuleIPv6(rule); err != nil {
-			n.log.Error("Replace IPv6 route decrypt rule failed", logfields.Error, err)
+			log.WithError(err).Error("Replace IPv6 route decrypt rule failed")
 			return err
 		}
 		rule.Mark = linux_defaults.RouteMarkEncrypt
 		if err := route.ReplaceRuleIPv6(rule); err != nil {
-			n.log.Error("Replace IPv6 route ecrypt rule failed", logfields.Error, err)
+			log.WithError(err).Error("Replace IPv6 route ecrypt rule failed")
 			return err
 		}
 	}
@@ -1242,11 +1238,9 @@ func (n *linuxNodeHandler) NodeConfigurationChanged(newConfig datapath.LocalNode
 			// disabled next time.
 			err := storeNeighLink(option.Config.StateDir, ifaceNames)
 			if err != nil {
-				n.log.Warn("Unable to store neighbor discovery iface."+
-					" Removing PERM neighbor entries upon cilium-agent init when neighbor"+
-					" discovery is disabled will not work.",
-					logfields.Error, err,
-				)
+				log.WithError(err).Warning("Unable to store neighbor discovery iface." +
+					" Removing PERM neighbor entries upon cilium-agent init when neighbor" +
+					" discovery is disabled will not work.")
 			}
 
 			// neighDiscoveryLink can be accessed by a concurrent insertNeighbor
@@ -1277,20 +1271,20 @@ func (n *linuxNodeHandler) NodeConfigurationChanged(newConfig datapath.LocalNode
 		}
 
 		if err := n.replaceHostRules(); err != nil {
-			n.log.Warn("Cannot replace Host rules", logfields.Error, err)
+			log.WithError(err).Warning("Cannot replace Host rules")
 		}
 		n.registerIpsecMetricOnce()
 	} else {
 		if err := n.removeEncryptRules(); err != nil {
-			n.log.Warn("Cannot cleanup previous encryption rule state.", logfields.Error, err)
+			log.WithError(err).Warning("Cannot cleanup previous encryption rule state.")
 		}
-		if err := ipsec.DeleteXFRM(n.log); err != nil {
+		if err := ipsec.DeleteXFRM(); err != nil {
 			return fmt.Errorf("failed to delete xfrm policies on node configuration changed: %w", err)
 		}
 	}
 
 	if !newConfig.EnableIPSecEncryptedOverlay {
-		if err := ipsec.DeleteXFRMWithReqID(n.log, ipsec.EncryptedOverlayReqID); err != nil {
+		if err := ipsec.DeleteXFRMWithReqID(ipsec.EncryptedOverlayReqID); err != nil {
 			return fmt.Errorf("failed to delete encrypt overlay xfrm policies on node configuration change: %w", err)
 		}
 	}
@@ -1359,7 +1353,7 @@ func (n *linuxNodeHandler) AllNodeValidateImplementation() {
 		}
 	}
 	if errs != nil {
-		n.log.Warn("Node update failed during datapath node validation", logfields.Error, errs)
+		log.WithError(errs).Warn("Node update failed during datapath node validation")
 	}
 }
 
@@ -1391,11 +1385,10 @@ func (n *linuxNodeHandler) NodeCleanNeighborsLink(l netlink.Link, migrateOnly bo
 		Index: uint32(l.Attrs().Index),
 	})
 	if err != nil {
-		n.log.Error("Unable to list PERM neighbor entries for removal of network device",
-			logfields.Error, err,
-			logfields.Device, l.Attrs().Name,
-			logfields.LinkIndex, l.Attrs().Index,
-		)
+		log.WithError(err).WithFields(logrus.Fields{
+			logfields.Device:    l.Attrs().Name,
+			logfields.LinkIndex: l.Attrs().Index,
+		}).Error("Unable to list PERM neighbor entries for removal of network device")
 		return false
 	}
 
@@ -1441,12 +1434,11 @@ func (n *linuxNodeHandler) NodeCleanNeighborsLink(l netlink.Link, migrateOnly bo
 				neigh.State = netlink.NUD_REACHABLE
 				neigh.Flags = netlink.NTF_EXT_LEARNED
 				if err := netlink.NeighSet(&neigh); err != nil {
-					n.log.Info("Unable to replace new next hop",
-						logfields.Error, err,
-						logfields.Device, l.Attrs().Name,
-						logfields.LinkIndex, l.Attrs().Index,
-						"neighbor", fmt.Sprintf("%+v", neigh),
-					)
+					log.WithError(err).WithFields(logrus.Fields{
+						logfields.Device:    l.Attrs().Name,
+						logfields.LinkIndex: l.Attrs().Index,
+						"neighbor":          fmt.Sprintf("%+v", neigh),
+					}).Info("Unable to replace new next hop")
 					neighErrored++
 					successClean = false
 					continue
@@ -1467,14 +1459,13 @@ func (n *linuxNodeHandler) NodeCleanNeighborsLink(l netlink.Link, migrateOnly bo
 			err = netlink.NeighDel(&neigh)
 		}
 		if err != nil {
-			n.log.Error("Unable to "+which+" non-GC'ed neighbor entry of network device. "+
-				"Consider removing this entry manually with 'ip neigh del "+neigh.IP.String()+" dev "+l.Attrs().Name+"'",
-				logfields.Error, err,
-				logfields.Device, l.Attrs().Name,
-				logfields.LinkIndex, l.Attrs().Index,
-				"neighbor", fmt.Sprintf("%+v", neigh),
-			)
-
+			log.WithError(err).WithFields(logrus.Fields{
+				logfields.Device:    l.Attrs().Name,
+				logfields.LinkIndex: l.Attrs().Index,
+				"neighbor":          fmt.Sprintf("%+v", neigh),
+			}).Errorf("Unable to %s non-GC'ed neighbor entry of network device. "+
+				"Consider removing this entry manually with 'ip neigh del %s dev %s'",
+				which, neigh.IP.String(), l.Attrs().Name)
 			neighErrored++
 			successClean = false
 		} else {
@@ -1482,14 +1473,14 @@ func (n *linuxNodeHandler) NodeCleanNeighborsLink(l netlink.Link, migrateOnly bo
 		}
 	}
 	if neighSucceeded != 0 {
-		n.log.Info("Successfully "+which+"d non-GC'ed neighbor entries previously installed by cilium-agent",
-			logfields.Count, neighSucceeded,
-		)
+		log.WithFields(logrus.Fields{
+			logfields.Count: neighSucceeded,
+		}).Infof("Successfully %sd non-GC'ed neighbor entries previously installed by cilium-agent", which)
 	}
 	if neighErrored != 0 {
-		n.log.Warn("Unable to "+which+" non-GC'ed neighbor entries previously installed by cilium-agent",
-			logfields.Count, neighErrored,
-		)
+		log.WithFields(logrus.Fields{
+			logfields.Count: neighErrored,
+		}).Warningf("Unable to %s non-GC'ed neighbor entries previously installed by cilium-agent", which)
 	}
 	return successClean
 }
@@ -1510,9 +1501,8 @@ func (n *linuxNodeHandler) NodeCleanNeighborsLink(l netlink.Link, migrateOnly bo
 func (n *linuxNodeHandler) NodeCleanNeighbors(migrateOnly bool) {
 	linkNames, err := loadNeighLink(option.Config.StateDir)
 	if err != nil {
-		n.log.Error("Unable to load neighbor discovery iface name for removing PERM neighbor entries",
-			logfields.Error, err,
-		)
+		log.WithError(err).Error("Unable to load neighbor discovery iface name" +
+			" for removing PERM neighbor entries")
 		return
 	}
 	if len(linkNames) == 0 {
@@ -1535,10 +1525,9 @@ func (n *linuxNodeHandler) NodeCleanNeighbors(migrateOnly bool) {
 			// up the neihbor entries so we can keep successClean=true
 			var linkNotFoundError netlink.LinkNotFoundError
 			if !errors.As(err, &linkNotFoundError) {
-				n.log.Error("Unable to remove PERM neighbor entries of network device",
-					logfields.Error, err,
-					logfields.Device, linkName,
-				)
+				log.WithError(err).WithFields(logrus.Fields{
+					logfields.Device: linkName,
+				}).Error("Unable to remove PERM neighbor entries of network device")
 				successClean = false
 			}
 			continue

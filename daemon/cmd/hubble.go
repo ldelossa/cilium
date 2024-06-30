@@ -146,11 +146,6 @@ func (d *Daemon) launchHubble() {
 		)
 	}
 
-	// fill in the local node information after the dropEventEmitter logique,
-	// but before anything else (e.g. metrics).
-	localNodeWatcher := observer.NewLocalNodeWatcher(d.ctx, d.nodeLocalStore)
-	observerOpts = append(observerOpts, observeroption.WithOnDecodedFlow(localNodeWatcher))
-
 	grpcMetrics := grpc_prometheus.NewServerMetrics()
 	var metricsTLSConfig *certloader.WatchedServerConfig
 	if option.Config.HubbleMetricsServerTLSEnabled {

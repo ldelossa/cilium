@@ -4,9 +4,8 @@
 package config
 
 import (
-	"log/slog"
-
 	"github.com/cilium/hive/cell"
+	"github.com/sirupsen/logrus"
 
 	dpdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
@@ -17,7 +16,7 @@ import (
 type WriterParams struct {
 	cell.In
 
-	Log                *slog.Logger
+	Log                logrus.FieldLogger
 	NodeMap            nodemap.MapV2
 	NodeAddressing     datapath.NodeAddressing
 	NodeExtraDefines   []dpdef.Map `group:"header-node-defines"`

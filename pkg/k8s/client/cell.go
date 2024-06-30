@@ -379,12 +379,12 @@ func (c *compositeClientset) waitForConn(ctx context.Context) error {
 }
 
 func setDialer(cfg Config, restConfig *rest.Config) func() {
-	if cfg.K8sClientConnectionTimeout == 0 || cfg.K8sClientConnectionKeepAlive == 0 {
+	if cfg.K8sHeartbeatTimeout == 0 {
 		return func() {}
 	}
 	ctx := (&net.Dialer{
-		Timeout:   cfg.K8sClientConnectionTimeout,
-		KeepAlive: cfg.K8sClientConnectionKeepAlive,
+		Timeout:   cfg.K8sHeartbeatTimeout,
+		KeepAlive: cfg.K8sHeartbeatTimeout,
 	}).DialContext
 	dialer := connrotation.NewDialer(ctx)
 	restConfig.Dial = dialer.DialContext

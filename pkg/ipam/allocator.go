@@ -31,6 +31,10 @@ var (
 )
 
 func (ipam *IPAM) determineIPAMPool(owner string, family Family) (Pool, error) {
+	if ipam.metadata == nil {
+		return PoolDefault(), nil
+	}
+
 	pool, err := ipam.metadata.GetIPPoolForPod(owner, family)
 	if err != nil {
 		return "", fmt.Errorf("unable to determine IPAM pool for owner %q: %w", owner, err)

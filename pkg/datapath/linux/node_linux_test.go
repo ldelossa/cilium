@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log/slog"
 	"net"
 	"runtime"
 	"slices"
@@ -196,7 +195,7 @@ func setupLinuxPrivilegedIPv4AndIPv6TestSuite(tb testing.TB) *linuxPrivilegedIPv
 }
 
 func tearDownTest(tb testing.TB) {
-	ipsec.DeleteXFRM(hivetest.Logger(tb))
+	ipsec.DeleteXFRM()
 	node.UnsetTestLocalNodeStore()
 	removeDevice(dummyHostDeviceName)
 	removeDevice(dummyExternalDeviceName)
@@ -308,8 +307,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestUpdateNodeRoute(t *testing.T) {
 
 	var linuxNodeHandler *linuxNodeHandler
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler = newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler = newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	require.NotNil(t, linuxNodeHandler)
 	nodeConfig := s.nodeConfigTemplate
@@ -357,8 +355,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestAuxiliaryPrefixes(t *testing.T) {
 	net2 := cidr.MustParseCIDR("cafe:f00d::/112")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	require.NotNil(t, linuxNodeHandler)
 	nodeConfig := s.nodeConfigTemplate
@@ -432,8 +429,7 @@ func (s *linuxPrivilegedBaseTestSuite) commonNodeUpdateEncapsulation(t *testing.
 	externalNodeIP2 := net.ParseIP("8.8.8.8")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	require.NotNil(t, linuxNodeHandler)
 	linuxNodeHandler.OverrideEnableEncapsulation(override)
@@ -699,8 +695,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateIDs(t *testing.T) {
 	nodeMap := nodemapfake.NewFakeNodeMapV2()
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodeMap, new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodeMap, new(mockEnqueuer))
 
 	nodeConfig := s.nodeConfigTemplate
 	err := linuxNodeHandler.NodeConfigurationChanged(nodeConfig)
@@ -836,6 +831,7 @@ func TestNodeChurnXFRMLeaks(t *testing.T) {
 }
 
 func (s *linuxPrivilegedIPv4OnlyTestSuite) TestEncryptedOverlayXFRMLeaks(t *testing.T) {
+
 	// Cover the XFRM configuration for IPAM modes cluster-pool, kubernetes, etc.
 	config := datapath.LocalNodeConfiguration{
 		EnableIPv4:  s.enableIPv4,
@@ -848,9 +844,8 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestEncryptedOverlayXFRMLeaks(t *test
 // TestEncryptedOverlayXFRMLeaks tests that the XFRM policies and states are accurate when the encrypted overlay
 // feature is enabled and disabled.
 func (s *linuxPrivilegedIPv4OnlyTestSuite) testEncryptedOverlayXFRMLeaks(t *testing.T, config datapath.LocalNodeConfiguration) {
-	tlog := hivetest.Logger(t)
 	keys := bytes.NewReader([]byte("6 rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n"))
-	_, _, err := ipsec.LoadIPSecKeys(tlog, keys)
+	_, _, err := ipsec.LoadIPSecKeys(keys)
 	require.NoError(t, err)
 
 	var linuxNodeHandler *linuxNodeHandler
@@ -858,10 +853,11 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) testEncryptedOverlayXFRMLeaks(t *test
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = newNodeHandler(tlog, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+			linuxNodeHandler = newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 		}),
 	)
 
+	tlog := hivetest.Logger(t)
 	require.Nil(t, h.Start(tlog, context.TODO()))
 	defer func() { require.Nil(t, h.Stop(tlog, context.TODO())) }()
 	require.NotNil(t, linuxNodeHandler)
@@ -904,13 +900,12 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) testEncryptedOverlayXFRMLeaks(t *test
 }
 
 func (s *linuxPrivilegedBaseTestSuite) testNodeChurnXFRMLeaksWithConfig(t *testing.T, config datapath.LocalNodeConfiguration) {
-	log := hivetest.Logger(t)
 	keys := bytes.NewReader([]byte("6 rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n"))
-	_, _, err := ipsec.LoadIPSecKeys(log, keys)
+	_, _, err := ipsec.LoadIPSecKeys(keys)
 	require.NoError(t, err)
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	err = linuxNodeHandler.NodeConfigurationChanged(config)
 	require.NoError(t, err)
@@ -963,8 +958,8 @@ func countXFRMPolicies(policies []netlink.XfrmPolicy) int {
 	return nbPolicies
 }
 
-func lookupDirectRoute(log *slog.Logger, CIDR *cidr.CIDR, nodeIP net.IP) ([]netlink.Route, error) {
-	routeSpec, _, err := createDirectRouteSpec(log, CIDR, nodeIP, false)
+func lookupDirectRoute(CIDR *cidr.CIDR, nodeIP net.IP) ([]netlink.Route, error) {
+	routeSpec, _, err := createDirectRouteSpec(CIDR, nodeIP, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,8 +995,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	defer removeDevice(externalNode2Device)
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	require.NotNil(t, linuxNodeHandler)
 	nodeConfig := s.nodeConfigTemplate
@@ -1027,7 +1021,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	err = linuxNodeHandler.NodeAdd(nodev1)
 	require.NoError(t, err)
 
-	foundRoutes, err := lookupDirectRoute(log, ip4Alloc1, externalNode1IP4v1)
+	foundRoutes, err := lookupDirectRoute(ip4Alloc1, externalNode1IP4v1)
 	require.NoError(t, err)
 	require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 
@@ -1043,7 +1037,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	err = linuxNodeHandler.NodeUpdate(nodev1, nodev2)
 	require.NoError(t, err)
 
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc1, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc1, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 
@@ -1059,12 +1053,12 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	require.NoError(t, err)
 
 	// node routes for alloc1 ranges should be gone
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc1, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc1, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(foundRoutes)) // route should not exist regardless whether ipv4 is enabled or not
 
 	// node routes for alloc2 ranges should have been installed
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc2, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc2, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 
@@ -1079,7 +1073,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	require.NoError(t, err)
 
 	// node routes for alloc2 ranges should have been removed
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc2, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc2, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(foundRoutes))
 
@@ -1095,7 +1089,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	require.NoError(t, err)
 
 	// node routes for alloc2 ranges should have been removed
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc2, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc2, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 
@@ -1104,7 +1098,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	require.NoError(t, err)
 
 	// node routes for alloc2 ranges should be gone
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc2, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc2, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(foundRoutes)) // route should not exist regardless whether ipv4 is enabled or not
 
@@ -1122,7 +1116,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 
 	// expecting both primary and secondary routes to exist
 	for _, ip4Alloc := range []*cidr.CIDR{ip4Alloc1, ipv4SecondaryAlloc1, ipv4SecondaryAlloc2} {
-		foundRoutes, err = lookupDirectRoute(log, ip4Alloc, externalNode1IP4v1)
+		foundRoutes, err = lookupDirectRoute(ip4Alloc, externalNode1IP4v1)
 		require.NoError(t, err)
 		require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 	}
@@ -1141,12 +1135,12 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 
 	// Checks all three required routes exist
 	for _, ip4Alloc := range []*cidr.CIDR{ip4Alloc1, ipv4SecondaryAlloc1, ipv4SecondaryAlloc3} {
-		foundRoutes, err = lookupDirectRoute(log, ip4Alloc, externalNode1IP4v1)
+		foundRoutes, err = lookupDirectRoute(ip4Alloc, externalNode1IP4v1)
 		require.NoError(t, err)
 		require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 	}
 	// Checks route for removed CIDR has been deleted
-	foundRoutes, err = lookupDirectRoute(log, ipv4SecondaryAlloc2, externalNode1IP4v1)
+	foundRoutes, err = lookupDirectRoute(ipv4SecondaryAlloc2, externalNode1IP4v1)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(foundRoutes))
 
@@ -1164,13 +1158,13 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 
 	// Checks all routes with the new node IP exist
 	for _, ip4Alloc := range []*cidr.CIDR{ip4Alloc1, ipv4SecondaryAlloc1, ipv4SecondaryAlloc3} {
-		foundRoutes, err = lookupDirectRoute(log, ip4Alloc, externalNode1IP4v2)
+		foundRoutes, err = lookupDirectRoute(ip4Alloc, externalNode1IP4v2)
 		require.NoError(t, err)
 		require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 	}
 	// Checks all routes with the old node IP have been deleted
 	for _, ip4Alloc := range []*cidr.CIDR{ip4Alloc1, ipv4SecondaryAlloc1, ipv4SecondaryAlloc3} {
-		foundRoutes, err = lookupDirectRoute(log, ip4Alloc, externalNode1IP4v1)
+		foundRoutes, err = lookupDirectRoute(ip4Alloc, externalNode1IP4v1)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(foundRoutes))
 	}
@@ -1188,13 +1182,13 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	require.NoError(t, err)
 
 	// Checks primary route has been created
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc2, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc2, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, expectedIPv4Routes, len(foundRoutes))
 
 	// Checks all old routes have been deleted
 	for _, ip4Alloc := range []*cidr.CIDR{ip4Alloc1, ipv4SecondaryAlloc1, ipv4SecondaryAlloc3} {
-		foundRoutes, err = lookupDirectRoute(log, ip4Alloc, externalNode1IP4v2)
+		foundRoutes, err = lookupDirectRoute(ip4Alloc, externalNode1IP4v2)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(foundRoutes))
 	}
@@ -1204,7 +1198,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	require.NoError(t, err)
 
 	// remaining primary node route must have been deleted
-	foundRoutes, err = lookupDirectRoute(log, ip4Alloc2, externalNode1IP4v2)
+	foundRoutes, err = lookupDirectRoute(ip4Alloc2, externalNode1IP4v2)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(foundRoutes))
 }
@@ -1215,8 +1209,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestAgentRestartOptionChanges(t *testing.
 	underlayIP := net.ParseIP("4.4.4.4")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	require.NotNil(t, linuxNodeHandler)
 	nodeConfig := s.nodeConfigTemplate
@@ -1318,8 +1311,7 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeValidationDirectRouting(t *testin
 	ip6Alloc1 := cidr.MustParseCIDR("2001:aaaa::/96")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	if s.enableIPv4 {
 		insertFakeRoute(t, linuxNodeHandler, ip4Alloc1)
@@ -1477,8 +1469,7 @@ func TestArpPingHandlingIPv6(t *testing.T) {
 
 	mq := new(mockEnqueuer)
 	dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
 	mq.nh = linuxNodeHandler
 
 	nodeConfig := s.nodeConfigTemplate
@@ -2229,8 +2220,7 @@ func TestArpPingHandlingForMultiDeviceIPv6(t *testing.T) {
 
 	mq := new(mockEnqueuer)
 	dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
 	mq.nh = linuxNodeHandler
 
 	nodeConfig := s.nodeConfigTemplate
@@ -2505,8 +2495,7 @@ func TestArpPingHandlingIPv4(t *testing.T) {
 
 	mq := new(mockEnqueuer)
 	dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
 	mq.nh = linuxNodeHandler
 
 	nodeConfig := s.nodeConfigTemplate
@@ -3255,8 +3244,7 @@ func TestArpPingHandlingForMultiDeviceIPv4(t *testing.T) {
 
 	mq := new(mockEnqueuer)
 	dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), mq)
 	mq.nh = linuxNodeHandler
 
 	nodeConfig := s.nodeConfigTemplate
@@ -3487,8 +3475,7 @@ func (s *linuxPrivilegedBaseTestSuite) benchmarkNodeUpdate(b *testing.B, config 
 	ip6Alloc2 := cidr.MustParseCIDR("2001:bbbb::/96")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(b)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(config)
 	require.NoError(b, err)
@@ -3584,8 +3571,7 @@ func (s *linuxPrivilegedBaseTestSuite) benchmarkNodeUpdateNOP(b *testing.B, conf
 	ip6Alloc1 := cidr.MustParseCIDR("2001:aaaa::/96")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(b)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(config)
 	require.NoError(b, err)
@@ -3653,8 +3639,7 @@ func (s *linuxPrivilegedBaseTestSuite) benchmarkNodeValidateImplementation(b *te
 	ip6Alloc1 := cidr.MustParseCIDR("2001:aaaa::/96")
 
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(b)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	linuxNodeHandler := newNodeHandler(dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(config)
 	require.NoError(b, err)

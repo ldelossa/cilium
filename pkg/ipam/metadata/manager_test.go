@@ -7,7 +7,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/cilium/cilium/pkg/annotation"
@@ -66,7 +65,7 @@ func namespaceKey(name string) resource.Key {
 }
 
 func TestManager_GetIPPoolForPod(t *testing.T) {
-	m := &manager{
+	m := &Manager{
 		namespaceStore: mockStore[*slim_core_v1.Namespace]{
 			namespaceKey("default"): &slim_core_v1.Namespace{},
 			namespaceKey("special"): &slim_core_v1.Namespace{
@@ -237,16 +236,4 @@ func TestManager_GetIPPoolForPod(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDefaultManager_DefaultPool(t *testing.T) {
-	defaultPoolManager := defaultIPPoolManager{}
-
-	ipv4Pool, err := defaultPoolManager.GetIPPoolForPod("", ipam.IPv4)
-	require.Nil(t, err)
-	require.Equal(t, ipam.PoolDefault(), ipam.Pool(ipv4Pool))
-
-	ipv6Pool, err := defaultPoolManager.GetIPPoolForPod("", ipam.IPv6)
-	require.Nil(t, err)
-	require.Equal(t, ipam.PoolDefault(), ipam.Pool(ipv6Pool))
 }

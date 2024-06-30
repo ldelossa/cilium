@@ -230,7 +230,7 @@ jobs:
           metadata:
             name: "pool"
           spec:
-            blocks:
+            cidrs:
               - cidr: "$LB_CIDR"
           EOF
           cat pool.yaml

@@ -10,6 +10,8 @@
 Per-node configuration
 **********************
 
+.. include:: ../beta.rst
+
 The Cilium agent process (a.k.a. DaemonSet) supports setting configuration
 on a per-node basis. This allows overriding :ref:`cilium-config-configmap`
 for a node or set of nodes. It is managed by CiliumNodeConfig objects.
@@ -43,7 +45,7 @@ hardware, one would label the relevant nodes and override their configuration.
 
 .. code-block:: yaml
 
-    apiVersion: cilium.io/v2
+    apiVersion: cilium.io/v2alpha1
     kind: CiliumNodeConfig
     metadata:
       namespace: kube-system
@@ -81,7 +83,7 @@ nodes with ``io.cilium.migration/kube-proxy-replacement: true``
     .. code-block:: shell-session
 
         cat <<EOF | kubectl apply --server-side -f -
-        apiVersion: cilium.io/v2
+        apiVersion: cilium.io/v2alpha1
         kind: CiliumNodeConfig
         metadata:
           namespace: kube-system

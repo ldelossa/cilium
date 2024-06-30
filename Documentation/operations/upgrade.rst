@@ -373,14 +373,6 @@ Annotations:
   explicitly during the upgrade.
 * Gateway API GRPCRoute which is moved from ``v1alpha2`` to ``v1``. Please install new GRPCRoute CRD and migrate
   your resources from ``v1alpha2`` to ``v1`` version.
-* The default value of of ``CiliumLoadBalancerIPPool.spec.allowFirstLastIPs`` has been changed to ``yes``.
-  This means that unless explicitly configured otherwise, the first and last IP addresses of the IP pool
-  are available for allocation. If you rely on the previous behavior, you should explicitly set
-  ``allowFirstLastIPs: no`` in your IP pool configuration before the upgrade.
-* The ``CiliumLoadBalancerIPPool.spec.cidrs`` field has been deprecated in v1.15 favor of 
-  ``CiliumLoadBalancerIPPool.spec.blocks``. As of v1.15 both fields have the same behavior. The
-  ``cidrs`` field will be removed in v1.16. Please update your IP pool configurations to use
-  ``blocks`` instead of ``cidrs`` before upgrading.
 
 Removed Options
 ~~~~~~~~~~~~~~~

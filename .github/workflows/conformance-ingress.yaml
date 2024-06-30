@@ -193,7 +193,7 @@ jobs:
           # Please refer to https://github.com/kubernetes-sigs/ingress-controller-conformance/pull/101 for more details.
           repository: cilium/ingress-controller-conformance
           path: ingress-controller-conformance
-          ref: ea4049969a830d3ecac0d2a9b71b254212ac4b65
+          ref: 010bbae21b71d9785660b87908dfe2ba8cd2f25d
           persist-credentials: false
 
       - name: Install Ingress conformance test tool
@@ -234,7 +234,7 @@ jobs:
           metadata:
             name: "pool"
           spec:
-            blocks:
+            cidrs:
               - cidr: "$LB_CIDR"
           EOF
           cat pool.yaml
@@ -400,12 +400,7 @@ jobs:
         timeout-minutes: 30
         run: |
           cd ingress-controller-conformance
-          ./ingress-controller-conformance \
-            -ingress-class cilium \
-            -wait-time-for-ingress-status 60s \
-            -wait-time-for-ready 60s \
-            -enable-http-debug \
-            -stop-on-failure
+          ./ingress-controller-conformance -ingress-class cilium -wait-time-for-ingress-status 60s -wait-time-for-ready 60s
 
       - name: Post-test information gathering
         if: ${{ !success() && steps.install-cilium.outcome != 'skipped' }}

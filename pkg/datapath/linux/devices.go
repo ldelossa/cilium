@@ -5,7 +5,6 @@ package linux
 
 import (
 	"fmt"
-	"log/slog"
 	"net"
 	"strings"
 
@@ -14,7 +13,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 )
@@ -73,9 +71,8 @@ func (dm *DeviceManager) Detect(k8sEnabled bool) ([]string, error) {
 			return nil, fmt.Errorf("unable to determine direct routing device. Use --%s to specify it",
 				option.DirectRoutingDevice)
 		}
-		dm.params.Log.Info("Direct routing device detected",
-			logfields.DirectRoutingDevice, option.Config.DirectRoutingDevice,
-		)
+		log.WithField(option.DirectRoutingDevice, option.Config.DirectRoutingDevice).
+			Info("Direct routing device detected")
 	}
 
 	if option.Config.EnableIPv6NDP && option.Config.IPv6MCastDevice == "" {
@@ -93,7 +90,6 @@ func (dm *DeviceManager) Detect(k8sEnabled bool) ([]string, error) {
 type devicesManagerParams struct {
 	cell.In
 
-	Log         *slog.Logger
 	DB          *statedb.DB
 	DeviceTable statedb.Table[*tables.Device]
 	RouteTable  statedb.Table[*tables.Route]
