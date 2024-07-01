@@ -24,6 +24,7 @@ var Cell = cell.Group(
 	cell.ProvidePrivate(tables.NewEgressIPTable),
 	cell.Invoke(
 		registerReconciler,
+		newDevicesWatcher,
 	),
 )
 
