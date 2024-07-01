@@ -121,7 +121,6 @@ type BFDProfileSpec struct {
 }
 
 // BFDEchoFunctionConfig contains configuration of the BFD Echo Function (RFC 5880, section 2.3.).
-// Note that this can be extended in the future when support for transmit of Echo packets is added.
 type BFDEchoFunctionConfig struct {
 	// Directions defines the directions in which the Echo Function is enabled.
 	// If empty, the Echo Function is disabled. Single or both directions can be configured,
@@ -308,4 +307,86 @@ type BFDNodeConfigStatus struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:categories={cilium,isovalent},singular="isovalentbfdnodeconfigoverride",path="isovalentbfdnodeconfigoverrides",scope="Cluster",shortName={ibfdncoverride}
+// +kubebuilder:storageversion
+
+// IsovalentBFDNodeConfigOverride specifies node-specific configuration overrides for the BFD agent.
+// It allows configuring node-specific BFD parameters that would be otherwise detected / derived automatically.
+// The content of this resource is consumed by the BFD operator when generating IsovalentBFDNodeConfig resources.
+// The name of the object should be a node name to which this override applies.
+type IsovalentBFDNodeConfigOverride struct {
+	// +deepequal-gen=false
+	metav1.TypeMeta `json:",inline"`
+
+	// +deepequal-gen=false
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the specification of the desired node-specific BFD override.
+	//
+	// +kubebuilder:validation:Required
+	Spec BFDNodeConfigOverrideSpec `json:"spec"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +deepequal-gen=false
+
+// IsovalentBFDNodeConfigOverrideList contains a list of IsovalentBFDNodeConfigOverride objects.
+type IsovalentBFDNodeConfigOverrideList struct {
+	// +deepequal-gen=false
+	metav1.TypeMeta `json:",inline"`
+
+	// +deepequal-gen=false
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// Items is a list of IsovalentBFDNodeConfigOverride objects.
+	//
+	// +kubebuilder:validation:Required
+	Items []IsovalentBFDNodeConfigOverride `json:"items"`
+}
+
+// BFDNodeConfigOverrideSpec contains node-specific configuration override for the BFD agent.
+type BFDNodeConfigOverrideSpec struct {
+	// Peers is a list of BFD peers for which the override configuration applies.
+	//
+	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=peerAddress
+	Peers []*BFDNodeConfigOverridePeer `json:"peers,omitempty"`
+}
+
+// BFDNodeConfigOverridePeer contains node-specific BFD override configuration for a BFD peer.
+type BFDNodeConfigOverridePeer struct {
+	// PeerAddress is the IP address of the BFD peer to which this override configuration applies.
+	// Supports IPv4 and IPv6 addresses. If a link-local IPv6 address is used, Interface must be specified.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Format=ip
+	PeerAddress string `json:"peerAddress"`
+
+	// Interface is the name of a network interface to which this session is bound to.
+	//
+	// +kubebuilder:validation:Optional
+	Interface *string `json:"interface,omitempty"`
+
+	// LocalAddress is the local IP address used for the BFD peering.
+	// It must match the IP address configured for this node on the remote peer.
+	//
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Format=ip
+	LocalAddress *string `json:"localAddress,omitempty"`
+
+	// EchoSourceAddress defines the IP address used as the source address when sending Echo packets for the BFD peering.
+	// If not configured, the LocalAddress will be used if configured, or the auto-detected IP address
+	// of the egress interface will be used.
+	//
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Format=ip
+	EchoSourceAddress *string `json:"echoSourceAddress,omitempty"`
 }

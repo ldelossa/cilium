@@ -16,6 +16,7 @@ import (
 type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	IsovalentBFDNodeConfigsGetter
+	IsovalentBFDNodeConfigOverridesGetter
 	IsovalentBFDProfilesGetter
 	IsovalentBGPAdvertisementsGetter
 	IsovalentBGPClusterConfigsGetter
@@ -40,6 +41,10 @@ type IsovalentV1alpha1Client struct {
 
 func (c *IsovalentV1alpha1Client) IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInterface {
 	return newIsovalentBFDNodeConfigs(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBFDNodeConfigOverrides() IsovalentBFDNodeConfigOverrideInterface {
+	return newIsovalentBFDNodeConfigOverrides(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentBFDProfiles() IsovalentBFDProfileInterface {

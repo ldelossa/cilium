@@ -65,6 +65,9 @@ const (
 	// IsovalentBFDNodeConfigCRDName is the full name of the IsovalentBFDNodeConfig CRD.
 	IsovalentBFDNodeConfigCRDName = k8sconstv1alpha1.IsovalentBFDNodeConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 
+	// IsovalentBFDNodeConfigOverrideCRDName is the full name of the IsovalentBFDNodeConfigOverride CRD.
+	IsovalentBFDNodeConfigOverrideCRDName = k8sconstv1alpha1.IsovalentBFDNodeConfigOverrideKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
 	// IsovalentBGPClusterConfigCRDName is the full name of the IsovalentBGPClusterConfig CRD.
 	IsovalentBGPClusterConfigCRDName = k8sconstv1alpha1.IsovalentBGPClusterConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 
@@ -104,6 +107,7 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentMeshEndpointName):          createIsovalentMeshEndpointCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDProfileName):            createBFDProfileCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDNodeConfigName):         createBFDNodeConfigCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBFDNodeConfigOverrideName): createBFDNodeConfigOverrideCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPClusterConfigName):      createBGPClusterConfigCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPPeerConfigName):         createBGPPeerConfigCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPAdvertisementName):      createBGPAdvertisementCRD,
@@ -160,6 +164,9 @@ var (
 	//go:embed crds/v1alpha1/isovalentbfdnodeconfigs.yaml
 	crdsv1Alpha1IsovalentBFDNodeConfig []byte
 
+	//go:embed crds/v1alpha1/isovalentbfdnodeconfigoverrides.yaml
+	crdsv1Alpha1IsovalentBFDNodeConfigOverride []byte
+
 	//go:embed crds/v1alpha1/isovalentbgpclusterconfigs.yaml
 	crdsv1Alpha1IsovalentBGPClusterConfigs []byte
 
@@ -213,6 +220,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentBFDProfile
 	case IsovalentBFDNodeConfigCRDName:
 		crdBytes = crdsv1Alpha1IsovalentBFDNodeConfig
+	case IsovalentBFDNodeConfigOverrideCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBFDNodeConfigOverride
 	case IsovalentBGPClusterConfigCRDName:
 		crdBytes = crdsv1Alpha1IsovalentBGPClusterConfigs
 	case IsovalentBGPPeerConfigCRDName:
@@ -386,6 +395,19 @@ func createBFDNodeConfigCRD(clientset apiextensionsclient.Interface) error {
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IsovalentBFDNodeConfigName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBFDNodeConfigOverrideCRD creates and updates the IsovalentBFDNodeConfigOverride CRD.
+func createBFDNodeConfigOverrideCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBFDNodeConfigOverrideCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBFDNodeConfigOverrideName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

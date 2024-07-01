@@ -9,6 +9,10 @@ package v1alpha1
 // IsovalentBFDNodeConfigLister.
 type IsovalentBFDNodeConfigListerExpansion interface{}
 
+// IsovalentBFDNodeConfigOverrideListerExpansion allows custom methods to be added to
+// IsovalentBFDNodeConfigOverrideLister.
+type IsovalentBFDNodeConfigOverrideListerExpansion interface{}
+
 // IsovalentBFDProfileListerExpansion allows custom methods to be added to
 // IsovalentBFDProfileLister.
 type IsovalentBFDProfileListerExpansion interface{}

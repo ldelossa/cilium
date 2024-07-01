@@ -31,6 +31,7 @@ CRDS_ISOVALENT_V1ALPHA1="isovalentfqdngroups \
                          isovalentmeshendpoints \
                          isovalentbfdprofiles \
                          isovalentbfdnodeconfigs \
+                         isovalentbfdnodeconfigoverrides \
                          isovalentbgpclusterconfigs \
                          isovalentbgppeerconfigs \
                          isovalentbgpadvertisements \

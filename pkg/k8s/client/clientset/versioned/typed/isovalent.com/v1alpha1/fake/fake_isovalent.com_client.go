@@ -19,6 +19,10 @@ func (c *FakeIsovalentV1alpha1) IsovalentBFDNodeConfigs() v1alpha1.IsovalentBFDN
 	return &FakeIsovalentBFDNodeConfigs{c}
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentBFDNodeConfigOverrides() v1alpha1.IsovalentBFDNodeConfigOverrideInterface {
+	return &FakeIsovalentBFDNodeConfigOverrides{c}
+}
+
 func (c *FakeIsovalentV1alpha1) IsovalentBFDProfiles() v1alpha1.IsovalentBFDProfileInterface {
 	return &FakeIsovalentBFDProfiles{c}
 }

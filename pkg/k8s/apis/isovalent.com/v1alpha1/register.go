@@ -74,6 +74,11 @@ const (
 	IsovalentBFDNodeConfigKindDefinition = "IsovalentBFDNodeConfig"
 	IsovalentBFDNodeConfigName           = IsovalentBFDNodeConfigPluralName + "." + CustomResourceDefinitionGroup
 
+	// IsovalentBFDNodeConfigOverride
+	IsovalentBFDNodeConfigOverridePluralName     = "isovalentbfdnodeconfigoverrides"
+	IsovalentBFDNodeConfigOverrideKindDefinition = "IsovalentBFDNodeConfigOverride"
+	IsovalentBFDNodeConfigOverrideName           = IsovalentBFDNodeConfigOverridePluralName + "." + CustomResourceDefinitionGroup
+
 	// Isovalent BGPv2 CRDs
 	IsovalentBGPClusterConfigPluralName          = "isovalentbgpclusterconfigs"
 	IsovalentBGPPeerConfigPluralName             = "isovalentbgppeerconfigs"
@@ -155,6 +160,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentBFDProfileList{},
 		&IsovalentBFDNodeConfig{},
 		&IsovalentBFDNodeConfigList{},
+		&IsovalentBFDNodeConfigOverride{},
+		&IsovalentBFDNodeConfigOverrideList{},
 		&IsovalentBGPClusterConfig{},
 		&IsovalentBGPClusterConfigList{},
 		&IsovalentBGPPeerConfig{},

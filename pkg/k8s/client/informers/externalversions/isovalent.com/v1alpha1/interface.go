@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// IsovalentBFDNodeConfigs returns a IsovalentBFDNodeConfigInformer.
 	IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInformer
+	// IsovalentBFDNodeConfigOverrides returns a IsovalentBFDNodeConfigOverrideInformer.
+	IsovalentBFDNodeConfigOverrides() IsovalentBFDNodeConfigOverrideInformer
 	// IsovalentBFDProfiles returns a IsovalentBFDProfileInformer.
 	IsovalentBFDProfiles() IsovalentBFDProfileInformer
 	// IsovalentBGPAdvertisements returns a IsovalentBGPAdvertisementInformer.
@@ -59,6 +61,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // IsovalentBFDNodeConfigs returns a IsovalentBFDNodeConfigInformer.
 func (v *version) IsovalentBFDNodeConfigs() IsovalentBFDNodeConfigInformer {
 	return &isovalentBFDNodeConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBFDNodeConfigOverrides returns a IsovalentBFDNodeConfigOverrideInformer.
+func (v *version) IsovalentBFDNodeConfigOverrides() IsovalentBFDNodeConfigOverrideInformer {
+	return &isovalentBFDNodeConfigOverrideInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentBFDProfiles returns a IsovalentBFDProfileInformer.

@@ -7,6 +7,8 @@ package v1alpha1
 
 type IsovalentBFDNodeConfigExpansion interface{}
 
+type IsovalentBFDNodeConfigOverrideExpansion interface{}
+
 type IsovalentBFDProfileExpansion interface{}
 
 type IsovalentBGPAdvertisementExpansion interface{}
