@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/netip"
 	"slices"
@@ -19,7 +20,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/cilium/cilium/pkg/bpf"
@@ -68,7 +68,7 @@ const NodePortMaxNAT = 65535
 // HeaderfileWriter is a wrapper type which implements datapath.ConfigWriter.
 // It manages writing of configuration of datapath program headerfiles.
 type HeaderfileWriter struct {
-	log                logrus.FieldLogger
+	log                *slog.Logger
 	nodeMap            nodemap.MapV2
 	nodeAddressing     datapath.NodeAddressing
 	nodeExtraDefines   dpdef.Map
@@ -961,19 +961,18 @@ func (h *HeaderfileWriter) WriteNetdevConfig(w io.Writer, opts *option.IntOption
 // specified writer. This must be kept in sync with loader.ELFSubstitutions().
 func (h *HeaderfileWriter) writeStaticData(devices []string, fw io.Writer, e datapath.EndpointConfiguration) {
 	if e.IsHost() {
-		if option.Config.EnableNodePort {
-			// Values defined here are for the host datapath attached to the
-			// host device and therefore won't be used. We however need to set
-			// non-zero values to prevent the compiler from optimizing them
-			// out, because we need to substitute them for host datapaths
-			// attached to native devices.
-			// When substituting symbols in the object file, we will replace
-			// these values with zero for the host device and with the actual
-			// values for the native devices.
-			fmt.Fprint(fw, "/* Fake values, replaced by 0 for host device and by actual values for native devices. */\n")
-			fmt.Fprint(fw, defineUint32("NATIVE_DEV_IFINDEX", 1))
-			fmt.Fprint(fw, "\n")
-		}
+		// Values defined here are for the host datapath attached to the
+		// host device and therefore won't be used. We however need to set
+		// non-zero values to prevent the compiler from optimizing them
+		// out, because we need to substitute them for host datapaths
+		// attached to native devices.
+		// When substituting symbols in the object file, we will replace
+		// these values with zero for the host device and with the actual
+		// values for the native devices.
+		fmt.Fprint(fw, "/* Fake values, replaced by 0 for host device and by actual values for native devices. */\n")
+		fmt.Fprint(fw, defineUint32("NATIVE_DEV_IFINDEX", 1))
+		fmt.Fprint(fw, "\n")
+
 		if option.Config.EnableBPFMasquerade {
 			if option.Config.EnableIPv4Masquerade {
 				// NodePort comment above applies to IPV4_MASQUERADE too
@@ -1019,12 +1018,12 @@ func (h *HeaderfileWriter) writeStaticData(devices []string, fw io.Writer, e dat
 	}
 
 	fmt.Fprint(fw, defineMAC("THIS_INTERFACE_MAC", e.GetNodeMAC()))
+	fmt.Fprint(fw, defineUint32("THIS_INTERFACE_IFINDEX", uint32(e.GetIfIndex())))
 
 	secID := e.GetIdentityLocked().Uint32()
 	fmt.Fprint(fw, defineUint32("SECLABEL", secID))
 	fmt.Fprint(fw, defineUint32("SECLABEL_IPV4", secID))
 	fmt.Fprint(fw, defineUint32("SECLABEL_IPV6", secID))
-	fmt.Fprint(fw, defineUint32("SECLABEL_NB", byteorder.HostToNetwork32(secID)))
 	fmt.Fprint(fw, defineUint32("POLICY_VERDICT_LOG_FILTER", e.GetPolicyVerdictLogFilter()))
 
 	epID := uint16(e.GetID())

@@ -51,7 +51,6 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/ipam"
-	ipamMetadata "github.com/cilium/cilium/pkg/ipam/metadata"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s"
@@ -171,8 +170,6 @@ type Daemon struct {
 	endpointCreations *endpointCreationManager
 
 	cgroupManager manager.CGroupManager
-
-	ipamMetadata *ipamMetadata.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -387,6 +384,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	identity.IterateReservedIdentities(func(_ identity.NumericIdentity, _ *identity.Identity) {
 		metrics.Identity.WithLabelValues(identity.ReservedIdentityType).Inc()
+		metrics.IdentityLabelSources.WithLabelValues(labels.LabelSourceReserved).Inc()
 	})
 
 	d := Daemon{
@@ -410,7 +408,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		identityAllocator: params.IdentityAllocator,
 		ipcache:           params.IPCache,
 		policy:            params.Policy,
-		ipamMetadata:      params.IPAMMetadataManager,
 		cniConfigManager:  params.CNIConfigManager,
 		clusterInfo:       params.ClusterInfo,
 		clustermesh:       params.ClusterMesh,
@@ -428,6 +425,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		k8sWatcher:        params.K8sWatcher,
 		k8sSvcCache:       params.K8sSvcCache,
 		rec:               params.Recorder,
+		ipam:              params.IPAM,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
@@ -604,7 +602,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		// context deadline or if the context has been cancelled, the context's
 		// error will be returned. Otherwise, it succeeded.
 		if !option.Config.DryMode {
-			if err := d.k8sWatcher.WaitForCRDsToRegister(d.ctx); err != nil {
+			_, err := params.CRDSyncPromise.Await(d.ctx)
+			if err != nil {
 				return nil, restoredEndpoints, err
 			}
 		}
@@ -723,11 +722,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if params.Clientset.IsEnabled() {
 		bootstrapStats.k8sInit.Start()
 
-		// Launch the policy K8s watcher
-		if params.PolicyK8sWatcher != nil {
-			params.PolicyK8sWatcher.WatchK8sPolicyResources(d.ctx, &d)
-		}
-
 		// Launch the K8s watchers in parallel as we continue to process other
 		// daemon options.
 		d.k8sWatcher.InitK8sSubsystem(d.ctx, params.CacheStatus)
@@ -798,7 +792,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	// Start IPAM
-	d.startIPAM(params.Resources.LocalCiliumNode)
+	d.startIPAM()
 
 	bootstrapStats.restore.Start()
 	// restore endpoints before any IPs are allocated to avoid eventual IP

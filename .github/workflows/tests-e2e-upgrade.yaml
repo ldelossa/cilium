@@ -17,6 +17,9 @@ on:
         description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
         required: false
         default: '{}'
+  push:
+    branches:
+      - 'renovate/main-**'
   # Run every 6 hours
   schedule:
     - cron:  '0 5/6 * * *'
@@ -47,6 +50,7 @@ concurrency:
     ${{ github.workflow }}
     ${{ github.event_name }}
     ${{
+      (github.event_name == 'push' && github.sha) ||
       (github.event_name == 'schedule' && github.sha) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.PR-number)
     }}
@@ -98,7 +102,7 @@ jobs:
 
           - name: '2'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.4-20240612.090637'
+            kernel: '5.4-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -106,7 +110,7 @@ jobs:
 
           - name: '3'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240612.090637'
+            kernel: '5.10-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -114,7 +118,7 @@ jobs:
 
           - name: '4'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240612.090637'
+            kernel: '5.10-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -126,7 +130,7 @@ jobs:
 
           - name: '5'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240612.090637'
+            kernel: '5.15-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -139,7 +143,7 @@ jobs:
 
           - name: '6'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.1-20240612.090637'
+            kernel: '6.1-20240620.102250'
             kube-proxy: 'none'
             kpr: 'true'
             tunnel: 'vxlan'
@@ -155,7 +159,7 @@ jobs:
 #          is resolved.
 #          - name: '7'
 #            # renovate: datasource=docker depName=quay.io/lvh-images/kind
-#            kernel: 'bpf-next-20240613.013105'
+#            kernel: 'bpf-next-20240625.013127'
 #            kube-proxy: 'none'
 #            kpr: 'true'
 #            devices: '{eth0,eth1}'
@@ -170,7 +174,7 @@ jobs:
 
           - name: '8'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20240613.013105'
+            kernel: 'bpf-next-20240625.013127'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'geneve'
@@ -178,7 +182,7 @@ jobs:
 
           - name: '9'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240612.090637'
+            kernel: '5.10-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -192,7 +196,7 @@ jobs:
 
           - name: '10'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240612.090637'
+            kernel: '5.15-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -201,7 +205,7 @@ jobs:
 
           - name: '11'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.1-20240612.090637'
+            kernel: '6.1-20240620.102250'
             kube-proxy: 'none'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -220,7 +224,7 @@ jobs:
           # often.
           #- name: '12'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-next-20240613.013105'
+          #  kernel: 'bpf-next-20240625.013127'
           #  kube-proxy: 'none'
           #  kpr: 'true'
           #  devices: '{eth0,eth1}'
@@ -238,7 +242,7 @@ jobs:
             # explains why 5.4 might cause north-south-loadbalancing tests to
             # fail.
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240612.090637'
+            kernel: '5.15-20240620.102250'
             kube-proxy: 'iptables'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -250,7 +254,7 @@ jobs:
 
           - name: '15'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20240613.013105'
+            kernel: 'bpf-next-20240625.013127'
             kube-proxy: 'none'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -266,7 +270,7 @@ jobs:
 
           - name: '16'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240612.090637'
+            kernel: '5.15-20240620.102250'
             kube-proxy: 'none'
             kpr: 'true'
             devices: '{eth0,eth1}'
@@ -282,7 +286,7 @@ jobs:
           # can be tested with netkit.
           # - name: '17'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240613.013105'
+          #  kernel: 'bpf-20240625.013127'
           #  misc: 'bpf.datapathMode=netkit,bpf.masquerade=true,enableIPv4BIGTCP=true,enableIPv6BIGTCP=true'
           #  kube-proxy: 'none'
           #  kpr: 'true'
@@ -293,7 +297,7 @@ jobs:
           #
           # - name: '18'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240613.013105'
+          #  kernel: 'bpf-20240625.013127'
           #  misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true,enableIPv4BIGTCP=true,enableIPv6BIGTCP=true'
           #  kube-proxy: 'none'
           #  kpr: 'true'
@@ -304,7 +308,7 @@ jobs:
           #
           # - name: '19'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240613.013105'
+          #  kernel: 'bpf-20240625.013127'
           #  misc: 'bpf.datapathMode=netkit,bpf.masquerade=true'
           #  kube-proxy: 'none'
           #  kpr: 'true'
@@ -314,7 +318,7 @@ jobs:
           #
           # - name: '20'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240613.013105'
+          #  kernel: 'bpf-20240625.013127'
           #  misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
           #  kube-proxy: 'none'
           #  kpr: 'true'
@@ -324,7 +328,7 @@ jobs:
           #
           # - name: '21'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240613.013105'
+          #  kernel: 'bpf-20240625.013127'
           #  misc: 'bpf.datapathMode=netkit,bpf.masquerade=true'
           #  kube-proxy: 'none'
           #  kpr: 'true'
@@ -334,7 +338,7 @@ jobs:
           #
           # - name: '22'
           #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240613.013105'
+          #  kernel: 'bpf-20240625.013127'
           #  misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
           #  kube-proxy: 'none'
           #  kpr: 'true'

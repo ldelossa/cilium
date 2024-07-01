@@ -62,7 +62,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/exporter/exporteroption"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/identity"
-	ipamMetadata "github.com/cilium/cilium/pkg/ipam/metadata"
+	"github.com/cilium/cilium/pkg/ipam"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/ipmasq"
@@ -1281,8 +1281,6 @@ func initEnv(vp *viper.Viper) {
 		log.WithError(err).Fatalf("BPF template directory: NOT OK. Please run 'make install-bpf'")
 	}
 
-	linuxdatapath.CheckRequirements()
-
 	if err := probes.CreateHeaderFiles(filepath.Join(option.Config.BpfDir, "include/bpf"), probes.ExecuteHeaderProbes()); err != nil {
 		log.WithError(err).Fatal("failed to create header files with feature macros")
 	}
@@ -1614,7 +1612,6 @@ var daemonCell = cell.Module(
 	cell.Provide(
 		newDaemonPromise,
 		promise.New[endpointstate.Restorer],
-		func() k8s.CacheStatus { return make(k8s.CacheStatus) },
 		newSyncHostIPs,
 	),
 	// Provide a read-only copy of the current daemon settings to be consumed
@@ -1629,15 +1626,16 @@ type daemonParams struct {
 	cell.In
 
 	Lifecycle              cell.Lifecycle
+	Health                 cell.Health
 	Clientset              k8sClient.Clientset
 	Datapath               datapath.Datapath
 	WGAgent                *wireguard.Agent
 	LocalNodeStore         *node.LocalNodeStore
 	Shutdowner             hive.Shutdowner
 	Resources              agentK8s.Resources
-	CacheStatus            k8s.CacheStatus
 	K8sWatcher             *watchers.K8sWatcher
 	K8sSvcCache            *k8s.ServiceCache
+	CacheStatus            k8sSynced.CacheStatus
 	K8sResourceSynced      *k8sSynced.Resources
 	K8sAPIGroups           *k8sSynced.APIGroups
 	NodeManager            nodeManager.NodeManager
@@ -1647,10 +1645,8 @@ type daemonParams struct {
 	IdentityAllocator      CachingIdentityAllocator
 	Policy                 *policy.Repository
 	IPCache                *ipcache.IPCache
-	PolicyK8sWatcher       *policyK8s.PolicyResourcesWatcher
 	DirectoryPolicyWatcher *policyDirectory.PolicyResourcesWatcher
 	DirReadStatus          policyDirectory.DirectoryWatcherReadStatus
-	IPAMMetadataManager    *ipamMetadata.Manager
 	CNIConfigManager       cni.CNIConfigManager
 	SwaggerSpec            *server.Spec
 	HealthAPISpec          *healthApi.Spec
@@ -1688,11 +1684,14 @@ type daemonParams struct {
 	CGroupManager       cgroup.CGroupManager
 	ServiceResolver     *dial.ServiceResolver
 	Recorder            *recorder.Recorder
+	IPAM                *ipam.IPAM
+	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
 }
 
-func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig]) {
+func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig], promise.Promise[policyK8s.PolicyManager]) {
 	daemonResolver, daemonPromise := promise.New[*Daemon]()
 	cfgResolver, cfgPromise := promise.New[*option.DaemonConfig]()
+	policyManagerResolver, policyManagerPromise := promise.New[policyK8s.PolicyManager]()
 
 	// daemonCtx is the daemon-wide context cancelled when stopping.
 	daemonCtx, cancelDaemonCtx := context.WithCancel(context.Background())
@@ -1708,7 +1707,16 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Pr
 	var wg sync.WaitGroup
 
 	params.Lifecycle.Append(cell.Hook{
-		OnStart: func(cell.HookContext) error {
+		OnStart: func(cell.HookContext) (err error) {
+			defer func() {
+				// Reject promises on error
+				if err != nil {
+					cfgResolver.Reject(err)
+					policyManagerResolver.Reject(err)
+					daemonResolver.Reject(err)
+				}
+			}()
+
 			d, restoredEndpoints, err := newDaemon(daemonCtx, cleaner, &params)
 			if err != nil {
 				cancelDaemonCtx()
@@ -1718,16 +1726,46 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Pr
 			daemon = d
 
 			if !option.Config.DryMode {
-				if err := startDaemon(daemon, restoredEndpoints, cleaner, params); err != nil {
-					daemonResolver.Reject(err)
-					cancelDaemonCtx()
-					cleaner.Clean()
-					cfgResolver.Reject(err)
-					return err
+				log.Info("Initializing daemon")
+
+				// This validation needs to be done outside of the agent until
+				// datapath.NodeAddressing is used consistently across the code base.
+				log.Info("Validating configured node address ranges")
+				if err := node.ValidatePostInit(); err != nil {
+					return fmt.Errorf("postinit failed: %w", err)
+				}
+
+				// Store config in file before resolving the DaemonConfig promise.
+				err = option.Config.StoreInFile(option.Config.StateDir)
+				if err != nil {
+					log.WithError(err).Error("Unable to store Cilium's configuration")
+				}
+
+				err = option.StoreViperInFile(option.Config.StateDir)
+				if err != nil {
+					log.WithError(err).Error("Unable to store Viper's configuration")
 				}
 			}
-			daemonResolver.Resolve(daemon)
+
+			// 'option.Config' is assumed to be stable at this point, execpt for
+			// 'option.Config.Opts' that are explicitly deemed to be runtime-changeable
 			cfgResolver.Resolve(option.Config)
+			policyManagerResolver.Resolve(daemon)
+
+			if option.Config.DryMode {
+				daemonResolver.Resolve(daemon)
+			} else {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if err := startDaemon(daemon, restoredEndpoints, cleaner, params); err != nil {
+						log.WithError(err).Error("Daemon start failed")
+						daemonResolver.Reject(err)
+					} else {
+						daemonResolver.Resolve(daemon)
+					}
+				}()
+			}
 			return nil
 		},
 		OnStop: func(cell.HookContext) error {
@@ -1737,25 +1775,22 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Pr
 			return nil
 		},
 	})
-	return daemonPromise, cfgPromise
+	return daemonPromise, cfgPromise, policyManagerPromise
 }
 
 // startDaemon starts the old unmodular part of the cilium-agent.
+// option.Config has already been exposed via *option.DaemonConfig promise,
+// so it may not be modified here
 func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daemonCleanup, params daemonParams) error {
-	log.Info("Initializing daemon")
-
-	// This validation needs to be done outside of the agent until
-	// datapath.NodeAddressing is used consistently across the code base.
-	log.Info("Validating configured node address ranges")
-	if err := node.ValidatePostInit(); err != nil {
-		return fmt.Errorf("postinit failed: %w", err)
-	}
-
 	bootstrapStats.k8sInit.Start()
 	if params.Clientset.IsEnabled() {
 		// Wait only for certain caches, but not all!
 		// (Check Daemon.InitK8sSubsystem() for more info)
-		<-params.CacheStatus
+		select {
+		case <-params.CacheStatus:
+		case <-d.ctx.Done():
+			return d.ctx.Err()
+		}
 	}
 
 	// wait for directory watcher to ingest policy from files
@@ -1824,7 +1859,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 	go func() {
 		if d.endpointRestoreComplete != nil {
-			<-d.endpointRestoreComplete
+			select {
+			case <-d.endpointRestoreComplete:
+			case <-d.ctx.Done():
+				return
+			}
 		}
 		d.dnsNameManager.CompleteBootstrap()
 
@@ -1913,28 +1952,42 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	bootstrapStats.updateMetrics()
 	go d.launchHubble()
 
-	err = option.Config.StoreInFile(option.Config.StateDir)
-	if err != nil {
-		log.WithError(err).Error("Unable to store Cilium's configuration")
-	}
-
-	err = option.StoreViperInFile(option.Config.StateDir)
-	if err != nil {
-		log.WithError(err).Error("Unable to store Viper's configuration")
-	}
+	// Start controller to validate daemon config is unchanged
+	cfgGroup := controller.NewGroup("daemon-validate-config")
+	d.controllers.UpdateController(
+		cfgGroup.Name,
+		controller.ControllerParams{
+			Group:  cfgGroup,
+			Health: params.Health,
+			DoFunc: option.Config.ValidateUnchanged,
+			// avoid synhronized run with other
+			// controllers started at same time
+			RunInterval: 61 * time.Second,
+			Context:     d.ctx,
+		})
 
 	return nil
 }
 
 func registerEndpointStateResolver(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon], resolver promise.Resolver[endpointstate.Restorer]) {
+	var wg sync.WaitGroup
+
 	lc.Append(cell.Hook{
 		OnStart: func(ctx cell.HookContext) error {
-			daemon, err := daemonPromise.Await(context.Background())
-			if err != nil {
-				resolver.Reject(err)
-				return err
-			}
-			resolver.Resolve(daemon)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				daemon, err := daemonPromise.Await(context.Background())
+				if err != nil {
+					resolver.Reject(err)
+				} else {
+					resolver.Resolve(daemon)
+				}
+			}()
+			return nil
+		},
+		OnStop: func(ctx cell.HookContext) error {
+			wg.Wait()
 			return nil
 		},
 	})

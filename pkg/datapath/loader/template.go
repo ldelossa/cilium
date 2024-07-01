@@ -6,6 +6,7 @@ package loader
 import (
 	"fmt"
 	"maps"
+	"math"
 	"net"
 	"net/netip"
 
@@ -26,6 +27,7 @@ const (
 	templateSecurityID          = identity.ReservedIdentityWorld
 	templateLxcID               = uint16(65535)
 	templatePolicyVerdictFilter = uint32(0xffff)
+	templateIfIndex             = math.MaxUint32
 )
 
 var (
@@ -103,6 +105,10 @@ func (t *templateCfg) GetIdentityLocked() identity.NumericIdentity {
 // substituted in the ELF.
 func (t *templateCfg) GetNodeMAC() mac.MAC {
 	return templateMAC
+}
+
+func (t *templateCfg) GetIfIndex() int {
+	return templateIfIndex
 }
 
 // IPv4Address always returns an IP in the documentation prefix (RFC5737) as
@@ -234,9 +240,7 @@ func ELFVariableSubstitutions(ep datapath.Endpoint) map[string]uint64 {
 	}
 
 	if ep.IsHost() {
-		if option.Config.EnableNodePort {
-			result["NATIVE_DEV_IFINDEX"] = 0
-		}
+		result["NATIVE_DEV_IFINDEX"] = 0
 		if option.Config.EnableIPv4Masquerade && option.Config.EnableBPFMasquerade {
 			if option.Config.EnableIPv4 {
 				result["IPV4_MASQUERADE"] = 0
@@ -245,6 +249,7 @@ func ELFVariableSubstitutions(ep datapath.Endpoint) map[string]uint64 {
 		result["SECCTX_FROM_IPCACHE"] = uint64(secctxFromIpcacheDisabled)
 	} else {
 		result["LXC_ID"] = uint64(ep.GetID())
+		result["THIS_INTERFACE_IFINDEX"] = uint64(ep.GetIfIndex())
 	}
 
 	// Contrary to IPV4_MASQUERADE, we cannot use a simple #define and
@@ -261,7 +266,6 @@ func ELFVariableSubstitutions(ep datapath.Endpoint) map[string]uint64 {
 	result["SECLABEL"] = uint64(identity)
 	result["SECLABEL_IPV4"] = uint64(identity)
 	result["SECLABEL_IPV6"] = uint64(identity)
-	result["SECLABEL_NB"] = uint64(byteorder.HostToNetwork32(identity))
 	result["POLICY_VERDICT_LOG_FILTER"] = uint64(ep.GetPolicyVerdictLogFilter())
 	return result
 }

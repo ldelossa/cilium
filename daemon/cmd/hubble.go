@@ -146,6 +146,15 @@ func (d *Daemon) launchHubble() {
 		)
 	}
 
+	// fill in the local node information after the dropEventEmitter logique,
+	// but before anything else (e.g. metrics).
+	localNodeWatcher, err := observer.NewLocalNodeWatcher(d.ctx, d.nodeLocalStore)
+	if err != nil {
+		logger.WithError(err).Error("Failed to retrieve local node information")
+		return
+	}
+	observerOpts = append(observerOpts, observeroption.WithOnDecodedFlow(localNodeWatcher))
+
 	grpcMetrics := grpc_prometheus.NewServerMetrics()
 	var metricsTLSConfig *certloader.WatchedServerConfig
 	if option.Config.HubbleMetricsServerTLSEnabled {

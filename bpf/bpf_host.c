@@ -1354,6 +1354,8 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 	int ret = CTX_ACT_OK;
 	__s8 ext_err = 0;
 
+	bpf_clear_meta(ctx);
+
 	if (magic == MARK_MAGIC_HOST || magic == MARK_MAGIC_OVERLAY)
 		src_sec_identity = HOST_ID;
 	else if (magic == MARK_MAGIC_IDENTITY)
@@ -1396,8 +1398,6 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 		ret = DROP_UNSUPPORTED_L2;
 		goto drop_err;
 	}
-
-	policy_clear_mark(ctx);
 
 	switch (proto) {
 # if defined ENABLE_ARP_PASSTHROUGH || defined ENABLE_ARP_RESPONDER
@@ -1455,7 +1455,7 @@ skip_host_firewall:
 			 */
 			send_trace_notify(ctx, TRACE_TO_STACK, src_sec_identity,
 					  dst_sec_identity,
-					  TRACE_EP_ID_UNKNOWN, TRACE_IFINDEX_UNKNOWN,
+					  TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
 					  TRACE_REASON_ENCRYPT_OVERLAY, 0);
 			return ret;
 		}
@@ -1597,7 +1597,7 @@ exit:
 
 	send_trace_notify(ctx, TRACE_TO_NETWORK, src_sec_identity, dst_sec_identity,
 			  TRACE_EP_ID_UNKNOWN,
-			  TRACE_IFINDEX_UNKNOWN, trace.reason, trace.monitor);
+			  NATIVE_DEV_IFINDEX, trace.reason, trace.monitor);
 
 	return ret;
 

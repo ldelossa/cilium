@@ -661,12 +661,16 @@ func (e *Endpoint) realizeBPFState(regenContext *regenerationContext) (err error
 		}
 
 		// Compile and install BPF programs for this endpoint
-		err = e.owner.Datapath().Loader().ReloadDatapath(datapathRegenCtxt.completionCtx, datapathRegenCtxt.epInfoCache, &stats.datapathRealization)
+		templateHash, err := e.owner.Datapath().Loader().ReloadDatapath(datapathRegenCtxt.completionCtx, datapathRegenCtxt.epInfoCache, &stats.datapathRealization)
 		if err != nil {
 			if !errors.Is(err, context.Canceled) {
 				e.getLogger().WithError(err).Error("Error while reloading endpoint BPF program")
 			}
 			return err
+		}
+
+		if err := os.WriteFile(filepath.Join(datapathRegenCtxt.nextDir, defaults.TemplateIDPath), []byte(templateHash+"\n"), 0644); err != nil {
+			return fmt.Errorf("unable to write template id: %w", err)
 		}
 
 		e.getLogger().Info("Reloaded endpoint BPF program")
@@ -791,7 +795,10 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 		return nil
 	}
 
+	firstRegen := false
+
 	if e.policyMap == nil {
+		firstRegen = true
 		e.policyMap, err = policymap.OpenOrCreate(e.policyMapPath())
 		if err != nil {
 			return err
@@ -871,11 +878,25 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 		// state with the current program (if it exists) for this endpoint.
 		// GH-3897 would fix this by creating a new map to do an atomic swap
 		// with the old one.
-		stats.mapSync.Start()
-		err = e.syncPolicyMap()
-		stats.mapSync.End(err == nil)
-		if err != nil {
-			return fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %w", err)
+		//
+		// We can skip this step on the first regeneration, as it can lead to spurious
+		// policy drops. During the first regen, at this point, the endpoint is still referencing
+		// the old IPCache's fd and the policy maps refer to those identities.
+		//
+		// Until GH-3897 is resolved, we should mininize the time that maps are skewed
+		// in the event that an IP has flapped identities on restoration. The easiest way to
+		// do this to only call syncPolicyMap once, very close to the end of regeneration,
+		// after the new ipcache is being referenced.
+		//
+		// Once the endpoint has regenerated once, it is safe to call syncPolicyMaps
+		// arbitrarily.
+		if !firstRegen {
+			stats.mapSync.Start()
+			err = e.syncPolicyMap()
+			stats.mapSync.End(err == nil)
+			if err != nil {
+				return fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %w", err)
+			}
 		}
 
 		// At this point, traffic is no longer redirected to the proxy for
@@ -916,10 +937,6 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext, rul
 	if datapathRegenCtxt.regenerationLevel >= regeneration.RegenerateWithDatapath {
 		if err := e.writeHeaderfile(nextDir); err != nil {
 			return fmt.Errorf("unable to write header file: %w", err)
-		}
-
-		if err := os.WriteFile(filepath.Join(nextDir, defaults.TemplateIDPath), []byte(datapathRegenCtxt.bpfHeaderfilesHash+"\n"), 0644); err != nil {
-			return fmt.Errorf("unable to write template id: %w", err)
 		}
 
 		datapathRegenCtxt.epInfoCache = e.createEpInfoCache(nextDir)
@@ -1097,7 +1114,7 @@ func (e *Endpoint) updatePolicyMapPressureMetric() {
 
 func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) bool {
 	// Convert from policy.Key to policymap.Key
-	policymapKey := policymap.NewKey(keyToDelete.Identity, keyToDelete.DestPort,
+	policymapKey := policymap.NewKey(keyToDelete.Identity, keyToDelete.DestPort, keyToDelete.PortMask(),
 		keyToDelete.Nexthdr, keyToDelete.TrafficDirection)
 
 	// Do not error out if the map entry was already deleted from the bpf map.
@@ -1131,7 +1148,7 @@ func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) boo
 
 func (e *Endpoint) addPolicyKey(keyToAdd policy.Key, entry policy.MapStateEntry, incremental bool) bool {
 	// Convert from policy.Key to policymap.Key
-	policymapKey := policymap.NewKey(keyToAdd.Identity, keyToAdd.DestPort,
+	policymapKey := policymap.NewKey(keyToAdd.Identity, keyToAdd.DestPort, keyToAdd.PortMask(),
 		keyToAdd.Nexthdr, keyToAdd.TrafficDirection)
 
 	var err error

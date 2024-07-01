@@ -306,16 +306,33 @@ Annotations:
 1.16 Upgrade Notes
 ------------------
 
-* Cilium Envoy DaemonSet is now enabled by default, and existing in-container installs
-  will be changed to DaemonSet mode unless specifically opted out of. This can be done by
-  disabling it manually by setting ``envoy.enabled=false`` accordingly. This change adds
-  one additional Pod per Node, therefore Nodes at maximum Pod capacity will face an
-  eviction of a single non-system critical Pod after upgrading.
+* Cilium Envoy DaemonSet is now enabled by default for new installation if the helm attribute
+  ``envoy.enabled`` is not specified, for existing cluster, please set ``upgradeCompatibility``
+  to 1.15 or earlier to keep the previous behavior. This change adds one additional Pod per Node,
+  therefore Nodes at maximum Pod capacity will face an eviction of a single non-system critical
+  Pod after upgrading.
 * For Linux kernels of version 6.6 or newer, Cilium by default switches to tcx BPF links for
   attaching its tc BPF programs in the core datapath for better resiliency and performance.
   If your current setup has third-party old-style tc BPF users, then this option should be
   disabled via Helm through ``bpf.enableTCX=false`` in order to continue in old-style tc BPF
   attachment mode as before.
+* Starting with Cilium 1.16 netkit is supported as a new datapath mode for Linux kernels of
+  version 6.8 or newer. Cilium still continues to rely on veth devices by default. In case
+  of interest to experiment with netkit, please consider the :ref:`performance_tuning` guide
+  for instructions. An in-place replacement of veth to netkit is not possible.
+* The implementation of ``toFQDNs`` selectors in policies has been overhauled to improve
+  performance when many different IPs are observed for a selector: Instead of creating
+  ``cidr`` identities for each allowed IP, IPs observed in DNS lookups are now labeled
+  with the selectors ``toFQDNs`` matching them. This reduces tail latency significantly for
+  FQDNs with a highly dynamic set of IPs, such as e.g. content delivery networks and
+  cloud object storage services.
+  Cilium automatically migrates its internal state for ``toFQDNs`` policy entries upon
+  upgrade or downgrade. To avoid drops during upgrades in clusters with ``toFQDNs`` policies,
+  it is required to run Cilium v1.15.6 or newer before upgrading to Cilium v1.16. If upgrading
+  from an older Cilium version, temporary packet drops for connections allowed by ``toFQDNs``
+  policies may occur during the initial endpoint regeneration on Cilium v1.16.
+  Similarly, when downgrading from v1.16 to v1.15 or older, temporary drops may occur for
+  such connections as well during initial endpoint regeneration on the downgraded version.
 * The ``cilium-dbg status --verbose`` command health data may now show health reported on a non-leaf
   component under a leaf named ``reporter``. Health data tree branches will now also be sorted by
   the fully qualified health status identifier.
@@ -373,6 +390,14 @@ Annotations:
   explicitly during the upgrade.
 * Gateway API GRPCRoute which is moved from ``v1alpha2`` to ``v1``. Please install new GRPCRoute CRD and migrate
   your resources from ``v1alpha2`` to ``v1`` version.
+* The default value of of ``CiliumLoadBalancerIPPool.spec.allowFirstLastIPs`` has been changed to ``yes``.
+  This means that unless explicitly configured otherwise, the first and last IP addresses of the IP pool
+  are available for allocation. If you rely on the previous behavior, you should explicitly set
+  ``allowFirstLastIPs: no`` in your IP pool configuration before the upgrade.
+* The ``CiliumLoadBalancerIPPool.spec.cidrs`` field has been deprecated in v1.15 favor of 
+  ``CiliumLoadBalancerIPPool.spec.blocks``. As of v1.15 both fields have the same behavior. The
+  ``cidrs`` field will be removed in v1.16. Please update your IP pool configurations to use
+  ``blocks`` instead of ``cidrs`` before upgrading.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -424,14 +449,19 @@ Helm Options
 Added Metrics
 ~~~~~~~~~~~~~
 
-* TBD
+* ``cilium_identity_label_sources`` is a new metric which counts the number of
+  identities with per label source. This is particularly useful to further break
+  down the source of local identities by having separate metrics for ``fqdn``
+  and ``cidr`` labels.
+* ``cilium_fqdn_selectors`` is a new metric counting the number of ingested
+  ``toFQDNs`` selectors.
 
 Removed Metrics
 ~~~~~~~~~~~~~~~
 
 The following deprecated metrics were removed:
 
-* TBD
+* ``cilium_ces_sync_errors_total``
 
 Changed Metrics
 ~~~~~~~~~~~~~~~

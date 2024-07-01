@@ -544,6 +544,11 @@ ct_recreate6:
 		/* Did we end up at a stale non-service entry? Recreate if so. */
 		if (unlikely(ct_state->rev_nat_index != ct_state_new.rev_nat_index))
 			goto ct_recreate6;
+
+		/* See comment in handle_ipv4_from_lxc(). */
+		ct_state_new.proxy_redirect = proxy_port > 0;
+		if (unlikely(ct_state->proxy_redirect != ct_state_new.proxy_redirect))
+			goto ct_recreate6;
 		break;
 
 	case CT_RELATED:
@@ -995,6 +1000,20 @@ ct_recreate4:
 		/* Did we end up at a stale non-service entry? Recreate if so. */
 		if (unlikely(ct_state->rev_nat_index != ct_state_new.rev_nat_index))
 			goto ct_recreate4;
+
+		/* Recreate the CT entry if the proxy_redirect flag is stale.
+		 * Otherwise, the return packet will be erroneously redirected (or not)
+		 * This check assumes the case where non-TCP packets hit the stale
+		 * CT entry with the proxy_redirect flag, or active TCP connection
+		 * suddenly comes into the scope of an L7 policy. Recreating the entry
+		 * updates the proxy_redirect flag properly.
+		 *
+		 * if the packet hits a closing stale entry, ct_lookup returns CT_NEW and
+		 * caller recreates the entry.
+		 */
+		ct_state_new.proxy_redirect = proxy_port > 0;
+		if (unlikely(ct_state->proxy_redirect != ct_state_new.proxy_redirect))
+			goto ct_recreate4;
 		break;
 
 	case CT_RELATED:
@@ -1170,12 +1189,12 @@ skip_vtep:
 	if (!skip_tunnel) {
 		struct tunnel_key key = {};
 
-		if (cluster_id > UINT8_MAX)
+		if (cluster_id > UINT16_MAX)
 			return DROP_INVALID_CLUSTER_ID;
 
 		key.ip4 = ip4->daddr & IPV4_MASK;
 		key.family = ENDPOINT_KEY_IPV4;
-		key.cluster_id = (__u8)cluster_id;
+		key.cluster_id = (__u16)cluster_id;
 
 #if !defined(ENABLE_NODEPORT) && defined(ENABLE_HOST_FIREWALL)
 		/*
@@ -1634,8 +1653,8 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = ipv6_policy(ctx, ip6, ifindex, src_label, &tuple, &ext_err,
-			  &proxy_port, from_tunnel);
+	ret = ipv6_policy(ctx, ip6, THIS_INTERFACE_IFINDEX, src_label, &tuple,
+			  &ext_err, &proxy_port, from_tunnel);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy6(ctx, &tuple, proxy_port, from_host);
@@ -1737,8 +1756,8 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 	update_metrics(ctx_full_len(ctx), METRIC_INGRESS, REASON_FORWARDED);
 #endif
 
-	ret = ipv6_policy(ctx, ip6, 0, src_sec_identity, NULL, &ext_err,
-			  &proxy_port, false);
+	ret = ipv6_policy(ctx, ip6, THIS_INTERFACE_IFINDEX, src_sec_identity,
+			  NULL, &ext_err, &proxy_port, false);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy_hairpin_ipv6(ctx, proxy_port);
@@ -1905,7 +1924,7 @@ ipv4_policy(struct __ctx_buff *ctx, struct iphdr *ip4, int ifindex, __u32 src_la
 
 		if (sep) {
 			auth_type = (__u8)*ext_err;
-			verdict = auth_lookup(ctx, SECLABEL, src_label,
+			verdict = auth_lookup(ctx, SECLABEL_IPV4, src_label,
 					      sep->tunnel_endpoint, auth_type);
 		}
 	}
@@ -1942,7 +1961,7 @@ skip_policy_enforcement:
 	}
 
 	if (*proxy_port > 0) {
-		send_trace_notify4(ctx, TRACE_TO_PROXY, src_label, SECLABEL, orig_sip,
+		send_trace_notify4(ctx, TRACE_TO_PROXY, src_label, SECLABEL_IPV4, orig_sip,
 				   bpf_ntohs(*proxy_port), ifindex, trace.reason,
 				   trace.monitor);
 		if (tuple_out)
@@ -1982,8 +2001,8 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = ipv4_policy(ctx, ip4, ifindex, src_label, &tuple, &ext_err,
-			  &proxy_port, from_tunnel);
+	ret = ipv4_policy(ctx, ip4, THIS_INTERFACE_IFINDEX, src_label, &tuple,
+			  &ext_err, &proxy_port, from_tunnel);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy4(ctx, &tuple, proxy_port, from_host);
@@ -2086,8 +2105,8 @@ int tail_ipv4_to_endpoint(struct __ctx_buff *ctx)
 	update_metrics(ctx_full_len(ctx), METRIC_INGRESS, REASON_FORWARDED);
 #endif
 
-	ret = ipv4_policy(ctx, ip4, 0, src_sec_identity, NULL, &ext_err,
-			  &proxy_port, false);
+	ret = ipv4_policy(ctx, ip4, THIS_INTERFACE_IFINDEX, src_sec_identity,
+			  NULL, &ext_err, &proxy_port, false);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		if (!revalidate_data(ctx, &data, &data_end, &ip4)) {

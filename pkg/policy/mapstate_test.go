@@ -22,12 +22,12 @@ func Test_IsSuperSetOf(t *testing.T) {
 		subSet   Key
 		res      int
 	}{
-		{keyWithPortMask(0, 0, 0, 0, 0), keyWithPortMask(0, 0, 0, 0, 0), 0},
-		{keyWithPortMask(0, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 6, 0), 1},
-		{keyWithPortMask(0, 0, 0, 0, 0), key(42, 80, 6, 0), 1},
-		{keyWithPortMask(0, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 0, 0), 1},
-		{keyWithPortMask(0, 0, 0, 6, 0), keyWithPortMask(42, 0, 0, 6, 0), 3}, // port is the same
-		{keyWithPortMask(0, 0, 0, 6, 0), key(42, 80, 6, 0), 2},
+		{key(0, 0, 0, 0), key(0, 0, 0, 0), 0},
+		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1},
+		{key(0, 0, 0, 0), key(42, 80, 6, 0), 1},
+		{key(0, 0, 0, 0), key(42, 0, 0, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 6, 0), 3}, // port is the same
+		{key(0, 0, 6, 0), key(42, 80, 6, 0), 2},
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 2}, // port range 64-127,80
 		{key(0, 80, 6, 0), key(42, 80, 6, 0), 3},
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 3}, // port ranges are the same
@@ -35,17 +35,17 @@ func Test_IsSuperSetOf(t *testing.T) {
 		{key(2, 80, 6, 0), key(42, 80, 6, 0), 0},                                         // id is different
 		{key(0, 8080, 6, 0), key(42, 80, 6, 0), 0},                                       // port is different
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 8080, 6, 0), 0},                   // port range is different from port
-		{keyWithPortMask(42, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},            // same key
-		{keyWithPortMask(42, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 6, 0), 4},
-		{keyWithPortMask(42, 0, 0, 0, 0), key(42, 80, 6, 0), 4},
+		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},                                          // same key
+		{key(42, 0, 0, 0), key(42, 0, 6, 0), 4},
+		{key(42, 0, 0, 0), key(42, 80, 6, 0), 4},
 		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(42, 80, 6, 0), 4}, // port range 64-127,80
-		{keyWithPortMask(42, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 17, 0), 4},
-		{keyWithPortMask(42, 0, 0, 0, 0), key(42, 80, 17, 0), 4},
+		{key(42, 0, 0, 0), key(42, 0, 17, 0), 4},
+		{key(42, 0, 0, 0), key(42, 80, 17, 0), 4},
 		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(42, 80, 17, 0), 4},
-		{keyWithPortMask(42, 0, 0, 6, 0), keyWithPortMask(42, 0, 0, 6, 0), 0}, // same key
-		{keyWithPortMask(42, 0, 0, 6, 0), key(42, 80, 6, 0), 5},
+		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0}, // same key
+		{key(42, 0, 6, 0), key(42, 80, 6, 0), 5},
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 5},
-		{keyWithPortMask(42, 0, 0, 6, 0), key(42, 8080, 6, 0), 5},
+		{key(42, 0, 6, 0), key(42, 8080, 6, 0), 5},
 		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0},                                          // same key
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0},  // same key
 		{key(42, 80, 6, 0), key(42, 8080, 6, 0), 0},                                        // different port
@@ -54,69 +54,69 @@ func Test_IsSuperSetOf(t *testing.T) {
 		{key(42, 80, 6, 0), key(42, 8080, 17, 0), 0},                                       // different port and proto
 
 		// increasing specificity for a L3/L4 key
-		{keyWithPortMask(0, 0, 0, 0, 0), key(42, 80, 6, 0), 1},
+		{key(0, 0, 0, 0), key(42, 80, 6, 0), 1},
 		{keyWithPortMask(0, 64, 0xffc0, 0, 0), key(42, 80, 6, 0), 1},
-		{keyWithPortMask(0, 0, 0, 6, 0), key(42, 80, 6, 0), 2},
+		{key(0, 0, 6, 0), key(42, 80, 6, 0), 2},
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 2},
 		{key(0, 80, 6, 0), key(42, 80, 6, 0), 3},
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 3},
-		{keyWithPortMask(42, 0, 0, 0, 0), key(42, 80, 6, 0), 4},
+		{key(42, 0, 0, 0), key(42, 80, 6, 0), 4},
 		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(42, 80, 6, 0), 4},
-		{keyWithPortMask(42, 0, 0, 6, 0), key(42, 80, 6, 0), 5},
+		{key(42, 0, 6, 0), key(42, 80, 6, 0), 5},
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(42, 80, 6, 0), 5},
 		{key(42, 80, 6, 0), key(42, 80, 6, 0), 0},                                         // same key
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0}, // same key
 
 		// increasing specificity for a L3-only key
-		{keyWithPortMask(0, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 0, 0), 1},
-		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(42, 0, 0, 0, 0), 1},
-		{keyWithPortMask(0, 0, 0, 6, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},              // not a superset
-		{key(0, 80, 6, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},                            // not a superset
-		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},        // not a superset
-		{keyWithPortMask(42, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},             // same key
-		{keyWithPortMask(42, 0, 0, 6, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},             // not a superset
+		{key(0, 0, 0, 0), key(42, 0, 0, 0), 1},
+		{keyWithPortMask(0, 64, 0xffc0, 0, 0), key(42, 0, 0, 0), 1},
+		{key(0, 0, 6, 0), key(42, 0, 0, 0), 0},                                            // not a superset
+		{key(0, 80, 6, 0), key(42, 0, 0, 0), 0},                                           // not a superset
+		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(42, 0, 0, 0), 0},                       // not a superset
+		{key(42, 0, 0, 0), key(42, 0, 0, 0), 0},                                           // same key
+		{key(42, 0, 6, 0), key(42, 0, 0, 0), 0},                                           // not a superset
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 0, 0), 0}, // not a superset
-		{key(42, 80, 6, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},                           // not a superset
-		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 0, 0, 0, 0), 0},       // not a superset
+		{key(42, 80, 6, 0), key(42, 0, 0, 0), 0},                                          // not a superset
+		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(42, 0, 0, 0), 0},                      // not a superset
 
 		// increasing specificity for a L3/proto key
-		{keyWithPortMask(0, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 6, 0), 1}, // wildcard
+		{key(0, 0, 0, 0), key(42, 0, 6, 0), 1}, // wildcard
 		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 1},
-		{keyWithPortMask(0, 0, 0, 6, 0), keyWithPortMask(42, 0, 0, 6, 0), 3},             // ports are the same
+		{key(0, 0, 6, 0), key(42, 0, 6, 0), 3},                                           // ports are the same
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 3}, // port ranges are the same
-		{key(0, 80, 6, 0), keyWithPortMask(42, 0, 0, 6, 0), 0},                           // not a superset
+		{key(0, 80, 6, 0), key(42, 0, 6, 0), 0},                                          // not a superset
 		{key(0, 80, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0},                     // not a superset
-		{keyWithPortMask(42, 0, 0, 0, 0), keyWithPortMask(42, 0, 0, 6, 0), 4},
+		{key(42, 0, 0, 0), key(42, 0, 6, 0), 4},
 		{keyWithPortMask(42, 64, 0xffc0, 0, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 4},
-		{keyWithPortMask(42, 0, 0, 6, 0), keyWithPortMask(42, 0, 0, 6, 0), 0},             // same key
+		{key(42, 0, 6, 0), key(42, 0, 6, 0), 0},                                           // same key
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0}, // same key
-		{key(42, 80, 6, 0), keyWithPortMask(42, 0, 0, 6, 0), 0},                           // not a superset
+		{key(42, 80, 6, 0), key(42, 0, 6, 0), 0},                                          // not a superset
 		{key(42, 80, 6, 0), keyWithPortMask(42, 64, 0xffc0, 6, 0), 0},                     // not a superset
 
 		// increasing specificity for a proto-only key
-		{keyWithPortMask(0, 0, 0, 0, 0), keyWithPortMask(0, 0, 0, 6, 0), 1},
+		{key(0, 0, 0, 0), key(0, 0, 6, 0), 1},
 		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 1},
-		{keyWithPortMask(0, 0, 0, 6, 0), keyWithPortMask(0, 0, 0, 6, 0), 0},              // same key
+		{key(0, 0, 6, 0), key(0, 0, 6, 0), 0},                                            // same key
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},  // same key
-		{key(0, 80, 6, 0), keyWithPortMask(0, 0, 0, 6, 0), 0},                            // not a superset
+		{key(0, 80, 6, 0), key(0, 0, 6, 0), 0},                                           // not a superset
 		{key(0, 80, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},                      // not a superset
-		{keyWithPortMask(42, 0, 0, 0, 0), keyWithPortMask(0, 0, 0, 6, 0), 0},             // not a superset
+		{key(42, 0, 0, 0), key(0, 0, 6, 0), 0},                                           // not a superset
 		{keyWithPortMask(42, 64, 0xffc0, 0, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0}, // not a superset
-		{keyWithPortMask(42, 0, 0, 6, 0), keyWithPortMask(0, 0, 0, 6, 0), 0},             // not a superset
+		{key(42, 0, 6, 0), key(0, 0, 6, 0), 0},                                           // not a superset
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0}, // not a superset
-		{key(42, 80, 6, 0), keyWithPortMask(0, 0, 0, 6, 0), 0},                           // not a superset
+		{key(42, 80, 6, 0), key(0, 0, 6, 0), 0},                                          // not a superset
 		{key(42, 80, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},                     // not a superset
 
 		// increasing specificity for a L4-only key
-		{keyWithPortMask(0, 0, 0, 0, 0), key(0, 80, 6, 0), 1},
+		{key(0, 0, 0, 0), key(0, 80, 6, 0), 1},
 		{keyWithPortMask(0, 64, 0xffc0, 0, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 1},
-		{keyWithPortMask(0, 0, 0, 6, 0), key(0, 80, 6, 0), 2},
+		{key(0, 0, 6, 0), key(0, 80, 6, 0), 2},
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), key(0, 80, 6, 0), 2},
 		{key(0, 80, 6, 0), key(0, 80, 6, 0), 0},                                          // same key
 		{keyWithPortMask(0, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0},  // same key
-		{keyWithPortMask(42, 0, 0, 0, 0), key(0, 80, 6, 0), 0},                           // not a superset
+		{key(42, 0, 0, 0), key(0, 80, 6, 0), 0},                                          // not a superset
 		{keyWithPortMask(42, 64, 0xffc0, 0, 0), key(0, 80, 6, 0), 0},                     // not a superset
-		{keyWithPortMask(42, 0, 0, 6, 0), key(0, 80, 6, 0), 0},                           // not a superset
+		{key(42, 0, 6, 0), key(0, 80, 6, 0), 0},                                          // not a superset
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), key(0, 80, 6, 0), 0},                     // not a superset
 		{key(42, 80, 6, 0), key(0, 80, 6, 0), 0},                                         // not a superset
 		{keyWithPortMask(42, 64, 0xffc0, 6, 0), keyWithPortMask(0, 64, 0xffc0, 6, 0), 0}, // not a superset
@@ -204,6 +204,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: 0,
 				}: {
@@ -213,13 +214,16 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				},
 			}),
 			args: args{
-				key:   Key{},
+				key: Key{
+					InvertedPortMask: 0xffff,
+				},
 				entry: MapStateEntry{},
 			},
 			want: newMapState(map[Key]MapStateEntry{
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: 0,
 				}: {
@@ -250,6 +254,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -263,6 +268,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -285,6 +291,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -592,6 +599,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -612,6 +620,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         2,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -624,6 +633,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -637,6 +647,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -657,6 +668,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         2,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -669,6 +681,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -685,6 +698,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -855,6 +869,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -875,6 +890,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         2,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -887,6 +903,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Egress.Uint8(),
 				},
@@ -910,6 +927,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -920,6 +938,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Egress.Uint8(),
 				}: {
@@ -940,6 +959,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         2,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -952,6 +972,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Egress.Uint8(),
 				}: struct{}{},
@@ -1092,6 +1113,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1117,6 +1139,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1135,6 +1158,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1161,6 +1185,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1179,6 +1204,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1205,6 +1231,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1223,6 +1250,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1250,6 +1278,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1281,6 +1310,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1294,6 +1324,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1306,6 +1337,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -1352,6 +1384,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1365,6 +1398,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1377,6 +1411,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -1434,6 +1469,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1447,6 +1483,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1459,6 +1496,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -1532,6 +1570,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1545,6 +1584,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1557,6 +1597,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         1,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -1620,6 +1661,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1632,6 +1674,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         100,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1656,6 +1699,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1686,6 +1730,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1698,6 +1743,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         100,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1723,6 +1769,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1776,6 +1823,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1789,6 +1837,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1812,6 +1861,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -1899,6 +1949,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				key: Key{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				},
@@ -1912,6 +1963,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: {
@@ -1936,6 +1988,7 @@ func TestMapState_denyPreferredInsertWithChanges(t *testing.T) {
 				Key{
 					Identity:         0,
 					DestPort:         0,
+					InvertedPortMask: 0xffff,
 					Nexthdr:          0,
 					TrafficDirection: trafficdirection.Ingress.Uint8(),
 				}: struct{}{},
@@ -3563,9 +3616,9 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		// allow-allow insertions do not need tests as their affect on one another does not matter.
 	}
 	for _, tt := range tests {
-		aKey := Key{Identity: tt.aIdentity, DestPort: tt.aPort, Nexthdr: tt.aProto}
+		aKey := key(tt.aIdentity, tt.aPort, tt.aProto, 0)
 		aEntry := MapStateEntry{IsDeny: tt.aIsDeny}
-		bKey := Key{Identity: tt.bIdentity, DestPort: tt.bPort, Nexthdr: tt.bProto}
+		bKey := key(tt.bIdentity, tt.bPort, tt.bProto, 0)
 		bEntry := MapStateEntry{IsDeny: tt.bIsDeny}
 		expectedKeys := newMapState(nil)
 		if tt.outcome&insertA > 0 {
@@ -3583,11 +3636,7 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 			}
 		}
 		if tt.outcome&insertAWithBProto > 0 {
-			var invertedPortMask uint16
-			if tt.bPort == 0 {
-				invertedPortMask = 0xffff // this is a wildcard
-			}
-			aKeyWithBProto := Key{Identity: tt.aIdentity, DestPort: tt.bPort, InvertedPortMask: invertedPortMask, Nexthdr: tt.bProto}
+			aKeyWithBProto := key(tt.aIdentity, tt.bPort, tt.bProto, 0)
 			aEntryCpy := MapStateEntry{IsDeny: tt.aIsDeny}
 			aEntryCpy.owners = map[MapStateOwner]struct{}{aKey: {}}
 			aEntry.AddDependent(aKeyWithBProto)
@@ -3600,11 +3649,7 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 			}
 		}
 		if tt.outcome&insertBWithAProto > 0 {
-			var invertedPortMask uint16
-			if tt.aPort == 0 {
-				invertedPortMask = 0xffff
-			}
-			bKeyWithBProto := Key{Identity: tt.bIdentity, DestPort: tt.aPort, InvertedPortMask: invertedPortMask, Nexthdr: tt.aProto}
+			bKeyWithBProto := key(tt.bIdentity, tt.aPort, tt.aProto, 0)
 			bEntryCpy := MapStateEntry{IsDeny: tt.bIsDeny}
 			bEntryCpy.owners = map[MapStateOwner]struct{}{bKey: {}}
 			bEntry.AddDependent(bKeyWithBProto)
@@ -3626,16 +3671,9 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 	// This should result in both entries being inserted with
 	// no changes, as they do not affect one another anymore.
 	for _, tt := range tests {
-		var aInvertedMask, bInvertedMask uint16
-		if tt.aPort == 0 {
-			aInvertedMask = 0xffff
-		}
-		if tt.bPort == 0 {
-			bInvertedMask = 0xffff
-		}
-		aKey := Key{Identity: tt.aIdentity, DestPort: tt.aPort, InvertedPortMask: aInvertedMask, Nexthdr: tt.aProto}
+		aKey := key(tt.aIdentity, tt.aPort, tt.aProto, 0)
 		aEntry := MapStateEntry{IsDeny: tt.aIsDeny}
-		bKey := Key{Identity: tt.bIdentity, DestPort: tt.bPort, InvertedPortMask: bInvertedMask, Nexthdr: tt.bProto, TrafficDirection: 1}
+		bKey := key(tt.bIdentity, tt.bPort, tt.bProto, 1)
 		bEntry := MapStateEntry{IsDeny: tt.bIsDeny}
 		expectedKeys := newMapState(nil)
 		if tt.aIsDeny {
@@ -3654,4 +3692,22 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		outcomeKeys.validatePortProto(t)
 		require.EqualValuesf(t, expectedKeys, outcomeKeys, "different traffic directions %s", tt.name)
 	}
+}
+
+func TestMapState_Get_stacktrace(t *testing.T) {
+	ms := newMapState(nil)
+	// This should produce a stacktrace in the error log. It is not validated here but can be
+	// observed manually.
+	// Example log (with newlines expanded):
+	// time="2024-06-22T23:21:27+03:00" level=error msg="mapState.Get: invalid wildcard port with non-zero mask: Identity=0,DestPort=0,Nexthdr=0,TrafficDirection=0. Stacktrace:
+	// github.com/hashicorp/go-hclog.Stacktrace
+	// 	github.com/cilium/cilium/vendor/github.com/hashicorp/go-hclog/stacktrace.go:51
+	// github.com/cilium/cilium/pkg/policy.(*mapState).Get
+	// 	github.com/cilium/cilium/pkg/policy/mapstate.go:355
+	// github.com/cilium/cilium/pkg/policy.TestMapState_Get_stacktrace
+	// 	github.com/cilium/cilium/pkg/policy/mapstate_test.go:3699
+	// testing.tRunner
+	// go/src/testing/testing.go:1689" subsys=policy
+	_, ok := ms.Get(Key{})
+	assert.False(t, ok)
 }

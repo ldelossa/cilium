@@ -168,6 +168,7 @@ cilium-agent [flags]
       --enable-pmtu-discovery                                        Enable path MTU discovery to send ICMP fragmentation-needed replies to the client
       --enable-policy string                                         Enable policy enforcement (default "default")
       --enable-recorder                                              Enable BPF datapath pcap recorder
+      --enable-route-mtu-for-cni-chaining                            Enable route MTU for pod netns when CNI chaining is used
       --enable-sctp                                                  Enable SCTP support (beta)
       --enable-service-topology                                      Enable support for service topology aware hints
       --enable-session-affinity                                      Enable support for service session affinity
@@ -286,6 +287,8 @@ cilium-agent [flags]
       --join-cluster                                                 Join a Cilium cluster via kvstore registration
       --k8s-api-server string                                        Kubernetes API server URL
       --k8s-client-burst int                                         Burst value allowed for the K8s client
+      --k8s-client-connection-keep-alive duration                    Configures the keep alive duration of K8s client connections. K8 client is disabled if the value is set to 0 (default 30s)
+      --k8s-client-connection-timeout duration                       Configures the timeout of K8s client connections. K8s client is disabled if the value is set to 0 (default 30s)
       --k8s-client-qps float32                                       Queries per second limit for the K8s client
       --k8s-heartbeat-timeout duration                               Configures the timeout for api-server heartbeat, set to 0 to disable (default 30s)
       --k8s-kubeconfig-path string                                   Absolute path of the kubernetes kubeconfig file

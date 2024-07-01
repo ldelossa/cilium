@@ -53,6 +53,7 @@ cilium-agent hive [flags]
       --enable-l2-pod-announcements                                  Enable announcing Pod IPs with Gratuitous ARP
       --enable-monitor                                               Enable the monitor unix domain socket server (default true)
       --enable-multi-network                                         Enable support for multiple pod networks
+      --enable-route-mtu-for-cni-chaining                            Enable route MTU for pod netns when CNI chaining is used
       --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --envoy-base-id uint                                           Envoy base ID
@@ -79,6 +80,8 @@ cilium-agent hive [flags]
       --iptables-random-fully                                        Set iptables flag random-fully on masquerading rules
       --k8s-api-server string                                        Kubernetes API server URL
       --k8s-client-burst int                                         Burst value allowed for the K8s client
+      --k8s-client-connection-keep-alive duration                    Configures the keep alive duration of K8s client connections. K8 client is disabled if the value is set to 0 (default 30s)
+      --k8s-client-connection-timeout duration                       Configures the timeout of K8s client connections. K8s client is disabled if the value is set to 0 (default 30s)
       --k8s-client-qps float32                                       Queries per second limit for the K8s client
       --k8s-heartbeat-timeout duration                               Configures the timeout for api-server heartbeat, set to 0 to disable (default 30s)
       --k8s-kubeconfig-path string                                   Absolute path of the kubernetes kubeconfig file
