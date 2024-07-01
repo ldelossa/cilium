@@ -24,6 +24,7 @@ rules:
   - isovalentvrfs.isovalent.com
   - isovalentbfdprofiles.isovalent.com
   - isovalentbfdnodeconfigs.isovalent.com
+  - isovalentbfdnodeconfigoverrides.isovalent.com
 {{- if .Values.enterprise.ciliummesh.enabled }}
   - isovalentmeshendpoints.isovalent.com
 {{- end }}
@@ -90,6 +91,7 @@ rules:
   - isovalent.com
   resources:
   - isovalentbfdnodeconfigs
+  - isovalentbfdnodeconfigoverrides
   verbs:
   - get
   - list
