@@ -39,6 +39,9 @@ triggers:
   /ci-multicast:
     workflows:
     - enterprise-multicast.yaml
+  /fqdn-ha-perf:
+    workflows:
+    - enterprise-fqdn-ha-perf.yaml
 
 workflows:
   enterprise-clustermesh-mixed-routing.yaml:

@@ -661,6 +661,9 @@ Vagrantfile @cilium/ci-structure
 #   of clusterwide state in order to minimize memory usage.
 # - @isovalent/traffic-engineering
 #   Responsible for maintaining features related to traffic engineering such as SRv6.
+# - @isovalent/scalability-performance:
+#   Maintain scalability and performance tests. Provide input on scalability
+#   and performance related changes.
 # - @isovalent/void
 #   An empty team to indicate the lack of code owners. If the void team gets
 #   added as a reviewer for a pull request, it most likely indicates that the
@@ -685,6 +688,8 @@ Vagrantfile @cilium/ci-structure
 /.github/workflows/enterprise-release-cilium-cli.yaml @isovalent/cli
 /.github/workflows/enterprise-*srv6*.yaml @isovalent/traffic-engineering
 /.github/workflows/enterprise-*cilium-mesh*.yaml @isovalent/cilium-mesh
+/.github/workflows/enterprise-fqdn-ha-perf.yaml @isovalent/dns-proxy @isovalent/scalability-performance
+/.github/actions/cl2-modules/**/enterprise* @isovalent/scalability-performance
 /bpf/enterprise_* @isovalent/cilium-datapath
 /bpf/lib/enterprise_* @isovalent/cilium-datapath
 /bpf/lib/enterprise_cilium_mesh.h @isovalent/cilium-mesh

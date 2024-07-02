@@ -1,0 +1,26 @@
+# Valid actions: "start", "gather"
+{{$action := .action}}
+
+steps:
+- name: "{{$action}}ing measurements"
+  measurements:
+  - Identifier: FQDNHAPerformanceMetrics
+    Method: GenericPrometheusQuery
+    Params:
+      action: {{$action}}
+      metricName: FQDN HA Performance
+      metricVersion: v1
+      unit: s
+      queries:
+      - name: Processing latency - Avg Perc99
+        query: avg(isovalent_external_dns_proxy_processing_duration_seconds{quantile="0.99", error="allow"})
+      - name: Processing latency - Avg Perc90
+        query: avg(isovalent_external_dns_proxy_processing_duration_seconds{quantile="0.9", error="allow"})
+      - name: Processing latency - Avg Perc50
+        query: avg(isovalent_external_dns_proxy_processing_duration_seconds{quantile="0.5", error="allow"})
+      - name: Upstream latency - Avg Perc99
+        query: avg(isovalent_external_dns_proxy_upstream_duration_seconds{quantile="0.99", error="allow"})
+      - name: Upstream latency - Avg Perc90
+        query: avg(isovalent_external_dns_proxy_upstream_duration_seconds{quantile="0.9", error="allow"})
+      - name: Upstream latency - Avg Perc50
+        query: avg(isovalent_external_dns_proxy_upstream_duration_seconds{quantile="0.5", error="allow"})
