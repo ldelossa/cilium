@@ -35,11 +35,9 @@ ports:
   - name: grpc-rbac
     containerPort: {{ .Values.hubble.rbac.listenPort }}
 volumeMounts:
-  {{- if eq .Values.hubble.rbac.policy.mode "configMap" }}
   - name: hubble-rbac-policy
     mountPath: /etc/hubble-rbac/policy
     readOnly: true
-  {{- end }}
   - mountPath: /etc/hubble-rbac/tls
     name: tls
     readOnly: true
