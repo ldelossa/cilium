@@ -124,14 +124,9 @@ func (rc *remoteCluster) releaseOldConnection() {
 	rc.etcdClusterID = ""
 	rc.mutex.Unlock()
 
-	// Release resources asynchronously in the background. Many of these
-	// operations may time out if the connection was closed due to an error
-	// condition.
-	go func() {
-		if backend != nil {
-			backend.Close(context.Background())
-		}
-	}()
+	if backend != nil {
+		backend.Close()
+	}
 }
 
 func (rc *remoteCluster) restartRemoteConnection() {
@@ -162,7 +157,7 @@ func (rc *remoteCluster) restartRemoteConnection() {
 
 				if err != nil {
 					if backend != nil {
-						backend.Close(ctx)
+						backend.Close()
 					}
 					rc.logger.WithError(err).Warning("Unable to establish etcd connection to remote cluster")
 					return err

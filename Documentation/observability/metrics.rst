@@ -418,6 +418,7 @@ Identity
 Name                                     Labels                                             Default    Description
 ======================================== ================================================== ========== ========================================================
 ``identity``                             ``type``                                           Enabled    Number of identities currently allocated
+``identity_label_sources``               ``source``                                         Enabled    Number of identities which contain at least one label from the given label source
 ``ipcache_errors_total``                 ``type``, ``error``                                Enabled    Number of errors interacting with the ipcache
 ``ipcache_events_total``                 ``type``                                           Enabled    Number of events interacting with the ipcache
 ======================================== ================================================== ========== ========================================================
@@ -545,6 +546,7 @@ Name                               Labels                           Default     
 ``fqdn_active_names``              ``endpoint``                     Disabled     Number of domains inside the DNS cache that have not expired (by TTL), per endpoint
 ``fqdn_active_ips``                ``endpoint``                     Disabled     Number of IPs inside the DNS cache associated with a domain that has not expired (by TTL), per endpoint
 ``fqdn_alive_zombie_connections``  ``endpoint``                     Disabled     Number of IPs associated with domains that have expired (by TTL) yet still associated with an active connection (aka zombie), per endpoint
+``fqdn_selectors``                                                  Enabled      Number of registered ToFQDN selectors
 ================================== ================================ ============ ========================================================
 
 Jobs
@@ -686,7 +688,6 @@ Name                                           Labels                           
 ============================================== ================================ ========================================================
 ``number_of_ceps_per_ces``                                                      The number of CEPs batched in a CES
 ``number_of_cep_changes_per_ces``              ``opcode``                       The number of changed CEPs in each CES update
-``ces_sync_errors_total``                                                       Number of CES sync errors
 ``ces_sync_total``                             ``outcome``                      The number of completed CES syncs by outcome
 ``ces_queueing_delay_seconds``                                                  CiliumEndpointSlice queueing delay in seconds
 ============================================== ================================ ========================================================

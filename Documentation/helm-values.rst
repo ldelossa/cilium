@@ -761,7 +761,7 @@
      - object
      - ``{"cert":"","key":""}``
    * - :spelling:ignore:`clustermesh.apiserver.tls.enableSecrets`
-     - Allow users to provide their own certificates Users may need to provide their certificates using  a mechanism that requires they provide their own secrets. This setting does not apply to any of the auto-generated  mechanisms below, it only restricts the creation of secrets via the ``tls-provided`` templates.
+     - Allow users to provide their own certificates Users may need to provide their certificates using a mechanism that requires they provide their own secrets. This setting does not apply to any of the auto-generated mechanisms below, it only restricts the creation of secrets via the ``tls-provided`` templates.
      - bool
      - ``true``
    * - :spelling:ignore:`clustermesh.apiserver.tls.remote`
@@ -850,6 +850,10 @@
      - ``"cni-config"``
    * - :spelling:ignore:`cni.customConf`
      - Skip writing of the CNI configuration. This can be used if writing of the CNI configuration is performed by external automation.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`cni.enableRouteMTUForCNIChaining`
+     - Enable route MTU for pod netns when CNI chaining is used
      - bool
      - ``false``
    * - :spelling:ignore:`cni.exclusive`
@@ -1013,7 +1017,7 @@
      - bool
      - ``false``
    * - :spelling:ignore:`enableRuntimeDeviceDetection`
-     - Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered.   This option has been deprecated and is a no-op.
+     - Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered.  This option has been deprecated and is a no-op.
      - bool
      - ``true``
    * - :spelling:ignore:`enableXTSocketFallback`
@@ -1249,9 +1253,9 @@
      - string
      - ``nil``
    * - :spelling:ignore:`envoy.enabled`
-     - Enable Envoy Proxy in standalone DaemonSet.
-     - bool
-     - ``true``
+     - Enable Envoy Proxy in standalone DaemonSet. This field is enabled by default for new installation.
+     - string
+     - ``true`` for new installation
    * - :spelling:ignore:`envoy.extraArgs`
      - Additional envoy container arguments.
      - list
@@ -1287,7 +1291,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:f2c0b275aebe14c7369c8396c4461c787b12b823aba0c613ebbed7a3f92f288e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.5-8fccf45a8ab9da13824e0f14122d5db35673f3bb","useDigest":true}``
+     - ``{"digest":"sha256:fb3c4ee29e3db638156ed69e88731f598738ca60f5fda007450d02bb4aea0d6b","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.6-1d6c2a79b0ff543bed0538ed2f9e236ef0d307af","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1529,7 +1533,7 @@
      - bool
      - ``false``
    * - :spelling:ignore:`gatewayAPI.externalTrafficPolicy`
-     - Control how traffic from external sources is routed to the LoadBalancer Kubernetes Service for all Cilium GatewayAPI Gateway instances. Valid values are "Cluster" and "Local". ref: https://kubernetes.io/docs/reference/networking/virtual-ips/#external-traffic-policy
+     - Control how traffic from external sources is routed to the LoadBalancer Kubernetes Service for all Cilium GatewayAPI Gateway instances. Valid values are "Cluster" and "Local". Note that this value will be ignored when ``hostNetwork.enabled == true``. ref: https://kubernetes.io/docs/reference/networking/virtual-ips/#external-traffic-policy
      - string
      - ``"Cluster"``
    * - :spelling:ignore:`gatewayAPI.hostNetwork.enabled`
@@ -2623,7 +2627,7 @@
    * - :spelling:ignore:`nodeinit.image`
      - node-init image.
      - object
-     - ``{"digest":"sha256:820155cb3b7f00c8d61c1cffa68c44440906cb046bdbad8ff544f5deb1103456","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"19fb149fb3d5c7a37d3edfaf10a2be3ab7386661","useDigest":true}``
+     - ``{"digest":"sha256:8d7b41c4ca45860254b3c19e20210462ef89479bb6331d6760c4e609d651b29c","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"c54c7edeab7fde4da68e59acd319ab24af242c3f","useDigest":true}``
    * - :spelling:ignore:`nodeinit.nodeSelector`
      - Node labels for nodeinit pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object

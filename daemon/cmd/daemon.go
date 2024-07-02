@@ -384,6 +384,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	identity.IterateReservedIdentities(func(_ identity.NumericIdentity, _ *identity.Identity) {
 		metrics.Identity.WithLabelValues(identity.ReservedIdentityType).Inc()
+		metrics.IdentityLabelSources.WithLabelValues(labels.LabelSourceReserved).Inc()
 	})
 
 	d := Daemon{
@@ -601,7 +602,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		// context deadline or if the context has been cancelled, the context's
 		// error will be returned. Otherwise, it succeeded.
 		if !option.Config.DryMode {
-			if err := d.k8sWatcher.WaitForCRDsToRegister(d.ctx); err != nil {
+			_, err := params.CRDSyncPromise.Await(d.ctx)
+			if err != nil {
 				return nil, restoredEndpoints, err
 			}
 		}
@@ -719,11 +721,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// are set.
 	if params.Clientset.IsEnabled() {
 		bootstrapStats.k8sInit.Start()
-
-		// Launch the policy K8s watcher
-		if params.PolicyK8sWatcher != nil {
-			params.PolicyK8sWatcher.WatchK8sPolicyResources(d.ctx, &d)
-		}
 
 		// Launch the K8s watchers in parallel as we continue to process other
 		// daemon options.

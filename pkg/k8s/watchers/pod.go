@@ -39,7 +39,6 @@ import (
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/endpointmanager"
-	hubblemetrics "github.com/cilium/cilium/pkg/hubble/metrics"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -166,7 +165,7 @@ func (k *K8sPodWatcher) createAllPodsController(slimClient slimclientset.Interfa
 		0,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				if pod := k8s.CastInformerEvent[slim_corev1.Pod](obj); pod != nil {
+				if pod := informer.CastInformerEvent[slim_corev1.Pod](obj); pod != nil {
 					err := k.addK8sPodV1(pod)
 					k.k8sEventReporter.K8sEventProcessed(metricPod, resources.MetricCreate, err == nil)
 					k.k8sEventReporter.K8sEventReceived(podApiGroup, metricPod, resources.MetricCreate, true, false)
@@ -175,8 +174,8 @@ func (k *K8sPodWatcher) createAllPodsController(slimClient slimclientset.Interfa
 				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
-				if oldPod := k8s.CastInformerEvent[slim_corev1.Pod](oldObj); oldPod != nil {
-					if newPod := k8s.CastInformerEvent[slim_corev1.Pod](newObj); newPod != nil {
+				if oldPod := informer.CastInformerEvent[slim_corev1.Pod](oldObj); oldPod != nil {
+					if newPod := informer.CastInformerEvent[slim_corev1.Pod](newObj); newPod != nil {
 						if oldPod.DeepEqual(newPod) {
 							k.k8sEventReporter.K8sEventReceived(podApiGroup, metricPod, resources.MetricUpdate, false, true)
 						} else {
@@ -190,7 +189,7 @@ func (k *K8sPodWatcher) createAllPodsController(slimClient slimclientset.Interfa
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				if pod := k8s.CastInformerEvent[slim_corev1.Pod](obj); pod != nil {
+				if pod := informer.CastInformerEvent[slim_corev1.Pod](obj); pod != nil {
 					err := k.deleteK8sPodV1(pod)
 					k.k8sEventReporter.K8sEventProcessed(metricPod, resources.MetricDelete, err == nil)
 					k.k8sEventReporter.K8sEventReceived(podApiGroup, metricPod, resources.MetricDelete, true, false)
@@ -615,7 +614,6 @@ func (k *K8sPodWatcher) deleteK8sPodV1(pod *slim_corev1.Pod) error {
 	if option.Config.EnableLocalRedirectPolicy {
 		k.redirectPolicyManager.OnDeletePod(pod)
 	}
-	hubblemetrics.ProcessPodDeletion(pod)
 
 	k.cgroupManager.OnDeletePod(pod)
 

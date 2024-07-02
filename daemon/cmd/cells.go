@@ -115,6 +115,14 @@ var (
 		// Store cell provides factory for creating watchStore/syncStore/storeManager
 		// useful for synchronizing data from/to kvstore.
 		store.Cell,
+
+		// Provide CRD resource names for 'k8sSynced.CRDSyncCell' below.
+		cell.Provide(func() k8sSynced.CRDSyncResourceNames { return k8sSynced.AgentCRDResourceNames() }),
+		// CRDSyncCell provides a promise that is resolved as soon as CRDs used by the
+		// agent have k8sSynced.
+		// Allows cells to wait for CRDs before trying to list Cilium resources.
+		// This is separate from k8sSynced.Cell as this one needs to be mocked for tests.
+		k8sSynced.CRDSyncCell,
 	)
 
 	// ControlPlane implement the per-node control functions. These are pure
@@ -214,7 +222,8 @@ var (
 		// ServiceCache holds the list of known services correlated with the matching endpoints.
 		k8s.ServiceCacheCell,
 
-		// K8s policy resource watcher cell.
+		// K8s policy resource watcher cell. It depends on the half-initialized daemon which is
+		// resolved by newDaemonPromise()
 		policyK8s.Cell,
 
 		// Directory policy watcher cell.

@@ -28,8 +28,12 @@ func setupIPSecSuitePrivileged(tb testing.TB) *slog.Logger {
 	log := hivetest.Logger(tb)
 
 	tb.Cleanup(func() {
+		ipSecKeysGlobal = make(map[string]*ipSecKey)
 		node.UnsetTestLocalNodeStore()
-		_ = DeleteXFRM(log)
+		err := DeleteXFRM(log)
+		if err != nil {
+			tb.Errorf("Failed cleaning XFRM state: %v", err)
+		}
 	})
 	return log
 }
@@ -139,7 +143,13 @@ func TestUpsertIPSecEquals(t *testing.T) {
 	_, err = UpsertIPsecEndpoint(log, local, remote, local.IP, remote.IP, 0, "remote-boot-id", IPSecDirBoth, false, false, DefaultReqID)
 	require.NoError(t, err)
 
-	cleanIPSecStatesAndPolicies(t)
+	// Let's check that state was not added as source and destination are the same
+	result, err := netlink.XfrmStateList(netlink.FAMILY_ALL)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(result))
+
+	err = DeleteXFRM(log)
+	require.NoError(t, err)
 
 	_, aeadKey, err := decodeIPSecKey("44434241343332312423222114131211f4f3f2f1")
 	require.NoError(t, err)
@@ -157,9 +167,10 @@ func TestUpsertIPSecEquals(t *testing.T) {
 	_, err = UpsertIPsecEndpoint(log, local, remote, local.IP, remote.IP, 0, "remote-boot-id", IPSecDirBoth, false, false, DefaultReqID)
 	require.NoError(t, err)
 
-	cleanIPSecStatesAndPolicies(t)
-	ipSecKeysGlobal["1.2.3.4"] = nil
-	ipSecKeysGlobal[""] = nil
+	// Let's check that state was not added as source and destination are the same
+	result, err = netlink.XfrmStateList(netlink.FAMILY_ALL)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(result))
 }
 
 func TestUpsertIPSecEndpoint(t *testing.T) {
@@ -188,7 +199,32 @@ func TestUpsertIPSecEndpoint(t *testing.T) {
 	_, err = UpsertIPsecEndpoint(log, local, remote, local.IP, remote.IP, 0, "remote-boot-id", IPSecDirBoth, false, false, DefaultReqID)
 	require.NoError(t, err)
 
-	cleanIPSecStatesAndPolicies(t)
+	getState := &netlink.XfrmState{
+		Src:   local.IP,
+		Dst:   remote.IP,
+		Proto: netlink.XFRM_PROTO_ESP,
+		Spi:   int(key.Spi),
+		Mark: &netlink.XfrmMark{
+			Value: ipSecXfrmMarkSetSPI(linux_defaults.RouteMarkEncrypt, uint8(key.Spi)),
+			Mask:  linux_defaults.IPsecMarkMaskOut,
+		},
+	}
+
+	state, err := netlink.XfrmStateGet(getState)
+	require.NoError(t, err)
+	require.NotNil(t, state)
+	require.Nil(t, state.Aead)
+	require.NotNil(t, state.Auth)
+	require.Equal(t, "hmac(sha256)", state.Auth.Name)
+	require.Equal(t, authKey, state.Auth.Key)
+	require.NotNil(t, state.Crypt)
+	require.Equal(t, "cbc(aes)", state.Crypt.Name)
+	require.Equal(t, cryptKey, state.Crypt.Key)
+	// ESN bit is not set, so ReplayWindow should be 0
+	require.Equal(t, 0, state.ReplayWindow)
+
+	err = DeleteXFRM(log)
+	require.NoError(t, err)
 
 	_, aeadKey, err := decodeIPSecKey("44434241343332312423222114131211f4f3f2f1")
 	require.NoError(t, err)
@@ -221,11 +257,6 @@ func TestUpsertIPSecEndpoint(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, toProxyPolicy)
-
-	cleanIPSecStatesAndPolicies(t)
-	ipSecKeysGlobal["1.1.3.4"] = nil
-	ipSecKeysGlobal["1.2.3.4"] = nil
-	ipSecKeysGlobal[""] = nil
 }
 
 func TestUpsertIPSecKeyMissing(t *testing.T) {
@@ -238,8 +269,6 @@ func TestUpsertIPSecKeyMissing(t *testing.T) {
 
 	_, err = UpsertIPsecEndpoint(log, local, remote, local.IP, remote.IP, 0, "remote-boot-id", IPSecDirBoth, false, false, DefaultReqID)
 	require.ErrorContains(t, err, "unable to replace local state: IPSec key missing")
-
-	cleanIPSecStatesAndPolicies(t)
 }
 
 func TestUpdateExistingIPSecEndpoint(t *testing.T) {
@@ -271,34 +300,4 @@ func TestUpdateExistingIPSecEndpoint(t *testing.T) {
 	// test updateExisting (xfrm delete + add)
 	_, err = UpsertIPsecEndpoint(log, local, remote, local.IP, remote.IP, 0, "remote-boot-id", IPSecDirBoth, false, true, DefaultReqID)
 	require.NoError(t, err)
-
-	cleanIPSecStatesAndPolicies(t)
-	ipSecKeysGlobal["1.1.3.4"] = nil
-	ipSecKeysGlobal["1.2.3.4"] = nil
-	ipSecKeysGlobal[""] = nil
-}
-
-func cleanIPSecStatesAndPolicies(t *testing.T) {
-	xfrmStateList, err := netlink.XfrmStateList(netlink.FAMILY_ALL)
-	if err != nil {
-		t.Fatalf("Can't list XFRM states: %v", err)
-	}
-
-	for _, s := range xfrmStateList {
-		if err := netlink.XfrmStateDel(&s); err != nil {
-			t.Fatalf("Can't delete XFRM state: %v", err)
-		}
-
-	}
-
-	xfrmPolicyList, err := netlink.XfrmPolicyList(netlink.FAMILY_ALL)
-	if err != nil {
-		t.Fatalf("Can't list XFRM policies: %v", err)
-	}
-
-	for _, p := range xfrmPolicyList {
-		if err := netlink.XfrmPolicyDel(&p); err != nil {
-			t.Fatalf("Can't delete XFRM policy: %v", err)
-		}
-	}
 }

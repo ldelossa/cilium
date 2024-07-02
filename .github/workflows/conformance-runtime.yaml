@@ -21,6 +21,7 @@ on:
     branches:
       - main-ce
       - ft/main/**
+      - 'renovate/main-**'
     paths-ignore:
       - 'Documentation/**'
 
@@ -70,7 +71,6 @@ jobs:
           echo '${{ tojson(inputs) }}'
 
   commit-status-start:
-    if: ${{ github.event_name != 'push' }}
     name: Commit Status Start
     runs-on: ubuntu-latest
     steps:
@@ -273,7 +273,7 @@ jobs:
           test-name: runtime-tests
           install-dependencies: true
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          image-version: "bpf-next-20240617.013201@sha256:392254a5696a5d072b617bec6eb0049e7e2f38cdd79e8d9f4b67b0a4eba678b4"
+          image-version: "bpf-next-20240625.013127@sha256:ef9a0b84c0ccda32fd2693ea35a0fad217935cb19fba00b8a703ca71f6f2ac5d"
           host-mount: ./
           cpu: 4
           mem: 12G
@@ -476,7 +476,7 @@ jobs:
           delete-merged: true
 
   commit-status-final:
-    if: ${{ always() && github.event_name != 'push' }}
+    if: ${{ always() }}
     name: Commit Status Final
     needs: setup-and-test
     runs-on: ubuntu-latest

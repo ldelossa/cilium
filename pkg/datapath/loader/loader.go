@@ -202,9 +202,8 @@ func (l *loader) patchHostNetdevDatapath(ep datapath.Endpoint, ifName string) (m
 		opts["SECCTX_FROM_IPCACHE"] = uint64(secctxFromIpcacheDisabled)
 	}
 
-	if option.Config.EnableNodePort {
-		opts["NATIVE_DEV_IFINDEX"] = uint64(ifIndex)
-	}
+	opts["NATIVE_DEV_IFINDEX"] = uint64(ifIndex)
+
 	if option.Config.EnableBPFMasquerade && ifName != defaults.SecondHostDevice {
 		ipv4, ipv6 := l.bpfMasqAddrs(ifName)
 
@@ -577,7 +576,7 @@ func (l *loader) replaceOverlayDatapath(ctx context.Context, cArgs []string, ifa
 // CompileOrLoad with the same configuration parameters. When the first
 // goroutine completes compilation of the template, all other CompileOrLoad
 // invocations will be released.
-func (l *loader) ReloadDatapath(ctx context.Context, ep datapath.Endpoint, stats *metrics.SpanStat) (err error) {
+func (l *loader) ReloadDatapath(ctx context.Context, ep datapath.Endpoint, stats *metrics.SpanStat) (hash string, err error) {
 	dirs := directoryInfo{
 		Library: option.Config.BpfDir,
 		Runtime: option.Config.StateDir,
@@ -587,15 +586,15 @@ func (l *loader) ReloadDatapath(ctx context.Context, ep datapath.Endpoint, stats
 
 	cfg := l.nodeConfig.Load()
 
-	spec, _, err := l.templateCache.fetchOrCompile(ctx, cfg, ep, &dirs, stats)
+	spec, hash, err := l.templateCache.fetchOrCompile(ctx, cfg, ep, &dirs, stats)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	stats.BpfLoadProg.Start()
 	err = l.reloadDatapath(ep, spec)
 	stats.BpfLoadProg.End(err == nil)
-	return err
+	return hash, err
 }
 
 // Unload removes the datapath specific program aspects

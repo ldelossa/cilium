@@ -628,6 +628,8 @@ cni:
     requests:
       cpu: 100m
       memory: 10Mi
+  # -- Enable route MTU for pod netns when CNI chaining is used
+  enableRouteMTUForCNIChaining: false
 # -- (string) Configure how frequently garbage collection should occur for the datapath
 # connection tracking table.
 # @default -- `"0s"`
@@ -688,7 +690,7 @@ daemon:
 # -- Enables experimental support for the detection of new and removed datapath
 # devices. When devices change the eBPF datapath is reloaded and services updated.
 # If "devices" is set then only those devices, or devices matching a wildcard will
-# be considered. 
+# be considered.
 #
 # This option has been deprecated and is a no-op.
 enableRuntimeDeviceDetection: true
@@ -849,6 +851,7 @@ gatewayAPI:
   # -- The number of additional GatewayAPI proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address.
   xffNumTrustedHops: 0
   # -- Control how traffic from external sources is routed to the LoadBalancer Kubernetes Service for all Cilium GatewayAPI Gateway instances. Valid values are "Cluster" and "Local".
+  # Note that this value will be ignored when `hostNetwork.enabled == true`.
   # ref: https://kubernetes.io/docs/reference/networking/virtual-ips/#external-traffic-policy
   externalTrafficPolicy: Cluster
   # -- SecretsNamespace is the namespace in which envoy SDS will retrieve TLS secrets from.
@@ -2087,8 +2090,13 @@ dashboards:
   annotations: {}
 # Configure Cilium Envoy options.
 envoy:
+  # @schema
+  # type: [null, boolean]
+  # @schema
   # -- Enable Envoy Proxy in standalone DaemonSet.
-  enabled: true
+  # This field is enabled by default for new installation.
+  # @default -- `true` for new installation
+  enabled: ~
   # -- (int)
   # Set Envoy'--base-id' to use when allocating shared memory regions.
   # Only needs to be changed if multiple Envoy instances will run on the same node and may have conflicts. Supported values: 0 - 4294967295. Defaults to '0'
@@ -3130,9 +3138,9 @@ clustermesh:
       #               CA is shared across all clusters part of the mesh.
       authMode: legacy
       # -- Allow users to provide their own certificates
-      # Users may need to provide their certificates using 
+      # Users may need to provide their certificates using
       # a mechanism that requires they provide their own secrets.
-      # This setting does not apply to any of the auto-generated 
+      # This setting does not apply to any of the auto-generated
       # mechanisms below, it only restricts the creation of secrets
       # via the `tls-provided` templates.
       enableSecrets: true
