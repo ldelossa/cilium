@@ -143,7 +143,7 @@ hubble:
       # authenticate and make requests.
       logRoles: false
       configMap:
-        # -- Whether to create the config map from where the mapping between scope
+        # -- Whether to create the config map from where the mapping between claims
         # and roles is read. If set to 'false' the user must create the config map
         # out-of-band. Hubble Relay will not start until the config map is
         # in place.
@@ -159,5 +159,5 @@ hubble:
 
         # -- The list of roles to define.
         roles: []
-        # -- The list of bindings between scope values and roles.
+        # -- The list of bindings between claims and roles.
         bindings: []

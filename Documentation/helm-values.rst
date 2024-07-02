@@ -1789,11 +1789,11 @@
      - object
      - ``{"configMap":{"bindings":[],"create":true,"key":"hubble-rbac-policy.yaml","name":"hubble-rbac-policy","roles":[]},"logRoles":false}``
    * - :spelling:ignore:`hubble.rbac.policy.configMap.bindings`
-     - The list of bindings between scope values and roles.
+     - The list of bindings between claims and roles.
      - list
      - ``[]``
    * - :spelling:ignore:`hubble.rbac.policy.configMap.create`
-     - Whether to create the config map from where the mapping between scope and roles is read. If set to 'false' the user must create the config map out-of-band. Hubble Relay will not start until the config map is in place.
+     - Whether to create the config map from where the mapping between claims and roles is read. If set to 'false' the user must create the config map out-of-band. Hubble Relay will not start until the config map is in place.
      - bool
      - ``true``
    * - :spelling:ignore:`hubble.rbac.policy.configMap.key`
