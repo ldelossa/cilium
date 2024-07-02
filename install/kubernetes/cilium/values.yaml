@@ -1826,22 +1826,9 @@ hubble:
         # document under this key. Most users won't need to customize this.
         key: hubble-rbac-policy.yaml
         # -- The list of roles to define.
-        roles:
-          - name: admin
-            rules:
-              - actions:
-                  - "*"
-                kind: "*"
-                allowAllContexts: true
+        roles: []
         # -- The list of bindings between scope values and roles.
-        bindings:
-          - type: oidc
-            # -- JWT claim to use
-            field: groups
-            # -- Value of the JWT claim that needs to match to assign the configured role
-            value: admins
-            # -- Role to assign to identities with the matching claim
-            role: admin
+        bindings: []
 # -- Method to use for identity allocation (`crd` or `kvstore`).
 identityAllocationMode: "crd"
 # -- (string) Time to wait before using new identity on endpoint identity change.

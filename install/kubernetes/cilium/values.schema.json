@@ -2886,26 +2886,7 @@
                 "configMap": {
                   "properties": {
                     "bindings": {
-                      "items": {
-                        "anyOf": [
-                          {
-                            "properties": {
-                              "field": {
-                                "type": "string"
-                              },
-                              "role": {
-                                "type": "string"
-                              },
-                              "type": {
-                                "type": "string"
-                              },
-                              "value": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        ]
-                      },
+                      "items": {},
                       "type": "array"
                     },
                     "create": {
@@ -2918,44 +2899,7 @@
                       "type": "string"
                     },
                     "roles": {
-                      "items": {
-                        "anyOf": [
-                          {
-                            "properties": {
-                              "name": {
-                                "type": "string"
-                              },
-                              "rules": {
-                                "items": {
-                                  "anyOf": [
-                                    {
-                                      "properties": {
-                                        "actions": {
-                                          "items": {
-                                            "anyOf": [
-                                              {
-                                                "type": "string"
-                                              }
-                                            ]
-                                          },
-                                          "type": "array"
-                                        },
-                                        "allowAllContexts": {
-                                          "type": "boolean"
-                                        },
-                                        "kind": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  ]
-                                },
-                                "type": "array"
-                              }
-                            }
-                          }
-                        ]
-                      },
+                      "items": {},
                       "type": "array"
                     }
                   },
