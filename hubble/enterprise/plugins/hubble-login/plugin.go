@@ -39,6 +39,8 @@ import (
 	"github.com/cilium/cilium/pkg/safeio"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -84,7 +86,7 @@ func New() (plugins.Instance, error) {
 }
 
 func (p *loginPlugin) AddCommands() []plugins.CommandInit {
-	return []plugins.CommandInit{p.getLoginCMD, p.getLogoutCMD}
+	return []plugins.CommandInit{p.getLoginCMD, p.getLogoutCMD, p.getPrintTokenCMD}
 }
 
 func (p *loginPlugin) AddFlags() []plugins.FlagsInit {
@@ -101,6 +103,7 @@ func (p *loginPlugin) tokenFlags() (fs *pflag.FlagSet, args []string, persistent
 	fs.String("token-type", "Bearer", "Define the type of token that is expected in specified token file.")
 	fs.String("token-file", "", "Path to a file that contains an authentication token to pass along when doing requests.")
 	// Defined here because we need this flag to be shared between all sub-commands, including hubble login
+	fs.String("issuer", "", "OIDC issuer url. Required for all grant-types.")
 	fs.String("issuer-ca", "", "CA to validate OIDC issuer against.")
 	return
 }
@@ -203,7 +206,6 @@ func (p *loginPlugin) getLoginCMD(vp *viper.Viper) (*cobra.Command, error) {
 		},
 	}
 	fs := pflag.NewFlagSet("login", pflag.ContinueOnError)
-	fs.String("issuer", "", "OIDC issuer url. Required for all grant-types.")
 	fs.String("client-id", "", "OIDC application client ID. Required for all grant-types.")
 	fs.String("client-secret", "", "OIDC application client secret. Required for all grant-types.")
 	fs.String("user", "", "OIDC username. Used for password grant-type.")
@@ -773,4 +775,66 @@ func newOAuth2ClientContext(ctx context.Context, issuerCA string) (context.Conte
 		}
 	}
 	return context.WithValue(ctx, oauth2.HTTPClient, httpClient), nil
+}
+
+func (p *loginPlugin) getPrintTokenCMD(vp *viper.Viper) (*cobra.Command, error) {
+	printTokenCmd := &cobra.Command{
+		Use:   "print-token",
+		Short: "Print out the ID token for the current login.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			issuer := vp.GetString("issuer")
+			printRaw := vp.GetBool("raw")
+			token, err := readToken(issuer)
+			if err != nil {
+				return fmt.Errorf("error reading OIDC token %w", err)
+			}
+			return printToken(token, printRaw)
+		},
+	}
+
+	fs := pflag.NewFlagSet("print-token", pflag.ContinueOnError)
+	fs.Bool("raw", false, "Print the raw ID token instead of the parsed token")
+	printTokenCmd.Flags().AddFlagSet(fs)
+	vp.BindPFlags(fs)
+	template.RegisterFlagSets(printTokenCmd, fs)
+	return printTokenCmd, nil
+}
+
+// Copied from https://github.com/coreos/go-oidc/blob/v3/oidc/jose.go#L21-L32
+// We aren't using an oidc.Provider here, so we need to hardcode the
+// algorithms, since the token could be using one of many algorithms.
+var allAlgs = []jose.SignatureAlgorithm{
+	jose.RS256,
+	jose.RS384,
+	jose.RS512,
+	jose.ES256,
+	jose.ES384,
+	jose.ES512,
+	jose.PS256,
+	jose.PS384,
+	jose.PS512,
+	jose.EdDSA,
+}
+
+func printToken(token *Token, printRaw bool) error {
+	if printRaw {
+		fmt.Println(token.RawIDToken)
+		return nil
+	}
+
+	tok, err := jwt.ParseSigned(token.RawIDToken, allAlgs)
+	if err != nil {
+		return err
+	}
+	var out map[string]any
+	err = tok.UnsafeClaimsWithoutVerification(&out)
+	if err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(b))
+	return nil
 }
