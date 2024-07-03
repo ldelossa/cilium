@@ -19,9 +19,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -149,6 +151,7 @@ func (p *loginPlugin) getLoginCMD(vp *viper.Viper) (*cobra.Command, error) {
 			refresh := vp.GetBool("refresh")
 			tokenFile := vp.GetString("token-file")
 			passwordFile := vp.GetString("password-file")
+			localServerPort := vp.GetInt("local-server-port")
 
 			switch {
 			case issuer == "":
@@ -183,6 +186,7 @@ func (p *loginPlugin) getLoginCMD(vp *viper.Viper) (*cobra.Command, error) {
 				refresh:          refresh,
 				additionalScopes: scopes,
 				passwordFile:     passwordFile,
+				localServerPort:  localServerPort,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to login: %w", err)
@@ -207,6 +211,7 @@ func (p *loginPlugin) getLoginCMD(vp *viper.Viper) (*cobra.Command, error) {
 	fs.StringSlice("scopes", []string{}, "Additional OAuth2 scopes to set when logging in.")
 	fs.Bool("refresh", false, "Refresh existing tokens using a refresh token if possible. Set to true to refresh credentials manually and set to false to relogin (if scopes or user changed).")
 	fs.String("password-file", "", "Path to a file that contains the users password.")
+	fs.Int("local-server-port", 8080, "Specify the port to listen on for the local web server when doing redirect based OAuth2 flows.")
 	loginCmd.Flags().AddFlagSet(fs)
 	vp.BindPFlags(fs)
 	template.RegisterFlagSets(loginCmd, fs)
@@ -249,6 +254,7 @@ type loginParameters struct {
 	refresh          bool
 	additionalScopes []string
 	passwordFile     string
+	localServerPort  int
 }
 
 func login(ctx context.Context, provider *oidc.Provider, l *Login, params loginParameters) (*oauth2.Token, error) {
@@ -309,7 +315,7 @@ func login(ctx context.Context, provider *oidc.Provider, l *Login, params loginP
 			AuthCodeOptions:        pkce.AuthCodeOptions(),
 			TokenRequestOptions:    pkce.TokenRequestOptions(),
 			LocalServerReadyChan:   ready,
-			LocalServerBindAddress: []string{"localhost:8000"},
+			LocalServerBindAddress: []string{net.JoinHostPort("localhost", strconv.Itoa(params.localServerPort))},
 			Logger:                 logger.Logger.With("component", "server"),
 		}
 
