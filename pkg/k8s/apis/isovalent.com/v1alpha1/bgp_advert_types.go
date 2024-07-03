@@ -82,7 +82,7 @@ type BGPAdvertisement struct {
 	Service *v2alpha1.BGPServiceOptions `json:"service,omitempty"`
 
 	// Selector is a label selector to select objects of the type specified by AdvertisementType.
-	// If not specified, all objects of the type specified by AdvertisementType are selected for advertisement.
+	// If not specified, no objects of the type specified by AdvertisementType are selected for advertisement.
 	//
 	// +kubebuilder:validation:Optional
 	Selector *slimv1.LabelSelector `json:"selector,omitempty"`
