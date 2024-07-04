@@ -34,6 +34,8 @@ const (
 
 	Multicast features.Feature = "multicast"
 
+	EnterpriseBGPControlPlane features.Feature = "enable-enterprise-bgp-control-plane"
+
 	// RemoteClusterTunnel: the routing mode configured in the remote cluster.
 	RemoteClusterTunnel features.Feature = "remote-cluster-tunnel"
 	// FallbackRoutingMode: whether a (and which) fallback routing mode is configured.
@@ -109,6 +111,10 @@ func extractFromConfigMap(ctx context.Context, ct *check.ConnectivityTest) error
 
 	ct.Features[Multicast] = features.Status{
 		Enabled: cm.Data["multicast-enabled"] == "true",
+	}
+
+	ct.Features[EnterpriseBGPControlPlane] = features.Status{
+		Enabled: cm.Data[string(EnterpriseBGPControlPlane)] == "true",
 	}
 
 	return nil
