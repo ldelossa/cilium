@@ -41,9 +41,11 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/watchers"
 	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/l2announcer"
+	loadbalancer_experimental "github.com/cilium/cilium/pkg/loadbalancer/experimental"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/metricsmap"
 	natStats "github.com/cilium/cilium/pkg/maps/nat/stats"
+	"github.com/cilium/cilium/pkg/maps/ratelimitmetricsmap"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	nodeManager "github.com/cilium/cilium/pkg/node/manager"
@@ -96,6 +98,9 @@ var (
 
 		// Provides cilium_datapath_drop/forward Prometheus metrics.
 		metricsmap.Cell,
+
+		// Provides cilium_bpf_ratelimit_dropped_total Prometheus metric.
+		ratelimitmetricsmap.Cell,
 
 		// Provide option.Config via hive so cells can depend on the agent config.
 		cell.Provide(func() *option.DaemonConfig { return option.Config }),
@@ -177,6 +182,9 @@ var (
 
 		// daemonCell wraps the legacy daemon initialization and provides Promise[*Daemon].
 		daemonCell,
+
+		// Experimental control-plane for configuring service load-balancing.
+		loadbalancer_experimental.Cell,
 
 		// Service is a datapath service handler. Its main responsibility is to reflect
 		// service-related changes into BPF maps used by datapath BPF programs.
