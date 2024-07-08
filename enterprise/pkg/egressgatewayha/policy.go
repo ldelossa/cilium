@@ -207,8 +207,17 @@ func (config *groupConfig) selectsNodeAsGateway(node nodeTypes.Node) bool {
 	return config.nodeSelector.Matches(k8sLabels.Set(node.Labels))
 }
 
-func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGatewayPolicyGroupStatus) *Policy {
-	return &Policy{
+func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []groupStatus) *Policy {
+	iegpGroupStatuses := make([]v1.IsovalentEgressGatewayPolicyGroupStatus, 0, len(groupStatuses))
+	for _, gs := range groupStatuses {
+		iegpGroupStatuses = append(iegpGroupStatuses, v1.IsovalentEgressGatewayPolicyGroupStatus{
+			ActiveGatewayIPs:     toStringSlice(gs.activeGatewayIPs),
+			ActiveGatewayIPsByAZ: toStringMapStringSlice(gs.activeGatewayIPsByAZ),
+			HealthyGatewayIPs:    toStringSlice(gs.healthyGatewayIPs),
+		})
+	}
+
+	policy := &Policy{
 		TypeMeta: meta_v1.TypeMeta{
 			Kind:       iegp.Kind,
 			APIVersion: iegp.APIVersion,
@@ -231,12 +240,14 @@ func getIEGPForStatusUpdate(iegp *Policy, groupStatuses []v1.IsovalentEgressGate
 		Spec: iegp.Spec,
 		Status: v1.IsovalentEgressGatewayPolicyStatus{
 			ObservedGeneration: iegp.GetGeneration(),
-			GroupStatuses:      groupStatuses,
+			GroupStatuses:      iegpGroupStatuses,
 		},
 	}
+
+	return policy
 }
 
-func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig, status *groupStatus) (*v1.IsovalentEgressGatewayPolicyGroupStatus, error) {
+func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, config *PolicyConfig, status *groupStatus) (groupStatus, error) {
 	healthyGatewayIPs := []netip.Addr{}
 
 	activeGatewayIPsByAZ := make(map[string][]netip.Addr)
@@ -271,7 +282,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 
 		nodeIP, ok := netipx.FromStdIP(node.GetK8sNodeIP())
 		if !ok {
-			return nil, fmt.Errorf("unable to convert node IP %s", node.GetK8sNodeIP())
+			return groupStatus{}, fmt.Errorf("unable to convert node IP %s", node.GetK8sNodeIP())
 		}
 
 		// add the node to the list of healthy gateway IPs.
@@ -301,7 +312,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 			}
 			activeGWs, err := selectActiveGWs(az, gc.maxGatewayNodes, currentLocalActiveGWs, healthyGatewayIPs)
 			if err != nil {
-				return nil, err
+				return groupStatus{}, err
 			}
 			activeGatewayIPsByAZ[az] = activeGWs
 		}
@@ -347,7 +358,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 				}
 				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes, currentNonLocalActiveGWs)
 				if err != nil {
-					return nil, err
+					return groupStatus{}, err
 				}
 				activeGatewayIPsByAZ[az] = nonLocalActiveGWs
 			}
@@ -362,7 +373,7 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 				}
 				nonLocalActiveGWs, err := nonLocalActiveGatewayIPs(az, gc.maxGatewayNodes-len(activeGatewayIPsByAZ[az]), currentNonLocalActiveGWs)
 				if err != nil {
-					return nil, err
+					return groupStatus{}, err
 				}
 
 				activeGatewayIPsByAZ[az] = append(activeGatewayIPsByAZ[az], nonLocalActiveGWs...)
@@ -382,13 +393,13 @@ func (gc *groupConfig) computeGroupStatus(operatorManager *OperatorManager, conf
 	}
 	activeGatewayIPs, err := selectActiveGWs(string(config.uid), gc.maxGatewayNodes, currentActiveGWs, healthyGatewayIPs)
 	if err != nil {
-		return nil, err
+		return groupStatus{}, err
 	}
 
-	return &v1.IsovalentEgressGatewayPolicyGroupStatus{
-		ActiveGatewayIPs:     toStringSlice(activeGatewayIPs),
-		ActiveGatewayIPsByAZ: toStringMapStringSlice(activeGatewayIPsByAZ),
-		HealthyGatewayIPs:    toStringSlice(healthyGatewayIPs),
+	return groupStatus{
+		activeGatewayIPs:     activeGatewayIPs,
+		activeGatewayIPsByAZ: activeGatewayIPsByAZ,
+		healthyGatewayIPs:    healthyGatewayIPs,
 	}, nil
 }
 
@@ -493,19 +504,19 @@ func excludeCurrentActiveGWsFromHealthyGWs(currentActiveGWs, healthyGWs []netip.
 // updateGroupStatuses updates the list of active and healthy gateway IPs in the
 // IEGP k8s resource for the receiver PolicyConfig
 func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager) error {
-	groupStatuses := []v1.IsovalentEgressGatewayPolicyGroupStatus{}
-
 	haveSeenLatestIEGP := config.groupStatusesGeneration == config.generation
+
+	groupStatuses := make([]groupStatus, 0, len(config.groupConfigs))
 	for i, gc := range config.groupConfigs {
 		var status *groupStatus
 		if haveSeenLatestIEGP && i < len(config.groupStatuses) {
 			status = &config.groupStatuses[i]
 		}
-		iegp, err := gc.computeGroupStatus(operatorManager, config, status)
+		gs, err := gc.computeGroupStatus(operatorManager, config, status)
 		if err != nil {
 			return err
 		}
-		groupStatuses = append(groupStatuses, *iegp)
+		groupStatuses = append(groupStatuses, gs)
 	}
 
 	// After building the list of active and healthy gateway IPs, update the
