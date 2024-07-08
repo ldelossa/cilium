@@ -20,9 +20,6 @@ some automation details.
       file to also include the new `v1.X`, so that the Isovalent fork also
       mirrors the new branch:
   - [ ] Add the "v1.X" to the [`BRANCHES`]
-  - [ ] Potentially extend the [`PATHSPEC`] of mirrored CI workflows. A
-        `grep issue_comment ./.github/workflows/* -R -l` on
-        `cilium/cilium` gives you the list.
 - [ ] Once merged, trigger the workflow.
 - [ ] Create the new enterprise branch, i.e. `git switch` to the new branch,
       then `git branch v1.XX-ce`. Push it to the fork.
