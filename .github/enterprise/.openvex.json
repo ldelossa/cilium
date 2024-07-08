@@ -561,6 +561,43 @@
       ],
       "status": "under_investigation",
       "status_notes": "a fixed version of the affected binary /usr/bin/etcd isn't available"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-37371"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-37370"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-24790"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Only the loopback binary is flagged, and it is not affected",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
