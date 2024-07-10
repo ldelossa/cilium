@@ -14,7 +14,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -138,8 +140,13 @@ func TestRemoveRestoredRules(t *testing.T) {
 				}
 			}
 
-			fmt.Println(proxy.fqdnRestoredRulesToRemoveCache)
-			require.Equal(t, tc.expectedRulesStillToRemove, proxy.fqdnRestoredRulesToRemoveCache)
+			rulesToRemoveEq := func() bool {
+				proxy.fqdnRestoredRulesToRemoveCacheLock.Lock()
+				defer proxy.fqdnRestoredRulesToRemoveCacheLock.Unlock()
+				return maps.Equal(tc.expectedRulesStillToRemove, proxy.fqdnRestoredRulesToRemoveCache)
+			}
+
+			require.Eventually(t, rulesToRemoveEq, 3*time.Second, 10*time.Millisecond)
 		})
 	}
 }
