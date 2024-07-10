@@ -20,12 +20,12 @@ import (
 
 	"github.com/cilium/cilium/enterprise/pkg/annotation"
 	enterprisereconciler "github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/bgpv1/test"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	slim_core_v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/loadbalancer"
+	"github.com/cilium/cilium/pkg/service"
 	"github.com/cilium/cilium/pkg/testutils"
 )
 
@@ -40,12 +40,12 @@ type svcBackendUpdate struct {
 	activeBackends []loadbalancer.Backend
 }
 
-// mockHealthCheckSubscriber implements the HealthCheckSubscriber interface for testing purposes.
-type mockHealthCheckSubscriber struct {
-	callback types.HealthUpdateCallback
+// mockServiceHealthCheckManager implements the ServiceHealthCheckManager interface for testing purposes.
+type mockServiceHealthCheckManager struct {
+	callback service.HealthUpdateCallback
 }
 
-func (s *mockHealthCheckSubscriber) Subscribe(ctx context.Context, callback types.HealthUpdateCallback) {
+func (s *mockServiceHealthCheckManager) Subscribe(ctx context.Context, callback service.HealthUpdateCallback) {
 	s.callback = callback
 }
 
@@ -295,12 +295,12 @@ func Test_LBServiceHealthCheckAdvertisements(t *testing.T) {
 	defer testDone()
 
 	// setup topology
-	healthCheckSubscriber := &mockHealthCheckSubscriber{}
+	healthCheckManager := &mockServiceHealthCheckManager{}
 	fixConfig := &test.EnterpriseFixtureConfig{
 		ReconcilerConfig: &enterprisereconciler.Config{
 			SvcHealthCheckingEnabled: true,
 		},
-		SvcHealthCheckSubscriber: healthCheckSubscriber,
+		SvcHealthCheckManager: healthCheckManager,
 	}
 	gobgpPeers, fixture, cleanup, err := test.EnterpriseSetup(t, testCtx, fixConfig)
 	require.NoError(t, err)
@@ -344,12 +344,13 @@ func Test_LBServiceHealthCheckAdvertisements(t *testing.T) {
 
 			// update svc backends
 			for _, upd := range step.backendUpdates {
-				svcInfo := types.HealthUpdateSvcInfo{
-					Name:    upd.svcName,
-					Addr:    upd.frontend,
-					SvcType: loadbalancer.SVCTypeLoadBalancer,
+				svcInfo := service.HealthUpdateSvcInfo{
+					Name:           upd.svcName,
+					Addr:           upd.frontend,
+					SvcType:        loadbalancer.SVCTypeLoadBalancer,
+					ActiveBackends: upd.activeBackends,
 				}
-				healthCheckSubscriber.callback(svcInfo, upd.activeBackends)
+				healthCheckManager.callback(svcInfo)
 			}
 
 			// validate expected result

@@ -18,11 +18,11 @@ import (
 
 	enterprisebgpv1 "github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	enterprisereconciler "github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/hive"
 	cilium_api_v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
+	"github.com/cilium/cilium/pkg/service"
 )
 
 // CiliumASN is BGP ASN number used in test cilium instance
@@ -35,8 +35,8 @@ type EnterpriseFixture struct {
 
 // EnterpriseFixtureConfig holds configuration for the enterprise test fixture.
 type EnterpriseFixtureConfig struct {
-	ReconcilerConfig         *enterprisereconciler.Config
-	SvcHealthCheckSubscriber types.HealthCheckSubscriber
+	ReconcilerConfig      *enterprisereconciler.Config
+	SvcHealthCheckManager service.ServiceHealthCheckManager
 }
 
 // newEnterpriseFixture creates a new test fixture with enterprise functionality.
@@ -50,11 +50,11 @@ func newEnterpriseFixture(conf *EnterpriseFixtureConfig) *EnterpriseFixture {
 		// enterprise bgpv1 cell
 		enterprisebgpv1.Cell,
 	)
-	if conf.SvcHealthCheckSubscriber != nil {
+	if conf.SvcHealthCheckManager != nil {
 		// enterprise LBServiceReconciler dependency
 		f.cells = append(f.cells,
-			cell.Provide(func() types.HealthCheckSubscriber {
-				return conf.SvcHealthCheckSubscriber
+			cell.Provide(func() service.ServiceHealthCheckManager {
+				return conf.SvcHealthCheckManager
 			}),
 		)
 	}

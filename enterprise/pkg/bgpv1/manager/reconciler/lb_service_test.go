@@ -20,7 +20,6 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/enterprise/pkg/annotation"
-	enterprisetypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconciler"
@@ -34,6 +33,7 @@ import (
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/loadbalancer"
+	"github.com/cilium/cilium/pkg/service"
 )
 
 func TestLBServiceHealthChecker(t *testing.T) {
@@ -451,12 +451,13 @@ func TestLBServiceHealthChecker(t *testing.T) {
 
 			// update active backends
 			for _, upd := range tt.backendUpdates {
-				svcInfo := enterprisetypes.HealthUpdateSvcInfo{
-					Name:    upd.svcName,
-					Addr:    upd.frontend,
-					SvcType: loadbalancer.SVCTypeLoadBalancer,
+				svcInfo := service.HealthUpdateSvcInfo{
+					Name:           upd.svcName,
+					Addr:           upd.frontend,
+					SvcType:        loadbalancer.SVCTypeLoadBalancer,
+					ActiveBackends: upd.activeBackends,
 				}
-				ceeReconciler.ServiceHealthUpdate(svcInfo, upd.activeBackends)
+				ceeReconciler.ServiceHealthUpdate(svcInfo)
 			}
 
 			newc := &v2alpha1api.CiliumBGPVirtualRouter{

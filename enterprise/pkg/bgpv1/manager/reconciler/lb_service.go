@@ -21,7 +21,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	enterpriseannotation "github.com/cilium/cilium/enterprise/pkg/annotation"
-	"github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/annotation"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
@@ -32,6 +31,7 @@ import (
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/lock"
+	"github.com/cilium/cilium/pkg/service"
 	ciliumslices "github.com/cilium/cilium/pkg/slices"
 )
 
@@ -58,7 +58,7 @@ type LBServiceReconciler struct {
 	ossLBServiceReconciler *ossreconciler.ServiceReconciler
 
 	// service health-checker
-	healthChecker    types.HealthCheckSubscriber
+	healthChecker    service.ServiceHealthCheckManager
 	healthCheckerCtx context.Context
 
 	// internal service health state
@@ -70,9 +70,9 @@ type LBServiceReconcilerParams struct {
 	cell.In
 	Lifecycle cell.Lifecycle
 
-	Cfg                   Config
-	Signaler              *signaler.BGPCPSignaler
-	HealthCheckSubscriber types.HealthCheckSubscriber `optional:"true"` // optional while not implemented in pkg/service
+	Cfg                Config
+	Signaler           *signaler.BGPCPSignaler
+	HealthCheckManager service.ServiceHealthCheckManager
 }
 
 type LBServiceReconcilerOut struct {
@@ -99,7 +99,7 @@ func NewLBServiceReconciler(p LBServiceReconcilerParams) LBServiceReconcilerOut 
 	r := &LBServiceReconciler{
 		cfg:              p.Cfg,
 		signaler:         p.Signaler,
-		healthChecker:    p.HealthCheckSubscriber,
+		healthChecker:    p.HealthCheckManager,
 		svcHealth:        make(map[k8s.ServiceID]svcFrontendHealthMap),
 		svcHealthChanged: make(map[k8s.ServiceID]struct{}),
 	}
@@ -184,7 +184,7 @@ func (r *LBServiceReconciler) Stop(ctx cell.HookContext) error {
 }
 
 // ServiceHealthUpdate is called by the service health-checker upon changes in service health based on backend health-checking.
-func (r *LBServiceReconciler) ServiceHealthUpdate(svcInfo types.HealthUpdateSvcInfo, activeBackends []loadbalancer.Backend) {
+func (r *LBServiceReconciler) ServiceHealthUpdate(svcInfo service.HealthUpdateSvcInfo) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -201,7 +201,7 @@ func (r *LBServiceReconciler) ServiceHealthUpdate(svcInfo types.HealthUpdateSvcI
 	}
 
 	svcID := k8s.ServiceID{Name: svcInfo.Name.Name, Namespace: svcInfo.Name.Namespace, Cluster: svcInfo.Name.Cluster}
-	r.log.WithFields(logrus.Fields{"service": svcID, "backends": len(activeBackends)}).Debugf("Service health update")
+	r.log.WithFields(logrus.Fields{"service": svcID, "backends": len(svcInfo.ActiveBackends)}).Debugf("Service health update")
 
 	svcFrontendsHealth := r.svcHealth[svcID]
 	if svcFrontendsHealth == nil {
@@ -218,7 +218,7 @@ func (r *LBServiceReconciler) ServiceHealthUpdate(svcInfo types.HealthUpdateSvcI
 	}
 
 	// update cache of active backends
-	frontendHealth.activeBackends = activeBackends
+	frontendHealth.activeBackends = svcInfo.ActiveBackends
 
 	// mark the service for reconciliation
 	r.svcHealthChanged[svcID] = struct{}{}
