@@ -11,17 +11,9 @@
 package reconcilerv2
 
 import (
-	"github.com/cilium/hive/cell"
+	"github.com/cilium/cilium/pkg/bgpv1/types"
 )
 
-// ConfigReconcilers contains cells of enterprise-only reconcilers
-var ConfigReconcilers = cell.Group(
-	cell.ProvidePrivate(
-		newReconcileParamsUpgrader,
-		newIsovalentPeerAdvertisement,
-	),
-
-	cell.Provide(
-		NewEgressGatewayIPsReconciler,
-	),
-)
+func AddPathToAFPathsMap(m AFPathsMap, fam types.Family, path *types.Path) {
+	addPathToAFPathsMap(m, fam, path)
+}

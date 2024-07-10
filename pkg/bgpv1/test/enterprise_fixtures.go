@@ -18,6 +18,7 @@ import (
 
 	enterprisebgpv1 "github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	enterprisereconciler "github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/pkg/hive"
 	cilium_api_v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
@@ -49,6 +50,13 @@ func newEnterpriseFixture(conf *EnterpriseFixtureConfig) *EnterpriseFixture {
 	f.cells = append(f.cells,
 		// enterprise bgpv1 cell
 		enterprisebgpv1.Cell,
+
+		cell.Provide(
+			// provide empty egressgatway manager
+			func() *egressgatewayha.Manager {
+				return &egressgatewayha.Manager{}
+			},
+		),
 	)
 	if conf.SvcHealthCheckManager != nil {
 		// enterprise LBServiceReconciler dependency

@@ -48,6 +48,7 @@ cilium-agent hive dot-graph [flags]
       --enable-cilium-health-api-server-access strings               List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-mesh                                           Enables Cilium Mesh feature
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs
+      --enable-enterprise-bgp-control-plane                          Enable enterprise BGP in Cilium
       --enable-gateway-api                                           Enables Envoy secret sync for Gateway API related TLS secrets
       --enable-ingress-controller                                    Enables Envoy secret sync for Ingress controller related TLS secrets
       --enable-inter-cluster-snat                                    Enable inter-cluster SNAT, to support overlapping PodCIDRs

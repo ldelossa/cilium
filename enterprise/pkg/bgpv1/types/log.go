@@ -8,20 +8,9 @@
 // or reproduction of this material is strictly forbidden unless prior written
 // permission is obtained from Isovalent Inc.
 
-package reconcilerv2
+package types
 
-import (
-	"github.com/cilium/hive/cell"
-)
-
-// ConfigReconcilers contains cells of enterprise-only reconcilers
-var ConfigReconcilers = cell.Group(
-	cell.ProvidePrivate(
-		newReconcileParamsUpgrader,
-		newIsovalentPeerAdvertisement,
-	),
-
-	cell.Provide(
-		NewEgressGatewayIPsReconciler,
-	),
+const (
+	// EgressGatewayLogField is used as key for egress gateway in the log field.
+	EgressGatewayLogField = "egress_gateway"
 )

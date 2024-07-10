@@ -49,6 +49,10 @@ type EnterpriseBGPInstance struct {
 	Metadata map[string]any
 }
 
+type paramUpgrader interface {
+	upgrade(params reconcilerv2.ReconcileParams) (EnterpriseReconcileParams, error)
+}
+
 type reconcileParamsUpgrader struct {
 	initialized atomic.Bool
 	store       resource.Store[*v1alpha1.IsovalentBGPNodeConfig]
