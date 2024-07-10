@@ -94,7 +94,7 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 	require.True(t, maps.NAT().Has(newcfg.ID), "NAT maps not initialized correctly")
 
 	// Disconnect cluster
-	rc.Remove()
+	rc.Remove(context.Background())
 
 	require.False(t, maps.CT().Has(newcfg.ID), "CT maps not released correctly")
 	require.False(t, maps.NAT().Has(newcfg.ID), "NAT maps not released correctly")

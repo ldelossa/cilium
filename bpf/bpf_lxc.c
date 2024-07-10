@@ -220,7 +220,7 @@ select_ct_map4(struct __ctx_buff *ctx __maybe_unused, int dir __maybe_unused,
 
 #if defined ENABLE_IPV4 || defined ENABLE_IPV6
 static __always_inline int drop_for_direction(struct __ctx_buff *ctx,
-					      enum ct_dir dir, __u32 reason,
+					      enum ct_dir dir, int reason,
 					      __s8 ext_err)
 {
 	__u32 dst = 0;
@@ -570,9 +570,6 @@ ct_recreate6:
 	default:
 		return DROP_UNKNOWN_CT;
 	}
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
 
 #ifdef ENABLE_SRV6
 	{
@@ -1670,7 +1667,8 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 #endif /* !ENABLE_ROUTING && !ENABLE_NODEPORT */
 
 		if (ifindex)
-			ret = redirect_ep(ctx, ifindex, from_host, from_tunnel);
+			ret = redirect_ep(ctx, THIS_INTERFACE_IFINDEX, from_host,
+					  from_tunnel);
 		break;
 	default:
 		break;
@@ -1901,13 +1899,9 @@ ipv4_policy(struct __ctx_buff *ctx, struct iphdr *ip4, int ifindex, __u32 src_la
 	 * connection. Populate
 	 * - .loopback, so that policy enforcement is bypassed, and
 	 * - .rev_nat_index, so that replies can be RevNATed.
-	 *
-	 * TODO: in v1.17, remove the rev_nat_index part. We're no longer driving
-	 * RevNAT from this CT entry.
 	 */
 	if (ret == CT_NEW && ip4->saddr == IPV4_LOOPBACK &&
-	    ct_has_loopback_egress_entry4(get_ct_map4(tuple), tuple,
-					  &ct_state_new.rev_nat_index)) {
+	    ct_has_loopback_egress_entry4(get_ct_map4(tuple), tuple)) {
 		ct_state_new.loopback = true;
 		goto skip_policy_enforcement;
 	}
@@ -2025,7 +2019,8 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 #endif /* !ENABLE_ROUTING && !ENABLE_NODEPORT */
 
 		if (ifindex)
-			ret = redirect_ep(ctx, ifindex, from_host, from_tunnel);
+			ret = redirect_ep(ctx, THIS_INTERFACE_IFINDEX, from_host,
+					  from_tunnel);
 		break;
 	default:
 		break;

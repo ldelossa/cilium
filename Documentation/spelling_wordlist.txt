@@ -48,6 +48,7 @@ Fsnotify
 GCP
 GKE
 Gartrell
+GatewayClass
 Gbit
 GiB
 Gospodarek
@@ -197,6 +198,7 @@ bugfix
 bugfixes
 bugtool
 buildx
+burstLimit
 bytecode
 cBPF
 callee
@@ -331,6 +333,7 @@ fromCIDR
 fromCIDRSet
 fromEndpoints
 frontend
+frontends
 fs
 func
 gRPC
@@ -478,6 +481,7 @@ llc
 llvm
 loadBalancerClass
 loadBalancerIP
+loadBalancerSourceRanges
 loadbalancer
 loadbalancers
 loadbalancing
@@ -621,6 +625,8 @@ queryable
 queueing
 rbac
 rST
+rateLimit
+ratelimiter
 rc
 reStructuredText
 reachability
@@ -640,6 +646,7 @@ repo
 repos
 reproducibility
 requireIPv
+requireLBClass
 resync
 retpoline
 retransmission

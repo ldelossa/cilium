@@ -301,6 +301,15 @@ Annotations:
 
 .. _current_release_required_changes:
 
+.. _1.17_upgrade_notes:
+
+1.17 Upgrade Notes
+------------------
+
+* Operating Cilium in ``--datapath-mode=lb-only`` for plain Docker mode now requires to
+  add an additional ``--bpf-lb-external-control-plane=true`` to the command line, otherwise
+  it is assumed that Kubernetes is present.
+
 .. _1.16_upgrade_notes:
 
 1.16 Upgrade Notes
@@ -345,7 +354,7 @@ Annotations:
 * Local Redirect Policy, when enabled with socket-based load-balancing, redirects traffic
   from policy-selected node-local backends destined to the policy's frontend, back to the
   node-local backends. To override this behavior, which is enabled by default, create
-  local redirect policies with the ``skipRedirectFromBackend`` flag set to ``false``.
+  local redirect policies with the ``skipRedirectFromBackend`` flag set to ``true``.
 * Detection and reconfiguration on changes to native network devices and their addresses is now
   the default. Cilium will now load the native device BPF program onto devices that appear after
   Cilium has started. NodePort services are now available on addresses assigned after Cilium has
@@ -398,6 +407,9 @@ Annotations:
   ``CiliumLoadBalancerIPPool.spec.blocks``. As of v1.15 both fields have the same behavior. The
   ``cidrs`` field will be removed in v1.16. Please update your IP pool configurations to use
   ``blocks`` instead of ``cidrs`` before upgrading.
+* For IPsec, the use of per-tunnel keys is mandatory, via the use of the ``+``
+  sign in the secret. See the :ref:`encryption_ipsec` guide for more
+  information.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -508,12 +520,14 @@ Changed Metrics
 * The ``CILIUM_PREPEND_IPTABLES_CHAIN`` environment variable has been renamed
   to ``CILIUM_PREPEND_IPTABLES_CHAINS`` (note the trailing ``S``) to more accurately
   match the name of the associated command line flag ``--prepend-iptables-chains``.
-* ``CiliumNetworkPolicy`` changed the semantic of the empty non-nil slice.
+* ``CiliumNetworkPolicy`` changed the semantics of the empty non-nil slice.
   For an Ingress CNP, an empty slice in one of the fields ``fromEndpoints``, ``fromCIDR``,
-  ``fromCIDRSet`` and ``fromEntities`` will not select any identity, thus falling back
-  to default deny for an allow policy. Similarly, for an Egress CNP, an empty slice in
-  one of the fields ``toEndpoints``, ``toCIDR``, ``toCIDRSet`` and ``toEntities`` will
-  not select any identity either.
+  ``fromCIDRSet`` and ``fromEntities`` will not select any identity, thus falling back to
+  default deny for an allow policy. Similarly, for an Egress CNP, an empty slice in one of
+  the fields ``toEndpoints``, ``toCIDR``, ``toCIDRSet`` and ``toEntities`` will not select
+  any identity either. Additionally, the behaviour of a CNP with ``toCIDRSet`` or
+  ``fromCIDRSet`` selectors using ``cidrGroupRef`` targeting only non-existent CIDR groups
+  was changed from allow-all to deny-all to align with the new semantics.
 * If Cilium is configured with BPF masquerade support but the requirements are not
   met (e.g: NodePort service implementation in BPF is disabled or socket load-balancing
   is disabled), it will fail to initialize and will log an error instead of silently

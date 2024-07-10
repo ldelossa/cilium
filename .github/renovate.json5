@@ -35,7 +35,7 @@
     "install/kubernetes/Makefile.values",
   ],
   "schedule": [
-    "on monday"
+    "on sunday"
   ],
   postUpdateOptions: [
     "gomodTidy"
@@ -65,6 +65,7 @@
   "pruneStaleBranches": true,
   "baseBranches": [
     "main",
+    "v1.16",
     "v1.15",
     "v1.14",
     "v1.13"
@@ -85,6 +86,14 @@
     "^make manifests$"
   ],
   "packageRules": [
+    {
+      "matchPackageNames": [
+        "github.com/aws/aws-sdk-go-v2/service/ec2",
+        "github.com/aliyun/alibaba-cloud-sdk-go",
+        "renovatebot/github-action"
+      ],
+      "schedule": ["on the 1st day instance on sunday"]
+    },
     {
       "matchPackageNames": [
         "go", // golang version directive upgrade in go.mod
@@ -181,6 +190,7 @@
       ],
       matchBaseBranches: [
         "main",
+        "v1.16",
         "v1.15",
         "v1.14",
         "v1.13"
@@ -196,6 +206,7 @@
         "go.sum"
       ],
       matchBaseBranches: [
+        "v1.16",
         "v1.15",
         "v1.14",
         "v1.13"
@@ -249,6 +260,25 @@
       ],
     },
     {
+      // Do not allow any major and minor updates into stable branches.
+      "enabled": false,
+      "groupName": "all external docker images dependencies",
+      "groupSlug": "all-external-images-deps-stable",
+      "matchFiles": [
+        "install/kubernetes/Makefile.values"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+      ],
+      matchBaseBranches: [
+        "v1.16",
+        "v1.15",
+        "v1.14",
+        "v1.13"
+      ]
+    },
+    {
       "matchFiles": [
         "install/kubernetes/Makefile.values"
       ],
@@ -259,7 +289,9 @@
       "matchBaseBranches": [
         "main"
       ],
-      "allowedVersions": ">1.6",
+      // We need to manually fix some regressions caused by spire, thus we won't
+      // be upgrading to 1.10 until we fix it.
+      "allowedVersions": "<1.10",
     },
     {
       "matchFiles": [
@@ -281,10 +313,21 @@
       "allowedVersions": "22.04",
       "matchBaseBranches": [
         "main",
+        "v1.16",
         "v1.15",
         "v1.14",
         "v1.13"
       ],
+    },
+    {
+      "matchPackageNames": [
+        "docker.io/library/golang",
+        "go"
+      ],
+      "allowedVersions": "<1.23",
+      "matchBaseBranches": [
+        "v1.16"
+      ]
     },
     {
       "matchPackageNames": [
@@ -313,6 +356,7 @@
       ],
       "allowedVersions": "<3.20",
       "matchBaseBranches": [
+        "v1.16",
         "v1.15"
       ]
     },
@@ -340,6 +384,7 @@
       ],
       "allowedVersions": "<0.2.0",
       "matchBaseBranches": [
+        "v1.16",
         "v1.15",
         "v1.14",
         "v1.13"
@@ -349,7 +394,7 @@
       "matchDepNames": [
         "golang.zx2c4.com/wireguard"
       ],
-      "versioning": "regex:^v0.0.0-(<patch>\\d+)-.*$"
+      "versioning": "regex:^v?0\\.0\\.0-(?<patch>\\d+)-.*$",
     },
     // Ref: https://github.com/cilium/cilium-cli#releases
     {
@@ -360,6 +405,7 @@
       ],
       "matchBaseBranches": [
         "main",
+        "v1.16",
         "v1.15",
         "v1.14"
       ]
@@ -411,6 +457,7 @@
         "golangci/golangci-lint"
       ],
       "matchBaseBranches": [
+        "v1.16",
         "v1.15",
         "v1.14",
         "v1.13"
@@ -433,6 +480,7 @@
       ],
       "allowedVersions": "!/bpf-next-.*/",
       "matchBaseBranches": [
+        "v1.16",
         "v1.15",
         "v1.14",
         "v1.13"
@@ -525,6 +573,18 @@
         ],
         "executionMode": "update"
       }
+    },
+    {
+      "matchDepNames": [
+        "quay.io/cilium/cilium-envoy"
+      ],
+      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-.*$",
+    },
+    {
+      "matchDepNames": [
+        "grpc/grpc-go"
+      ],
+      "versioning": "regex:cmd/protoc-gen-go-grpc/v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
     }
   ],
   "kubernetes": {
@@ -550,7 +610,9 @@
         // to match the digest to the pinned version. It will not work without it.
         // Note that for GitHub release artifact digests, you likely want to use
         // github-release-attachments as the datasource here.
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?) digestVersion=(?<currentValue>.*)\\s+.+_sha256.*=\"(?<currentDigest>.*)\""
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?) digestVersion=(?<currentValue>.*)\\s+.+_sha256.*=\"(?<currentDigest>.*)\"",
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s.+@(?<currentValue>.*)",
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s.+_VERSION=(?<currentValue>.*)"
       ]
     },
     {
@@ -611,11 +673,14 @@
     },
     {
       "fileMatch": [
-        "^install/kubernetes/Makefile.values$"
+        "^install/kubernetes/Makefile\\.values$"
       ],
+      // This regex manages version strings in the Makefile.defs file,
+      // similar to the examples shown here:
+      //   https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_VERSION:=(?<currentValue>.*)\\s+.+_DIGEST:=(?<currentDigest>sha256:[a-f0-9]+)"
+        "# renovate: datasource=(?<datasource>.*?)\\s+.+_REPO:=(?<depName>.*?)\\s+.+_VERSION:=(?<currentValue>.*)\\s+.+_DIGEST:=(?<currentDigest>sha256:[a-f0-9]+)"
       ]
-    },
+    }
   ]
 }
