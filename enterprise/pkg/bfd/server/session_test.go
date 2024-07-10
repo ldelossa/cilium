@@ -60,7 +60,7 @@ type testFixture struct {
 
 func newTestFixture(t *testing.T, echoEnabled bool) *testFixture {
 	slowDesiredMinTxInterval = uint32(50 * time.Millisecond / time.Microsecond)  // 50ms to speed up the tests
-	slowRequiredMinRxInterval = uint32(15 * time.Millisecond / time.Microsecond) // 15ms to speed up the tests
+	slowRequiredMinRxInterval = uint32(30 * time.Millisecond / time.Microsecond) // 30ms to speed up the tests
 
 	logger := log.StandardLogger()
 	logger.SetLevel(log.DebugLevel)
@@ -607,6 +607,7 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	f.session.inPacketsCh <- inPkt
 	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateInit)
 	require.EqualValues(t, f.sessionCfg.EchoReceiveInterval/time.Microsecond, outPkt.RequiredMinEchoRxInterval)
+	require.EqualValues(t, f.sessionCfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
 
 	assertNoEgressEchoPacket(t, f.session) // not yet Up
 
@@ -614,7 +615,8 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
 	inPkt.RequiredMinEchoRxInterval = 10000
 	f.session.inPacketsCh <- inPkt
-	waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	require.EqualValues(t, slowRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
 
 	echoPkt := waitFirstEgressEchoPacket(t, f.session)
 	require.EqualValues(t, f.localDiscriminator, echoPkt.MyDiscriminator)
@@ -683,6 +685,35 @@ func Test_BFDSessionEchoFunction(t *testing.T) {
 	f.session.inPacketsCh <- inPkt
 	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateDown)
 	require.EqualValues(t, types.BFDDiagnosticEchoFunctionFailed, outPkt.Diagnostic)
+	require.EqualValues(t, f.sessionCfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
+
+	// L: Down (R: Init) -> Up
+	inPkt = createTestControlPacket(f.remoteDiscriminator, f.localDiscriminator, layers.BFDStateInit)
+	inPkt.RequiredMinEchoRxInterval = 10000
+	f.session.inPacketsCh <- inPkt
+	outPkt = waitEgressPacketWithState(t, f.session, inPkt, layers.BFDStateUp)
+	require.EqualValues(t, slowRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
+
+	echoPkt = waitFirstEgressEchoPacket(t, f.session)
+	require.EqualValues(t, f.localDiscriminator, echoPkt.MyDiscriminator)
+
+	// Session update from our side -> ReceiveInterval smaller than slowRequiredMinRxInterval, keep using slowRequiredMinRxInterval
+	cfg := f.sessionCfg
+	cfg.ReceiveInterval = time.Duration(slowRequiredMinRxInterval)*time.Microsecond - time.Millisecond
+	err := f.session.update(cfg)
+	require.NoError(t, err)
+	outPkt = waitEgressPacketWithState(t, f.session, nil, layers.BFDStateUp)
+	require.EqualValues(t, slowRequiredMinRxInterval, outPkt.RequiredMinRxInterval)
+
+	echoPkt = waitFirstEgressEchoPacket(t, f.session)
+	require.EqualValues(t, f.localDiscriminator, echoPkt.MyDiscriminator)
+
+	// Session update from our side -> ReceiveInterval greater than slowRequiredMinRxInterval, use the new value
+	cfg.ReceiveInterval = time.Duration(slowRequiredMinRxInterval)*time.Microsecond + time.Millisecond
+	err = f.session.update(cfg)
+	require.NoError(t, err)
+	outPkt = waitEgressPacketWithState(t, f.session, nil, layers.BFDStateUp)
+	require.EqualValues(t, f.sessionCfg.ReceiveInterval/time.Microsecond, outPkt.RequiredMinRxInterval)
 }
 
 func createTestControlPacket(myDiscriminator, yourDiscriminator uint32, state layers.BFDState) *ControlPacket {
