@@ -27,8 +27,6 @@
 #include "proxy_hairpin.h"
 #include "fib.h"
 
-#include "enterprise_cilium_mesh.h"
-
 #define nodeport_nat_egress_ipv4_hook(ctx, ip4, info, tuple, l4_off, ext_err) CTX_ACT_OK
 #define nodeport_rev_dnat_ingress_ipv4_hook(ctx, ip4, tuple, tunnel_endpoint, src_sec_identity, \
 		dst_sec_identity) -1
