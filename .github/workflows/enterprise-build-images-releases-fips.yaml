@@ -74,13 +74,7 @@ jobs:
       - name: Getting image tag
         id: tag
         run: |
-          if [ ${{ github.event_name == 'workflow_dispatch' }} ]; then
-            tag=${{ inputs.tag }}
-            tag=${tag##*/}-fips
-          else
-            tag=${GITHUB_REF##*/}-fips
-          fi
-          
+          tag=${GITHUB_REF##*/}-fips
           echo tag=$tag >> $GITHUB_OUTPUT
           echo image_tags=quay.io/${{ env.QUAY_ORGANIZATION }}/${{ matrix.name }}:$tag >> $GITHUB_OUTPUT
 
