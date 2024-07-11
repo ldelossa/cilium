@@ -221,7 +221,7 @@ jobs:
             --set clustermesh.config.enabled=true \
             --set hubble.enabled=true \
             --set hubble.eventBufferCapacity=65535 \
-            --set extraConfig.clustermesh-ip-identities-sync-timeout=10m \
+            --set extraConfig.clustermesh-sync-timeout=10m \
             --set envoy.enabled=false \
           "
 
