@@ -155,6 +155,12 @@ spec:
               key: dnsproxy-enable-transparent-mode
               name: cilium-config
               optional: true
+        - name: CILIUM_DNSPROXY_SOCKET_LINGER_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              key: dnsproxy-socket-linger-timeout
+              name: cilium-config
+              optional: true
 {{- if .Values.k8sServiceHost }}
         - name: KUBERNETES_SERVICE_HOST
           value: {{ .Values.k8sServiceHost | quote }}

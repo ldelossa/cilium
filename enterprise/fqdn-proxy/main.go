@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -45,6 +46,7 @@ import (
 	_ "github.com/cilium/cilium/enterprise/fips"
 	pb "github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 
+	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/re"
@@ -86,6 +88,8 @@ var (
 	ToFQDNSRejectResponseCode  = flag.String("tofqdns-dns-reject-response-code", "refused", "DNS response code for rejecting DNS requests, available options are '[nameError refused]' (default \"refused\")")
 
 	DNSProxyEnableTransparentMode = flag.Bool("dnsproxy-enable-transparent-mode", false, "")
+	DNSProxySocketLingerTimeout   = flag.Int("dnsproxy-socket-linger-timeout", defaults.DNSProxySocketLingerTimeout, "Timeout (in seconds) when closing the connection between the DNS proxy and the upstream server."+
+		"If set to 0, the connection is closed immediately (with TCP RST). If set to -1, the connection is closed asynchronously in the background")
 
 	proxy     *dnsproxy.DNSProxy
 	clientPtr atomic.Pointer[fqdnAgentClient]
@@ -237,6 +241,16 @@ func main() {
 		} else if val == "false" {
 			*DNSProxyEnableTransparentMode = false
 		}
+	}
+
+	if val, ok := os.LookupEnv("CILIUM_DNSPROXY_SOCKET_LINGER_TIMEOUT"); ok {
+		linger, err := strconv.Atoi(val)
+		if err != nil {
+			log.WithField("env", "CILIUM_DNSPROXY_SOCKET_LINGER_TIMEOUT").
+				WithError(err).
+				Fatal("Invalid value for configuration option")
+		}
+		*DNSProxySocketLingerTimeout = linger
 	}
 
 	option.Config.EnableIPv4 = *enableIPV4
