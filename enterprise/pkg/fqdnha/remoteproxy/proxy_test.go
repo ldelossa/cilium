@@ -12,294 +12,200 @@ package remoteproxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"maps"
+	"net/netip"
 	"testing"
-	"time"
 
+	"github.com/cilium/dns"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/stretchr/testify/require"
+	dnsproxypb "github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
 
-	"github.com/cilium/cilium/enterprise/fqdn-proxy/api/v1/dnsproxy"
-
-	"github.com/cilium/cilium/pkg/fqdn/re"
+	"github.com/cilium/cilium/pkg/endpoint"
+	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/u8proto"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 type mockFQDNProxyClient struct {
-	removeRestoredRulesHandler func(endpointID *dnsproxy.EndpointID) error
-	updateAllowedHandler       func(msg *dnsproxy.FQDNRules) error
+	removed map[uint32]struct{}
+
+	allowed map[string]*dnsproxypb.L7Rules
+}
+
+func newMockFQDNProxyClient() *mockFQDNProxyClient {
+	return &mockFQDNProxyClient{
+		removed: map[uint32]struct{}{},
+		allowed: map[string]*dnsproxypb.L7Rules{},
+	}
 }
 
 func (m *mockFQDNProxyClient) UpdateAllowed(
 	ctx context.Context,
-	in *dnsproxy.FQDNRules,
+	in *dnsproxypb.FQDNRules,
 	opts ...grpc.CallOption,
-) (*dnsproxy.Empty, error) {
-	return nil, m.updateAllowedHandler(in)
+) (*dnsproxypb.Empty, error) {
+	k := fmt.Sprintf("%d:%d:%d", in.EndpointID, in.DestProto, in.DestPort)
+	if in.Rules == nil {
+		delete(m.allowed, k)
+	} else {
+		m.allowed[k] = in.Rules
+	}
+	return nil, nil
 }
 
 func (m *mockFQDNProxyClient) RemoveRestoredRules(
 	ctx context.Context,
-	in *dnsproxy.EndpointID,
+	in *dnsproxypb.EndpointID,
 	opts ...grpc.CallOption,
-) (*dnsproxy.Empty, error) {
-	return nil, m.removeRestoredRulesHandler(in)
+) (*dnsproxypb.Empty, error) {
+	m.removed[in.EndpointID] = struct{}{}
+	return nil, nil
 }
 
 func (m *mockFQDNProxyClient) GetRules(
 	ctx context.Context,
-	in *dnsproxy.EndpointID,
+	in *dnsproxypb.EndpointID,
 	opts ...grpc.CallOption,
-) (*dnsproxy.RestoredRules, error) {
+) (*dnsproxypb.RestoredRules, error) {
 	return nil, nil
 }
 
-func TestRemoveRestoredRules(t *testing.T) {
-	ch := make(chan uint16)
+// Test that a client that connects never misses a single update, even if it disconnects and reconnects.
+//
+// This also ensures that we dump and load our state correctly, as we only intercept proxy updates
+// after agent restarts.
+func TestConnectionLifecycle(t *testing.T) {
+	var remoteProxy *RemoteFQDNProxy
 
-	tt := map[string]struct {
-		endpoints                  []uint16
-		hasFQDNProxyBeenReached    bool
-		mock                       func(endpointID *dnsproxy.EndpointID) error
-		expectedErr                []bool
-		expectedRulesStillToRemove map[uint16]struct{}
-	}{
-		"nominal case": {
-			endpoints:               []uint16{16, 17},
-			hasFQDNProxyBeenReached: true,
-			mock: func(endpointID *dnsproxy.EndpointID) error {
-				ch <- uint16(endpointID.EndpointID)
-				return nil
-			},
-			expectedErr:                []bool{false, false},
-			expectedRulesStillToRemove: map[uint16]struct{}{},
-		},
-		"intentional failure for all endpoints": {
-			endpoints:               []uint16{16, 17},
-			hasFQDNProxyBeenReached: true,
-			mock: func(endpointID *dnsproxy.EndpointID) error {
-				return fmt.Errorf("fqdn proxy is not available")
-			},
-			expectedErr:                []bool{true, true},
-			expectedRulesStillToRemove: map[uint16]struct{}{16: {}, 17: {}},
-		},
-		"intentional failure for the same endpoint twice": {
-			endpoints:               []uint16{16, 16},
-			hasFQDNProxyBeenReached: true,
-			mock: func(endpointID *dnsproxy.EndpointID) error {
-				return fmt.Errorf("fqdn proxy is not available")
-			},
-			expectedErr:                []bool{true, true},
-			expectedRulesStillToRemove: map[uint16]struct{}{16: {}}, // it appears only once
-		},
-		"intentional failure for one of the endpoints": {
-			endpoints:               []uint16{16, 17, 18},
-			hasFQDNProxyBeenReached: true,
-			mock: func(endpointID *dnsproxy.EndpointID) error {
-				if endpointID.EndpointID == 17 {
-					return fmt.Errorf("fqdn proxy is not available")
-				}
-				ch <- uint16(endpointID.EndpointID)
-				return nil
-			},
-			expectedErr:                []bool{false, true, false},
-			expectedRulesStillToRemove: map[uint16]struct{}{17: {}},
-		},
-		"intentional failure and connection with fqdn proxy is not established": {
-			endpoints:               []uint16{16, 17, 18},
-			hasFQDNProxyBeenReached: false,
-			mock: func(endpointID *dnsproxy.EndpointID) error {
-				return fmt.Errorf("fqdn proxy is not available")
-			},
-			expectedErr:                []bool{true, true, true},
-			expectedRulesStillToRemove: map[uint16]struct{}{16: {}, 17: {}, 18: {}},
-		},
-	}
-
-	for name, tc := range tt {
-		t.Run(name, func(t *testing.T) {
-			proxy := newRemoteFQDNProxy()
-			proxy.client = &mockFQDNProxyClient{removeRestoredRulesHandler: tc.mock}
-			proxy.hasFQDNProxyBeenReached.Store(true)
-
-			t.Cleanup(proxy.Cleanup)
-
-			for i, e := range tc.endpoints {
-				proxy.RemoveRestoredRules(e)
-
-				if !tc.expectedErr[i] {
-					require.Equal(t, e, <-ch)
-				}
-			}
-
-			rulesToRemoveEq := func() bool {
-				proxy.fqdnRestoredRulesToRemoveCacheLock.Lock()
-				defer proxy.fqdnRestoredRulesToRemoveCacheLock.Unlock()
-				return maps.Equal(tc.expectedRulesStillToRemove, proxy.fqdnRestoredRulesToRemoveCache)
-			}
-
-			require.Eventually(t, rulesToRemoveEq, 3*time.Second, 10*time.Millisecond)
-		})
-	}
-}
-
-func TestUpdateAllowedOrdering(t *testing.T) {
-	portProto := uint32(restore.MakeV2PortProto(8080, uint8(u8proto.UDP)))
-	re.InitRegexCompileLRU(1000)
-	updates := []fqdnRuleKey{
-		{
-			endpointID:    1,
-			destPortProto: portProto,
-		},
-		{
-			endpointID:    2,
-			destPortProto: portProto,
-		},
-		{
-			endpointID:    3,
-			destPortProto: portProto,
-		},
-		{
-			endpointID:    4,
-			destPortProto: portProto,
-		},
-		{
-			endpointID:    5,
-			destPortProto: portProto,
-		},
-	}
-	step := 0
-	testErrs := make(chan error)
-
-	proxy := newRemoteFQDNProxy()
-	proxy.client = &mockFQDNProxyClient{
-		updateAllowedHandler: func(msg *dnsproxy.FQDNRules) error {
-			if msg.EndpointID != updates[step].endpointID {
-				testErrs <- fmt.Errorf("expected endpoint id %d, got %d", updates[step].endpointID, msg.EndpointID)
-				return errors.New("UpdateAllowed failed")
-			}
-			pp := restore.PortProto(updates[step].destPortProto)
-			if msg.DestPort != uint32(pp.Port()) {
-				testErrs <- fmt.Errorf("expected destination port %d, got %d", pp.Port(), msg.DestPort)
-				return errors.New("UpdateAllowed failed")
-			}
-
-			if msg.DestProto != uint32(pp.Protocol()) {
-				testErrs <- fmt.Errorf("expected destination protocol %d, got %d", pp.Protocol(), msg.DestProto)
-				return errors.New("UpdateAllowed failed")
-			}
-
-			if len(msg.Rules.SelectorRegexMapping) != 1 || msg.Rules.SelectorRegexMapping["foo=bar"] != "^(?:[-a-zA-Z0-9_]*[.]cilium[.]io[.]|foo[.]cilium[.]io[.])$" {
-				testErrs <- fmt.Errorf("unexpected selector regex mappings")
-				return errors.New("UpdatedAllowed failed (unexpected policy regex)")
-			}
-
-			step++
-			if step == len(updates) {
-				// end the test
-				close(testErrs)
-			}
-
+	localProxy, err := dnsproxy.StartDNSProxy(dnsproxy.DNSProxyConfig{
+		Address: "127.0.0.2",
+		IPv4:    false,
+		IPv6:    false,
+	},
+		func(ip netip.Addr) (endpoint *endpoint.Endpoint, err error) { return nil, nil },
+		nil,
+		nil,
+		func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 			return nil
 		},
-	}
-	t.Cleanup(proxy.Cleanup)
-	dnsRules := &policy.PerSelectorPolicy{L7Rules: api.L7Rules{
-		DNS: []api.PortRuleDNS{
-			{MatchPattern: "*.cilium.io"},
-			{MatchPattern: "foo.cilium.io"},
+	)
+
+	require.Nil(t, err)
+	t.Cleanup(localProxy.Cleanup)
+
+	cs := mockCachedSelector("selector-string")
+
+	allowExampleCom := policy.L7DataMap{
+		cs: &policy.PerSelectorPolicy{
+			L7Rules: api.L7Rules{
+				DNS: []api.PortRuleDNS{{
+					MatchName: "example.com",
+				}},
+			},
 		},
-	}}
-	dm := policy.L7DataMap{
-		mockCachedSelector("foo=bar"): dnsRules,
-	}
-	for _, upd := range updates {
-		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPortProto), dm); err != nil {
-			t.Fatal(err)
-		}
 	}
 
-	err := <-testErrs
-	if err != nil {
-		t.Fatal(err)
+	addRule := func(epID uint64, port uint16) {
+		t.Helper()
+		err := localProxy.UpdateAllowed(epID, restore.MakeV2PortProto(port, 17), allowExampleCom)
+		require.Nil(t, err)
+		if remoteProxy == nil {
+			return
+		}
+		err = remoteProxy.UpdateAllowed(epID, restore.MakeV2PortProto(port, 17), allowExampleCom)
+		require.Nil(t, err)
 	}
+
+	addRule(1, 35)
+	addRule(2, 35)
+	addRule(1, 35) // overwrites
+	addRule(2, 36)
+
+	require.Len(t, localProxy.DumpRules(), 3)
+
+	// Initialize the remote prxy
+	remoteProxy = newRemoteFQDNProxy()
+	remoteProxy.local = localProxy
+
+	// Add another endpoint, with installed but disconnected
+	// remote proxy. Ensure we don't block.
+	addRule(3, 35)
+	require.Len(t, localProxy.DumpRules(), 4)
+
+	// Now, we have connected to a remote proxy.
+	mock := newMockFQDNProxyClient()
+	remoteProxy.onConnect(nil, mock)
+
+	// Ensure the remote proxy has all already-existing rules.
+	// Note that updates are queued and applied asynchronously, so we must wait
+	require.Eventually(t, func() bool {
+		return len(mock.allowed) == 4 && len(mock.removed) == 3
+	}, time.Second, 10*time.Millisecond)
+
+	// Add another rule
+	addRule(4, 35)
+	require.Eventually(t, func() bool {
+		return len(mock.allowed) == 5 && len(mock.removed) == 3
+	}, time.Second, 10*time.Millisecond)
+
+	// Check that RemoveRestored works
+	remoteProxy.RemoveRestoredRules(15)
+	require.Eventually(t, func() bool {
+		return len(mock.allowed) == 5 && len(mock.removed) == 4
+	}, time.Second, 10*time.Millisecond)
+
+	// Disconnect, ensure that we do not block
+	remoteProxy.onDisconnect()
+
+	addRule(5, 35)
+	require.Len(t, localProxy.DumpRules(), 6)
 }
 
-func TestUpdateAllowedOrderingWithRetries(t *testing.T) {
-	portProto := uint32(restore.MakeV2PortProto(8080, uint8(u8proto.UDP)))
-	updates := []fqdnRuleKey{
-		{
-			endpointID:    1,
-			destPortProto: portProto,
-		},
-		{
-			endpointID:    2,
-			destPortProto: portProto,
-		},
-		{
-			endpointID:    3,
-			destPortProto: portProto,
-		},
-	}
-	step := 0
-	testErrs := make(chan error)
-
-	proxy := newRemoteFQDNProxy()
-	proxy.client = &mockFQDNProxyClient{
-		updateAllowedHandler: func(msg *dnsproxy.FQDNRules) error {
-			// increase step here to take into account intentional failures too
-			step++
-			switch step {
-			case 1:
-				if err := CheckUpdate(t, updates[0], msgKey(msg)); err != nil {
-					testErrs <- err
-					return errors.New("UpdateAllowed failed")
-				}
-			case 2:
-				if err := CheckUpdate(t, updates[1], msgKey(msg)); err != nil {
-					testErrs <- err
-					return errors.New("UpdateAllowed failed")
-				}
-				return errors.New("intentional failure to trigger a retry")
-			case 3:
-				if err := CheckUpdate(t, updates[1], msgKey(msg)); err != nil {
-					testErrs <- err
-					return errors.New("UpdateAllowed failed")
-				}
-			case 4:
-				if err := CheckUpdate(t, updates[2], msgKey(msg)); err != nil {
-					testErrs <- err
-					return errors.New("UpdateAllowed failed")
-				}
-				// end the test
-				close(testErrs)
-			default:
-				return errors.New("unexpected call to UpdatedAllowed")
-			}
-
+// TestDumpRules ensures that Dumprules in enterprise_getallrules.go matches
+// ruleToMsg
+func TestDumpRules(t *testing.T) {
+	localProxy, err := dnsproxy.StartDNSProxy(dnsproxy.DNSProxyConfig{
+		Address: "127.0.0.2",
+		IPv4:    false,
+		IPv6:    false,
+	},
+		func(ip netip.Addr) (endpoint *endpoint.Endpoint, err error) { return nil, nil },
+		nil,
+		nil,
+		func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 			return nil
 		},
-	}
-	t.Cleanup(proxy.Cleanup)
+	)
 
-	for _, upd := range updates {
-		if err := proxy.UpdateAllowed(upd.endpointID, restore.PortProto(upd.destPortProto), nil); err != nil {
-			t.Fatal(err)
-		}
-	}
+	require.Nil(t, err)
+	t.Cleanup(localProxy.Cleanup)
 
-	err := <-testErrs
-	if err != nil {
-		t.Fatal(err)
+	epID := uint64(5)
+	portProto := restore.MakeV2PortProto(53, 17)
+
+	cs := mockCachedSelector("selector-string")
+	allowExampleCom := policy.L7DataMap{
+		cs: &policy.PerSelectorPolicy{
+			L7Rules: api.L7Rules{
+				DNS: []api.PortRuleDNS{{
+					MatchName: "example.com",
+				}},
+			},
+		},
 	}
+	err = localProxy.UpdateAllowed(epID, portProto, allowExampleCom)
+	require.Nil(t, err)
+
+	dump := localProxy.DumpRules()
+	require.Len(t, dump, 1)
+	require.Equal(t, ruleToMsg(epID, portProto, allowExampleCom), dump[0])
+
 }
 
 func CheckUpdate(t *testing.T, expected fqdnRuleKey, got fqdnRuleKey) error {

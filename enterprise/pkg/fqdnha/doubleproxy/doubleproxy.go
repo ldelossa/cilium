@@ -77,6 +77,7 @@ func (dp *DoubleProxy) Start(ctx cell.HookContext) error {
 	}
 	dp.LocalProxy = lp
 	proxy.DefaultDNSProxy = dp
+	dp.RemoteProxy.ProvideLocalProxy(lp)
 
 	return nil
 }
