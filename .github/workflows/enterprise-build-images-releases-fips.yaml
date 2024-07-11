@@ -120,7 +120,7 @@ jobs:
         with:
           artifact-name: sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_ci_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
-          image: quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}
+          image: quay.io/${{ env.QUAY_ORGANIZATION }}/${{ matrix.name }}:${{ steps.tag.outputs.tag }}
 
       - name: Attach SBOM to container images
         run: |
@@ -163,7 +163,8 @@ jobs:
       - name: Getting image tag
         id: tag
         run: |
-          echo tag=${GITHUB_REF##*/} >> $GITHUB_OUTPUT
+          echo tag=${GITHUB_REF##*/}-fips >> $GITHUB_OUTPUT
+
       - name: Downloading Image Digests
         shell: bash
         run: |
