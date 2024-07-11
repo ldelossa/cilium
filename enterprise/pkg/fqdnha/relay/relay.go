@@ -158,10 +158,7 @@ func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty)
 	if !ok {
 		return nil, nil
 	}
-	local, ok := double.LocalProxy.(*dnsproxy.DNSProxy)
-	if !ok {
-		return nil, fmt.Errorf("local proxy is not local")
-	}
+	local := double.LocalProxy
 	allRules, err := local.GetAllRules()
 	if err != nil {
 		return nil, err

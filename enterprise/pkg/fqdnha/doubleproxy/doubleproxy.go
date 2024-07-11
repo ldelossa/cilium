@@ -13,12 +13,15 @@
 package doubleproxy
 
 import (
+	"fmt"
+
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/daemon/cmd"
 	fqdnhaconfig "github.com/cilium/cilium/enterprise/pkg/fqdnha/config"
 	"github.com/cilium/cilium/enterprise/pkg/fqdnha/remoteproxy"
 	"github.com/cilium/cilium/pkg/endpoint"
+	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/policy"
@@ -31,8 +34,8 @@ var _ fqdnproxy.DNSProxier = &DoubleProxy{}
 // DoubleProxy is a shim for relaying proxy function calls to a local and remote proxies.
 // LocalProxy is always set, RemoteProxy may be nil
 type DoubleProxy struct {
-	RemoteProxy fqdnproxy.DNSProxier
-	LocalProxy  fqdnproxy.DNSProxier
+	RemoteProxy *remoteproxy.RemoteFQDNProxy
+	LocalProxy  *dnsproxy.DNSProxy
 
 	daemonPromise promise.Promise[*cmd.Daemon]
 }
@@ -68,7 +71,11 @@ func (dp *DoubleProxy) Start(ctx cell.HookContext) error {
 	}
 
 	// TODO: get rid of the DefaultDNSProxy singleton in upstream altogether to avoid this ugly hack.
-	dp.LocalProxy = proxy.DefaultDNSProxy
+	lp, ok := proxy.DefaultDNSProxy.(*dnsproxy.DNSProxy)
+	if !ok {
+		return fmt.Errorf("doubleproxy: type assertion failed! proxy.DefaultDNSProxy is not a dnsproxy.DNSProxy")
+	}
+	dp.LocalProxy = lp
 	proxy.DefaultDNSProxy = dp
 
 	return nil
