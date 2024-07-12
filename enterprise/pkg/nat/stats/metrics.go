@@ -127,7 +127,7 @@ func newTopkMetrics(p params) *topkMetrics {
 		OnStart: func(hc cell.HookContext) error {
 			go func() {
 				tx := m.db.ReadTxn()
-				iter, _ := m.statsTable.All(tx)
+				iter := m.statsTable.All(tx)
 				if err := m.update(iter); err != nil {
 					log.WithError(err).Error("could not populate initial topk nat metrics." +
 						" This may result in out of date or incorrect metrics")
@@ -140,7 +140,7 @@ func newTopkMetrics(p params) *topkMetrics {
 				defer limiter.Stop()
 				for {
 					tx := m.db.ReadTxn()
-					iter, watch := m.statsTable.All(tx)
+					iter, watch := m.statsTable.AllWatch(tx)
 					select {
 					case <-watch:
 						limiter.Wait(ctx)

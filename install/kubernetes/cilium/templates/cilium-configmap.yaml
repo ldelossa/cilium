@@ -982,7 +982,7 @@ data:
 {{- if .Values.hubble.dropEventEmitter.enabled }}
   hubble-drop-events: "true"
   hubble-drop-events-interval: {{ .Values.hubble.dropEventEmitter.interval | quote }}
-  hubble-drop-events-reasons: {{ .Values.hubble.dropEventEmitter.reasons | join "," | quote }}
+  hubble-drop-events-reasons: {{ .Values.hubble.dropEventEmitter.reasons | join " " | quote }}
 {{- end }}
 {{- if .Values.hubble.preferIpv6 }}
   hubble-prefer-ipv6: "true"
@@ -1169,6 +1169,9 @@ data:
   {{- if .Values.ciliumEndpointSlice.rateLimits }}
   ces-rate-limits: {{ .Values.ciliumEndpointSlice.rateLimits | toJson | quote }}
   {{- end }}
+  {{- if .Values.ciliumEndpointSlice.sliceMode }}
+  ces-slice-mode: {{ .Values.ciliumEndpointSlice.sliceMode | quote }}
+  {{- end }}
 {{- end }}
 
 {{- if hasKey .Values "enableK8sTerminatingEndpoint" }}
@@ -1220,6 +1223,9 @@ data:
   {{- else if eq $cniChainingMode "none" }}
   # default DNS proxy to transparent mode in non-chaining modes
   dnsproxy-enable-transparent-mode: {{ $defaultDNSProxyEnableTransparentMode | quote }}
+  {{- end }}
+  {{- if .Values.dnsProxy.socketLingerTimeout }}
+  dnsproxy-socket-linger-timeout: {{ .Values.dnsProxy.socketLingerTimeout | quote }}
   {{- end }}
   {{- if .Values.dnsProxy.dnsRejectResponseCode }}
   tofqdns-dns-reject-response-code: {{ .Values.dnsProxy.dnsRejectResponseCode | quote }}

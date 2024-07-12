@@ -782,6 +782,12 @@
             ]
           },
           "type": "array"
+        },
+        "sliceMode": {
+          "enum": [
+            "identity",
+            "fcfs"
+          ]
         }
       },
       "type": "object"
@@ -1588,6 +1594,9 @@
         },
         "proxyResponseMaxDelay": {
           "type": "string"
+        },
+        "socketLingerTimeout": {
+          "type": "integer"
         }
       },
       "type": "object"
@@ -3616,6 +3625,9 @@
                   "type": "array"
                 }
               },
+              "type": "object"
+            },
+            "labels": {
               "type": "object"
             },
             "nodeSelector": {
