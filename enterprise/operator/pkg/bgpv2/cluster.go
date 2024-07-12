@@ -86,7 +86,7 @@ func (m *BGPResourceMapper) upsertNodeConfig(ctx context.Context, config *v1alph
 			OwnerReferences: []meta_v1.OwnerReference{
 				{
 					APIVersion: v1alpha1.SchemeGroupVersion.String(),
-					Kind:       v1alpha1.IsovalentBGPNodeConfigOverrideKindDefinition,
+					Kind:       v1alpha1.IsovalentBGPClusterConfigKindDefinition,
 					Name:       config.GetName(),
 					UID:        config.GetUID(),
 				},

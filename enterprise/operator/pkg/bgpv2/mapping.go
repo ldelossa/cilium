@@ -329,6 +329,9 @@ func createOSSAdvertisement(entAdvertisement *v1alpha1.IsovalentBGPAdvertisement
 				},
 			},
 		},
+		Spec: v2alpha1.CiliumBGPAdvertisementSpec{
+			Advertisements: []v2alpha1.BGPAdvertisement{},
+		},
 	}
 
 	for _, advert := range entAdvertisement.Spec.Advertisements {
