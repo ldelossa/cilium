@@ -31,11 +31,14 @@ func AllIsovalentCRDResourceNames() []string {
 		CRDResourceName(v1alpha1.IsovalentBFDProfileName),
 		CRDResourceName(v1alpha1.IsovalentBFDNodeConfigName),
 		CRDResourceName(v1alpha1.IsovalentBFDNodeConfigOverrideName),
-		CRDResourceName(v1alpha1.IsovalentBGPClusterConfigName),
-		CRDResourceName(v1alpha1.IsovalentBGPPeerConfigName),
-		CRDResourceName(v1alpha1.IsovalentBGPAdvertisementName),
-		CRDResourceName(v1alpha1.IsovalentBGPNodeConfigName),
-		CRDResourceName(v1alpha1.IsovalentBGPNodeConfigOverrideName),
+	}
+
+	if option.Config.EnableEnterpriseBGPControlPlane {
+		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPClusterConfigName))
+		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPPeerConfigName))
+		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPAdvertisementName))
+		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPNodeConfigName))
+		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPNodeConfigOverrideName))
 	}
 
 	if option.Config.EnableIPv4EgressGatewayHA {

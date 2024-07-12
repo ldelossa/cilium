@@ -25,6 +25,13 @@ rules:
   - isovalentbfdprofiles.isovalent.com
   - isovalentbfdnodeconfigs.isovalent.com
   - isovalentbfdnodeconfigoverrides.isovalent.com
+{{- if .Values.enterprise.bgpControlPlane.enabled }}
+  - isovalentbgpclusterconfigs.isovalent.com
+  - isovalentbgppeerconfigs.isovalent.com
+  - isovalentbgpadvertisements.isovalent.com
+  - isovalentbgpnodeconfigs.isovalent.com
+  - isovalentbgpnodeconfigoverrides.isovalent.com
+{{- end }}
 {{- if .Values.enterprise.ciliummesh.enabled }}
   - isovalentmeshendpoints.isovalent.com
 {{- end }}
