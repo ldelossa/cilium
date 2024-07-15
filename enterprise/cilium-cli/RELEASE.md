@@ -69,3 +69,9 @@ a public repository that's used to host cilium-cli binary releases without any s
 Go to https://github.com/isovalent/cilium-cli-releases/releases and you'll see a newly created
 draft. Click on "Edit draft" button, review the draft, and then click on "Publish release" if
 everything looks ok.
+
+## Update Cilium Enterprise Docs
+
+After the release is published, make a PR to update the
+[`CILIUM_CLI_VERSION`](https://github.com/isovalent/cilium-enterprise-docs/blob/main/CILIUM_CLI_VERSION)
+in the [cilium-enterprise-docs repo](https://github.com/isovalent/cilium-enterprise-docs).
