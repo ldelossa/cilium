@@ -27,8 +27,6 @@
 #include "proxy_hairpin.h"
 #include "fib.h"
 
-#include "enterprise_cilium_mesh.h"
-
 #define nodeport_nat_egress_ipv4_hook(ctx, ip4, info, tuple, l4_off, ext_err) CTX_ACT_OK
 #define nodeport_rev_dnat_ingress_ipv4_hook(ctx, ip4, tuple, tunnel_endpoint, src_sec_identity, \
 		dst_sec_identity) -1
@@ -1308,9 +1306,11 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 			skip_l3_xlate, ext_err);
 
 #ifdef SERVICE_NO_BACKEND_RESPONSE
-	if (ret == DROP_NO_SERVICE)
+	if (ret == DROP_NO_SERVICE) {
+		edt_set_aggregate(ctx, 0);
 		ret = tail_call_internal(ctx, CILIUM_CALL_IPV6_NO_SERVICE,
 					 ext_err);
+	}
 #endif
 
 	if (IS_ERR(ret))
@@ -1581,7 +1581,9 @@ __handle_nat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 	int ret;
 
 	ret = nodeport_rev_dnat_fwd_ipv6(ctx, &snat_done, trace, ext_err);
+#if !defined(IS_BPF_WIREGUARD)
 	if (ret != CTX_ACT_OK)
+#endif /* !IS_BPF_WIREGUARD */
 		return ret;
 
 #if !defined(ENABLE_DSR) ||						\
@@ -2847,9 +2849,12 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 				has_l4_header, skip_l3_xlate, &cluster_id,
 				ext_err);
 #ifdef SERVICE_NO_BACKEND_RESPONSE
-		if (ret == DROP_NO_SERVICE)
+		if (ret == DROP_NO_SERVICE) {
+			/* Packet is TX'ed back out, avoid EDT false-positives: */
+			edt_set_aggregate(ctx, 0);
 			ret = tail_call_internal(ctx, CILIUM_CALL_IPV4_NO_SERVICE,
 						 ext_err);
+		}
 #endif
 	}
 	if (IS_ERR(ret))
@@ -3195,7 +3200,9 @@ __handle_nat_fwd_ipv4(struct __ctx_buff *ctx, __u32 cluster_id __maybe_unused,
 	int ret;
 
 	ret = nodeport_rev_dnat_fwd_ipv4(ctx, &snat_done, trace, ext_err);
+#if !defined(IS_BPF_WIREGUARD)
 	if (ret != CTX_ACT_OK)
+#endif /* !IS_BPF_WIREGUARD */
 		return ret;
 
 #if !defined(ENABLE_DSR) ||						\
@@ -3385,9 +3392,9 @@ handle_nat_fwd(struct __ctx_buff *ctx, __u32 cluster_id, __be16 proto,
 		break;
 #endif /* ENABLE_IPV6 */
 	default:
-		build_bug_on(!(NODEPORT_PORT_MIN_NAT < NODEPORT_PORT_MAX_NAT));
-		build_bug_on(!(NODEPORT_PORT_MIN     < NODEPORT_PORT_MAX));
-		build_bug_on(!(NODEPORT_PORT_MAX     < NODEPORT_PORT_MIN_NAT));
+		build_bug_on(!(NODEPORT_PORT_MIN_NAT <= NODEPORT_PORT_MAX_NAT));
+		build_bug_on(!(NODEPORT_PORT_MIN     <= NODEPORT_PORT_MAX));
+		build_bug_on(!(NODEPORT_PORT_MAX     <= NODEPORT_PORT_MIN_NAT));
 		break;
 	}
 	return ret;

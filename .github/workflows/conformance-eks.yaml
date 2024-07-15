@@ -62,7 +62,7 @@ env:
   clusterName: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}
   cilium_cli_ci_version:
   # renovate: datasource=github-releases depName=eksctl-io/eksctl
-  eksctl_version: v0.183.0
+  eksctl_version: v0.184.0
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
   kubectl_version: v1.30.2
 
@@ -215,13 +215,11 @@ jobs:
           echo owner=${OWNER} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@9d071f99ae32af95cb15c3e0a280d222b569a1cf # v0.16.11
+        uses: cilium/cilium-cli@1afb3ff7eb6ace8ab5f8d4d844afe02e2018bb4e # v0.16.13
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
-          binary-name: cilium-cli
-          binary-dir: ./
 
       - name: Install kubectl
         run: |
@@ -312,11 +310,11 @@ jobs:
       - name: Install Cilium
         id: install-cilium
         run: |
-          ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
+          cilium install ${{ steps.vars.outputs.cilium_install_defaults }}
 
       - name: Wait for Cilium to be ready
         run: |
-          ./cilium-cli status --wait --wait-duration=10m
+          cilium status --wait --wait-duration=10m
           kubectl get pods -n kube-system
 
       - name: Check that AWS leftover iptables chains have been removed
@@ -336,7 +334,7 @@ jobs:
 
       - name: Run connectivity test (${{ join(matrix.*, ', ') }})
         run: |
-          ./cilium-cli connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }} \
+          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }} \
           --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}) - 1.xml" \
           --junit-property github_job_step="Run connectivity test (${{ join(matrix.*, ', ') }})"
 
@@ -363,20 +361,20 @@ jobs:
         if: ${{ !success() && steps.install-cilium.outcome != 'skipped' }}
         run: |
           kubectl get pods --all-namespaces -o wide
-          ./cilium-cli status
-          ./cilium-cli sysdump --output-filename cilium-sysdump-final-${{ join(matrix.*, '-') }}
+          cilium status
+          cilium sysdump --output-filename cilium-sysdump-final-${{ join(matrix.*, '-') }}
         shell: bash {0} # Disable default fail-fast behaviour so that all commands run independently
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-sysdumps-${{ matrix.version }}
           path: cilium-sysdump-*.zip
 
       - name: Upload JUnits [junit]
         if: ${{ always() }}
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-junits-${{ matrix.version }}
           path: cilium-junits/*.xml
@@ -395,7 +393,7 @@ jobs:
     steps:
       - name: Merge Sysdumps
         if: ${{ needs.installation-and-connectivity.result == 'failure' }}
-        uses: actions/upload-artifact/merge@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact/merge@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-sysdumps
           pattern: cilium-sysdumps-*
@@ -403,7 +401,7 @@ jobs:
           delete-merged: true
         continue-on-error: true
       - name: Merge JUnits
-        uses: actions/upload-artifact/merge@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact/merge@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-junits
           pattern: cilium-junits-*

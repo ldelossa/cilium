@@ -357,54 +357,6 @@ func xfrmStateReplace(log *slog.Logger, new *netlink.XfrmState, remoteRebooted b
 		}
 	}
 
-	var (
-		oldXFRMOutMark = &netlink.XfrmMark{
-			Value: ipSecXfrmMarkSetSPI(linux_defaults.RouteMarkEncrypt, uint8(new.Spi)),
-			Mask:  linux_defaults.IPsecOldMarkMaskOut,
-		}
-		errs = resiliency.NewErrorSet("failed to delete old xfrm states", len(states))
-	)
-	for _, s := range states {
-		// This is either the XFRM OUT state or the XFRM IN state from a
-		// previous Cilium version. Because their marks match the new mark
-		// (e.g., 0xXXXX3e00/0xffffff00 ∈ 0x3e00/0xff00), the kernel considers
-		// the two states conflict and we won't be able to add the new ones
-		// until the old one is removed.
-		//
-		// Thus, we temporarily remove the old, conflicting XFRM state and
-		// re-add it in a defer. In between the removal of the old state and
-		// the addition of the new, we can have a packet drops due to the
-		// missing state. These drops should be limited to the specific node
-		// pair we are handling here and the window during which they can
-		// happen should be really small. This is also specific to the upgrade
-		// and can be removed in v1.16.
-		if s.Spi == new.Spi && xfrmIPEqual(s.Dst, new.Dst) {
-			var dir string
-			// The old XFRM IN state matches on 0.0.0.0 so it conflicts even
-			// though the source IP addresses of old and new are different.
-			// Thus, we don't need to compare source IP addresses for the IN
-			// states.
-			if xfrmIPEqual(s.Src, new.Src) && xfrmMarkEqual(s.Mark, oldXFRMOutMark) {
-				dir = "OUT"
-			} else if xfrmMarkEqual(s.Mark, oldXFRMInMark) {
-				dir = "IN"
-			} else {
-				continue
-			}
-
-			err, deferFn := xfrmTemporarilyRemoveState(scopedLog, s, dir)
-			if err != nil {
-				errs.Add(fmt.Errorf("Failed to remove old XFRM %s state %s: %w", dir, s.String(), err))
-			} else {
-				defer deferFn()
-			}
-		}
-	}
-	if err := errs.Error(); err != nil {
-		scopedLog.Error("Failed to clean up old XFRM state", logfields.Error, err)
-		return err
-	}
-
 	// It doesn't exist so let's attempt to add it.
 	firstAttemptErr := xfrmStateCache.XfrmStateAdd(new)
 	if !os.IsExist(firstAttemptErr) {
@@ -673,35 +625,31 @@ func IPsecDefaultDropPolicy(log *slog.Logger, ipv6 bool) error {
 
 	err := netlink.XfrmPolicyUpdate(defaultDropPolicy)
 
-	// We move the existing XFRM OUT policy to a lower priority to allow the
-	// new priorities to take precedence.
-	// This code can be removed in Cilium v1.15 to instead remove the old XFRM
-	// OUT policy and state.
+	// We move the old XFRM OUT policy. This code can be removed in Cilium v1.17.
 	removeStaleXFRMOnce := &removeStaleIPv4XFRMOnce
 	if ipv6 {
 		removeStaleXFRMOnce = &removeStaleIPv6XFRMOnce
 	}
 	removeStaleXFRMOnce.Do(func() {
-		deprioritizeOldOutPolicy(log, family)
+		removeOldOutPolicy(log, family)
 	})
 
 	return err
 }
 
-// Lowers the priority of the old XFRM OUT policy. We rely on the mark mask to
-// identify it. By lowering the priority, we will allow the new XFRM OUT
-// policies to take precedence. We cannot simply remove and replace the old
-// XFRM OUT configs because that would cause traffic interruptions on upgrades.
-func deprioritizeOldOutPolicy(log *slog.Logger, family int) {
+// Removes the old XFRM OUT policy. We rely on the mark mask and its lower
+// priority to identify it. We can rely on the priority because it was lowered
+// to a specific number in a previous upgrade.
+func removeOldOutPolicy(log *slog.Logger, family int) {
 	policies, err := netlink.XfrmPolicyList(family)
 	if err != nil {
 		log.Error("Cannot get XFRM policies", logfields.Error, err)
 	}
 	for _, p := range policies {
-		if p.Dir == netlink.XFRM_DIR_OUT && p.Mark.Mask == linux_defaults.IPsecOldMarkMaskOut {
-			p.Priority = oldXFRMOutPolicyPriority
-			if err := netlink.XfrmPolicyUpdate(&p); err != nil {
-				log.Error("Failed to deprioritize old XFRM policy",
+		if p.Dir == netlink.XFRM_DIR_OUT && p.Priority == oldXFRMOutPolicyPriority &&
+			p.Mark.Mask == linux_defaults.IPsecOldMarkMaskOut {
+			if err := netlink.XfrmPolicyDel(&p); err != nil {
+				log.Error("Failed to remove old XFRM policy",
 					logfields.Error, err,
 					logfields.SourceCIDR, p.Src,
 					logfields.DestinationCIDR, p.Dst,

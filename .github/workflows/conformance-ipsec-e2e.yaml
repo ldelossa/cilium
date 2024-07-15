@@ -105,7 +105,7 @@ jobs:
 
           - name: '2'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.4-20240620.102250'
+            kernel: '5.4-20240703.151759'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -118,7 +118,7 @@ jobs:
 
           - name: '3'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240620.102250'
+            kernel: '5.10-20240703.151759'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -132,7 +132,7 @@ jobs:
 
           - name: '4'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20240628.013131'
+            kernel: 'bpf-next-20240705.013129'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'geneve'
@@ -146,7 +146,7 @@ jobs:
 
           - name: '5'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.4-20240620.102250'
+            kernel: '5.4-20240703.151759'
             kube-proxy: 'none'
             kpr: 'true'
             tunnel: 'disabled'
@@ -159,7 +159,7 @@ jobs:
 
           - name: '6'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240620.102250'
+            kernel: '5.10-20240703.151759'
             kube-proxy: 'none'
             kpr: 'true'
             tunnel: 'disabled'
@@ -173,7 +173,7 @@ jobs:
 
           - name: '7'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240620.102250'
+            kernel: '5.15-20240703.151759'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -187,7 +187,7 @@ jobs:
 
           - name: '8'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20240628.013131'
+            kernel: 'bpf-next-20240705.013129'
             kube-proxy: 'none'
             kpr: 'true'
             tunnel: 'vxlan'
@@ -246,13 +246,11 @@ jobs:
           misc: ${{ matrix.misc }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@9d071f99ae32af95cb15c3e0a280d222b569a1cf # v0.16.11
+        uses: cilium/cilium-cli@1afb3ff7eb6ace8ab5f8d4d844afe02e2018bb4e # v0.16.13
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
-          binary-name: cilium-cli
-          binary-dir: ./
 
       - name: Set Kind params
         id: kind-params
@@ -306,11 +304,11 @@ jobs:
           kubectl create -n kube-system secret generic cilium-ipsec-keys \
             --from-literal=keys="3${{ matrix.key-type-one }} ${key}"
 
-          ./cilium-cli install ${{ steps.cilium-config.outputs.config }}
+          cilium install ${{ steps.cilium-config.outputs.config }}
           kubectl -n cilium-spire wait --for=condition=Ready pod -l app=spire-server --timeout=300s
           kubectl -n cilium-spire wait --for=condition=Ready pod -l app=spire-agent --timeout=300s
 
-          ./cilium-cli status --wait
+          cilium status --wait
           kubectl get pods --all-namespaces -o wide
           kubectl -n kube-system exec daemonset/cilium -c cilium-agent -- cilium-dbg status
 
@@ -335,7 +333,7 @@ jobs:
         run: |
           mkdir -p cilium-junits
 
-          ./cilium-cli connectivity test --include-unsafe-tests --collect-sysdump-on-failure \
+          cilium connectivity test --include-unsafe-tests --collect-sysdump-on-failure \
             --sysdump-hubble-flows-count=1000000 --sysdump-hubble-flows-timeout=5m \
             --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>" \
             --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml" \
@@ -387,7 +385,7 @@ jobs:
             TEST='--test "!pod-to-pod-no-frag"'
           fi
 
-          ./cilium-cli connectivity test --include-unsafe-tests --collect-sysdump-on-failure \
+          cilium connectivity test --include-unsafe-tests --collect-sysdump-on-failure \
             --sysdump-hubble-flows-count=1000000 --sysdump-hubble-flows-timeout=5m \
             --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>" \
             --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml" \
@@ -402,20 +400,20 @@ jobs:
         shell: bash
         run: |
           kubectl get pods --all-namespaces -o wide
-          ./cilium-cli status
+          cilium status
           mkdir -p cilium-sysdumps
-          ./cilium-cli sysdump --output-filename cilium-sysdump-${{ matrix.name }}-final
+          cilium sysdump --output-filename cilium-sysdump-${{ matrix.name }}-final
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-sysdumps-${{ matrix.name }}
           path: cilium-sysdump-*.zip
 
       - name: Upload JUnits [junit]
         if: ${{ always() }}
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-junits-${{ matrix.name }}
           path: cilium-junits/*.xml
@@ -434,7 +432,7 @@ jobs:
     steps:
       - name: Merge Sysdumps
         if: ${{ needs.setup-and-test.result == 'failure' }}
-        uses: actions/upload-artifact/merge@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact/merge@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-sysdumps
           pattern: cilium-sysdumps-*
@@ -442,7 +440,7 @@ jobs:
           delete-merged: true
         continue-on-error: true
       - name: Merge JUnits
-        uses: actions/upload-artifact/merge@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact/merge@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-junits
           pattern: cilium-junits-*

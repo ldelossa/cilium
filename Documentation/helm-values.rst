@@ -139,7 +139,7 @@
    * - :spelling:ignore:`authentication.mutual.spire.install.initImage`
      - init container image of SPIRE agent and server
      - object
-     - ``{"digest":"sha256:223ae047b1065bd069aac01ae3ac8088b3ca4a527827e283b85112f29385fb1b","override":null,"pullPolicy":"Always","repository":"docker.io/library/busybox","tag":"1.36.1","useDigest":true}``
+     - ``{"digest":"sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87b2b85a32def253c7","override":null,"pullPolicy":"Always","repository":"docker.io/library/busybox","tag":"1.36.1","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.namespace`
      - SPIRE namespace to install into
      - string
@@ -472,6 +472,10 @@
      - List of rate limit options to be used for the CiliumEndpointSlice controller. Each object in the list must have the following fields: nodes: Count of nodes at which to apply the rate limit. limit: The sustained request rate in requests per second. The maximum rate that can be configured is 50. burst: The burst request rate in requests per second. The maximum burst that can be configured is 100.
      - list
      - ``[{"burst":20,"limit":10,"nodes":0},{"burst":15,"limit":7,"nodes":100},{"burst":10,"limit":5,"nodes":500}]``
+   * - :spelling:ignore:`ciliumEndpointSlice.sliceMode`
+     - The slicing mode to use for CiliumEndpointSlices. identity groups together CiliumEndpoints that share the same identity. fcfs groups together CiliumEndpoints in a first-come-first-serve basis, filling in the largest non-full slice first.
+     - string
+     - ``"identity"``
    * - :spelling:ignore:`cleanBpfState`
      - Clean all eBPF datapath state from the initContainer of the cilium-agent DaemonSet.  WARNING: Use with care!
      - bool
@@ -713,7 +717,7 @@
      - object
      - ``{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}``
    * - :spelling:ignore:`clustermesh.apiserver.service.annotations`
-     - Annotations for the clustermesh-apiserver For GKE LoadBalancer, use annotation cloud.google.com/load-balancer-type: "Internal" For EKS LoadBalancer, use annotation service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+     - Annotations for the clustermesh-apiserver service. Example annotations to configure an internal load balancer on different cloud providers: * AKS: service.beta.kubernetes.io/azure-load-balancer-internal: "true" * EKS: service.beta.kubernetes.io/aws-load-balancer-scheme: "internal" * GKE: networking.gke.io/load-balancer-type: "Internal"
      - object
      - ``{}``
    * - :spelling:ignore:`clustermesh.apiserver.service.enableSessionAffinity`
@@ -996,6 +1000,10 @@
      - The maximum time the DNS proxy holds an allowed DNS response before sending it along. Responses are sent as soon as the datapath is updated with the new IP information.
      - string
      - ``"100ms"``
+   * - :spelling:ignore:`dnsProxy.socketLingerTimeout`
+     - Timeout (in seconds) when closing the connection between the DNS proxy and the upstream server. If set to 0, the connection is closed immediately (with TCP RST). If set to -1, the connection is closed asynchronously in the background.
+     - int
+     - ``10``
    * - :spelling:ignore:`egressGateway.enabled`
      - Enables egress gateway to redirect and SNAT the traffic that leaves the cluster.
      - bool
@@ -2168,6 +2176,10 @@
      - hubble-ui ingress configuration.
      - object
      - ``{"annotations":{},"className":"","enabled":false,"hosts":["chart-example.local"],"labels":{},"tls":[]}``
+   * - :spelling:ignore:`hubble.ui.labels`
+     - Additional labels to be added to 'hubble-ui' deployment object
+     - object
+     - ``{}``
    * - :spelling:ignore:`hubble.ui.nodeSelector`
      - Node labels for pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object

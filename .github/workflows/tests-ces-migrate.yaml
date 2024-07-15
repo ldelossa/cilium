@@ -116,22 +116,20 @@ jobs:
           misc: 'bpfClockProbe=false,cni.uninstall=false'
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@9d071f99ae32af95cb15c3e0a280d222b569a1cf # v0.16.11
+        uses: cilium/cilium-cli@1afb3ff7eb6ace8ab5f8d4d844afe02e2018bb4e # v0.16.13
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
-          binary-name: cilium-cli
-          binary-dir: ./
 
       - name: Install Cilium
         id: install-cilium
         run: |
-          ./cilium-cli install ${{ steps.cilium-config.outputs.config }}
+          cilium install ${{ steps.cilium-config.outputs.config }}
 
       - name: Wait for Cilium status to be ready
         run: |
-          ./cilium-cli status --wait
+          cilium status --wait
           kubectl get pods --all-namespaces -o wide
           mkdir -p cilium-junits
           kubectl -n kube-system exec daemonset/cilium -c cilium-agent -- cilium-dbg status
@@ -157,7 +155,7 @@ jobs:
 
           kubectl rollout restart -n kube-system ds cilium
 
-          ./cilium-cli status --wait
+          cilium status --wait
           kubectl get pods --all-namespaces -o wide
           kubectl -n kube-system exec daemonset/cilium -c cilium-agent -- cilium-dbg status
 
@@ -175,13 +173,13 @@ jobs:
         run: |
           echo "=== Retrieve cluster state ==="
           kubectl get pods --all-namespaces -o wide
-          ./cilium-cli status
+          cilium status
           mkdir -p cilium-sysdumps
 
-          ./cilium-cli sysdump --output-filename cilium-sysdumps-out
+          cilium sysdump --output-filename cilium-sysdumps-out
 
       - name: Upload cilium-sysdumps
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         if: ${{ failure() }}
         with:
           name: cilium-sysdumps-out.zip
@@ -189,7 +187,7 @@ jobs:
 
       - name: Upload JUnits [junit]
         if: ${{ always() }}
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: cilium-junits
           path: cilium-junits/*.xml
