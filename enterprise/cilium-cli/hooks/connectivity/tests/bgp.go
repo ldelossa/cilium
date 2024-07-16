@@ -36,17 +36,17 @@ const (
 	bgpCommunityService = "65001:200"
 )
 
-func BGPAdvertisements() check.Scenario {
-	return &bgpAdvertisements{}
+func BGPSvcAdvertisements() check.Scenario {
+	return &bgpSvcAdvertisements{}
 }
 
-type bgpAdvertisements struct{}
+type bgpSvcAdvertisements struct{}
 
-func (s *bgpAdvertisements) Name() string {
-	return "bgp-advertisements"
+func (s *bgpSvcAdvertisements) Name() string {
+	return "bgp-svc-advertisements"
 }
 
-func (s *bgpAdvertisements) Run(ctx context.Context, t *check.Test) {
+func (s *bgpSvcAdvertisements) Run(ctx context.Context, t *check.Test) {
 	ct := t.Context()
 
 	t.ForEachIPFamily(func(ipFamily features.IPFamily) {
@@ -103,7 +103,7 @@ func (s *bgpAdvertisements) Run(ctx context.Context, t *check.Test) {
 	})
 }
 
-func (s *bgpAdvertisements) cleanup(ctx context.Context, t *check.Test) {
+func (s *bgpSvcAdvertisements) cleanup(ctx context.Context, t *check.Test) {
 	if t.Failed() {
 		for _, frr := range t.Context().FRRPods() {
 			check.DumpFRRBGPState(ctx, t, &frr)
@@ -119,7 +119,7 @@ func (s *bgpAdvertisements) cleanup(ctx context.Context, t *check.Test) {
 	}
 }
 
-func (s *bgpAdvertisements) deleteK8sResources(ctx context.Context, t *check.Test) {
+func (s *bgpSvcAdvertisements) deleteK8sResources(ctx context.Context, t *check.Test) {
 	client := t.Context().K8sClient().CiliumClientset.IsovalentV1alpha1()
 
 	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPClusterConfigs(), bgpClusterConfigName)
@@ -127,7 +127,7 @@ func (s *bgpAdvertisements) deleteK8sResources(ctx context.Context, t *check.Tes
 	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPAdvertisements(), bgpAdvertisementName)
 }
 
-func (s *bgpAdvertisements) configureBGPPeering(ctx context.Context, t *check.Test, ipFamily features.IPFamily) {
+func (s *bgpSvcAdvertisements) configureBGPPeering(ctx context.Context, t *check.Test, ipFamily features.IPFamily) {
 	ct := t.Context()
 	client := ct.K8sClient().CiliumClientset.IsovalentV1alpha1()
 	s.deleteK8sResources(ctx, t)

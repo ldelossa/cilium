@@ -354,7 +354,7 @@ func (ec *EnterpriseConnectivity) addBGPTests(ct *check.ConnectivityTest) (err e
 	}
 
 	newTest(ct, "enterprise-bgp-control-plane-v2").
-		WithScenarios(enterpriseTests.BGPAdvertisements())
+		WithScenarios(enterpriseTests.BGPSvcAdvertisements())
 
 	return nil
 }

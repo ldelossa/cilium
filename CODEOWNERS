@@ -703,6 +703,7 @@ Vagrantfile @cilium/ci-structure
 *podnetwork* @isovalent/multi-network
 /enterprise/api/extensions @isovalent/hubble-api
 /enterprise/cilium-cli/ @isovalent/cli
+/enterprise/cilium-cli/hooks/connectivity/tests/bgp.go @isovalent/traffic-engineering
 /enterprise/cilium-cli/hooks/connectivity/tests/egressgateway.go @isovalent/egress-gateway
 /enterprise/cilium-cli/hooks/connectivity/tests/external_dns_proxy*.go @isovalent/dns-proxy
 /enterprise/cilium-cli/hooks/connectivity/tests/hubble-cli-version.go @isovalent/hubble
