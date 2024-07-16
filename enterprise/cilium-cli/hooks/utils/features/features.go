@@ -35,6 +35,7 @@ const (
 	Multicast features.Feature = "multicast"
 
 	EnterpriseBGPControlPlane features.Feature = "enable-enterprise-bgp-control-plane"
+	BFD                       features.Feature = "enable-bfd"
 
 	// RemoteClusterTunnel: the routing mode configured in the remote cluster.
 	RemoteClusterTunnel features.Feature = "remote-cluster-tunnel"
@@ -115,6 +116,10 @@ func extractFromConfigMap(ctx context.Context, ct *check.ConnectivityTest) error
 
 	ct.Features[EnterpriseBGPControlPlane] = features.Status{
 		Enabled: cm.Data[string(EnterpriseBGPControlPlane)] == "true",
+	}
+
+	ct.Features[BFD] = features.Status{
+		Enabled: cm.Data[string(BFD)] == "true",
 	}
 
 	return nil

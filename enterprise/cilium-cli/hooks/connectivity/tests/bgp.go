@@ -65,7 +65,7 @@ func (s *bgpSvcAdvertisements) Run(ctx context.Context, t *check.Test) {
 		}
 
 		// configure BGP on Cilium
-		s.configureBGPPeering(ctx, t, ipFamily)
+		configureBGPPeering(ctx, t, ipFamily, "")
 
 		// wait for BGP peers and expected prefixes
 		podCIDRPrefixes := ct.PodCIDRPrefixes(ipFamily)
@@ -111,7 +111,7 @@ func (s *bgpSvcAdvertisements) cleanup(ctx context.Context, t *check.Test) {
 	}
 
 	// delete test-configured K8s resources
-	s.deleteK8sResources(ctx, t)
+	deleteBGPPeeringResources(ctx, t)
 
 	// clear FRR config
 	for _, frr := range t.Context().FRRPods() {
@@ -119,24 +119,16 @@ func (s *bgpSvcAdvertisements) cleanup(ctx context.Context, t *check.Test) {
 	}
 }
 
-func (s *bgpSvcAdvertisements) deleteK8sResources(ctx context.Context, t *check.Test) {
-	client := t.Context().K8sClient().CiliumClientset.IsovalentV1alpha1()
-
-	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPClusterConfigs(), bgpClusterConfigName)
-	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPPeerConfigs(), bgpPeerConfigName)
-	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPAdvertisements(), bgpAdvertisementName)
-}
-
-func (s *bgpSvcAdvertisements) configureBGPPeering(ctx context.Context, t *check.Test, ipFamily features.IPFamily) {
+func configureBGPPeering(ctx context.Context, t *check.Test, ipFamily features.IPFamily, bfdProfile string) {
 	ct := t.Context()
 	client := ct.K8sClient().CiliumClientset.IsovalentV1alpha1()
-	s.deleteK8sResources(ctx, t)
+	deleteBGPPeeringResources(ctx, t)
 
 	// configure advertisement
 	advertisement := &isovalentv1alpha1.IsovalentBGPAdvertisement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   bgpAdvertisementName,
-			Labels: map[string]string{"test": s.Name()},
+			Labels: map[string]string{"test": "bgp"},
 		},
 		Spec: isovalentv1alpha1.IsovalentBGPAdvertisementSpec{
 			Advertisements: []isovalentv1alpha1.BGPAdvertisement{
@@ -196,6 +188,9 @@ func (s *bgpSvcAdvertisements) configureBGPPeering(ctx context.Context, t *check
 			},
 		},
 	}
+	if bfdProfile != "" {
+		peerConfig.Spec.BFDProfileRef = &bfdProfile
+	}
 	_, err = client.IsovalentBGPPeerConfigs().Create(ctx, peerConfig, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create IsovalentBGPPeerConfig: %v", err)
@@ -230,4 +225,12 @@ func (s *bgpSvcAdvertisements) configureBGPPeering(ctx context.Context, t *check
 	if err != nil {
 		t.Fatalf("failed to create IsovalentBGPClusterConfig: %v", err)
 	}
+}
+
+func deleteBGPPeeringResources(ctx context.Context, t *check.Test) {
+	client := t.Context().K8sClient().CiliumClientset.IsovalentV1alpha1()
+
+	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPClusterConfigs(), bgpClusterConfigName)
+	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPPeerConfigs(), bgpPeerConfigName)
+	check.DeleteK8sResourceWithWait(ctx, t, client.IsovalentBGPAdvertisements(), bgpAdvertisementName)
 }
