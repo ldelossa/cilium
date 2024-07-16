@@ -93,7 +93,11 @@ func (u *reconcileParamsUpgrader) upgrade(params reconcilerv2.ReconcileParams) (
 	}
 
 	for i, inst := range nc.Spec.BGPInstances {
-		if inst.Name != params.BGPInstance.Config.Name {
+		// compare BGP instance names to find the matching instance.
+		// We check desired config instead of BGPInstance.Config because
+		// BGPInstance.Config is nil at first reconciliation loop. Desired config
+		// is considered source of truth.
+		if inst.Name != params.DesiredConfig.Name {
 			continue
 		}
 		return EnterpriseReconcileParams{
