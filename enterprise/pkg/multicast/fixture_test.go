@@ -34,6 +34,7 @@ import (
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/k8s/utils"
+	"github.com/cilium/cilium/pkg/lock"
 	maps_multicast "github.com/cilium/cilium/pkg/maps/multicast"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/addressing"
@@ -170,6 +171,7 @@ func newFixture(ctx context.Context, req *require.Assertions, initBPF map[netip.
 
 // fakeMaps implements maps_multicast.GroupV4Map for testing purposes
 type fakeGroupV4Map struct {
+	lock.Mutex
 	data map[netip.Addr]maps_multicast.SubscriberV4Map
 }
 
@@ -180,6 +182,9 @@ func newFakeMaps() maps_multicast.GroupV4Map {
 }
 
 func (fgm *fakeGroupV4Map) Lookup(multicastAddr netip.Addr) (maps_multicast.SubscriberV4Map, error) {
+	fgm.Lock()
+	defer fgm.Unlock()
+
 	sm, exists := fgm.data[multicastAddr]
 	if !exists {
 		return nil, ebpf.ErrKeyNotExist
@@ -188,16 +193,25 @@ func (fgm *fakeGroupV4Map) Lookup(multicastAddr netip.Addr) (maps_multicast.Subs
 }
 
 func (fgm *fakeGroupV4Map) Insert(multicastAddr netip.Addr) error {
+	fgm.Lock()
+	defer fgm.Unlock()
+
 	fgm.data[multicastAddr] = newFakeSubscriberV4Map()
 	return nil
 }
 
 func (fgm *fakeGroupV4Map) Delete(multicastAddr netip.Addr) error {
+	fgm.Lock()
+	defer fgm.Unlock()
+
 	delete(fgm.data, multicastAddr)
 	return nil
 }
 
 func (fgm *fakeGroupV4Map) List() ([]netip.Addr, error) {
+	fgm.Lock()
+	defer fgm.Unlock()
+
 	res := make([]netip.Addr, 0, len(fgm.data))
 	for k := range fgm.data {
 		res = append(res, k)
@@ -207,6 +221,8 @@ func (fgm *fakeGroupV4Map) List() ([]netip.Addr, error) {
 }
 
 type fakeSubscriberV4Map struct {
+	lock.Mutex
+
 	data []*maps_multicast.SubscriberV4
 }
 
@@ -215,14 +231,21 @@ func newFakeSubscriberV4Map() maps_multicast.SubscriberV4Map {
 }
 
 func (fsm *fakeSubscriberV4Map) Insert(subscriber *maps_multicast.SubscriberV4) error {
+	fsm.Lock()
+	defer fsm.Unlock()
+
 	fsm.data = append(fsm.data, subscriber)
 	return nil
 }
 
 func (fsm *fakeSubscriberV4Map) Lookup(Src netip.Addr) (*maps_multicast.SubscriberV4, error) {
+	fsm.Lock()
+	defer fsm.Unlock()
+
 	for _, v := range fsm.data {
 		if v.SAddr.Compare(Src) == 0 {
-			return v, nil
+			cp := *v
+			return &cp, nil
 		}
 	}
 
@@ -230,6 +253,9 @@ func (fsm *fakeSubscriberV4Map) Lookup(Src netip.Addr) (*maps_multicast.Subscrib
 }
 
 func (fsm *fakeSubscriberV4Map) Delete(Src netip.Addr) error {
+	fsm.Lock()
+	defer fsm.Unlock()
+
 	for i, v := range fsm.data {
 		if v.SAddr.Compare(Src) == 0 {
 			fsm.data = append(fsm.data[:i], fsm.data[i+1:]...)
@@ -240,5 +266,14 @@ func (fsm *fakeSubscriberV4Map) Delete(Src netip.Addr) error {
 }
 
 func (fsm *fakeSubscriberV4Map) List() ([]*maps_multicast.SubscriberV4, error) {
-	return fsm.data, nil
+	fsm.Lock()
+	defer fsm.Unlock()
+
+	// make deep copy
+	cpy := make([]*maps_multicast.SubscriberV4, len(fsm.data))
+	for i, v := range fsm.data {
+		cp := *v
+		cpy[i] = &cp
+	}
+	return cpy, nil
 }
