@@ -36,7 +36,7 @@ import (
 
 func TestReconcileParamsUpgrader(t *testing.T) {
 	var (
-		up *reconcileParamsUpgrader
+		up paramUpgrader
 		cs client.Clientset
 		jg job.Group
 	)
@@ -59,7 +59,7 @@ func TestReconcileParamsUpgrader(t *testing.T) {
 				}
 			},
 		),
-		cell.Invoke(func(u *reconcileParamsUpgrader, c client.Clientset, j job.Group) {
+		cell.Invoke(func(u paramUpgrader, c client.Clientset, j job.Group) {
 			up = u
 			cs = c
 			jg = j

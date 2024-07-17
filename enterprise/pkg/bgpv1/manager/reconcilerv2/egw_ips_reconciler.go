@@ -44,7 +44,7 @@ type EGWIPsReconcilerIn struct {
 	DaemonConfig *option.DaemonConfig
 	EGWManager   *egressgatewayha.Manager
 
-	Upgrader   *reconcileParamsUpgrader
+	Upgrader   paramUpgrader
 	PeerAdvert *IsovalentPeerAdvertisement
 }
 

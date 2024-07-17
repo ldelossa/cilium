@@ -16,7 +16,6 @@ import (
 
 	"github.com/cilium/hive/cell"
 
-	enterprisebgpv1 "github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	enterprisereconciler "github.com/cilium/cilium/enterprise/pkg/bgpv1/manager/reconciler"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/pkg/hive"
@@ -48,8 +47,8 @@ func newEnterpriseFixture(conf *EnterpriseFixtureConfig) *EnterpriseFixture {
 
 	// create a new hive which also contains enterprise cells
 	f.cells = append(f.cells,
-		// enterprise bgpv1 cell
-		enterprisebgpv1.Cell,
+		// enterprise bgpv1 reconcilers
+		enterprisereconciler.ConfigReconcilers,
 
 		cell.Provide(
 			// provide empty egressgatway manager

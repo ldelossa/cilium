@@ -23,5 +23,6 @@ var ConfigReconcilers = cell.Group(
 
 	cell.Provide(
 		NewEgressGatewayIPsReconciler,
+		NewBFDStateReconciler,
 	),
 )

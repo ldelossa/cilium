@@ -59,7 +59,7 @@ type reconcileParamsUpgrader struct {
 	store       resource.Store[*v1alpha1.IsovalentBGPNodeConfig]
 }
 
-func newReconcileParamsUpgrader(c config.Config, r resource.Resource[*v1alpha1.IsovalentBGPNodeConfig], g job.Group) *reconcileParamsUpgrader {
+func newReconcileParamsUpgrader(c config.Config, r resource.Resource[*v1alpha1.IsovalentBGPNodeConfig], g job.Group) paramUpgrader {
 	u := &reconcileParamsUpgrader{}
 	if !c.Enabled {
 		// No need to initialize the upgrader if enterprise BGP control plane is not enabled.
