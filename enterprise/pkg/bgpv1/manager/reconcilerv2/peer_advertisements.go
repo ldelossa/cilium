@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -42,6 +43,7 @@ type PeerAdvertisementIn struct {
 
 	Group              job.Group
 	Logger             logrus.FieldLogger
+	Config             config.Config
 	PeerConfigResource resource.Resource[*v1alpha1.IsovalentBGPPeerConfig]
 	AdvertResource     resource.Resource[*v1alpha1.IsovalentBGPAdvertisement]
 }
@@ -56,6 +58,10 @@ type IsovalentPeerAdvertisement struct {
 func newIsovalentPeerAdvertisement(p PeerAdvertisementIn) *IsovalentPeerAdvertisement {
 	pa := &IsovalentPeerAdvertisement{
 		logger: p.Logger,
+	}
+	// Check if enterprise BGP control plane is enabled
+	if !p.Config.Enabled {
+		return pa
 	}
 	p.Group.Add(job.OneShot("init-peer-advertisement", func(ctx context.Context, health cell.Health) error {
 		pcs, err := p.PeerConfigResource.Store(ctx)

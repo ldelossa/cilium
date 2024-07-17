@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
 
+	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -58,8 +59,12 @@ type reconcileParamsUpgrader struct {
 	store       resource.Store[*v1alpha1.IsovalentBGPNodeConfig]
 }
 
-func newReconcileParamsUpgrader(r resource.Resource[*v1alpha1.IsovalentBGPNodeConfig], g job.Group) *reconcileParamsUpgrader {
+func newReconcileParamsUpgrader(c config.Config, r resource.Resource[*v1alpha1.IsovalentBGPNodeConfig], g job.Group) *reconcileParamsUpgrader {
 	u := &reconcileParamsUpgrader{}
+	if !c.Enabled {
+		// No need to initialize the upgrader if enterprise BGP control plane is not enabled.
+		return u
+	}
 
 	g.Add(job.OneShot("bgp-reconcile-params-upgrader-init", func(ctx context.Context, health cell.Health) error {
 		s, err := r.Store(ctx)
