@@ -598,6 +598,45 @@
       "status": "not_affected",
       "status_notes": "Only the loopback binary is flagged, and it is not affected",
       "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-x989-52fc-4vr4"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/operator-generic-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "The affected functionality is not in use in this image",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-7496-fgv9-xw82"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/operator-generic-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "The affected functionality is not in use in this image",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-24791"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/hubble-relay-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "This flags on /usr/bin/grpc_health_probe, which does not use the affected functionality",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
