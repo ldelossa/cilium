@@ -4,6 +4,7 @@
 package act
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -46,7 +47,8 @@ var defaultConfig = Config{
 type ActiveConnectionTrackingIterateCallback func(*ActiveConnectionTrackerKey, *ActiveConnectionTrackerValue)
 
 type ActiveConnectionTrackingMap interface {
-	IterateWithCallback(ActiveConnectionTrackingIterateCallback) error
+	IterateWithCallback(context.Context, ActiveConnectionTrackingIterateCallback) error
+	Delete(*ActiveConnectionTrackerKey) error
 }
 
 type actMap struct {
@@ -63,13 +65,18 @@ func newActiveConnectionTrackingMap(in struct {
 
 	bpf.MapOut[ActiveConnectionTrackingMap]
 	defines.NodeOut
-}) {
+}, err error) {
 	if !in.Conf.EnableActiveConnectionTracking {
 		return
 	}
-	size := option.Config.LBServiceMapEntries * len(option.Config.FixedZoneMapping)
+	svcSize := option.Config.LBMapEntries
+	if option.Config.LBServiceMapEntries > 0 {
+		svcSize = option.Config.LBServiceMapEntries
+	}
+	zoneSize := len(option.Config.FixedZoneMapping)
+	size := svcSize * zoneSize
 	if size == 0 {
-		return
+		return out, fmt.Errorf("unexpected map size: %d = svc[%d] * zones[%d]", size, svcSize, zoneSize)
 	}
 
 	out.NodeDefines = map[string]string{
@@ -103,13 +110,23 @@ func createActiveConnectionTrackingMap(lc cell.Lifecycle, size int) *actMap {
 	return &actMap{m}
 }
 
-func (m actMap) IterateWithCallback(cb ActiveConnectionTrackingIterateCallback) error {
+func (m actMap) IterateWithCallback(ctx context.Context, cb ActiveConnectionTrackingIterateCallback) error {
 	return m.m.DumpWithCallback(func(k bpf.MapKey, v bpf.MapValue) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		key := k.(*ActiveConnectionTrackerKey)
 		value := v.(*ActiveConnectionTrackerValue)
 
 		cb(key, value)
 	})
+}
+
+func (m actMap) Delete(key *ActiveConnectionTrackerKey) error {
+	_, err := m.m.SilentDelete(key)
+	return err
 }
 
 // ActiveConnectionTrackerKey is the key to ActiveConnectionTrackingMap.
