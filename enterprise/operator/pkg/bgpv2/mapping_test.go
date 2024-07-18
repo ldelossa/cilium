@@ -89,6 +89,11 @@ var (
 			},
 		},
 	}
+	isoNodeConfigSpecWithResponder = func() v1alpha1.IsovalentBGPNodeInstance {
+		cpy := isoNodeConfigSpec.DeepCopy()
+		cpy.SRv6Responder = ptr.To[bool](true)
+		return *cpy
+	}
 
 	ossClusterConfig = &v2alpha1.CiliumBGPClusterConfig{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -533,13 +538,13 @@ func upsertIsoBGPNodeConfigOR(req *require.Assertions, ctx context.Context, f *f
 		return
 	}
 
-	_, err := f.isoNodeConfORClient.Get(ctx, bgpNodeConfigOR.Name, meta_v1.GetOptions{})
+	_, err := f.isoBGPNodeConfORClient.Get(ctx, bgpNodeConfigOR.Name, meta_v1.GetOptions{})
 	if err != nil && k8s_errors.IsNotFound(err) {
-		_, err = f.isoNodeConfORClient.Create(ctx, bgpNodeConfigOR, meta_v1.CreateOptions{})
+		_, err = f.isoBGPNodeConfORClient.Create(ctx, bgpNodeConfigOR, meta_v1.CreateOptions{})
 	} else if err != nil {
 		req.Fail(err.Error())
 	} else {
-		_, err = f.isoNodeConfORClient.Update(ctx, bgpNodeConfigOR, meta_v1.UpdateOptions{})
+		_, err = f.isoBGPNodeConfORClient.Update(ctx, bgpNodeConfigOR, meta_v1.UpdateOptions{})
 	}
 	req.NoError(err)
 }

@@ -39,13 +39,13 @@ var (
 )
 
 type fixture struct {
-	hive                *hive.Hive
-	fakeClientSet       *k8s_client.FakeClientset
-	isoClusterClient    isovalent_client_v1alpha1.IsovalentBGPClusterConfigInterface
-	isoPeerConfClient   isovalent_client_v1alpha1.IsovalentBGPPeerConfigInterface
-	isoAdvertClient     isovalent_client_v1alpha1.IsovalentBGPAdvertisementInterface
-	isoNodeConfClient   isovalent_client_v1alpha1.IsovalentBGPNodeConfigInterface
-	isoNodeConfORClient isovalent_client_v1alpha1.IsovalentBGPNodeConfigOverrideInterface
+	hive                   *hive.Hive
+	fakeClientSet          *k8s_client.FakeClientset
+	isoClusterClient       isovalent_client_v1alpha1.IsovalentBGPClusterConfigInterface
+	isoPeerConfClient      isovalent_client_v1alpha1.IsovalentBGPPeerConfigInterface
+	isoAdvertClient        isovalent_client_v1alpha1.IsovalentBGPAdvertisementInterface
+	isoBGPNodeConfClient   isovalent_client_v1alpha1.IsovalentBGPNodeConfigInterface
+	isoBGPNodeConfORClient isovalent_client_v1alpha1.IsovalentBGPNodeConfigOverrideInterface
 
 	// oss clients
 	ossClusterClient    cilium_client_v2alpha1.CiliumBGPClusterConfigInterface
@@ -112,8 +112,8 @@ func newFixture(ctx context.Context, req *require.Assertions) (*fixture, func())
 	f.isoClusterClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPClusterConfigs()
 	f.isoPeerConfClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPPeerConfigs()
 	f.isoAdvertClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPAdvertisements()
-	f.isoNodeConfClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPNodeConfigs()
-	f.isoNodeConfORClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPNodeConfigOverrides()
+	f.isoBGPNodeConfClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPNodeConfigs()
+	f.isoBGPNodeConfORClient = f.fakeClientSet.IsovalentV1alpha1().IsovalentBGPNodeConfigOverrides()
 
 	// oss clients
 	f.ossClusterClient = f.fakeClientSet.CiliumV2alpha1().CiliumBGPClusterConfigs()

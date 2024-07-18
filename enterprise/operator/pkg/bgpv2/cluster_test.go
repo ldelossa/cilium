@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	cilium_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -29,6 +30,7 @@ func Test_ClusterConfigSteps(t *testing.T) {
 	steps := []struct {
 		name                string
 		clusterConfig       *v1alpha1.IsovalentBGPClusterConfig
+		nodeConfigOverride  *v1alpha1.IsovalentBGPNodeConfigOverride
 		nodes               []*cilium_v2.CiliumNode
 		expectedNodeConfigs []*v1alpha1.IsovalentBGPNodeConfig
 	}{
@@ -118,6 +120,50 @@ func Test_ClusterConfigSteps(t *testing.T) {
 			},
 		},
 		{
+			name:          "add node config override",
+			clusterConfig: isoClusterConfig,
+			nodeConfigOverride: &v1alpha1.IsovalentBGPNodeConfigOverride{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name: "node-3",
+				},
+				Spec: v1alpha1.IsovalentBGPNodeConfigOverrideSpec{
+					BGPInstances: []v1alpha1.IsovalentBGPNodeConfigInstanceOverride{
+						{
+							Name:          "instance-1",
+							SRv6Responder: ptr.To[bool](true),
+						},
+					},
+				},
+			},
+			nodes: []*cilium_v2.CiliumNode{},
+			expectedNodeConfigs: []*v1alpha1.IsovalentBGPNodeConfig{
+				{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: "node-1",
+					},
+					Spec: v1alpha1.IsovalentBGPNodeSpec{
+						BGPInstances: []v1alpha1.IsovalentBGPNodeInstance{isoNodeConfigSpec},
+					},
+				},
+				{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: "node-2",
+					},
+					Spec: v1alpha1.IsovalentBGPNodeSpec{
+						BGPInstances: []v1alpha1.IsovalentBGPNodeInstance{isoNodeConfigSpec},
+					},
+				},
+				{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: "node-3",
+					},
+					Spec: v1alpha1.IsovalentBGPNodeSpec{
+						BGPInstances: []v1alpha1.IsovalentBGPNodeInstance{isoNodeConfigSpecWithResponder()},
+					},
+				},
+			},
+		},
+		{
 			name:          "remove node labels",
 			clusterConfig: isoClusterConfig,
 			nodes: []*cilium_v2.CiliumNode{
@@ -164,9 +210,12 @@ func Test_ClusterConfigSteps(t *testing.T) {
 			// upsert BGP cluster config
 			upsertIsoBGPCC(req, ctx, f, step.clusterConfig)
 
+			// upsert BGP node config override
+			upsertIsoBGPNodeConfigOR(req, ctx, f, step.nodeConfigOverride)
+
 			// validate node configs
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
-				runningIsoNodeConfigs, err := f.isoNodeConfClient.List(ctx, meta_v1.ListOptions{})
+				runningIsoNodeConfigs, err := f.isoBGPNodeConfClient.List(ctx, meta_v1.ListOptions{})
 				if err != nil {
 					assert.NoError(c, err)
 					return
@@ -174,7 +223,7 @@ func Test_ClusterConfigSteps(t *testing.T) {
 				assert.Equal(c, len(step.expectedNodeConfigs), len(runningIsoNodeConfigs.Items))
 
 				for _, expectedNodeConfig := range step.expectedNodeConfigs {
-					isoNodeConfig, err := f.isoNodeConfClient.Get(ctx, expectedNodeConfig.Name, meta_v1.GetOptions{})
+					isoNodeConfig, err := f.isoBGPNodeConfClient.Get(ctx, expectedNodeConfig.Name, meta_v1.GetOptions{})
 					if err != nil {
 						assert.NoError(c, err)
 						return

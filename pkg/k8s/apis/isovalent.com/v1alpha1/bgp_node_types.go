@@ -107,7 +107,7 @@ type IsovalentBGPNodeInstance struct {
 	//
 	// +kubebuilder:validation:Optional
 	// +listType=map
-	// +listMapKey=name
+	// +listMapKey=vrfRef
 	VRFs []IsovalentBGPNodeVRF `json:"vrfs,omitempty"`
 }
 
@@ -161,13 +161,6 @@ type IsovalentBGPNodeInstanceStatus struct {
 }
 
 type IsovalentBGPNodeVRF struct {
-	// Name is the name of the VRF. This name is used to identify the VRF for the BGP instance.
-	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=255
-	Name string `json:"name"`
-
 	// VRFRef is a reference to a IsovalentVRF resource.
 	//
 	// +kubebuilder:validation:Required

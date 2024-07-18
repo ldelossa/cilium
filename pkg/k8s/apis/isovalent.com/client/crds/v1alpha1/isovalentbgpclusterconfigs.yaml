@@ -139,27 +139,22 @@ spec:
                             items:
                               type: string
                             type: array
-                          name:
-                            description: Name is the name of the VRF. It is a unique
-                              identifier for the VRF within the BGP instance.
-                            maxLength: 255
-                            minLength: 1
-                            type: string
                           rd:
                             description: RD is the Route Distinguisher of the VRF.
                             type: string
                           vrfRef:
                             description: VRFRef is a reference to a IsovalentVRF resource.
+                              It should be the same as the name of the IsovalentVRF
+                              object to which this BGPVRF is associated.
                             maxLength: 255
                             minLength: 1
                             type: string
                         required:
-                        - name
                         - vrfRef
                         type: object
                       type: array
                       x-kubernetes-list-map-keys:
-                      - name
+                      - vrfRef
                       x-kubernetes-list-type: map
                   required:
                   - name

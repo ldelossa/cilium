@@ -133,6 +133,7 @@ func toNodeBGPInstance(clusterBGPInstances []v1alpha1.IsovalentBGPInstance, over
 			if overrideBGPInstance.Name == clusterBGPInstance.Name {
 				nodeBGPInstance.RouterID = overrideBGPInstance.RouterID
 				nodeBGPInstance.LocalPort = overrideBGPInstance.LocalPort
+				nodeBGPInstance.SRv6Responder = overrideBGPInstance.SRv6Responder
 				override = overrideBGPInstance
 				break
 			}
@@ -155,6 +156,10 @@ func toNodeBGPInstance(clusterBGPInstances []v1alpha1.IsovalentBGPInstance, over
 			}
 
 			nodeBGPInstance.Peers = append(nodeBGPInstance.Peers, nodePeer)
+		}
+
+		for _, bgpVRF := range clusterBGPInstance.VRFs {
+			nodeBGPInstance.VRFs = append(nodeBGPInstance.VRFs, v1alpha1.IsovalentBGPNodeVRF(bgpVRF))
 		}
 
 		res = append(res, nodeBGPInstance)

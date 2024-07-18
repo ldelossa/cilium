@@ -174,7 +174,7 @@ func (m *BGPResourceMapper) reconcileWithRetry(ctx context.Context) error {
 		err := m.reconcile(ctx)
 		if err != nil {
 			// log error, continue retry
-			m.logger.WithError(TrimError(err, maxErrorLen)).Warn("BGP reconciliation error")
+			m.logger.WithError(TrimError(err, maxErrorLen)).Debug("BGP reconciliation error")
 			return false, nil
 		}
 

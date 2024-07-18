@@ -169,12 +169,6 @@ spec:
                               type: string
                             type: array
                             x-kubernetes-list-type: set
-                          name:
-                            description: Name is the name of the VRF. This name is
-                              used to identify the VRF for the BGP instance.
-                            maxLength: 255
-                            minLength: 1
-                            type: string
                           rd:
                             description: RD is the route distinguisher for the VRF.
                             type: string
@@ -184,12 +178,11 @@ spec:
                             minLength: 1
                             type: string
                         required:
-                        - name
                         - vrfRef
                         type: object
                       type: array
                       x-kubernetes-list-map-keys:
-                      - name
+                      - vrfRef
                       x-kubernetes-list-type: map
                   required:
                   - name
