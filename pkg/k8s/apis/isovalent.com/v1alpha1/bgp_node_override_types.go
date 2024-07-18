@@ -70,6 +70,11 @@ type IsovalentBGPNodeConfigInstanceOverride struct {
 	// +kubebuilder:validation:Optional
 	LocalPort *int32 `json:"localPort,omitempty"`
 
+	// SRv6 Responder is a flag to enable SRv6 responder functionality on this BGP instance.
+	//
+	// +kubebuilder:validation:Optional
+	SRv6Responder *bool `json:"srv6Responder,omitempty"`
+
 	// Peers is a list of peer configurations to override.
 	//
 	// +kubebuilder:validation:Optional

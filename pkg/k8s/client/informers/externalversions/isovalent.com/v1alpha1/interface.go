@@ -27,6 +27,8 @@ type Interface interface {
 	IsovalentBGPNodeConfigOverrides() IsovalentBGPNodeConfigOverrideInformer
 	// IsovalentBGPPeerConfigs returns a IsovalentBGPPeerConfigInformer.
 	IsovalentBGPPeerConfigs() IsovalentBGPPeerConfigInformer
+	// IsovalentBGPVRFConfigs returns a IsovalentBGPVRFConfigInformer.
+	IsovalentBGPVRFConfigs() IsovalentBGPVRFConfigInformer
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
 	// IsovalentMeshEndpoints returns a IsovalentMeshEndpointInformer.
@@ -96,6 +98,11 @@ func (v *version) IsovalentBGPNodeConfigOverrides() IsovalentBGPNodeConfigOverri
 // IsovalentBGPPeerConfigs returns a IsovalentBGPPeerConfigInformer.
 func (v *version) IsovalentBGPPeerConfigs() IsovalentBGPPeerConfigInformer {
 	return &isovalentBGPPeerConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentBGPVRFConfigs returns a IsovalentBGPVRFConfigInformer.
+func (v *version) IsovalentBGPVRFConfigs() IsovalentBGPVRFConfigInformer {
+	return &isovalentBGPVRFConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.

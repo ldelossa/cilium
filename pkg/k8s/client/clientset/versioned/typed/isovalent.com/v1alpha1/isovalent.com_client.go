@@ -23,6 +23,7 @@ type IsovalentV1alpha1Interface interface {
 	IsovalentBGPNodeConfigsGetter
 	IsovalentBGPNodeConfigOverridesGetter
 	IsovalentBGPPeerConfigsGetter
+	IsovalentBGPVRFConfigsGetter
 	IsovalentFQDNGroupsGetter
 	IsovalentMeshEndpointsGetter
 	IsovalentMulticastGroupsGetter
@@ -69,6 +70,10 @@ func (c *IsovalentV1alpha1Client) IsovalentBGPNodeConfigOverrides() IsovalentBGP
 
 func (c *IsovalentV1alpha1Client) IsovalentBGPPeerConfigs() IsovalentBGPPeerConfigInterface {
 	return newIsovalentBGPPeerConfigs(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentBGPVRFConfigs() IsovalentBGPVRFConfigInterface {
+	return newIsovalentBGPVRFConfigs(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterface {

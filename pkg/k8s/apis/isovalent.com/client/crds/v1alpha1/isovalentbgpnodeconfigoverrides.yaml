@@ -97,6 +97,10 @@ spec:
                         It must be unique across all BGP instances.
                       format: ipv4
                       type: string
+                    srv6Responder:
+                      description: SRv6 Responder is a flag to enable SRv6 responder
+                        functionality on this BGP instance.
+                      type: boolean
                   required:
                   - name
                   type: object

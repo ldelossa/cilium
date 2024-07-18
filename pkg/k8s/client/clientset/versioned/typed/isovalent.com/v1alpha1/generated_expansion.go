@@ -21,6 +21,8 @@ type IsovalentBGPNodeConfigOverrideExpansion interface{}
 
 type IsovalentBGPPeerConfigExpansion interface{}
 
+type IsovalentBGPVRFConfigExpansion interface{}
+
 type IsovalentFQDNGroupExpansion interface{}
 
 type IsovalentMeshEndpointExpansion interface{}

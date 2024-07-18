@@ -82,6 +82,13 @@ type IsovalentBGPInstance struct {
 	// +listType=map
 	// +listMapKey=name
 	Peers []IsovalentBGPPeer `json:"peers,omitempty"`
+
+	// VRFs is a list of VRFs for this virtual router
+	//
+	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=name
+	VRFs []BGPVRF `json:"vrfs,omitempty"`
 }
 
 type IsovalentBGPPeer struct {
@@ -135,4 +142,41 @@ type PeerConfigReference struct {
 	//
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
+}
+
+type BGPVRF struct {
+	// Name is the name of the VRF.
+	// It is a unique identifier for the VRF within the BGP instance.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Name string `json:"name"`
+
+	// VRFRef is a reference to a IsovalentVRF resource.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	VRFRef string `json:"vrfRef"`
+
+	// ConfigRef is a reference to a IsovalentBGPVRFConfig resource.
+	//
+	// +kubebuilder:validation:Optional
+	ConfigRef *string `json:"configRef,omitempty"`
+
+	// RD is the Route Distinguisher of the VRF.
+	//
+	// +kubebuilder:validation:Optional
+	RD *string `json:"rd,omitempty"`
+
+	// ImportRTs is a list of route targets to import routes from.
+	//
+	// +kubebuilder:validation:Optional
+	ImportRTs []string `json:"importRTs,omitempty"`
+
+	// ExportRTs is a list of route targets to export routes to.
+	//
+	// +kubebuilder:validation:Optional
+	ExportRTs []string `json:"exportRTs,omitempty"`
 }

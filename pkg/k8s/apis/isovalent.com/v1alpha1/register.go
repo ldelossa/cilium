@@ -85,16 +85,19 @@ const (
 	IsovalentBGPAdvertisementPluralName          = "isovalentbgpadvertisements"
 	IsovalentBGPNodeConfigPluralName             = "isovalentbgpnodeconfigs"
 	IsovalentBGPNodeConfigOverridePluralName     = "isovalentbgpnodeconfigoverrides"
+	IsovalentBGPVRFConfigPluralName              = "isovalentbgpvrfconfigs"
 	IsovalentBGPClusterConfigKindDefinition      = "IsovalentBGPClusterConfig"
 	IsovalentBGPPeerConfigKindDefinition         = "IsovalentBGPPeerConfig"
 	IsovalentBGPAdvertisementKindDefinition      = "IsovalentBGPAdvertisement"
 	IsovalentBGPNodeConfigKindDefinition         = "IsovalentBGPNodeConfig"
 	IsovalentBGPNodeConfigOverrideKindDefinition = "IsovalentBGPNodeConfigOverride"
+	IsovalentBGPVRFConfigKindDefinition          = "IsovalentBGPVRFConfig"
 	IsovalentBGPClusterConfigName                = IsovalentBGPClusterConfigPluralName + "." + CustomResourceDefinitionGroup
 	IsovalentBGPPeerConfigName                   = IsovalentBGPPeerConfigPluralName + "." + CustomResourceDefinitionGroup
 	IsovalentBGPAdvertisementName                = IsovalentBGPAdvertisementPluralName + "." + CustomResourceDefinitionGroup
 	IsovalentBGPNodeConfigName                   = IsovalentBGPNodeConfigPluralName + "." + CustomResourceDefinitionGroup
 	IsovalentBGPNodeConfigOverrideName           = IsovalentBGPNodeConfigOverridePluralName + "." + CustomResourceDefinitionGroup
+	IsovalentBGPVRFConfigName                    = IsovalentBGPVRFConfigPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -172,6 +175,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentBGPNodeConfigList{},
 		&IsovalentBGPNodeConfigOverride{},
 		&IsovalentBGPNodeConfigOverrideList{},
+		&IsovalentBGPVRFConfig{},
+		&IsovalentBGPVRFConfigList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

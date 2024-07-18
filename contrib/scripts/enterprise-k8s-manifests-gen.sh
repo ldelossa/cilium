@@ -36,7 +36,8 @@ CRDS_ISOVALENT_V1ALPHA1="isovalentfqdngroups \
                          isovalentbgppeerconfigs \
                          isovalentbgpadvertisements \
                          isovalentbgpnodeconfigs \
-                         isovalentbgpnodeconfigoverrides"
+                         isovalentbgpnodeconfigoverrides \
+                         isovalentbgpvrfconfigs"
 
 TMPDIR=$(mktemp -d -t cilium.tmpXXXXXXXX)
 go run sigs.k8s.io/controller-tools/cmd/controller-gen ${CRD_OPTIONS} paths="${CRD_PATHS}" output:crd:artifacts:config="${TMPDIR}"

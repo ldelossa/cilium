@@ -37,6 +37,10 @@ type IsovalentBGPNodeConfigOverrideListerExpansion interface{}
 // IsovalentBGPPeerConfigLister.
 type IsovalentBGPPeerConfigListerExpansion interface{}
 
+// IsovalentBGPVRFConfigListerExpansion allows custom methods to be added to
+// IsovalentBGPVRFConfigLister.
+type IsovalentBGPVRFConfigListerExpansion interface{}
+
 // IsovalentFQDNGroupListerExpansion allows custom methods to be added to
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}

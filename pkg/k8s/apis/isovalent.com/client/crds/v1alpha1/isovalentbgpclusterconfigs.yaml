@@ -119,6 +119,48 @@ spec:
                       x-kubernetes-list-map-keys:
                       - name
                       x-kubernetes-list-type: map
+                    vrfs:
+                      description: VRFs is a list of VRFs for this virtual router
+                      items:
+                        properties:
+                          configRef:
+                            description: ConfigRef is a reference to a IsovalentBGPVRFConfig
+                              resource.
+                            type: string
+                          exportRTs:
+                            description: ExportRTs is a list of route targets to export
+                              routes to.
+                            items:
+                              type: string
+                            type: array
+                          importRTs:
+                            description: ImportRTs is a list of route targets to import
+                              routes from.
+                            items:
+                              type: string
+                            type: array
+                          name:
+                            description: Name is the name of the VRF. It is a unique
+                              identifier for the VRF within the BGP instance.
+                            maxLength: 255
+                            minLength: 1
+                            type: string
+                          rd:
+                            description: RD is the Route Distinguisher of the VRF.
+                            type: string
+                          vrfRef:
+                            description: VRFRef is a reference to a IsovalentVRF resource.
+                            maxLength: 255
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
+                        - vrfRef
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - name
+                      x-kubernetes-list-type: map
                   required:
                   - name
                   type: object

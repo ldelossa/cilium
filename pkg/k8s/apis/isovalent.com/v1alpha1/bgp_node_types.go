@@ -91,12 +91,24 @@ type IsovalentBGPNodeInstance struct {
 	// +kubebuilder:validation:Maximum=65535
 	LocalPort *int32 `json:"localPort,omitempty"`
 
+	// SRv6Responder is a flag to enable SRv6 responder on the BGP instance.
+	//
+	// +kubebuilder:validation:Optional
+	SRv6Responder *bool `json:"srv6Responder,omitempty"`
+
 	// Peers is a list of neighboring BGP peers for this virtual router
 	//
 	// +kubebuilder:validation:Optional
 	// +listType=map
 	// +listMapKey=name
 	Peers []IsovalentBGPNodePeer `json:"peers,omitempty"`
+
+	// VRFs is a list of VRFs for this virtual router
+	//
+	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=name
+	VRFs []IsovalentBGPNodeVRF `json:"vrfs,omitempty"`
 }
 
 type IsovalentBGPNodePeer struct {
@@ -146,4 +158,42 @@ type IsovalentBGPNodeStatus struct {
 
 type IsovalentBGPNodeInstanceStatus struct {
 	v2alpha1.CiliumBGPNodeInstanceStatus `json:",inline"`
+}
+
+type IsovalentBGPNodeVRF struct {
+	// Name is the name of the VRF. This name is used to identify the VRF for the BGP instance.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Name string `json:"name"`
+
+	// VRFRef is a reference to a IsovalentVRF resource.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	VRFRef string `json:"vrfRef"`
+
+	// ConfigRef is a reference to a IsovalentBGPVRFConfig resource.
+	//
+	// +kubebuilder:validation:Optional
+	ConfigRef *string `json:"configRef,omitempty"`
+
+	// RD is the route distinguisher for the VRF.
+	//
+	// +kubebuilder:validation:Optional
+	RD *string `json:"rd,omitempty"`
+
+	// ImportRTs is a list of route targets to import routes from.
+	//
+	// +kubebuilder:validation:Optional
+	// +listType=set
+	ImportRTs []string `json:"importRTs,omitempty"`
+
+	// ExportRTs is a list of route targets to export routes to.
+	//
+	// +kubebuilder:validation:Optional
+	// +listType=set
+	ExportRTs []string `json:"exportRTs,omitempty"`
 }

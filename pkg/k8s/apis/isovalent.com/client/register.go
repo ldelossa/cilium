@@ -82,6 +82,9 @@ const (
 
 	// IsovalentBGPNodeConfigOverrideCRDName is the full name of the IsovalentBGPNodeConfigOverride CRD.
 	IsovalentBGPNodeConfigOverrideCRDName = k8sconstv1alpha1.IsovalentBGPNodeConfigOverrideKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IsovalentBGPVRFConfigCRDName is the full name of the IsovalentBGPVRFConfig CRD.
+	IsovalentBGPVRFConfigCRDName = k8sconstv1alpha1.IsovalentBGPVRFConfigKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 // log is the k8s package logger object.
@@ -113,6 +116,7 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPAdvertisementName):      createBGPAdvertisementCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPNodeConfigName):         createBGPNodeConfigCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPNodeConfigOverrideName): createBGPNodeConfigOverrideCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IsovalentBGPVRFConfigName):          createBGPVRFConfigCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -181,6 +185,9 @@ var (
 
 	//go:embed crds/v1alpha1/isovalentbgpnodeconfigoverrides.yaml
 	crdsv1Alpha1IsovalentBGPNodeConfigOverrides []byte
+
+	//go:embed crds/v1alpha1/isovalentbgpvrfconfigs.yaml
+	crdsv1Alpha1IsovalentBGPVRFConfigs []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -232,6 +239,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentBGPNodeConfigs
 	case IsovalentBGPNodeConfigOverrideCRDName:
 		crdBytes = crdsv1Alpha1IsovalentBGPNodeConfigOverrides
+	case IsovalentBGPVRFConfigCRDName:
+		crdBytes = crdsv1Alpha1IsovalentBGPVRFConfigs
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -473,6 +482,19 @@ func createBGPNodeConfigOverrideCRD(clientset apiextensionsclient.Interface) err
 	return crdhelpers.CreateUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IsovalentBGPNodeConfigOverrideName, ciliumCRD),
+		crdhelpers.NewDefaultPoller(),
+		k8sconst.CustomResourceDefinitionSchemaVersionKey,
+		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),
+	)
+}
+
+// createBGPVRFConfigCRD creates and updates the IsovalentBGPVRFConfig CRD.
+func createBGPVRFConfigCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IsovalentBGPVRFConfigCRDName)
+
+	return crdhelpers.CreateUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IsovalentBGPVRFConfigName, ciliumCRD),
 		crdhelpers.NewDefaultPoller(),
 		k8sconst.CustomResourceDefinitionSchemaVersionKey,
 		versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion),

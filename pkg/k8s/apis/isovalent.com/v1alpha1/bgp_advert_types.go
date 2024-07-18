@@ -22,6 +22,9 @@ const (
 	// BGPEGWAdvert is advertisement of egress gateway.
 	BGPEGWAdvert IsovalentBGPAdvertType = "EgressGateway"
 
+	// BGPSRv6LocatorPoolAdvert is advertisement of SRv6 locator pool routes.
+	BGPSRv6LocatorPoolAdvert IsovalentBGPAdvertType = "SRv6LocatorPool"
+
 	// BGPPodCIDRAdvert when configured, Cilium will advertise pod CIDRs to BGP peers.
 	BGPPodCIDRAdvert IsovalentBGPAdvertType = "PodCIDR"
 

@@ -47,6 +47,10 @@ func (c *FakeIsovalentV1alpha1) IsovalentBGPPeerConfigs() v1alpha1.IsovalentBGPP
 	return &FakeIsovalentBGPPeerConfigs{c}
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentBGPVRFConfigs() v1alpha1.IsovalentBGPVRFConfigInterface {
+	return &FakeIsovalentBGPVRFConfigs{c}
+}
+
 func (c *FakeIsovalentV1alpha1) IsovalentFQDNGroups() v1alpha1.IsovalentFQDNGroupInterface {
 	return &FakeIsovalentFQDNGroups{c}
 }

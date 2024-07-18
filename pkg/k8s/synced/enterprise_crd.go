@@ -39,6 +39,7 @@ func AllIsovalentCRDResourceNames() []string {
 		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPAdvertisementName))
 		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPNodeConfigName))
 		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPNodeConfigOverrideName))
+		result = append(result, CRDResourceName(v1alpha1.IsovalentBGPVRFConfigName))
 	}
 
 	if option.Config.EnableIPv4EgressGatewayHA {
