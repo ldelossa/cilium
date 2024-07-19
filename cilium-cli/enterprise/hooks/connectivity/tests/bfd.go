@@ -267,13 +267,6 @@ func (s *bfdWithBGP) Run(ctx context.Context, t *check.Test) {
 		bfdProfile := generateBFDProfile(false, false)
 		configureBFDProfile(ctx, t, bfdProfile, false)
 
-		// ensure BGP peering is established
-		t.NewGenericAction(s, fmt.Sprintf("ensure-bgp-established-%s", ipFamily)).Run(func(a *check.Action) {
-			for _, frr := range ct.FRRPods() {
-				check.WaitForFRRBGPNeighborsState(ctx, t, &frr, frrPeers, "Established")
-			}
-		})
-
 		// ensure BFD peering goes Up on both sides
 		t.NewGenericAction(s, fmt.Sprintf("ensure-bfd-up-%s", ipFamily)).Run(func(a *check.Action) {
 			for _, frr := range ct.FRRPods() {
@@ -281,6 +274,39 @@ func (s *bfdWithBGP) Run(ctx context.Context, t *check.Test) {
 			}
 			for _, ciliumPod := range ct.CiliumPods() {
 				waitForCiliumBFDPeersState(ctx, a, &ciliumPod, types.BFDStateUp)
+			}
+		})
+
+		// ensure BGP peering is established and store last reset time
+		upTimestamps := make(map[string]int) // keyed by FRR name + peer IP
+		t.NewGenericAction(s, fmt.Sprintf("ensure-bgp-established-%s", ipFamily)).Run(func(a *check.Action) {
+			for _, frr := range ct.FRRPods() {
+				neighbors := check.WaitForFRRBGPNeighborsState(ctx, t, &frr, frrPeers, "Established")
+				for nIP, neighbor := range neighbors {
+					upTimestamps[frr.Name()+nIP] = neighbor.BgpTimerUpEstablishedEpoch
+				}
+			}
+		})
+
+		// disable BFD on FRR and expect BGP reset from Cilium
+		t.NewGenericAction(s, fmt.Sprintf("check-bgp-reset-%s", ipFamily)).Run(func(a *check.Action) {
+			// unconfigure BFD on FRR
+			for _, frrPod := range ct.FRRPods() {
+				RunFRRCommands(ctx, t, &frrPod, []string{"configure terminal", "no bfd"})
+			}
+			// check BFD peering is Down on Cilium
+			for _, ciliumPod := range ct.CiliumPods() {
+				waitForCiliumBFDPeersState(ctx, a, &ciliumPod, types.BFDStateDown)
+			}
+			// BGP should be Up again, verify it has been reset
+			for _, frr := range ct.FRRPods() {
+				neighbors := check.WaitForFRRBGPNeighborsState(ctx, t, &frr, frrPeers, "Established")
+				for nIP, neighbor := range neighbors {
+					prevUpTimeStamp := upTimestamps[frr.Name()+nIP]
+					if prevUpTimeStamp == neighbor.BgpTimerUpEstablishedEpoch {
+						a.Fatalf("BGP peering %s was not reset", nIP)
+					}
+				}
 			}
 		})
 	})
@@ -531,4 +557,18 @@ func waitForCiliumBFDPeersState(ctx context.Context, a *check.Action, ciliumPod 
 func dumpFRRBFDState(ctx context.Context, t *check.Test, frrPod *check.Pod) {
 	t.Logf("FRR %s state:", frrPod.Name())
 	t.Logf("%s", check.RunFRRCommand(ctx, t, frrPod, "show bfd peers"))
+}
+
+// RunFRRCommands runs CLI commands on the given FRR pod.
+func RunFRRCommands(ctx context.Context, t *check.Test, frrPod *check.Pod, cmds []string) []byte {
+	cmdArr := []string{"vtysh"}
+	for _, cmd := range cmds {
+		cmdArr = append(cmdArr, "-c "+cmd)
+	}
+	stdout, stderr, err := frrPod.K8sClient.ExecInPodWithStderr(ctx,
+		frrPod.Pod.Namespace, frrPod.Pod.Name, frrPod.Pod.Labels["name"], cmdArr)
+	if err != nil || stderr.String() != "" {
+		t.Fatalf("failed to run FRR command: %v: %s", err, stderr.String())
+	}
+	return stdout.Bytes()
 }
