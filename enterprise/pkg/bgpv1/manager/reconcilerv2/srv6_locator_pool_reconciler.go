@@ -47,7 +47,7 @@ type srv6LocatorPoolReconcilerIn struct {
 	BGPConfig    config.Config
 
 	Upgrader   paramUpgrader
-	PeerAdvert *IsovalentPeerAdvertisement
+	PeerAdvert *IsovalentAdvertisement
 
 	SIDManagerPromise   promise.Promise[sidmanager.SIDManager]
 	LocatorPoolResource resource.Resource[*v1alpha1.IsovalentSRv6LocatorPool]
@@ -64,7 +64,7 @@ type LocatorPoolReconciler struct {
 	logger      logrus.FieldLogger
 
 	upgrader   paramUpgrader
-	peerAdvert *IsovalentPeerAdvertisement
+	peerAdvert *IsovalentAdvertisement
 
 	sidAllocators     map[string]sidmanager.SIDAllocator
 	sidAllocatorsLock lock.RWMutex
@@ -162,7 +162,7 @@ func (r *LocatorPoolReconciler) Reconcile(ctx context.Context, p reconcilerv2.Re
 	}
 
 	// get per peer per family locator pool advertisements
-	desiredPeerAdverts, err := r.peerAdvert.GetConfiguredAdvertisements(iParams.DesiredConfig, v1alpha1.BGPSRv6LocatorPoolAdvert)
+	desiredPeerAdverts, err := r.peerAdvert.GetConfiguredPeerAdvertisements(iParams.DesiredConfig, v1alpha1.BGPSRv6LocatorPoolAdvert)
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func (r *LocatorPoolReconciler) getDesiredPaths(desiredFamilyAdverts PeerAdverti
 					desiredLPAFPaths := make(reconcilerv2.AFPathsMap)
 					path := types.NewPathForPrefix(allocator.Locator().Prefix)
 					path.Family = agentFamily
-					reconcilerv2.AddPathToAFPathsMap(desiredLPAFPaths, agentFamily, path)
+					reconcilerv2.AddPathToAFPathsMap(desiredLPAFPaths, agentFamily, path, path.NLRI.String())
 
 					desiredResourceAFPaths[resource.Key{Name: lp.Name}] = desiredLPAFPaths
 				}

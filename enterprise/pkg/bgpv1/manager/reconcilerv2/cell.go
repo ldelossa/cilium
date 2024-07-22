@@ -13,14 +13,21 @@ package reconcilerv2
 import (
 	"github.com/cilium/hive/cell"
 
+	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/k8s"
+	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 )
 
 // ConfigReconcilers contains cells of enterprise-only reconcilers
 var ConfigReconcilers = cell.Group(
 	cell.ProvidePrivate(
 		newReconcileParamsUpgrader,
-		newIsovalentPeerAdvertisement,
+		newIsovalentAdvertisement,
+	),
+
+	// provide stores
+	cell.Provide(
+		store.NewBGPCPResourceStore[*v1alpha1.IsovalentBGPVRFConfig],
 	),
 
 	cell.Provide(

@@ -466,7 +466,7 @@ func TestEgressGatewayAdvertisements(t *testing.T) {
 				logger:         logger,
 				egwIPsProvider: newEGWManagerMock(tt.testEGWPolicies),
 				upgrader:       newUpgraderMock(tt.testBGPInstanceConfig),
-				peerAdvert: &IsovalentPeerAdvertisement{
+				peerAdvert: &IsovalentAdvertisement{
 					logger:     logger,
 					peerConfig: mockPeerConfigStore,
 					adverts:    mockAdvertStore,

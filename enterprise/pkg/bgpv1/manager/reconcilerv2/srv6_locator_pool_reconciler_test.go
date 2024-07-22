@@ -567,7 +567,7 @@ func TestExportSRv6LocatorPoolReconciler(t *testing.T) {
 				upgrader:         newUpgraderMock(testInstanceConfig),
 				locatorPoolStore: mockLocatorPoolStore,
 				sidAllocators:    allocators,
-				peerAdvert: &IsovalentPeerAdvertisement{
+				peerAdvert: &IsovalentAdvertisement{
 					logger:     logger,
 					peerConfig: mockPeerConfigStore,
 					adverts:    mockAdvertStore,

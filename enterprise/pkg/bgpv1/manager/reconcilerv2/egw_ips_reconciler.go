@@ -43,9 +43,8 @@ type EGWIPsReconcilerIn struct {
 	BGPConfig    config.Config
 	DaemonConfig *option.DaemonConfig
 	EGWManager   *egressgatewayha.Manager
-
-	Upgrader   paramUpgrader
-	PeerAdvert *IsovalentPeerAdvertisement
+	Upgrader     paramUpgrader
+	PeerAdvert   *IsovalentAdvertisement
 }
 
 type EGWIPsReconcilerOut struct {
@@ -73,7 +72,7 @@ type EgressGatewayIPsReconciler struct {
 	logger         logrus.FieldLogger
 	egwIPsProvider egwIPsProvider
 	upgrader       paramUpgrader
-	peerAdvert     *IsovalentPeerAdvertisement
+	peerAdvert     *IsovalentAdvertisement
 }
 
 type EgressGatewayIPsMetadata struct {
@@ -96,7 +95,7 @@ func (r *EgressGatewayIPsReconciler) Reconcile(ctx context.Context, p reconciler
 	}
 
 	// get per peer per family egw advertisements
-	desiredPeerAdverts, err := r.peerAdvert.GetConfiguredAdvertisements(iParams.DesiredConfig, v1alpha1.BGPEGWAdvert)
+	desiredPeerAdverts, err := r.peerAdvert.GetConfiguredPeerAdvertisements(iParams.DesiredConfig, v1alpha1.BGPEGWAdvert)
 	if err != nil {
 		return err
 	}
@@ -229,12 +228,12 @@ func (r *EgressGatewayIPsReconciler) getDesiredEGWAFPaths(desiredFamilyAdverts P
 						case agentFamily.Afi == types.AfiIPv4 && egwIP.Is4():
 							path := types.NewPathForPrefix(netip.PrefixFrom(egwIP, egwIP.BitLen()))
 							path.Family = agentFamily
-							reconcilerv2.AddPathToAFPathsMap(desiredEGWAFPaths, agentFamily, path)
+							reconcilerv2.AddPathToAFPathsMap(desiredEGWAFPaths, agentFamily, path, path.NLRI.String())
 
 						case agentFamily.Afi == types.AfiIPv6 && egwIP.Is6():
 							path := types.NewPathForPrefix(netip.PrefixFrom(egwIP, egwIP.BitLen()))
 							path.Family = agentFamily
-							reconcilerv2.AddPathToAFPathsMap(desiredEGWAFPaths, agentFamily, path)
+							reconcilerv2.AddPathToAFPathsMap(desiredEGWAFPaths, agentFamily, path, path.NLRI.String())
 
 						default:
 							r.logger.WithField("IP", egwIP.String()).Error("invalid egress gateway IP")

@@ -16,4 +16,7 @@ const (
 
 	// LocatorPoolLogField is used as key for SRv6 locator pool in the log field.
 	LocatorPoolLogField = "locator_pool"
+
+	// VRFLogField is used as key for VRF in the log field.
+	VRFLogField = "vrf"
 )

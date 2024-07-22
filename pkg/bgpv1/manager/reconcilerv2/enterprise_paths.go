@@ -14,6 +14,11 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 )
 
-func AddPathToAFPathsMap(m AFPathsMap, fam types.Family, path *types.Path) {
-	addPathToAFPathsMap(m, fam, path)
+func AddPathToAFPathsMap(m AFPathsMap, fam types.Family, path *types.Path, pathKey string) {
+	pathsPerFamily, exists := m[fam]
+	if !exists {
+		pathsPerFamily = make(PathMap)
+		m[fam] = pathsPerFamily
+	}
+	pathsPerFamily[pathKey] = path
 }

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
+	entTypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/store"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -34,11 +35,16 @@ import (
 type (
 	// PeerAdvertisements is a map of peer name to its family advertisements
 	// This is the top level map that is returned to the consumer with requested advertisements.
-	PeerAdvertisements       map[string]PeerFamilyAdvertisements
-	PeerFamilyAdvertisements map[v2alpha1.CiliumBGPFamily][]v1alpha1.BGPAdvertisement // key is the address family type
+	PeerAdvertisements map[string]FamilyAdvertisements
+
+	// VRFAdvertisements is a map of VRF name to its family advertisements
+	VRFAdvertisements map[string]FamilyAdvertisements
+
+	// FamilyAdvertisements is a map of address family to its advertisements
+	FamilyAdvertisements map[v2alpha1.CiliumBGPFamily][]v1alpha1.BGPAdvertisement
 )
 
-type PeerAdvertisementIn struct {
+type AdvertisementIn struct {
 	cell.In
 
 	Group              job.Group
@@ -46,24 +52,30 @@ type PeerAdvertisementIn struct {
 	Config             config.Config
 	PeerConfigResource resource.Resource[*v1alpha1.IsovalentBGPPeerConfig]
 	AdvertResource     resource.Resource[*v1alpha1.IsovalentBGPAdvertisement]
+	VRFConfigStore     store.BGPCPResourceStore[*v1alpha1.IsovalentBGPVRFConfig]
 }
 
-type IsovalentPeerAdvertisement struct {
+type IsovalentAdvertisement struct {
 	initialized atomic.Bool
 	logger      logrus.FieldLogger
 	peerConfig  resource.Store[*v1alpha1.IsovalentBGPPeerConfig]
 	adverts     resource.Store[*v1alpha1.IsovalentBGPAdvertisement]
+
+	// we want to trigger BGP reconciliation if there is change detected in IsovalentBGPVRFConfig
+	// so we initialize BGPCPResourceStore for IsovalentBGPVRFConfig
+	vrfs store.BGPCPResourceStore[*v1alpha1.IsovalentBGPVRFConfig]
 }
 
-func newIsovalentPeerAdvertisement(p PeerAdvertisementIn) *IsovalentPeerAdvertisement {
-	pa := &IsovalentPeerAdvertisement{
-		logger: p.Logger,
+func newIsovalentAdvertisement(p AdvertisementIn) *IsovalentAdvertisement {
+	pa := &IsovalentAdvertisement{
+		logger: p.Logger.WithField(types.ReconcilerLogField, "advertisements"),
+		vrfs:   p.VRFConfigStore,
 	}
 	// Check if enterprise BGP control plane is enabled
 	if !p.Config.Enabled {
 		return pa
 	}
-	p.Group.Add(job.OneShot("init-peer-advertisement", func(ctx context.Context, health cell.Health) error {
+	p.Group.Add(job.OneShot("init-advertisements", func(ctx context.Context, health cell.Health) error {
 		pcs, err := p.PeerConfigResource.Store(ctx)
 		if err != nil {
 			return err
@@ -84,7 +96,7 @@ func newIsovalentPeerAdvertisement(p PeerAdvertisementIn) *IsovalentPeerAdvertis
 	return pa
 }
 
-// GetConfiguredAdvertisements can be called to get all configured advertisements of given BGPAdvertisementType for each peer.
+// GetConfiguredPeerAdvertisements can be called to get all configured advertisements of given BGPAdvertisementType for each peer.
 // Advertisements are selected based on below criteria:
 // Each peer is selected from the BGP node instance configuration. For each peer, the peer configuration is fetched
 // from local store.
@@ -95,7 +107,7 @@ func newIsovalentPeerAdvertisement(p PeerAdvertisementIn) *IsovalentPeerAdvertis
 // Linear scan [ Peers ] - O(n) ( number of peers )
 // Linear scan [ Families ] - O(m) ( max 2 )
 // Linear scan [ Advertisements ] - O(k) ( number of advertisements - 3-4 types, which is again filtered)
-func (p *IsovalentPeerAdvertisement) GetConfiguredAdvertisements(conf *v1alpha1.IsovalentBGPNodeInstance, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (PeerAdvertisements, error) {
+func (p *IsovalentAdvertisement) GetConfiguredPeerAdvertisements(conf *v1alpha1.IsovalentBGPNodeInstance, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (PeerAdvertisements, error) {
 	if !p.initialized.Load() {
 		return make(PeerAdvertisements), nil
 	}
@@ -104,6 +116,11 @@ func (p *IsovalentPeerAdvertisement) GetConfiguredAdvertisements(conf *v1alpha1.
 	l := p.logger.WithField(types.InstanceLogField, conf.Name)
 	for _, peer := range conf.Peers {
 		lp := l.WithField(types.PeerLogField, peer.Name)
+
+		if peer.PeerConfigRef == nil {
+			lp.Debug("Peer config ref not set, skipping advertisement check")
+			continue
+		}
 
 		peerConfig, exist, err := p.peerConfig.GetByKey(resource.Key{Name: peer.PeerConfigRef.Name})
 		if err != nil {
@@ -127,7 +144,7 @@ func (p *IsovalentPeerAdvertisement) GetConfiguredAdvertisements(conf *v1alpha1.
 	return result, nil
 }
 
-func (p *IsovalentPeerAdvertisement) getPeerAdvertisements(peerConfig *v1alpha1.IsovalentBGPPeerConfig, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (PeerFamilyAdvertisements, error) {
+func (p *IsovalentAdvertisement) getPeerAdvertisements(peerConfig *v1alpha1.IsovalentBGPPeerConfig, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (FamilyAdvertisements, error) {
 	result := make(map[v2alpha1.CiliumBGPFamily][]v1alpha1.BGPAdvertisement)
 
 	for _, family := range peerConfig.Spec.Families {
@@ -140,7 +157,7 @@ func (p *IsovalentPeerAdvertisement) getPeerAdvertisements(peerConfig *v1alpha1.
 	return result, nil
 }
 
-func (p *IsovalentPeerAdvertisement) getFamilyAdvertisements(family v2alpha1.CiliumBGPFamilyWithAdverts, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) ([]v1alpha1.BGPAdvertisement, error) {
+func (p *IsovalentAdvertisement) getFamilyAdvertisements(family v2alpha1.CiliumBGPFamilyWithAdverts, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) ([]v1alpha1.BGPAdvertisement, error) {
 	// get all advertisement CRD objects.
 	advertResources := p.adverts.List()
 
@@ -170,7 +187,7 @@ func (p *IsovalentPeerAdvertisement) getFamilyAdvertisements(family v2alpha1.Cil
 	return selectedAdvertisements, nil
 }
 
-func (p *IsovalentPeerAdvertisement) familySelectedAdvertisements(family v2alpha1.CiliumBGPFamilyWithAdverts, adverts []*v1alpha1.IsovalentBGPAdvertisement) ([]*v1alpha1.IsovalentBGPAdvertisement, error) {
+func (p *IsovalentAdvertisement) familySelectedAdvertisements(family v2alpha1.CiliumBGPFamilyWithAdverts, adverts []*v1alpha1.IsovalentBGPAdvertisement) ([]*v1alpha1.IsovalentBGPAdvertisement, error) {
 	var result []*v1alpha1.IsovalentBGPAdvertisement
 	advertSelector, err := slim_metav1.LabelSelectorAsSelector(family.Advertisements)
 	if err != nil {
@@ -181,6 +198,57 @@ func (p *IsovalentPeerAdvertisement) familySelectedAdvertisements(family v2alpha
 		if advertSelector.Matches(labels.Set(advert.Labels)) {
 			result = append(result, advert)
 		}
+	}
+	return result, nil
+}
+
+func (p *IsovalentAdvertisement) GetConfiguredVRFAdvertisements(conf *v1alpha1.IsovalentBGPNodeInstance, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (VRFAdvertisements, error) {
+	if !p.initialized.Load() {
+		return make(VRFAdvertisements), nil
+	}
+
+	result := make(VRFAdvertisements)
+	l := p.logger.WithField(types.InstanceLogField, conf.Name)
+
+	for _, vrf := range conf.VRFs {
+		lv := l.WithField(entTypes.VRFLogField, vrf.VRFRef)
+
+		if vrf.ConfigRef == nil {
+			lv.Debug("VRF config ref not set, skipping advertisement check")
+			continue
+		}
+
+		vrfConfig, exist, err := p.vrfs.GetByKey(resource.Key{Name: *vrf.ConfigRef})
+		if err != nil {
+			if errors.Is(err, store.ErrStoreUninitialized) {
+				lv.Debug("VRF config store is not initialized")
+			}
+			return nil, err
+		}
+
+		if !exist {
+			lv.Debug("VRF config not found, skipping advertisement check")
+			continue
+		}
+
+		vrfAdverts, err := p.getVRFAdvertisements(vrfConfig, selectAdvertTypes...)
+		if err != nil {
+			return nil, err
+		}
+		result[vrf.VRFRef] = vrfAdverts
+	}
+	return result, nil
+}
+
+func (p *IsovalentAdvertisement) getVRFAdvertisements(vrfConfig *v1alpha1.IsovalentBGPVRFConfig, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (FamilyAdvertisements, error) {
+	result := make(map[v2alpha1.CiliumBGPFamily][]v1alpha1.BGPAdvertisement)
+
+	for _, family := range vrfConfig.Spec.Families {
+		advert, err := p.getFamilyAdvertisements(family, selectAdvertTypes...)
+		if err != nil {
+			return result, err
+		}
+		result[family.CiliumBGPFamily] = advert
 	}
 	return result, nil
 }
@@ -198,7 +266,7 @@ func PeerAdvertisementsEqual(first, second PeerAdvertisements) bool {
 	return true
 }
 
-func FamilyAdvertisementsEqual(first, second PeerFamilyAdvertisements) bool {
+func FamilyAdvertisementsEqual(first, second FamilyAdvertisements) bool {
 	if len(first) != len(second) {
 		return false
 	}
