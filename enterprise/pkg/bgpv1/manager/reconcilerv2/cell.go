@@ -23,6 +23,7 @@ var ConfigReconcilers = cell.Group(
 	cell.ProvidePrivate(
 		newReconcileParamsUpgrader,
 		newIsovalentAdvertisement,
+		newSRv6Paths,
 	),
 
 	// provide stores
@@ -40,5 +41,6 @@ var ConfigReconcilers = cell.Group(
 		NewSRv6LocatorPoolReconciler,
 		NewImportRoutePolicyReconciler,
 		NewImportedVPNRouteReconciler,
+		NewPodCIDRVRFReconciler,
 	),
 )

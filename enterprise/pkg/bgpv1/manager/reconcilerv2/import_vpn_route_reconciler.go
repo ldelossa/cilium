@@ -57,7 +57,7 @@ type ImportedVPNRouteReconciler struct {
 	Logger      logrus.FieldLogger
 	Clientset   client.Clientset
 	Upgrader    paramUpgrader
-	SRv6Manager *srv6.Manager
+	SRv6Manager SRv6Manager
 }
 
 func NewImportedVPNRouteReconciler(params ImportedVPNRouteReconcilerIn) ImportedVPNRouteReconcilerOut {
