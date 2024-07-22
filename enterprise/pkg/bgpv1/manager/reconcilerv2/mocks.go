@@ -83,6 +83,16 @@ func (u *upgraderMock) upgrade(params reconcilerv2.ReconcileParams) (EnterpriseR
 	}, nil
 }
 
+func (u *upgraderMock) upgradeState(params reconcilerv2.StateReconcileParams) (EnterpriseStateReconcileParams, error) {
+	return EnterpriseStateReconcileParams{
+		DesiredConfig: u.bgpNodeInstance, // put provided isovalentBGPNodeInstance into the desired config
+		UpdatedInstance: &EnterpriseBGPInstance{
+			Router:   params.UpdatedInstance.Router,
+			Metadata: params.UpdatedInstance.Metadata,
+		},
+	}, nil
+}
+
 var _ resource.Store[runtime.Object] = (*mockResourceStore[runtime.Object])(nil)
 
 // mockResourceStore is a mock implementation of resource.Store used for testing.

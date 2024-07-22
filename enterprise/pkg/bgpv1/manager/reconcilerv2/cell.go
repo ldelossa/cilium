@@ -39,5 +39,6 @@ var ConfigReconcilers = cell.Group(
 		NewBFDStateReconciler,
 		NewSRv6LocatorPoolReconciler,
 		NewImportRoutePolicyReconciler,
+		NewImportedVPNRouteReconciler,
 	),
 )

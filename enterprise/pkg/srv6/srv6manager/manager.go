@@ -594,6 +594,18 @@ func (manager *Manager) GetVRFs(importRouteTarget string) []*VRF {
 	return vrfs
 }
 
+// GetVRFByName returns a copy of the VRF with the given VRF name known to the SRv6 manager.
+func (manager *Manager) GetVRFByName(vrfName types.NamespacedName) (*VRF, bool) {
+	manager.RLock()
+	defer manager.RUnlock()
+
+	vrf, exists := manager.vrfs[vrfName]
+	if !exists {
+		return nil, false
+	}
+	return vrf.DeepCopy(), true
+}
+
 // GetEgressPolicies returns a slice with the SRv6 egress policies known to the
 // SRv6 manager.
 func (manager *Manager) GetEgressPolicies() []*EgressPolicy {

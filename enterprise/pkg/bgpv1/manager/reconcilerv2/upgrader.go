@@ -17,13 +17,20 @@ import (
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
+	"github.com/sirupsen/logrus"
 
+	daemon_k8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/lock"
+)
+
+var (
+	NotInitializedErr = fmt.Errorf("not initialized")
 )
 
 // EnterpriseReconcileParams is an enterprise specific version of
@@ -33,6 +40,15 @@ type EnterpriseReconcileParams struct {
 	BGPInstance   *EnterpriseBGPInstance
 	DesiredConfig *v1alpha1.IsovalentBGPNodeInstance
 	CiliumNode    *ciliumv2.CiliumNode
+}
+
+// EnterpriseStateReconcileParams is an enterprise specific version of
+// reconcilerv2.StateReconcileParams. It must be created with
+// reconcileParamsUpgrader.upgradeState.
+type EnterpriseStateReconcileParams struct {
+	DesiredConfig   *v1alpha1.IsovalentBGPNodeInstance
+	UpdatedInstance *EnterpriseBGPInstance
+	DeletedInstance string
 }
 
 // EnterpriseBGPInstance is an enterprise specific version of
@@ -52,27 +68,52 @@ type EnterpriseBGPInstance struct {
 
 type paramUpgrader interface {
 	upgrade(params reconcilerv2.ReconcileParams) (EnterpriseReconcileParams, error)
+	upgradeState(params reconcilerv2.StateReconcileParams) (EnterpriseStateReconcileParams, error)
+}
+
+type reconcilerParamsUpgraderIn struct {
+	cell.In
+
+	Logger           logrus.FieldLogger
+	BGPConfig        config.Config
+	BGPNodeConfigRes resource.Resource[*v1alpha1.IsovalentBGPNodeConfig]
+	LocalNodeRes     daemon_k8s.LocalCiliumNodeResource
+	JobGroup         job.Group
 }
 
 type reconcileParamsUpgrader struct {
-	initialized atomic.Bool
-	store       resource.Store[*v1alpha1.IsovalentBGPNodeConfig]
+	initialized   atomic.Bool
+	nodeName      string
+	nodeNameMutex lock.Mutex
+	store         resource.Store[*v1alpha1.IsovalentBGPNodeConfig]
 }
 
-func newReconcileParamsUpgrader(c config.Config, r resource.Resource[*v1alpha1.IsovalentBGPNodeConfig], g job.Group) paramUpgrader {
+func newReconcileParamsUpgrader(in reconcilerParamsUpgraderIn) paramUpgrader {
 	u := &reconcileParamsUpgrader{}
-	if !c.Enabled {
+	if !in.BGPConfig.Enabled {
 		// No need to initialize the upgrader if enterprise BGP control plane is not enabled.
 		return u
 	}
 
-	g.Add(job.OneShot("bgp-reconcile-params-upgrader-init", func(ctx context.Context, health cell.Health) error {
-		s, err := r.Store(ctx)
+	in.JobGroup.Add(job.OneShot("bgp-reconcile-params-upgrader-init", func(ctx context.Context, health cell.Health) error {
+		s, err := in.BGPNodeConfigRes.Store(ctx)
 		if err != nil {
 			return err
 		}
 		u.store = s
-		u.initialized.Store(true)
+
+		for event := range in.LocalNodeRes.Events(ctx) {
+			switch event.Kind {
+			case resource.Upsert:
+				u.setNodeName(event.Object.GetName())
+
+				// initialize upgrader once we have the node name
+				u.initialized.Store(true)
+				in.Logger.Debug("BGP params upgrader initialized")
+			}
+			event.Done(nil)
+		}
+
 		return nil
 	}))
 
@@ -81,7 +122,7 @@ func newReconcileParamsUpgrader(c config.Config, r resource.Resource[*v1alpha1.I
 
 func (u *reconcileParamsUpgrader) upgrade(params reconcilerv2.ReconcileParams) (EnterpriseReconcileParams, error) {
 	if !u.initialized.Load() {
-		return EnterpriseReconcileParams{}, fmt.Errorf("not initialized")
+		return EnterpriseReconcileParams{}, NotInitializedErr
 	}
 
 	if params.BGPInstance == nil || params.DesiredConfig == nil || params.CiliumNode == nil {
@@ -121,4 +162,63 @@ func (u *reconcileParamsUpgrader) upgrade(params reconcilerv2.ReconcileParams) (
 	}
 
 	return EnterpriseReconcileParams{}, fmt.Errorf("enterprise node instance not found")
+}
+
+func (u *reconcileParamsUpgrader) upgradeState(params reconcilerv2.StateReconcileParams) (EnterpriseStateReconcileParams, error) {
+	if !u.initialized.Load() {
+		return EnterpriseStateReconcileParams{}, NotInitializedErr
+	}
+
+	// If the instance is being deleted, we don't need to find the instance in the config.
+	if params.DeletedInstance != "" {
+		return EnterpriseStateReconcileParams{
+			DesiredConfig:   nil,
+			UpdatedInstance: nil,
+			DeletedInstance: params.DeletedInstance,
+		}, nil
+	}
+
+	if params.UpdatedInstance == nil || params.UpdatedInstance.Config == nil {
+		return EnterpriseStateReconcileParams{}, fmt.Errorf("invalid params")
+	}
+
+	nc, exists, err := u.store.GetByKey(resource.Key{Name: u.getNodeName()})
+	if err != nil {
+		return EnterpriseStateReconcileParams{}, err
+	}
+
+	if !exists {
+		return EnterpriseStateReconcileParams{}, fmt.Errorf("enterprise node config not found")
+	}
+
+	for i, inst := range nc.Spec.BGPInstances {
+		if inst.Name == params.UpdatedInstance.Config.Name {
+			return EnterpriseStateReconcileParams{
+				DesiredConfig: &nc.Spec.BGPInstances[i],
+				UpdatedInstance: &EnterpriseBGPInstance{
+					// So far, we don't need to keep the previous
+					// config. Once we have a use case for it, we
+					// can consider storing it in the metadata and
+					// copying it here.
+					Config:   nil,
+					Router:   params.UpdatedInstance.Router,
+					Metadata: params.UpdatedInstance.Metadata,
+				},
+			}, nil
+		}
+	}
+
+	return EnterpriseStateReconcileParams{}, fmt.Errorf("enterprise node instance not found")
+}
+
+func (u *reconcileParamsUpgrader) getNodeName() string {
+	u.nodeNameMutex.Lock()
+	defer u.nodeNameMutex.Unlock()
+	return u.nodeName
+}
+
+func (u *reconcileParamsUpgrader) setNodeName(name string) {
+	u.nodeNameMutex.Lock()
+	u.nodeName = name
+	u.nodeNameMutex.Unlock()
 }

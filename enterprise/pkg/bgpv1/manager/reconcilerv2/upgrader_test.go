@@ -19,10 +19,12 @@ import (
 	"github.com/cilium/hive"
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	daemon_k8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
@@ -32,6 +34,8 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
+	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/k8s/utils"
 )
 
 func TestReconcileParamsUpgrader(t *testing.T) {
@@ -58,7 +62,19 @@ func TestReconcileParamsUpgrader(t *testing.T) {
 					Enabled: true,
 				}
 			},
+			func() logrus.FieldLogger {
+				return logrus.WithField("test", "upgrader")
+			},
 		),
+
+		cell.Provide(func(lc cell.Lifecycle, c client.Clientset) daemon_k8s.LocalCiliumNodeResource {
+			return resource.New[*ciliumv2.CiliumNode](
+				lc, utils.ListerWatcherFromTyped[*ciliumv2.CiliumNodeList](
+					c.CiliumV2().CiliumNodes(),
+				),
+			)
+		}),
+
 		cell.Invoke(func(u paramUpgrader, c client.Clientset, j job.Group) {
 			up = u
 			cs = c
@@ -74,6 +90,18 @@ func TestReconcileParamsUpgrader(t *testing.T) {
 
 	// start jobs in the group
 	jg.Start(context.Background())
+
+	// insert a node
+	_, err = cs.CiliumV2().CiliumNodes().Create(
+		context.Background(),
+		&ciliumv2.CiliumNode{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node0",
+			},
+		},
+		metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
 
 	ceeNode, err := cs.IsovalentV1alpha1().IsovalentBGPNodeConfigs().Create(
 		context.Background(),
