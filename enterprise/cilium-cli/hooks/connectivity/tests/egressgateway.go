@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -851,6 +852,172 @@ func (s *egressGatewayHAIPAM) Run(ctx context.Context, t *check.Test) {
 				}
 			})
 			i++
+		}
+	}
+}
+
+func EgressGatewayHAIPAMMultipleGateways() check.Scenario {
+	return &egressGatewayHAIPAMMultipleGateways{}
+}
+
+type egressGatewayHAIPAMMultipleGateways struct{}
+
+func (s *egressGatewayHAIPAMMultipleGateways) Name() string {
+	return "egress-gateway-ha-ipam-multiple-gateways"
+}
+
+func (s *egressGatewayHAIPAMMultipleGateways) Run(ctx context.Context, t *check.Test) {
+	ct := t.Context()
+
+	// apply the egress-group=test label to all the nodes running Cilium and build a gatewayNodeName -> egressIP mapping for all such nodes
+	gatewayIPsToNames := map[string]string{}
+	addNodeLabelPatch := fmt.Sprintf(`[{"op":"add","path":"/metadata/labels/%s","value":"%s"}]`, EgressGroupLabelKey, EgressGroupLabelValue)
+	for _, node := range ct.Nodes() {
+		if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
+			continue
+		}
+
+		if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(addNodeLabelPatch)); err != nil {
+			t.Fatalf("cannot add %s=%s label to node %s: %w", EgressGroupLabelKey, EgressGroupLabelValue, node.Name, err)
+		}
+
+		gatewayIP := getGatewayNodeInternalIP(ct, node.Name)
+		if gatewayIP == nil {
+			t.Fatal("Cannot get egress gateway node internal IP")
+		}
+
+		gatewayIPsToNames[gatewayIP.String()] = node.Name
+	}
+
+	// remove the labels after the test is done
+	t.WithFinalizer(func(_ context.Context) error {
+		for _, node := range ct.Nodes() {
+			removeNodeLabelPatch := fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, EgressGroupLabelKey)
+			if _, ok := node.GetLabels()[defaults.CiliumNoScheduleLabel]; ok {
+				continue
+			}
+
+			if _, err := ct.K8sClient().PatchNode(ctx, node.Name, types.JSONPatchType, []byte(removeNodeLabelPatch)); err != nil {
+				return fmt.Errorf("cannot remove %s label from node %s: %w", EgressGroupLabelKey, node.Name, err)
+			}
+		}
+
+		return nil
+	})
+
+	policyName := "iegp-sample-client"
+
+	gatewayIPsToMasqueradeIPs := make(map[string]string, len(gatewayIPsToNames))
+	masqueradeIPs := make([]string, 0, len(gatewayIPsToNames))
+	for gatewayIP := range gatewayIPsToNames {
+		masqueradeIP := waitForAllocatedEgressIP(ctx, t, policyName, 0, gatewayIP)
+		masqueradeIPs = append(masqueradeIPs, masqueradeIP.String())
+		gatewayIPsToMasqueradeIPs[gatewayIP] = masqueradeIP.String()
+	}
+
+	// wait for the policy map to be populated
+	waitForBpfPolicyEntries(ctx, t, func(ciliumPod check.Pod) []bpfEgressGatewayPolicyEntry {
+		egressIP := "0.0.0.0"
+		egressGatewayNodeInternalIPs := []string{}
+
+		for gatewayIP, nodeName := range gatewayIPsToNames {
+			if ciliumPod.Pod.Spec.NodeName == nodeName {
+				egressIP = gatewayIPsToMasqueradeIPs[gatewayIP]
+			}
+			egressGatewayNodeInternalIPs = append(egressGatewayNodeInternalIPs, gatewayIP)
+		}
+
+		targetEntries := []bpfEgressGatewayPolicyEntry{}
+
+		for _, client := range ct.ClientPods() {
+			for _, nodeWithoutCiliumName := range t.NodesWithoutCilium() {
+				if _, err := ciliumPod.K8sClient.GetNode(context.Background(), nodeWithoutCiliumName, metav1.GetOptions{}); err != nil {
+					if k8sErrors.IsNotFound(err) {
+						continue
+					}
+
+					t.Fatalf("Cannot retrieve external node: %w", err)
+				}
+
+				targetEntries = append(targetEntries, bpfEgressGatewayPolicyEntry{
+					SourceIP:   client.Pod.Status.PodIP,
+					DestCIDR:   "0.0.0.0/0",
+					EgressIP:   egressIP,
+					GatewayIPs: egressGatewayNodeInternalIPs,
+				})
+			}
+		}
+
+		return targetEntries
+	})
+
+	// run the test
+	i := 0
+	responsesByClientIP := map[string]int{}
+
+	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP of one of the multiple GWs (pod to external service using DNS)
+	for _, client := range ct.ClientPods() {
+		for _, externalEchoSvc := range ct.EchoExternalServices() {
+			externalEcho := externalEchoSvc.ToEchoIPService()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-service-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandParallelWithOutput(externalEcho, features.IPFamilyV4, 100, "-4"))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					responsesByClientIP[clientIP.String()]++
+				}
+			})
+			i++
+		}
+	}
+
+	// all client IPs should be egress IPs
+	for clientIP := range responsesByClientIP {
+		if !slices.Contains(masqueradeIPs, clientIP) {
+			t.Fatalf("Request reached external echo service with wrong source IP %s", clientIP)
+		}
+	}
+
+	// and traffic should go through all gateways, masqueraded with theirs egress IPs
+	for _, egressIP := range masqueradeIPs {
+		if _, ok := responsesByClientIP[egressIP]; !ok {
+			t.Fatalf("No request has gone through gateway with egress IP %s", egressIP)
+		}
+	}
+
+	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP of one of the multiple GWs (pod to external service)
+	i = 0
+	responsesByClientIP = map[string]int{}
+	for _, client := range ct.ClientPods() {
+		client := client
+
+		for _, externalEcho := range ct.ExternalEchoPods() {
+			externalEcho := externalEcho.ToEchoIPPod()
+
+			t.NewAction(s, fmt.Sprintf("curl-external-echo-pod-%d", i), &client, externalEcho, features.IPFamilyV4).Run(func(a *check.Action) {
+				a.ExecInPod(ctx, ct.CurlCommandParallelWithOutput(externalEcho, features.IPFamilyV4, 100))
+				clientIPs := extractClientIPsFromEchoServiceResponses(a.CmdOutput())
+
+				for _, clientIP := range clientIPs {
+					responsesByClientIP[clientIP.String()]++
+				}
+			})
+		}
+		i++
+	}
+
+	// all client IPs should be egress IPs
+	for clientIP := range responsesByClientIP {
+		if !slices.Contains(masqueradeIPs, clientIP) {
+			t.Fatalf("Request reached external echo service with wrong source IP %s", clientIP)
+		}
+	}
+
+	// and traffic should go through all gateways, masqueraded with theirs egress IPs
+	for _, egressIP := range masqueradeIPs {
+		if _, ok := responsesByClientIP[egressIP]; !ok {
+			t.Fatalf("No request has gone through gateway with egress IP %s", egressIP)
 		}
 	}
 }
