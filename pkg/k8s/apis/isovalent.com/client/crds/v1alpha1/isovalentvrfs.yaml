@@ -41,15 +41,17 @@ spec:
           spec:
             properties:
               exportRouteTarget:
-                description: ExportRouteTarget is the export route-target for this
+                description: "ExportRouteTarget is the export route-target for this
                   VRF. It is optional and, if specified, will instruct the SRv6 Manager
                   to allocate a SID for this VRF and signal the BGP manager to create
-                  VPNv4 advertisements over applicable speakers.
+                  VPNv4 advertisements over applicable speakers. \n Deprecated: Use
+                  IsovalentBGPClusterConfig resource to define import/export route-targets."
                 type: string
               importRouteTarget:
-                description: ImportRouteTarget is the import route-target for this
+                description: "ImportRouteTarget is the import route-target for this
                   VRF. It is optional and, if specified, will be used by the BGP manager
-                  to know in which VRF to install received routes.
+                  to know in which VRF to install received routes. \n Deprecated:
+                  Use IsovalentBGPClusterConfig resource to define import/export route-targets."
                 type: string
               locatorPoolRef:
                 description: LocatorPoolRef specifies a name of the locator pool that
