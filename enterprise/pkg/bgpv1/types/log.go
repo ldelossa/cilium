@@ -13,4 +13,7 @@ package types
 const (
 	// EgressGatewayLogField is used as key for egress gateway in the log field.
 	EgressGatewayLogField = "egress_gateway"
+
+	// LocatorPoolLogField is used as key for SRv6 locator pool in the log field.
+	LocatorPoolLogField = "locator_pool"
 )

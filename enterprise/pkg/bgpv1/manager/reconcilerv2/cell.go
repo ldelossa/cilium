@@ -12,6 +12,8 @@ package reconcilerv2
 
 import (
 	"github.com/cilium/hive/cell"
+
+	"github.com/cilium/cilium/pkg/k8s"
 )
 
 // ConfigReconcilers contains cells of enterprise-only reconcilers
@@ -22,7 +24,12 @@ var ConfigReconcilers = cell.Group(
 	),
 
 	cell.Provide(
+		k8s.IsovalentSRv6LocatorPoolResource,
+	),
+
+	cell.Provide(
 		NewEgressGatewayIPsReconciler,
 		NewBFDStateReconciler,
+		NewSRv6LocatorPoolReconciler,
 	),
 )

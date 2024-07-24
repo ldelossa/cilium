@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/utils"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 func IsovalentFQDNGroup(lc cell.Lifecycle, cs client.Clientset) (resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup], error) {
@@ -115,4 +116,14 @@ func IsovalentBFDNodeConfigOverrideResource(lc cell.Lifecycle, c client.Clientse
 		lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentBFDNodeConfigOverrideList](
 			c.IsovalentV1alpha1().IsovalentBFDNodeConfigOverrides(),
 		), resource.WithMetric("IsovalentBFDNodeConfigOverride"))
+}
+
+func IsovalentSRv6LocatorPoolResource(lc cell.Lifecycle, c client.Clientset, bgpConfig config.Config, dc *option.DaemonConfig) resource.Resource[*isovalent_api_v1alpha1.IsovalentSRv6LocatorPool] {
+	if !c.IsEnabled() || !bgpConfig.Enabled || !dc.EnableSRv6 {
+		return nil
+	}
+	return resource.New[*isovalent_api_v1alpha1.IsovalentSRv6LocatorPool](
+		lc, utils.ListerWatcherFromTyped[*isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolList](
+			c.IsovalentV1alpha1().IsovalentSRv6LocatorPools(),
+		), resource.WithMetric("IsovalentSRv6LocatorPool"))
 }
