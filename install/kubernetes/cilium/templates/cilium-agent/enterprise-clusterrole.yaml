@@ -54,6 +54,7 @@ rules:
   - isovalentbgppeerconfigs
   - isovalentbgpadvertisements
   - isovalentbgpnodeconfigs
+  - isovalentbgpvrfconfigs
   verbs:
   - list
   - watch
