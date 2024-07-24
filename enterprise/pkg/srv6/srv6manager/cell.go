@@ -11,9 +11,11 @@
 package srv6manager
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/daemon/cmd"
@@ -58,23 +60,21 @@ type daemon interface {
 }
 
 // daemonPromiseProvider converts raw Daemon promise to daemon promise
-func newDaemonPromiseProvider(lc cell.Lifecycle, dp promise.Promise[*cmd.Daemon], dc *option.DaemonConfig) promise.Promise[daemon] {
+func newDaemonPromiseProvider(g job.Group, dp promise.Promise[*cmd.Daemon], dc *option.DaemonConfig) promise.Promise[daemon] {
 	if !dc.EnableSRv6 {
 		return nil
 	}
 
 	r, p := promise.New[daemon]()
 
-	lc.Append(cell.Hook{
-		OnStart: func(hookCtx cell.HookContext) error {
-			d, err := dp.Await(hookCtx)
-			if err != nil {
-				return fmt.Errorf("failed to await for Daemon: %w", err)
-			}
-			r.Resolve(d)
-			return nil
-		},
-	})
+	g.Add(job.OneShot("srv6-daemon-promise-job", func(ctx context.Context, health cell.Health) error {
+		d, err := dp.Await(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to await for Daemon: %w", err)
+		}
+		r.Resolve(d)
+		return nil
+	}))
 
 	return p
 }
