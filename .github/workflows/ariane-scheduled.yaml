@@ -24,10 +24,12 @@ jobs:
         # DON'T USE hourModulo=0 to avoid running ariane scheduled-workflows
         # at the same time as regular main scheduled workflows
           - branch: '1.13-ce'
-            hourModulo: 2
+            hourModulo: 1
           - branch: '1.14-ce'
-            hourModulo: 3
+            hourModulo: 2
           - branch: '1.15-ce'
+            hourModulo: 3
+          - branch: '1.16-ce'
             hourModulo: 4
     runs-on: ubuntu-latest
     steps:
