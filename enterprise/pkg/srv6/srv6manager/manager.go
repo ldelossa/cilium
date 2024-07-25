@@ -53,10 +53,9 @@ var (
 // SIDAllocation is a bookkeeping structure for locally allocated SIDs.
 // These SID allocations serve as SRV6 VRF locators.
 type SIDAllocation struct {
-	VRFID             uint32
-	ExportRouteTarget string
-	SIDInfo           *sidmanager.SIDInfo
-	LocatorPool       string
+	VRFID       uint32
+	SIDInfo     *sidmanager.SIDInfo
+	LocatorPool string
 }
 
 // The SRv6 manager stores the internal data to track SRv6 policies, VRFs,
@@ -91,12 +90,11 @@ type Manager struct {
 	// identityAllocator is used to fetch identity labels for endpoint updates
 	identityAllocator identityCache.IdentityAllocator
 
-	// allocatedSIDs map VRF IDs to their allocated SID if the VRF has an
-	// ExportRouteTarget defined.
+	// allocatedSIDs map VRF IDs to their allocated SID.
 	//
-	// When we encounter VRFs with a defined ExportRouteTarget field a SID is
-	// allocated locally and stored in this map. The map is then referenced to
-	// determine if SID allocation/deallocation is necessary on VRF reconciliation.
+	// When we encounter VRFs, a SID is allocated locally and stored in this map.
+	// The map is then referenced to determine if SID allocation/deallocation is
+	// necessary on VRF reconciliation.
 	allocatedSIDs map[uint32]*SIDAllocation
 
 	// BGP Control Plane signaler
@@ -394,10 +392,9 @@ func NewSRv6Manager(p Params) *Manager {
 func (manager *Manager) updateVRFSIDAllocation(vrf *VRF, pool string, newInfo *sidmanager.SIDInfo) {
 	vrf.SIDInfo = newInfo
 	manager.allocatedSIDs[vrf.VRFID] = &SIDAllocation{
-		VRFID:             vrf.VRFID,
-		ExportRouteTarget: vrf.ExportRouteTarget,
-		SIDInfo:           newInfo,
-		LocatorPool:       pool,
+		VRFID:       vrf.VRFID,
+		SIDInfo:     newInfo,
+		LocatorPool: pool,
 	}
 }
 
@@ -422,22 +419,6 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 				}).Debug("Released stale SID")
 			}
 		} else {
-			// This VRF doesn't need SID allocation anymore.
-			// Release existing SID allocation. This happens
-			// when users modify the ExportRouteTarget while
-			// Cilium is stopping.
-			if vrf.ExportRouteTarget == "" {
-				if err := allocator.Release(info.SID.Addr); err != nil {
-					manager.logger.WithError(err).Warn("Failed to release stale SID")
-				} else {
-					manager.logger.WithFields(logrus.Fields{
-						logfields.VRF: info.MetaData,
-						logfields.SID: info.SID.String(),
-					}).Debug("Released stale SID")
-				}
-				continue
-			}
-
 			// This VRF is not interested in this pool anymore.
 			// Release existing SID allocation. This happens when
 			// users modifiy the LocatorPool while Cilium is
@@ -477,10 +458,9 @@ func (manager *Manager) restoreExistingAllocations(pool string, allocator sidman
 					vrf.SIDInfo = info
 
 					manager.allocatedSIDs[vrf.VRFID] = &SIDAllocation{
-						VRFID:             vrf.VRFID,
-						ExportRouteTarget: vrf.ExportRouteTarget,
-						SIDInfo:           info,
-						LocatorPool:       pool,
+						VRFID:       vrf.VRFID,
+						SIDInfo:     info,
+						LocatorPool: pool,
 					}
 
 					manager.logger.WithFields(logrus.Fields{
@@ -507,11 +487,6 @@ func (manager *Manager) onAddLocator(pool string, allocator sidmanager.SIDAlloca
 			continue
 		}
 
-		// This VRF doesn't require SID allocation
-		if vrf.ExportRouteTarget == "" {
-			continue
-		}
-
 		// Allocation already exists
 		if vrf.SIDInfo != nil {
 			continue
@@ -530,10 +505,6 @@ func (manager *Manager) onAddLocator(pool string, allocator sidmanager.SIDAlloca
 func (manager *Manager) onUpdateLocator(pool string, oldAllocator, newAllocator sidmanager.SIDAllocator) {
 	// Update all existing allocations associated with this pool
 	for id, vrf := range manager.vrfs {
-		if vrf.ExportRouteTarget == "" {
-			continue
-		}
-
 		if vrf.LocatorPool != pool {
 			continue
 		}
@@ -569,10 +540,6 @@ func (manager *Manager) onUpdateLocator(pool string, oldAllocator, newAllocator 
 func (manager *Manager) onDeleteLocator(pool string, allocator sidmanager.SIDAllocator) {
 	// Delete all existing allocations associated with this pool
 	for _, vrf := range manager.vrfs {
-		if vrf.ExportRouteTarget == "" {
-			continue
-		}
-
 		if vrf.LocatorPool != pool {
 			continue
 		}
@@ -988,9 +955,8 @@ nextVRFKey:
 	}
 }
 
-// When a VRF has a defined "ExportRouteTarget" we must configure both the Manager
-// and the eBPF datapath to process ingress traffic destined to the VRF being
-// exported.
+// When a VRF is defined, we must configure both the Manager
+// and the eBPF datapath to process ingress traffic destined to the VRF.
 //
 // This function will organize the Manager's VRFs and SID allocations and then
 // create or remove both according to the Manager's state.
@@ -1010,38 +976,21 @@ func (m *Manager) reconcileVRFIngressPath() {
 	// the manager's VRF field.
 	//
 	// ATTENTION: A subtlety exists here in that VRF updates from Kubernetes know nothing
-	// about locally allocated SIDs and an update event can overwrite the a VRF's
+	// about locally allocated SIDs and an update event can overwrite the VRF's
 	// locally allocated SID. Therefore, this method must also repopulate the
 	// SID's Allocated VRF field.
 	for _, v := range m.vrfs {
 		alloc, hasSID := m.allocatedSIDs[v.VRFID]
 
-		// does this vrf have an ExportRouteTarget and no SID allocation?
-		if v.ExportRouteTarget != "" && !hasSID {
+		// does this vrf no SID allocation?
+		if !hasSID {
 			toCreate = append(toCreate, v)
 			continue
 		}
 
 		// does this VRF have an existing SID allocation?
 		if hasSID {
-			// ExportRouteTarget undefined, remove this allocation.
-			if v.ExportRouteTarget == "" {
-				toRemove = append(toRemove, alloc)
-				continue
-			}
-
-			// SID allocation exists, does ExportRouteTarget match it?
-			if v.ExportRouteTarget != alloc.ExportRouteTarget {
-				// NOTE: it is possible the ExportRouteTarget may have been changed
-				// by the user.
-				// in this case, we will update the SID allocation, and the BGP
-				// control plane with re-advertise the SID with the updated
-				// ExportRouteTarget on it's next reconciliation loop.
-				alloc.ExportRouteTarget = v.ExportRouteTarget
-			}
-
-			// SID allocation exists and ExportRouteTarget is the same, re-write
-			// allocated SID incase an update overwritten it. See: ATTENTION:
+			// SID allocation exists, re-write allocated SID incase an update overwritten it.
 			v.SIDInfo = alloc.SIDInfo
 
 			// Locator pool changed. Need SID reallocation.
@@ -1229,10 +1178,9 @@ func (m *Manager) createIngressPathVRFs(vrfs []*VRF) {
 			m.updateVRFSIDAllocation(vrf, vrf.LocatorPool, info)
 
 			l.WithFields(logrus.Fields{
-				"VRF":               vrf.id.Name,
-				"LocatorPool":       vrf.LocatorPool,
-				"SID":               vrf.SIDInfo.SID.String(),
-				"ExportRouteTarget": vrf.ExportRouteTarget,
+				"VRF":         vrf.id.Name,
+				"LocatorPool": vrf.LocatorPool,
+				"SID":         vrf.SIDInfo.SID.String(),
 			}).Info("Allocated SID for VRF with export route target.")
 		}(vrf)
 	}
@@ -1311,10 +1259,9 @@ func (m *Manager) updateIngressPathVRFs(vrfs []*VRF) {
 			m.updateVRFSIDAllocation(vrf, vrf.LocatorPool, newInfo)
 
 			l.WithFields(logrus.Fields{
-				"VRF":               vrf.id.Name,
-				"LocatorPool":       vrf.LocatorPool,
-				"SID":               vrf.SIDInfo.SID.String(),
-				"ExportRouteTarget": vrf.ExportRouteTarget,
+				"VRF":         vrf.id.Name,
+				"LocatorPool": vrf.LocatorPool,
+				"SID":         vrf.SIDInfo.SID.String(),
 			}).Info("Updated SID for VRF")
 		}()
 	}
@@ -1336,9 +1283,8 @@ func (m *Manager) removeIngressPathVRFs(allocs []*SIDAllocation) {
 	for _, alloc := range allocs {
 		l := l.WithFields(
 			logrus.Fields{
-				"SID":               alloc.SIDInfo.SID.String(),
-				"exportRouteTarget": alloc.ExportRouteTarget,
-				"vrfID":             alloc.VRFID,
+				"SID":   alloc.SIDInfo.SID.String(),
+				"vrfID": alloc.VRFID,
 			},
 		)
 		var shouldRelease = true

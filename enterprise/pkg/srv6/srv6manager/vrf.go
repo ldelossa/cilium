@@ -36,8 +36,10 @@ type VRF struct {
 
 	// Those two fields are exposed to the BGP manager can deduce which BGP
 	// route should be installed in which VRF.
-	VRFID             uint32
+	VRFID uint32
+	// Deprecated
 	ImportRouteTarget string
+	// Deprecated
 	ExportRouteTarget string
 
 	// SID allocation information

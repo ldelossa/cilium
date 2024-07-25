@@ -465,14 +465,8 @@ func TestSRv6Manager(t *testing.T) {
 	vrf0WithDestinationCIDR := vrf0.DeepCopy()
 	vrf0WithDestinationCIDR.Spec.Rules[0].DestinationCIDRs[0] = v1alpha1.CIDR(cidr2.String())
 
-	vrf0WithExportRouteTarget := vrf0.DeepCopy()
-	vrf0WithExportRouteTarget.Spec.ExportRouteTarget = "65000:1"
-
-	vrf0WithExportRouteTarget2 := vrf0.DeepCopy()
-	vrf0WithExportRouteTarget2.Spec.ExportRouteTarget = "65000:2"
-
-	vrf0WithExportRouteTargetAndLocatorPoolRef := vrf0WithExportRouteTarget.DeepCopy()
-	vrf0WithExportRouteTargetAndLocatorPoolRef.Spec.LocatorPoolRef = "pool1"
+	vrf0WithLocatorPoolRef := vrf0.DeepCopy()
+	vrf0WithLocatorPoolRef.Spec.LocatorPoolRef = "pool1"
 
 	policy0 := &v1alpha1.IsovalentSRv6EgressPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -555,28 +549,9 @@ func TestSRv6Manager(t *testing.T) {
 			},
 		},
 		{
-			name:          "Update VRF ExportRouteTarget",
-			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
-			initVRFMapEntries: []*vrfKV{
-				{
-					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
-					v: &srv6map.VRFValue{ID: 1},
-				},
-			},
-			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget2},
-			updatedVRFMapEntries: []*vrfKV{
-				{
-					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
-					v: &srv6map.VRFValue{ID: 1},
-				},
-			},
-		},
-		{
 			name:             "Allocate SID with default allocator",
 			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
+			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
 					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
@@ -591,34 +566,9 @@ func TestSRv6Manager(t *testing.T) {
 			},
 		},
 		{
-			name:          "Remove VRF ExportRouteTarget",
-			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
-			initVRFMapEntries: []*vrfKV{
-				{
-					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
-					v: &srv6map.VRFValue{ID: 1},
-				},
-			},
-			initSIDMapEntries: []*sidKV{
-				{
-					k: &srv6map.SIDKey{SID: types.IPv6(sid2IP.To16())},
-					v: &srv6map.SIDValue{VRFID: 1},
-				},
-			},
-			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
-			updatedVRFMapEntries: []*vrfKV{
-				{
-					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
-					v: &srv6map.VRFValue{ID: 1},
-				},
-			},
-		},
-		{
 			name:             "Allocate SID with SIDManager",
 			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
+			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithLocatorPoolRef},
 			updatedVRFMapEntries: []*vrfKV{
 				{
 					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
@@ -635,7 +585,7 @@ func TestSRv6Manager(t *testing.T) {
 		{
 			name:          "Update SID allocation from default allocator to SIDManager",
 			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
+			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			initVRFMapEntries: []*vrfKV{
 				{
 					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
@@ -649,7 +599,7 @@ func TestSRv6Manager(t *testing.T) {
 				},
 			},
 			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
+			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithLocatorPoolRef},
 			updatedVRFMapEntries: []*vrfKV{
 				{
 					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
@@ -666,7 +616,7 @@ func TestSRv6Manager(t *testing.T) {
 		{
 			name:          "Update SID allocation from SIDManager to default allocator",
 			initEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTargetAndLocatorPoolRef},
+			initVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithLocatorPoolRef},
 			initVRFMapEntries: []*vrfKV{
 				{
 					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
@@ -680,7 +630,7 @@ func TestSRv6Manager(t *testing.T) {
 				},
 			},
 			updatedEndpoints: []*v2.CiliumEndpoint{endpoint1},
-			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0WithExportRouteTarget},
+			updatedVRFs:      []*v1alpha1.IsovalentVRF{vrf0},
 			updatedVRFMapEntries: []*vrfKV{
 				{
 					k: &srv6map.VRFKey{SourceIP: ip1, DestCIDR: cidr1},
