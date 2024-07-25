@@ -174,13 +174,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p image-digest/
-          job_name=${{ matrix.name }}
+          job_name=${{ matrix.name }}-${{ matrix.tier }}
           job_name_capital=${job_name^^}
           job_name_underscored=${job_name_capital//-/_}
           echo "${job_name_underscored}_DIGEST := \"${{ steps.docker_build_release.outputs.digest }}\"" > image-digest/makefile-digest.txt
 
-          echo "### ${{ matrix.name }}" > image-digest/${{ matrix.name }}.txt
-          echo "" >> image-digest/${{ matrix.name }}.txt
+          echo "### ${{ matrix.name }}-${{ matrix.tier }}" > image-digest/${{ matrix.name }}-${{ matrix.tier }}.txt
+          echo "" >> image-digest/${{ matrix.name }}-${{ matrix.tier }}.txt
           if [ "${{ env.PUSH_TO_DOCKERHUB }}" == "true" ]; then
             echo "\`docker.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ steps.tag.outputs.tag }}-${{ matrix.tier }}@${{ steps.docker_build_release.outputs.digest }}\`" >> image-digest/${{ matrix.name }}-${{ matrix.tier }}.txt
           fi
@@ -191,7 +191,7 @@ jobs:
       - name: Upload artifact digests
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
-          name: image-digest ${{ matrix.name }}
+          name: image-digest ${{ matrix.name }} ${{ matrix.tier }}
           path: image-digest
           retention-days: 10
 
