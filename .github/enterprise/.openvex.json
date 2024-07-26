@@ -7,23 +7,6 @@
   "statements": [
     {
       "vulnerability": {
-        "name": "GHSA-gj2r-phwg-6rww"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
         "name": "CVE-2020-22916"
       },
       "products": [
@@ -32,26 +15,6 @@
           "subcomponents": [
             {
               "@id": "pkg:deb/ubuntu/liblzma5"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "CVE-2024-33599"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:deb/ubuntu/libc-bin"
-            },
-            {
-              "@id": "pkg:deb/ubuntu/libc6"
             }
           ]
         }
@@ -104,213 +67,6 @@
     },
     {
       "vulnerability": {
-        "name": "GHSA-6p8v-8cq8-v2r3"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-8fg8-jh2h-f2hc"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-7496-fgv9-xw82"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-4hc4-pgfx-3mrx"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-2h44-x2wx-49f4"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-fmrf-gvjp-5j5g"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-x989-52fc-4vr4"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-pfhr-pccp-hwmh"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-4xp2-w642-7mcx"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "CVE-2024-33600"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:deb/ubuntu/libc-bin"
-            },
-            {
-              "@id": "pkg:deb/ubuntu/libc6"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-j89h-qrvr-xc36"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/cilium/cilium"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-fx6x-h9g4-56f8"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:golang/github.com/containernetworking/plugins"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
         "name": "GHSA-4v7x-pqxf-cx7m"
       },
       "products": [
@@ -319,46 +75,6 @@
           "subcomponents": [
             {
               "@id": "pkg:golang/golang.org/x/net"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "CVE-2024-33602"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:deb/ubuntu/libc-bin"
-            },
-            {
-              "@id": "pkg:deb/ubuntu/libc6"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "CVE-2024-33601"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:deb/ubuntu/libc-bin"
-            },
-            {
-              "@id": "pkg:deb/ubuntu/libc6"
             }
           ]
         }
@@ -449,26 +165,6 @@
             },
             {
               "@id": "pkg:deb/ubuntu/libstdc++6"
-            }
-          ]
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path"
-    },
-    {
-      "vulnerability": {
-        "name": "CVE-2022-40735"
-      },
-      "products": [
-        {
-          "@id": "pkg:oci/cilium-ci",
-          "subcomponents": [
-            {
-              "@id": "pkg:deb/ubuntu/libssl3"
-            },
-            {
-              "@id": "pkg:deb/ubuntu/openssl"
             }
           ]
         }
@@ -636,6 +332,19 @@
       ],
       "status": "not_affected",
       "status_notes": "This flags on /usr/bin/grpc_health_probe, which does not use the affected functionality",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-24791"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "This flags on /usr/bin/hubble and /cni/loopback, neither of which are affected.",
       "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
