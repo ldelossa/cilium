@@ -38,5 +38,6 @@ var ConfigReconcilers = cell.Group(
 		NewEgressGatewayIPsReconciler,
 		NewBFDStateReconciler,
 		NewSRv6LocatorPoolReconciler,
+		NewImportRoutePolicyReconciler,
 	),
 )

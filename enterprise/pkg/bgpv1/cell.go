@@ -30,6 +30,7 @@ var Cell = cell.Module(
 		k8s.IsovalentBGPAdvertisementResource,
 		k8s.IsovalentBGPNodeConfigResource,
 		k8s.IsovalentBGPVRFConfigResource,
+		k8s.CiliumBGPPeerConfigResource,
 	),
 
 	// enterprise-only reconcilers
