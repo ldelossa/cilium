@@ -15,7 +15,7 @@ import (
 // Note list of supported advertisements is not exhaustive and can be extended in the future.
 // Consumer of this API should be able to handle unknown values.
 //
-// +kubebuilder:validation:Enum=PodCIDR;CiliumPodIPPool;Service;EgressGateway
+// +kubebuilder:validation:Enum=PodCIDR;CiliumPodIPPool;Service;EgressGateway;SRv6LocatorPool
 type IsovalentBGPAdvertType string
 
 const (
