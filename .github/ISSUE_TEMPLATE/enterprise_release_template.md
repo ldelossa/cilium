@@ -77,6 +77,10 @@ _If you need help: ask in #enterprise-release._
   - [ ] Select the `vX.Y.Z-cee.1` tag created from the previous step.
   - [ ] Generate the release notes by selecting `Generate release notes`.
   - [ ] Ensure that `Set as the latest release` is only checked for the latest minor release. Ex: If you are releasing v1.13.3, v1.12.10, and v1.11.17, only v1.13.3 should have this checked.
+- [ ] Generate tiered images
+  - [ ] Go to https://github.com/isovalent/cilium/actions/workflows/enterprise-build-images-tiered-releases.yaml and run workflow with `vX.Y.Z-cee.1` in `Tag to release tiered images for` field.
+  - [ ] Click on the started action and approve deployment (it should be approvable by `release-manager` team)
+  - [ ] Check in after some time to see whether the action succeeded. If it didn't, raise this issue in #enterprise-release slack channel.
 
 ## Prepare Helm & documentation
 
