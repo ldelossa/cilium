@@ -721,9 +721,13 @@ data:
 {{- if $socketLB }}
 {{- if hasKey $socketLB "enabled" }}
   bpf-lb-sock: {{ $socketLB.enabled | quote }}
+  bpf-lb-sock-terminate-pod-connections: {{ $socketLB.enabled | quote }}
 {{- end }}
 {{- if hasKey $socketLB "hostNamespaceOnly" }}
   bpf-lb-sock-hostns-only: {{ $socketLB.hostNamespaceOnly | quote }}
+{{- end }}
+{{- if hasKey $socketLB "terminatePodConnections" }}
+  bpf-lb-sock-terminate-pod-connections: {{ $socketLB.terminatePodConnections | quote }}
 {{- end }}
 {{- end }}
 
@@ -1224,7 +1228,7 @@ data:
   # default DNS proxy to transparent mode in non-chaining modes
   dnsproxy-enable-transparent-mode: {{ $defaultDNSProxyEnableTransparentMode | quote }}
   {{- end }}
-  {{- if .Values.dnsProxy.socketLingerTimeout }}
+  {{- if (not (kindIs "invalid" .Values.dnsProxy.socketLingerTimeout)) }}
   dnsproxy-socket-linger-timeout: {{ .Values.dnsProxy.socketLingerTimeout | quote }}
   {{- end }}
   {{- if .Values.dnsProxy.dnsRejectResponseCode }}

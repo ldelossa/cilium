@@ -113,6 +113,9 @@ issues:
     - path: "enterprise((/|_).+)?\\.go$"
       linters:
         - goheader
+    - path: "pkg/hubble/dropeventemitter/fake_recorder.go"
+      linters:
+        - goheader
 
 linters:
   disable-all: true
