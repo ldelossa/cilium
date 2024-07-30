@@ -45,18 +45,18 @@ triggers:
 
 workflows:
   enterprise-clustermesh-mixed-routing.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
   enterprise-clustermesh-overlapping-podcidr.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
   enterprise-fqdn-ha.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
   enterprise-fqdn-ha-upgrade.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
   enterprise-multi-network.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
   enterprise-srv6-datapath.yaml:
-    paths-ignore-regex: Documentation/
+    paths-ignore-regex: (Documentation|hubble)/
   enterprise-conformance-cilium-mesh.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
   enterprise-multicast.yaml:
-    paths-ignore-regex: (test|Documentation)/
+    paths-ignore-regex: (test|Documentation|hubble)/
