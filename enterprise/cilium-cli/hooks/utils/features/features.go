@@ -155,5 +155,13 @@ func ExtractFromSysdumpCollector(collector *sysdump.Collector) error {
 		Enabled: cm != nil && cm.Data[string(SRv6LocatorPool)] == "true",
 	}
 
+	collector.FeatureSet[EnterpriseBGPControlPlane] = features.Status{
+		Enabled: cm != nil && cm.Data[string(EnterpriseBGPControlPlane)] == "true",
+	}
+
+	collector.FeatureSet[BFD] = features.Status{
+		Enabled: cm != nil && cm.Data[string(BFD)] == "true",
+	}
+
 	return nil
 }
