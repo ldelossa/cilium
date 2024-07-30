@@ -319,9 +319,17 @@
       "matchPackageNames": [
         "docker.io/library/ubuntu"
       ],
-      "allowedVersions": "22.04",
+      "allowedVersions": "24.04",
       "matchBaseBranches": [
         "main",
+      ],
+    },
+    {
+      "matchPackageNames": [
+        "docker.io/library/ubuntu"
+      ],
+      "allowedVersions": "22.04",
+      "matchBaseBranches": [
         "v1.16",
         "v1.15",
         "v1.14",
@@ -686,7 +694,7 @@
       // similar to the examples shown here:
       //   https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+- \'v(?<currentValue>.*) or higher\'"
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+- \'higher than (?<currentValue>.*) and lower than.+"
       ],
     },
     {

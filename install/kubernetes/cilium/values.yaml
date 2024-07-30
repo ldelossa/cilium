@@ -262,6 +262,7 @@ securityContext:
       - IPC_LOCK
       # Used in iptables. Consider removing once we are iptables-free
       - SYS_MODULE
+      # Needed to switch network namespaces (used for health endpoint, socket-LB).
       # We need it for now but might not need it for >= 5.11 specially
       # for the 'SYS_RESOURCE'.
       # In >= 5.8 there's already BPF and PERMON capabilities
@@ -1023,6 +1024,8 @@ socketLB:
   enabled: false
   # -- Disable socket lb for non-root ns. This is used to enable Istio routing rules.
   # hostNamespaceOnly: false
+  # -- Enable terminating pod connections to deleted service backends.
+  # terminatePodConnections: true
 # -- Configure certificate generation for Hubble integration.
 # If hubble.tls.auto.method=cronJob, these values are used
 # for the Kubernetes CronJob which will be scheduled regularly to

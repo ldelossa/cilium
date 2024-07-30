@@ -851,7 +851,7 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 			// There is one special case is L7 proxy service, which never have any
 			// backends because the traffic will be redirected.
 			activeBackends := 0
-			if params.L7LBProxyPort != 0 {
+			if l7lbInfo != nil {
 				// Set this to 1 because Envoy will be running in this case.
 				getScopedLog().WithField(logfields.ServiceHealthCheckNodePort, svc.svcHealthCheckNodePort).
 					Debug("L7 service with HealthcheckNodePort enabled")
@@ -1184,6 +1184,19 @@ func (s *Service) GetDeepCopyServices() []*lb.SVC {
 	svcs := make([]*lb.SVC, 0, len(s.svcByHash))
 	for _, svc := range s.svcByHash {
 		svcs = append(svcs, svc.deepCopyToLBSVC())
+	}
+
+	return svcs
+}
+
+// GetServiceIDs returns a list of IDs of all installed services.
+func (s *Service) GetServiceIDs() []lb.ServiceID {
+	s.RLock()
+	defer s.RUnlock()
+
+	svcs := make([]lb.ServiceID, 0, len(s.svcByID))
+	for _, svc := range s.svcByID {
+		svcs = append(svcs, lb.ServiceID(svc.frontend.ID))
 	}
 
 	return svcs

@@ -4,6 +4,7 @@
 package act
 
 import (
+	"cmp"
 	"container/heap"
 	"context"
 	"fmt"
@@ -94,7 +95,8 @@ type actMetric struct {
 	opened, closed    uint64
 	newFailed, failed uint64
 	updated           time.Time
-	labelValues       []string
+	// labelValues contain zone and service addr string (in order)
+	labelValues []string
 }
 
 type ACT struct {
@@ -104,6 +106,8 @@ type ACT struct {
 
 	// keyToStrings converts (svc, zone) pair to their string versions
 	keyToStrings func(key *act.ActiveConnectionTrackerKey) (zone string, svc string, err error)
+	// svcIDs returns a list of all actively used service IDs
+	svcIDs func() []loadbalancer.ServiceID
 
 	// trig is used to start removeOverflow routine early
 	trig job.Trigger
@@ -123,23 +127,32 @@ func NewACT(in struct {
 	Jobs      job.Group
 	Source    act.ActiveConnectionTrackingMap
 	Metrics   ActiveConnectionTrackingMetrics
+	Service   service.ServiceManager
 }) *ACT {
 	if !in.Conf.EnableActiveConnectionTracking {
 		// Active Connection Tracking is disabled.
 		return nil
 	}
-	a := newAct(in.Log, in.Source, in.Metrics, option.Config)
+	a := newAct(in.Log, in.Source, in.Metrics, in.Service, option.Config)
 	a.trig = job.NewTrigger()
 
 	in.Jobs.Add(job.Timer("act-metrics-update", a.update, metricsUpdateInterval))
 	in.Jobs.Add(job.Timer("act-metrics-cleanup", a.cleanup, metricsTimeout))
 	in.Jobs.Add(job.Timer("act-metrics-remove-overflow", a.removeOverflow, time.Hour, job.WithTrigger(a.trig)))
+	in.Jobs.Add(job.OneShot("act-metrics-init",
+		func(ctx context.Context, health cell.Health) error { return a.update(ctx) },
+	))
 	in.Lifecycle.Append(in.Jobs)
+	in.Lifecycle.Append(cell.Hook{
+		OnStop: func(_ cell.HookContext) error {
+			return a.saveFailed()
+		},
+	})
 	ctmap.ACT = a
 	return a
 }
 
-func newAct(log *slog.Logger, src act.ActiveConnectionTrackingMap, metrics ActiveConnectionTrackingMetrics, opts *option.DaemonConfig) *ACT {
+func newAct(log *slog.Logger, src act.ActiveConnectionTrackingMap, metrics ActiveConnectionTrackingMetrics, svcMgr service.ServiceManager, opts *option.DaemonConfig) *ACT {
 	tracker := make(map[uint8]map[uint16]*actMetric, len(opts.FixedZoneMapping))
 	for zone := range opts.ReverseFixedZoneMapping {
 		tracker[zone] = make(map[uint16]*actMetric)
@@ -162,6 +175,7 @@ func newAct(log *slog.Logger, src act.ActiveConnectionTrackingMap, metrics Activ
 		src:          src,
 		metrics:      metrics,
 		keyToStrings: kts,
+		svcIDs:       svcMgr.GetServiceIDs,
 		mux:          new(lock.Mutex),
 		tracker:      tracker,
 	}
@@ -172,9 +186,6 @@ func newAct(log *slog.Logger, src act.ActiveConnectionTrackingMap, metrics Activ
 // It will create the new metrics series if needed. In this case metrics won't
 // be presented as the number of new connections can't be calculated yet.
 func (a *ACT) callback(key *act.ActiveConnectionTrackerKey, value *act.ActiveConnectionTrackerValue) {
-	a.mux.Lock()
-	defer a.mux.Unlock()
-
 	entry, ok := a.tracker[key.Zone][key.SvcID]
 	if !ok {
 		if count := a.trackerLen(); count >= metricsCountHardLimit {
@@ -199,9 +210,14 @@ func (a *ACT) callback(key *act.ActiveConnectionTrackerKey, value *act.ActiveCon
 			a.log.Debug("Failed to construct metrics map key in callback", "from-key", key.String())
 			return
 		}
+		failed, err := a.src.RestoreFailed(key)
+		if err != nil {
+			a.log.Debug("Failed to read a counter of failed connections for new metric")
+		}
 		a.tracker[key.Zone][key.SvcID] = &actMetric{
 			opened:      uint64(value.Opened),
 			closed:      uint64(value.Closed),
+			failed:      failed,
 			labelValues: []string{zone, svc},
 		}
 		return
@@ -209,8 +225,18 @@ func (a *ACT) callback(key *act.ActiveConnectionTrackerKey, value *act.ActiveCon
 
 	opened, closed := uint64(value.Opened), uint64(value.Closed)
 	if opened == entry.opened && closed == entry.closed && entry.newFailed == 0 {
-		a.metrics.New.WithLabelValues(entry.labelValues...).Set(0)
-		a.metrics.Failed.WithLabelValues(entry.labelValues...).Set(0)
+		if entry.updated.IsZero() {
+			// New and inactive entry.
+			return
+		}
+		n := a.metrics.New.WithLabelValues(entry.labelValues...)
+		f := a.metrics.Failed.WithLabelValues(entry.labelValues...)
+		if n.Get()+f.Get() > 0 {
+			// Reset published metrics only once.
+			n.Set(0)
+			f.Set(0)
+			entry.updated = time.Now()
+		}
 		return
 	}
 	scopedLog := a.log.With("svc", key.SvcID, "zone", key.Zone)
@@ -225,6 +251,9 @@ func (a *ACT) callback(key *act.ActiveConnectionTrackerKey, value *act.ActiveCon
 
 	entry.failed += entry.newFailed
 	a.metrics.Failed.WithLabelValues(entry.labelValues...).Set(float64(entry.newFailed))
+	if entry.newFailed > 0 {
+		a.src.SaveFailed(key, entry.failed)
+	}
 
 	active := opened - (closed + entry.failed)
 	if sumClosed := (closed + entry.failed); sumClosed > opened {
@@ -243,6 +272,9 @@ func (a *ACT) callback(key *act.ActiveConnectionTrackerKey, value *act.ActiveCon
 }
 
 func (a *ACT) update(ctx context.Context) error {
+	a.mux.Lock()
+	defer a.mux.Unlock()
+
 	start := time.Now()
 	err := a.src.IterateWithCallback(ctx, a.callback)
 	if err != nil {
@@ -258,11 +290,6 @@ func (a *ACT) dropEntry(zone uint8, svc uint16) {
 	a.metrics.Active.DeleteLabelValues(entry.labelValues...)
 	a.metrics.Failed.DeleteLabelValues(entry.labelValues...)
 
-	mapKey := &act.ActiveConnectionTrackerKey{SvcID: svc, Zone: zone}
-	err := a.src.Delete(mapKey)
-	if err != nil {
-		a.log.Debug("Failed to delete ACT map entry", "key", mapKey.String())
-	}
 	delete(a.tracker[zone], svc)
 }
 
@@ -293,7 +320,7 @@ func (a *ACT) _cleanup(ctx context.Context, cutoff time.Time) error {
 
 func (a *ACT) cleanup(ctx context.Context) error {
 	cutoff := time.Now().Add(-metricsTimeout)
-	return a._cleanup(ctx, cutoff)
+	return cmp.Or(a.reconcileServices(ctx), a._cleanup(ctx, cutoff))
 }
 
 // CountFailed4 increments a counter of new failed connections
@@ -375,10 +402,9 @@ func (a *ACT) trackerLen() int {
 // their latest update timestamp. All elements on the heap (metrics that are
 // stale for the longest) are removed.
 func (a *ACT) removeOverflow(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		ctx.Err()
-	default:
+	err := a.reconcileServices(ctx)
+	if err != nil {
+		return err
 	}
 	a.mux.Lock()
 	defer a.mux.Unlock()
@@ -387,9 +413,14 @@ func (a *ACT) removeOverflow(ctx context.Context) error {
 		// Nothing to do
 		return nil
 	}
+	return a._removeOverflow(ctx, n)
+}
+
+func (a *ACT) _removeOverflow(ctx context.Context, n int) error {
 	target := max(n-metricsCountSoftLimit, 100)
 	scopedLog := a.log.With("start-count", n, "limit", metricsCountSoftLimit, "target", target)
 	scopedLog.Info("Making a sweep of presented metrics")
+
 	gc := make(gcHeap, 0, target+1)
 	heap.Init(&gc)
 	for zone, services := range a.tracker {
@@ -437,5 +468,84 @@ func (a *ACT) removeOverflow(ctx context.Context) error {
 	}
 	scopedLog.Info("Removed extra metrics", "removed", removed)
 
+	return nil
+}
+
+func (a *ACT) saveFailed() error {
+	a.mux.Lock()
+	defer a.mux.Unlock()
+
+	saveErrCount := 0
+	for zone, services := range a.tracker {
+		for svc, entry := range services {
+			if entry.newFailed == 0 {
+				continue
+			}
+			mapKey := &act.ActiveConnectionTrackerKey{SvcID: svc, Zone: zone}
+			entry.failed += entry.newFailed
+			entry.newFailed = 0
+			err := a.src.SaveFailed(mapKey, entry.failed)
+			if err != nil {
+				a.log.Info("Failed to sync failed connection counter for",
+					"zone", entry.labelValues[0],
+					"svc", entry.labelValues[1],
+					"err", err,
+				)
+				saveErrCount++
+			}
+		}
+	}
+	if saveErrCount > 0 {
+		err := fmt.Errorf("failed connection counters not synced: %d", saveErrCount)
+		a.log.Warn("Failed to sync failed connection counters", "err", err)
+		return err
+	}
+	return nil
+}
+
+func (a *ACT) reconcileServices(ctx context.Context) error {
+	svcs := a.svcIDs()
+	tracked := make(map[uint16]bool, len(svcs))
+	for _, svc := range svcs {
+		tracked[uint16(svc)] = true
+	}
+	select {
+	case <-ctx.Done():
+		ctx.Err()
+	default:
+	}
+
+	a.mux.Lock()
+	defer a.mux.Unlock()
+
+	deleteErrCount := 0
+	for zone, services := range a.tracker {
+		for svc, entry := range services {
+			if tracked[svc] {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				ctx.Err()
+			default:
+			}
+			a.dropEntry(zone, svc)
+			mapKey := &act.ActiveConnectionTrackerKey{SvcID: svc, Zone: zone}
+			err := a.src.Delete(mapKey)
+			if err != nil {
+				a.log.Info("Failed to delete map entries for",
+					"zone", entry.labelValues[0],
+					"svc", entry.labelValues[1],
+					"err", err,
+				)
+				deleteErrCount++
+			}
+		}
+	}
+	if deleteErrCount > 0 {
+		err := fmt.Errorf("BPF map entries not deleted: %d", deleteErrCount)
+		a.log.Warn("Failed to delete some entries", "err", err)
+		return err
+	}
 	return nil
 }
