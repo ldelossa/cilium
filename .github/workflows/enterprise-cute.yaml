@@ -41,7 +41,7 @@ env:
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  kubectl_version: v1.30.2
+  kubectl_version: v1.30.3
   upload_dir: github-upload
   artifact_retention_days: 15
 
@@ -555,7 +555,7 @@ jobs:
 
       - name: Upload Artifacts
         if: always() && steps.create.outcome != 'skipped'
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: output
           path: ${{ steps.upload_prep.outputs.dir }}
