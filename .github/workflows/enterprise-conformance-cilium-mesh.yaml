@@ -157,6 +157,7 @@ jobs:
             --helm-set=kubeProxyReplacement=true \
             --helm-set=k8s.requireIPv4PodCIDR=true \
             --helm-set=k8s.requireIPv6PodCIDR=false \
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}' \
             "
 
           case "${{ matrix.ipfamily }}" in
