@@ -103,7 +103,7 @@ jobs:
         run: |
           tag=${{ inputs.tag }}
           echo tag=$tag >> $GITHUB_OUTPUT
-          
+
           if [ "${{ env.PUSH_TO_DOCKER_HUB }}" == "true" ]; then
             echo image_tags=${{ github.repository_owner }}/${{ matrix.name }}:$tag-${{ matrix.tier }},quay.io/${{ env.QUAY_ORGANIZATION }}/${{ matrix.name }}:$tag-${{ matrix.tier }} >> $GITHUB_OUTPUT
           else

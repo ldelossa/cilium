@@ -83,7 +83,7 @@ jobs:
         with:
           persist-credentials: false
           path: target
-      
+
       - name: Enable FIPs compliant build
         run: |
           echo "export GOEXPERIMENT = boringcrypto" >> ./Makefile.defs
