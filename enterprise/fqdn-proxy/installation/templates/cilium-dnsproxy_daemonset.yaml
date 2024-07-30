@@ -60,8 +60,8 @@ spec:
       imagePullSecrets:
 {{ toYaml .Values.imagePullSecrets | indent 6 }}
 {{- end }}
-      initContainers:
 {{- if eq .Values.upgradeCompatibility "1.13" }}
+      initContainers:
       - name: upgrade-compatibility
         image: "{{ if .Values.iptables.image.override }}{{ .Values.iptables.image.override }}{{ else }}{{ .Values.iptables.image.repository }}:{{ .Values.iptables.image.tag }}{{ end }}"
         imagePullPolicy: {{ .Values.iptables.image.imagePullPolicy }}
