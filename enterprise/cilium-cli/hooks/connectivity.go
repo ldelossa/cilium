@@ -93,6 +93,8 @@ func (ec *EnterpriseConnectivity) addConnectivityTests(cts ...*check.Connectivit
 
 func (ec *EnterpriseConnectivity) addConnectivityTestFlags(flags *pflag.FlagSet) {
 	flags.StringSliceVar(&tests.Params.EgressGateway.CIDRs, "egw-ipam-cidrs", defaults.EgressGatewayCIDRsDefault, "CIDRs to use to allocate Egress IPs in egress gateway ha ipam connectivity tests")
+	flags.UintVar(&tests.Params.EgressGateway.Retry, "egw-ipam-retry", defaults.EgressGatewayConnectRetryDefault, "Number of retries on connection failure to external targets for egress gateway ha IPAM tests")
+	flags.DurationVar(&tests.Params.EgressGateway.RetryDelay, "egw-ipam-retry-delay", defaults.EgressGatewayConnectRetryDelayDefault, "Delay between retries to external targets for egress gateway ha IPAM tests")
 }
 
 func (ec *EnterpriseConnectivity) addHubbleVersionTests(cts ...*check.ConnectivityTest) error {

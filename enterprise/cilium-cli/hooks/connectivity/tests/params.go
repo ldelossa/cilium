@@ -10,6 +10,8 @@
 
 package tests
 
+import "time"
+
 var Params Parameters
 
 type Parameters struct {
@@ -17,5 +19,7 @@ type Parameters struct {
 }
 
 type EgressGatewayParameters struct {
-	CIDRs []string
+	CIDRs      []string
+	Retry      uint
+	RetryDelay time.Duration
 }
