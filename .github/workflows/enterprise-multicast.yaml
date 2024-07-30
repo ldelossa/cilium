@@ -130,6 +130,7 @@ jobs:
             --helm-set=routingMode=tunnel \
             --helm-set=tunnelProtocol=vxlan \
             --helm-set=enterprise.multicast.enabled=true \
+            --helm-set='enterprise.featureGates={AllAlphaFeatures,AllBetaFeatures,AllLimitedFeatures}' \
           "
 
           echo sha=${SHA} >> $GITHUB_OUTPUT
