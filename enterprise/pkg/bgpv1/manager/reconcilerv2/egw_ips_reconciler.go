@@ -311,7 +311,7 @@ func (r *EgressGatewayIPsReconciler) getDesiredEGWRoutePolicies(params Enterpris
 						continue
 					}
 
-					policyName := reconcilerv2.PolicyName(peer, agentFamily.Afi.String(), egwID.String())
+					policyName := PolicyName(peer, agentFamily.Afi.String(), v1alpha1.BGPEGWAdvert, egwID.Name)
 					policy, err := reconcilerv2.CreatePolicy(policyName, peerAddr, v4Prefixes, v6Prefixes, v2alpha1.BGPAdvertisement{
 						Attributes: advert.Attributes,
 					})

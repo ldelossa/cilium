@@ -4003,6 +4003,23 @@
             "integer"
           ]
         },
+        "operator": {
+          "properties": {
+            "burst": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "qps": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            }
+          },
+          "type": "object"
+        },
         "qps": {
           "type": [
             "null",
@@ -4022,6 +4039,18 @@
     },
     "k8sServiceHost": {
       "type": "string"
+    },
+    "k8sServiceLookupConfigMapName": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "k8sServiceLookupNamespace": {
+      "type": [
+        "null",
+        "string"
+      ]
     },
     "k8sServicePort": {
       "type": [
@@ -4127,6 +4156,17 @@
     },
     "name": {
       "type": "string"
+    },
+    "nat": {
+      "properties": {
+        "mapStatsEntries": {
+          "type": "integer"
+        },
+        "mapStatsInterval": {
+          "type": "string"
+        }
+      },
+      "type": "object"
     },
     "nat46x64Gateway": {
       "properties": {

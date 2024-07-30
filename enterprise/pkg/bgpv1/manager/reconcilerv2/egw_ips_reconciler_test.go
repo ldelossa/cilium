@@ -128,7 +128,7 @@ var (
 		},
 	}
 
-	egw1RPName = reconcilerv2.PolicyName("peer-65001", "ipv4", egwPolicyKey.String())
+	egw1RPName = PolicyName("peer-65001", "ipv4", v1alpha1.BGPEGWAdvert, egwPolicyKey.Name)
 	egw1RP     = &types.RoutePolicy{
 		Name: egw1RPName,
 		Type: types.RoutePolicyTypeExport,
@@ -152,7 +152,7 @@ var (
 		},
 	}
 
-	egw2RPName = reconcilerv2.PolicyName("peer-65001", "ipv4", egwPolicyKey2.String())
+	egw2RPName = PolicyName("peer-65001", "ipv4", v1alpha1.BGPEGWAdvert, egwPolicyKey2.Name)
 	egw2RP     = &types.RoutePolicy{
 		Name: egw2RPName,
 		Type: types.RoutePolicyTypeExport,
