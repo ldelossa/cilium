@@ -42,7 +42,7 @@ func createOrUpdateIEGP(ctx context.Context, client *enterpriseK8s.EnterpriseCli
 	return err
 }
 
-// deleteIEGP deletes a CiliumEgressGatewayPolicy from the cluster.
+// deleteIEGP deletes an IsovalentEgressGatewayPolicy from the cluster.
 func deleteIEGP(ctx context.Context, client *enterpriseK8s.EnterpriseClient, iegp *isovalentv1.IsovalentEgressGatewayPolicy) error {
 	if err := client.DeleteIsovalentEgressGatewayPolicy(ctx, iegp.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("%s/%s policy delete failed: %w", client.ClusterName(), iegp.Name, err)
@@ -89,7 +89,7 @@ func deleteIMG(ctx context.Context, client *enterpriseK8s.EnterpriseClient, img 
 	return nil
 }
 
-// addiegps adds one or more CiliumEgressGatewayPolicy resources to the Test.
+// addIEGPs adds one or more IsovalentEgressGatewayPolicy resources to the Test.
 func (t *EnterpriseTest) addIEGPs(iegps ...*isovalentv1.IsovalentEgressGatewayPolicy) (err error) {
 	t.iegps, err = check.RegisterPolicy(t.iegps, iegps...)
 	return err
@@ -123,7 +123,7 @@ func (t *EnterpriseTest) applyPolicies(ctx context.Context) error {
 	// Apply all given Cilium Egress Gateway Policies.
 	for _, iegp := range t.iegps {
 		for _, client := range t.Context().clients.clients() {
-			t.Infof("📜 Applying CiliumEgressGatewayPolicy '%s' to namespace '%s'..", iegp.Name, iegp.Namespace)
+			t.Infof("📜 Applying IsovalentEgressGatewayPolicy '%s' to namespace '%s'..", iegp.Name, iegp.Namespace)
 			if err := createOrUpdateIEGP(ctx, client, iegp); err != nil {
 				return fmt.Errorf("policy application failed: %w", err)
 			}
@@ -174,10 +174,10 @@ func (t *EnterpriseTest) deletePolicies(ctx context.Context) error {
 
 	// Delete all the Test's iegps from all clients.
 	for _, iegp := range t.iegps {
-		t.Infof("📜 Deleting CiliumEgressGatewayPolicy '%s' from namespace '%s'..", iegp.Name, iegp.Namespace)
+		t.Infof("📜 Deleting IsovalentEgressGatewayPolicy '%s' from namespace '%s'..", iegp.Name, iegp.Namespace)
 		for _, client := range t.Context().clients.clients() {
 			if err := deleteIEGP(ctx, client, iegp); err != nil {
-				return fmt.Errorf("deleting CiliumEgressGatewayPolicy: %w", err)
+				return fmt.Errorf("deleting IsovalentEgressGatewayPolicy: %w", err)
 			}
 		}
 	}
