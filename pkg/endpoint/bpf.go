@@ -533,6 +533,10 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	stats.waitingForLock.End(true)
 	defer e.owner.GetCompilationLock().RUnlock()
 
+	if err := e.aliveCtx.Err(); err != nil {
+		return 0, fmt.Errorf("endpoint was closed while waiting for datapath lock: %w", err)
+	}
+
 	datapathRegenCtxt.prepareForProxyUpdates(regenContext.parentContext)
 	defer datapathRegenCtxt.completionCancel()
 
@@ -644,6 +648,11 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	if err != nil {
 		return 0, fmt.Errorf("unable to regenerate policy because PolicyMap synchronization failed: %w", err)
 	}
+
+	// Initialize (if not done yet) the DNS history trigger to allow DNS proxy to trigger
+	// updates to endpoint headers. The initialization happens here as at this point
+	// datapath is ready to process the trigger.
+	e.initDNSHistoryTrigger()
 
 	return datapathRegenCtxt.epInfoCache.revision, err
 }

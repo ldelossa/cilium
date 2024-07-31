@@ -62,6 +62,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/exporter/exporteroption"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/identity"
+	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/ipam"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -601,9 +602,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.String(option.LoadBalancerRSSv6CIDR, "", "BPF load balancing RSS outer source IPv6 CIDR prefix for IPIP")
 	option.BindEnv(vp, option.LoadBalancerRSSv6CIDR)
 
-	flags.Bool(option.LoadBalancerExternalControlPlane, false, "BPF load balancer uses an externally-provided control plane")
-	option.BindEnv(vp, option.LoadBalancerExternalControlPlane)
-
 	flags.String(option.LoadBalancerAcceleration, option.NodePortAccelerationDisabled, fmt.Sprintf(
 		"BPF load balancing acceleration via XDP (\"%s\", \"%s\")",
 		option.NodePortAccelerationNative, option.NodePortAccelerationDisabled))
@@ -983,7 +981,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.StringSlice(option.HubbleRedactHttpHeadersDeny, []string{}, "HTTP headers to redact from flows")
 	option.BindEnv(vp, option.HubbleRedactHttpHeadersDeny)
 
-	flags.Bool(option.HubbleDropEvents, defaults.HubbleDropEventsEnabled, "Emit packet drop Events related to pods")
+	flags.Bool(option.HubbleDropEvents, defaults.HubbleDropEventsEnabled, "Emit packet drop Events related to pods (alpha)")
 	option.BindEnv(vp, option.HubbleDropEvents)
 
 	flags.Duration(option.HubbleDropEventsInterval, defaults.HubbleDropEventsInterval, "Minimum time between emitting same events")
@@ -1384,7 +1382,6 @@ func initEnv(vp *viper.Viper) {
 		}
 		option.Config.KubeProxyReplacement = option.KubeProxyReplacementFalse
 		option.Config.EnableSocketLB = true
-		option.Config.EnableSocketLBTracing = true
 		option.Config.EnableSocketLBPodConnectionTermination = true
 		option.Config.EnableHostPort = false
 		option.Config.EnableNodePort = true
@@ -1708,6 +1705,7 @@ type daemonParams struct {
 	Recorder            *recorder.Recorder
 	IPAM                *ipam.IPAM
 	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
+	IdentityManager     *identitymanager.IdentityManager
 }
 
 func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig], promise.Promise[policyK8s.PolicyManager]) {
@@ -1718,10 +1716,6 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Pr
 	// daemonCtx is the daemon-wide context cancelled when stopping.
 	daemonCtx, cancelDaemonCtx := context.WithCancel(context.Background())
 	cleaner := NewDaemonCleanup()
-
-	if option.Config.LoadBalancerExternalControlPlane {
-		params.Clientset.Disable()
-	}
 
 	var daemon *Daemon
 	var wg sync.WaitGroup
@@ -1834,6 +1828,16 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 	if params.WGAgent != nil {
 		go func() {
+			select {
+			case <-d.nodeDiscovery.Registered:
+				// Wait until the kvstore synchronization completed, to avoid
+				// causing connectivity blips due incorrectly removing
+				// WireGuard peers that have not yet been discovered. The
+				// Registered channel is immediately closed in CRD mode.
+			case <-d.ctx.Done():
+				return
+			}
+
 			if err := params.WGAgent.RestoreFinished(d.clustermesh); err != nil {
 				log.WithError(err).Error("Failed to set up WireGuard peers")
 			}
@@ -1979,7 +1983,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		controller.ControllerParams{
 			Group:  cfgGroup,
 			Health: params.Health,
-			DoFunc: option.Config.ValidateUnchanged,
+			DoFunc: func(context.Context) error {
+				// Validate that Daemon config has not changed, ignoring 'Opts'
+				// that may be modified via config patch events.
+				return option.Config.ValidateUnchanged()
+			},
 			// avoid synhronized run with other
 			// controllers started at same time
 			RunInterval: 61 * time.Second,

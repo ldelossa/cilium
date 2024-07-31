@@ -5,7 +5,6 @@ package option
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -42,7 +41,6 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/ip"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
-	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/mac"
@@ -278,10 +276,6 @@ const (
 
 	// Alias to NodePortAcceleration
 	LoadBalancerAcceleration = "bpf-lb-acceleration"
-
-	// LoadBalancerExternalControlPlane switch skips connectivity to kube-apiserver
-	// which is relevant in lb-only mode
-	LoadBalancerExternalControlPlane = "bpf-lb-external-control-plane"
 
 	// MaglevTableSize determines the size of the backend table per service
 	MaglevTableSize = "bpf-lb-maglev-table-size"
@@ -1466,9 +1460,6 @@ type DaemonConfig struct {
 	// Options changeable at runtime
 	Opts *IntOptions
 
-	// Mutex for serializing configuration updates to the daemon.
-	ConfigPatchMutex *lock.RWMutex
-
 	// Monitor contains the configuration for the node monitor.
 	Monitor *models.MonitorStatus
 
@@ -1999,10 +1990,6 @@ type DaemonConfig struct {
 	LoadBalancerRSSv6CIDR string
 	LoadBalancerRSSv6     net.IPNet
 
-	// LoadBalancerExternalControlPlane tells whether to not use kube-apiserver as
-	// its control plane in lb-only mode.
-	LoadBalancerExternalControlPlane bool
-
 	// EnablePMTUDiscovery indicates whether to send ICMP fragmentation-needed
 	// replies to the client (when needed).
 	EnablePMTUDiscovery bool
@@ -2483,7 +2470,6 @@ var (
 	Config = &DaemonConfig{
 		CreationTime:                    time.Now(),
 		Opts:                            NewIntOptions(&DaemonOptionLibrary),
-		ConfigPatchMutex:                new(lock.RWMutex),
 		Monitor:                         &models.MonitorStatus{Cpus: int64(runtime.NumCPU()), Npages: 64, Pagesize: int64(os.Getpagesize()), Lost: 0, Unknown: 0},
 		IPv6ClusterAllocCIDR:            defaults.IPv6ClusterAllocCIDR,
 		IPv6ClusterAllocCIDRBase:        defaults.IPv6ClusterAllocCIDRBase,
@@ -2533,36 +2519,6 @@ var (
 		EnableEnvoyConfig:             defaults.EnableEnvoyConfig,
 	}
 )
-
-// GetIPv4NativeRoutingCIDR returns the native routing CIDR if configured
-func (c *DaemonConfig) GetIPv4NativeRoutingCIDR() (cidr *cidr.CIDR) {
-	c.ConfigPatchMutex.RLock()
-	cidr = c.IPv4NativeRoutingCIDR
-	c.ConfigPatchMutex.RUnlock()
-	return
-}
-
-// SetIPv4NativeRoutingCIDR sets the native routing CIDR
-func (c *DaemonConfig) SetIPv4NativeRoutingCIDR(cidr *cidr.CIDR) {
-	c.ConfigPatchMutex.Lock()
-	c.IPv4NativeRoutingCIDR = cidr
-	c.ConfigPatchMutex.Unlock()
-}
-
-// GetIPv6NativeRoutingCIDR returns the native routing CIDR if configured
-func (c *DaemonConfig) GetIPv6NativeRoutingCIDR() (cidr *cidr.CIDR) {
-	c.ConfigPatchMutex.RLock()
-	cidr = c.IPv6NativeRoutingCIDR
-	c.ConfigPatchMutex.RUnlock()
-	return
-}
-
-// SetIPv6NativeRoutingCIDR sets the native routing CIDR
-func (c *DaemonConfig) SetIPv6NativeRoutingCIDR(cidr *cidr.CIDR) {
-	c.ConfigPatchMutex.Lock()
-	c.IPv6NativeRoutingCIDR = cidr
-	c.ConfigPatchMutex.Unlock()
-}
 
 // IsExcludedLocalAddress returns true if the specified IP matches one of the
 // excluded local IP ranges
@@ -3171,7 +3127,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.LoadBalancerDSRL4Xlate = vp.GetString(LoadBalancerDSRL4Xlate)
 	c.LoadBalancerRSSv4CIDR = vp.GetString(LoadBalancerRSSv4CIDR)
 	c.LoadBalancerRSSv6CIDR = vp.GetString(LoadBalancerRSSv6CIDR)
-	c.LoadBalancerExternalControlPlane = vp.GetBool(LoadBalancerExternalControlPlane)
 	c.InstallNoConntrackIptRules = vp.GetBool(InstallNoConntrackIptRules)
 	c.ContainerIPLocalReservedPorts = vp.GetString(ContainerIPLocalReservedPorts)
 	c.EnableCustomCalls = vp.GetBool(EnableCustomCallsName)
@@ -3772,7 +3727,7 @@ func (c *DaemonConfig) checkMapSizeLimits() error {
 }
 
 func (c *DaemonConfig) checkIPv4NativeRoutingCIDR() error {
-	if c.GetIPv4NativeRoutingCIDR() != nil {
+	if c.IPv4NativeRoutingCIDR != nil {
 		return nil
 	}
 	if !c.EnableIPv4 || !c.EnableIPv4Masquerade {
@@ -3799,7 +3754,7 @@ func (c *DaemonConfig) checkIPv4NativeRoutingCIDR() error {
 }
 
 func (c *DaemonConfig) checkIPv6NativeRoutingCIDR() error {
-	if c.GetIPv6NativeRoutingCIDR() != nil {
+	if c.IPv6NativeRoutingCIDR != nil {
 		return nil
 	}
 	if !c.EnableIPv6 || !c.EnableIPv6Masquerade {
@@ -4067,6 +4022,7 @@ var backupFileNames []string = []string{
 // name 'daemon-config.json'. If this file already exists, it is renamed to
 // 'daemon-config-1.json', if 'daemon-config-1.json' also exists,
 // 'daemon-config-1.json' is renamed to 'daemon-config-2.json'
+// Caller is responsible for blocking concurrent changes.
 func (c *DaemonConfig) StoreInFile(dir string) error {
 	backupFiles(dir, backupFileNames)
 	f, err := os.Create(backupFileNames[0])
@@ -4077,12 +4033,8 @@ func (c *DaemonConfig) StoreInFile(dir string) error {
 	e := json.NewEncoder(f)
 	e.SetIndent("", " ")
 
-	// Exclude concurrent modification of fields protected by c.ConfigPatchMutex
-	// we store the file
-	c.ConfigPatchMutex.RLock()
 	err = e.Encode(c)
 	c.shaSum = c.checksum()
-	c.ConfigPatchMutex.RUnlock()
 
 	return err
 }
@@ -4099,15 +4051,10 @@ func (c *DaemonConfig) checksum() [32]byte {
 	return sha256.Sum256(cBytes)
 }
 
-// ValidateUnchanged takes a context that is unused so that it can be used as a doFunc in a
-// controller
-func (c *DaemonConfig) ValidateUnchanged(context.Context) error {
-	// Exclude concurrent modification of fields protected by c.ConfigPatchMutex
-	// we store the file
-	c.ConfigPatchMutex.RLock()
+// ValidateUnchanged checks that invariable parts of the config have not changed since init.
+// Caller is responsible for blocking concurrent changes.
+func (c *DaemonConfig) ValidateUnchanged() error {
 	sum := c.checksum()
-	c.ConfigPatchMutex.RUnlock()
-
 	if sum != c.shaSum {
 		return c.diffFromFile()
 	}
