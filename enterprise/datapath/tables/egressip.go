@@ -12,6 +12,7 @@ package tables
 
 import (
 	"net/netip"
+	"strings"
 
 	"github.com/cilium/statedb"
 	"github.com/cilium/statedb/index"
@@ -58,18 +59,28 @@ func NewEgressIPTable(db *statedb.DB) (statedb.RWTable[*EgressIPEntry], error) {
 
 // TableHeader returns the names of the "egress-ips" table columns
 func (e *EgressIPEntry) TableHeader() []string {
-	return []string{"Address", "Interface", "Status"}
+	return []string{"Address", "Interface", "Destinations", "Status"}
 }
 
 // TableRow returns the values of an "egress-ips" table entry
 func (e *EgressIPEntry) TableRow() []string {
-	return []string{e.Addr.String(), e.Interface, e.Status.String()}
+	dests := make([]string, 0, len(e.Destinations))
+	for _, d := range e.Destinations {
+		dests = append(dests, d.String())
+	}
+	return []string{
+		e.Addr.String(),
+		e.Interface,
+		strings.Join(dests, ", "),
+		e.Status.String(),
+	}
 }
 
 // EgressIPEntry describes a single row of the "egress-ips" stateDB table
 type EgressIPEntry struct {
-	Addr      netip.Addr
-	Interface string
+	Addr         netip.Addr
+	Interface    string
+	Destinations []netip.Prefix
 
 	Status reconciler.Status
 }

@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"syscall"
@@ -29,7 +30,6 @@ import (
 	"github.com/cilium/cilium/enterprise/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
-	"github.com/cilium/cilium/pkg/defaults"
 )
 
 const (
@@ -59,8 +59,52 @@ func (ops *ops) Update(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 		return fmt.Errorf("failed to upsert rule for address %s: %w", entry.Addr, err)
 	}
 
-	if err := route.Upsert(routeForEgressIP(entry.Addr, iface)); err != nil {
-		return fmt.Errorf("failed to append route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+	routes, err := netlink.RouteListFiltered(
+		netlink.FAMILY_V4,
+		&netlink.Route{
+			Src:       entry.Addr.AsSlice(),
+			LinkIndex: iface.Attrs().Index,
+			Table:     RouteTableEgressGatewayIPAM,
+			Protocol:  linux_defaults.RTProto,
+		},
+		netlink.RT_FILTER_SRC|netlink.RT_FILTER_OIF|netlink.RT_FILTER_TABLE|netlink.RT_FILTER_PROTOCOL,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to lookup existing routes for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+	}
+
+	// delete stale routes
+	for _, r := range routes {
+		dst := ipNetToPrefix(*r.Dst)
+		found := false
+		for _, dest := range entry.Destinations {
+			if dest.String() == dst.String() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if err := route.DeleteV4(routeForEgressIP(entry.Addr, ipNetToPrefix(*r.Dst), iface)); err != nil && !errors.Is(err, syscall.ESRCH) {
+				return fmt.Errorf("failed to delete route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+			}
+		}
+	}
+
+	// add new routes
+	for _, dest := range entry.Destinations {
+		found := false
+		for _, r := range routes {
+			dst := ipNetToPrefix(*r.Dst)
+			if dst.String() == dest.String() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if err := route.Upsert(routeForEgressIP(entry.Addr, dest, iface)); err != nil {
+				return fmt.Errorf("failed to append route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+			}
+		}
 	}
 
 	return nil
@@ -80,8 +124,10 @@ func (ops *ops) Delete(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 		return fmt.Errorf("failed to upsert rule for address %s: %w", entry.Addr, err)
 	}
 
-	if err := route.DeleteV4(routeForEgressIP(entry.Addr, iface)); err != nil && !errors.Is(err, syscall.ESRCH) {
-		return fmt.Errorf("failed to delete route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+	for _, dest := range entry.Destinations {
+		if err := route.DeleteV4(routeForEgressIP(entry.Addr, dest, iface)); err != nil && !errors.Is(err, syscall.ESRCH) {
+			return fmt.Errorf("failed to delete route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+		}
 	}
 
 	return nil
@@ -113,12 +159,26 @@ func ruleForEgressIP(addr netip.Addr) route.Rule {
 	}
 }
 
-func routeForEgressIP(addr netip.Addr, iface netlink.Link) route.Route {
+func routeForEgressIP(addr netip.Addr, dest netip.Prefix, iface netlink.Link) route.Route {
 	return route.Route{
-		Prefix: defaults.IPv4DefaultRoute,
+		Prefix: prefixToIPNet(dest),
 		Local:  addr.AsSlice(),
 		Device: iface.Attrs().Name,
 		Table:  RouteTableEgressGatewayIPAM,
 		Proto:  linux_defaults.RTProto,
 	}
+}
+
+func prefixToIPNet(prefix netip.Prefix) net.IPNet {
+	prefix = prefix.Masked()
+	return net.IPNet{
+		IP:   prefix.Addr().AsSlice(),
+		Mask: net.CIDRMask(prefix.Bits(), prefix.Addr().BitLen()),
+	}
+}
+
+func ipNetToPrefix(prefix net.IPNet) netip.Prefix {
+	addr, _ := netip.AddrFromSlice(prefix.IP)
+	cidr, _ := prefix.Mask.Size()
+	return netip.PrefixFrom(addr, cidr)
 }

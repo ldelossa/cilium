@@ -870,15 +870,22 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 		}
 	}
 
+	// upsert all the egress configs <egress IP, egress interface, destination CIDRs>
+	// from the current status of the policy and remove the configs from the previous policy status
 	nextEgressIPs := sets.New(egressIPs...)
 	curEgressIPs := manager.egressConfigsByPolicy[config.id]
-	toAdd, toDel := nextEgressIPs.Difference(curEgressIPs), curEgressIPs.Difference(nextEgressIPs)
-	updateEgressIPsConfig(manager.db, manager.egressIPTable, toAdd, toDel)
+	toDel := curEgressIPs.Difference(nextEgressIPs)
+	updateEgressIPsConfig(manager.db, manager.egressIPTable, nextEgressIPs, toDel, config.dstCIDRs)
 	manager.egressConfigsByPolicy[config.id] = nextEgressIPs
 
 }
 
-func updateEgressIPsConfig(db *statedb.DB, table statedb.RWTable[*tables.EgressIPEntry], toAdd, toDel sets.Set[gwEgressIPConfig]) {
+func updateEgressIPsConfig(
+	db *statedb.DB,
+	table statedb.RWTable[*tables.EgressIPEntry],
+	toUpsert, toDel sets.Set[gwEgressIPConfig],
+	destinations []netip.Prefix,
+) {
 	txn := db.WriteTxn(table)
 	defer txn.Abort()
 
@@ -889,11 +896,12 @@ func updateEgressIPsConfig(db *statedb.DB, table statedb.RWTable[*tables.EgressI
 		})
 	}
 
-	for _, config := range toAdd.UnsortedList() {
+	for _, config := range toUpsert.UnsortedList() {
 		table.Insert(txn, &tables.EgressIPEntry{
-			Addr:      config.addr,
-			Interface: config.iface,
-			Status:    reconciler.StatusPending(),
+			Addr:         config.addr,
+			Interface:    config.iface,
+			Destinations: destinations,
+			Status:       reconciler.StatusPending(),
 		})
 	}
 
