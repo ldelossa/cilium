@@ -34,6 +34,7 @@ var (
 			Labels: map[string]string{
 				"bgp": "dummy_label",
 			},
+			ResourceVersion: "1234",
 		},
 		Spec: v1alpha1.IsovalentBGPClusterConfigSpec{
 			NodeSelector: &slimv1.LabelSelector{
@@ -169,6 +170,7 @@ var (
 			Labels: map[string]string{
 				"bgp": "dummy_label_1",
 			},
+			ResourceVersion: "2345",
 		},
 		Spec: v1alpha1.IsovalentBGPPeerConfigSpec{
 			CiliumBGPPeerConfigSpec: ossPeerConfigSpec,
@@ -189,6 +191,7 @@ var (
 			Labels: map[string]string{
 				"bgp": "advert-1",
 			},
+			ResourceVersion: "3456",
 		},
 		Spec: v1alpha1.IsovalentBGPAdvertisementSpec{
 			Advertisements: []v1alpha1.BGPAdvertisement{
@@ -231,6 +234,7 @@ var (
 			Labels: map[string]string{
 				"bgp": "advert-2",
 			},
+			ResourceVersion: "4567",
 		},
 		Spec: v1alpha1.IsovalentBGPAdvertisementSpec{
 			Advertisements: []v1alpha1.BGPAdvertisement{
@@ -277,6 +281,7 @@ var (
 			Labels: map[string]string{
 				"bgp": "advert-3",
 			},
+			ResourceVersion: "5678",
 		},
 		Spec: v1alpha1.IsovalentBGPAdvertisementSpec{
 			Advertisements: []v1alpha1.BGPAdvertisement{
@@ -413,6 +418,7 @@ func Test_Mapping(t *testing.T) {
 
 				assert.Equal(c, tt.expectedOSSClusterConfig.Name, ossClusterConfig.Name)
 				assert.Equal(c, tt.expectedOSSClusterConfig.Labels, ossClusterConfig.Labels)
+				assert.Equal(c, map[string]string{ownerVersionAnnotation: tt.isoClusterConfig.ResourceVersion}, ossClusterConfig.Annotations)
 				assert.True(c, tt.expectedOSSClusterConfig.Spec.DeepEqual(&tt.expectedOSSClusterConfig.Spec))
 			}, TestTimeout, 50*time.Millisecond)
 
@@ -435,6 +441,7 @@ func Test_Mapping(t *testing.T) {
 
 				assert.Equal(c, tt.expectedOSSPeerConfig.Name, ossPeerConfig.Name)
 				assert.Equal(c, tt.expectedOSSPeerConfig.Labels, ossPeerConfig.Labels)
+				assert.Equal(c, map[string]string{ownerVersionAnnotation: tt.isoPeerConfig.ResourceVersion}, ossPeerConfig.Annotations)
 				assert.True(c, tt.expectedOSSPeerConfig.Spec.DeepEqual(&tt.expectedOSSPeerConfig.Spec))
 			}, TestTimeout, 50*time.Millisecond)
 
@@ -457,6 +464,7 @@ func Test_Mapping(t *testing.T) {
 
 				assert.Equal(c, tt.expectedOSSAdvert.Name, ossAdvert.Name)
 				assert.Equal(c, tt.expectedOSSAdvert.Labels, ossAdvert.Labels)
+				assert.Equal(c, map[string]string{ownerVersionAnnotation: tt.isoAdvert.ResourceVersion}, ossAdvert.Annotations)
 				assert.True(c, tt.expectedOSSAdvert.Spec.DeepEqual(&tt.expectedOSSAdvert.Spec))
 			}, TestTimeout, 50*time.Millisecond)
 
@@ -479,6 +487,7 @@ func Test_Mapping(t *testing.T) {
 
 				assert.Equal(c, tt.expectedOSSNodeConfigOR.Name, ossNodeConfigOR.Name)
 				assert.Equal(c, tt.expectedOSSNodeConfigOR.Labels, ossNodeConfigOR.Labels)
+				assert.Equal(c, map[string]string{ownerVersionAnnotation: tt.isoNodeConfigOR.ResourceVersion}, ossNodeConfigOR.Annotations)
 				assert.True(c, tt.expectedOSSNodeConfigOR.Spec.DeepEqual(&tt.expectedOSSNodeConfigOR.Spec))
 			}, TestTimeout, 50*time.Millisecond)
 		})

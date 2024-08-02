@@ -18,9 +18,15 @@ import (
 	"golang.org/x/exp/maps"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/cilium/cilium/pkg/annotation"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+)
+
+const (
+	// ownerVersionAnnotation is used to track the last reconciled version of the owner (parent) CRD object
+	ownerVersionAnnotation = annotation.ConfigPrefix + "/owner-version"
 )
 
 func (m *BGPResourceMapper) reconcileMappings(ctx context.Context) error {
@@ -60,13 +66,15 @@ func (m *BGPResourceMapper) mapClusterConfig(ctx context.Context, entClusterConf
 
 	switch {
 	case exists && expectedOSSClusterConfig.Spec.DeepEqual(&runningOSSClusterConfig.Spec) &&
-		maps.Equal(expectedOSSClusterConfig.Labels, runningOSSClusterConfig.Labels):
+		maps.Equal(expectedOSSClusterConfig.Labels, runningOSSClusterConfig.Labels) &&
+		maps.Equal(expectedOSSClusterConfig.Annotations, runningOSSClusterConfig.Annotations):
 		return nil
 
 	case exists:
 		// update
 		runningOSSClusterConfig.Spec = expectedOSSClusterConfig.Spec
 		runningOSSClusterConfig.Labels = expectedOSSClusterConfig.Labels
+		runningOSSClusterConfig.Annotations = expectedOSSClusterConfig.Annotations
 
 		_, err = clusterConfigClientSet.Update(ctx, runningOSSClusterConfig, metav1.UpdateOptions{})
 		if err != nil {
@@ -114,13 +122,15 @@ func (m *BGPResourceMapper) mapPeerConfig(ctx context.Context, entPeerConfig *v1
 
 	switch {
 	case exists && expectedOSSPeerConfig.Spec.DeepEqual(&runningOSSPeerConfig.Spec) &&
-		maps.Equal(expectedOSSPeerConfig.Labels, runningOSSPeerConfig.Labels):
+		maps.Equal(expectedOSSPeerConfig.Labels, runningOSSPeerConfig.Labels) &&
+		maps.Equal(expectedOSSPeerConfig.Annotations, runningOSSPeerConfig.Annotations):
 		return nil
 
 	case exists:
 		// update
 		runningOSSPeerConfig.Spec = expectedOSSPeerConfig.Spec
 		runningOSSPeerConfig.Labels = expectedOSSPeerConfig.Labels
+		runningOSSPeerConfig.Annotations = expectedOSSPeerConfig.Annotations
 
 		_, err = peerConfigClientSet.Update(ctx, runningOSSPeerConfig, metav1.UpdateOptions{})
 		if err != nil {
@@ -168,13 +178,15 @@ func (m *BGPResourceMapper) mapAdvertisement(ctx context.Context, entAdvertiseme
 
 	switch {
 	case exists && expectedOSSAdvertisement.Spec.DeepEqual(&runningOSSAdvertisement.Spec) &&
-		maps.Equal(expectedOSSAdvertisement.Labels, runningOSSAdvertisement.Labels):
+		maps.Equal(expectedOSSAdvertisement.Labels, runningOSSAdvertisement.Labels) &&
+		maps.Equal(expectedOSSAdvertisement.Annotations, runningOSSAdvertisement.Annotations):
 		return nil
 
 	case exists:
 		// update
 		runningOSSAdvertisement.Spec = expectedOSSAdvertisement.Spec
 		runningOSSAdvertisement.Labels = expectedOSSAdvertisement.Labels
+		runningOSSAdvertisement.Annotations = expectedOSSAdvertisement.Annotations
 
 		_, err = advertisementClientSet.Update(ctx, runningOSSAdvertisement, metav1.UpdateOptions{})
 		if err != nil {
@@ -222,13 +234,15 @@ func (m *BGPResourceMapper) mapNodeConfigOverride(ctx context.Context, entNodeCo
 
 	switch {
 	case exists && expectedOSSNodeConfigOverride.Spec.DeepEqual(&runningOSSNodeConfigOverride.Spec) &&
-		maps.Equal(expectedOSSNodeConfigOverride.Labels, runningOSSNodeConfigOverride.Labels):
+		maps.Equal(expectedOSSNodeConfigOverride.Labels, runningOSSNodeConfigOverride.Labels) &&
+		maps.Equal(expectedOSSNodeConfigOverride.Annotations, runningOSSNodeConfigOverride.Annotations):
 		return nil
 
 	case exists:
 		// update
 		runningOSSNodeConfigOverride.Spec = expectedOSSNodeConfigOverride.Spec
 		runningOSSNodeConfigOverride.Labels = expectedOSSNodeConfigOverride.Labels
+		runningOSSNodeConfigOverride.Annotations = expectedOSSNodeConfigOverride.Annotations
 
 		_, err = nodeConfigOverrideClientSet.Update(ctx, runningOSSNodeConfigOverride, metav1.UpdateOptions{})
 		if err != nil {
@@ -253,9 +267,10 @@ func (m *BGPResourceMapper) mapNodeConfigOverride(ctx context.Context, entNodeCo
 func createOSSClusterConfig(entClusterConfig *v1alpha1.IsovalentBGPClusterConfig) *v2alpha1.CiliumBGPClusterConfig {
 	newOSSClusterConfig := &v2alpha1.CiliumBGPClusterConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      entClusterConfig.GetName(),
-			Namespace: entClusterConfig.GetNamespace(),
-			Labels:    entClusterConfig.GetLabels(),
+			Name:        entClusterConfig.GetName(),
+			Namespace:   entClusterConfig.GetNamespace(),
+			Labels:      entClusterConfig.GetLabels(),
+			Annotations: map[string]string{ownerVersionAnnotation: entClusterConfig.ResourceVersion},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: v1alpha1.SchemeGroupVersion.String(),
@@ -296,9 +311,10 @@ func createOSSClusterConfig(entClusterConfig *v1alpha1.IsovalentBGPClusterConfig
 func createOSSPeerConfig(entPeerConfig *v1alpha1.IsovalentBGPPeerConfig) *v2alpha1.CiliumBGPPeerConfig {
 	newOSSPeerConfig := &v2alpha1.CiliumBGPPeerConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      entPeerConfig.GetName(),
-			Namespace: entPeerConfig.GetNamespace(),
-			Labels:    entPeerConfig.GetLabels(),
+			Name:        entPeerConfig.GetName(),
+			Namespace:   entPeerConfig.GetNamespace(),
+			Labels:      entPeerConfig.GetLabels(),
+			Annotations: map[string]string{ownerVersionAnnotation: entPeerConfig.ResourceVersion},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: v1alpha1.SchemeGroupVersion.String(),
@@ -317,9 +333,10 @@ func createOSSPeerConfig(entPeerConfig *v1alpha1.IsovalentBGPPeerConfig) *v2alph
 func createOSSAdvertisement(entAdvertisement *v1alpha1.IsovalentBGPAdvertisement) *v2alpha1.CiliumBGPAdvertisement {
 	newOSSAdvertisement := &v2alpha1.CiliumBGPAdvertisement{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      entAdvertisement.GetName(),
-			Namespace: entAdvertisement.GetNamespace(),
-			Labels:    entAdvertisement.GetLabels(),
+			Name:        entAdvertisement.GetName(),
+			Namespace:   entAdvertisement.GetNamespace(),
+			Labels:      entAdvertisement.GetLabels(),
+			Annotations: map[string]string{ownerVersionAnnotation: entAdvertisement.ResourceVersion},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: v1alpha1.SchemeGroupVersion.String(),
@@ -368,9 +385,10 @@ func ossAdvertTypeFromEnt(advert v1alpha1.IsovalentBGPAdvertType) v2alpha1.BGPAd
 func createOSSNodeConfigOverride(entNodeConfigOverride *v1alpha1.IsovalentBGPNodeConfigOverride) *v2alpha1.CiliumBGPNodeConfigOverride {
 	newOSSNodeConfigOverride := &v2alpha1.CiliumBGPNodeConfigOverride{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      entNodeConfigOverride.GetName(),
-			Namespace: entNodeConfigOverride.GetNamespace(),
-			Labels:    entNodeConfigOverride.GetLabels(),
+			Name:        entNodeConfigOverride.GetName(),
+			Namespace:   entNodeConfigOverride.GetNamespace(),
+			Labels:      entNodeConfigOverride.GetLabels(),
+			Annotations: map[string]string{ownerVersionAnnotation: entNodeConfigOverride.ResourceVersion},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: v1alpha1.SchemeGroupVersion.String(),
