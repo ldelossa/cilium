@@ -536,6 +536,24 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				return nil
 			},
 		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting all Custom Resource Definitions (CRDs)",
+			Quick:           true,
+			Task: func(ctx context.Context) error {
+				crds, err := collector.Client.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to list CRDs: %w", err)
+				}
+
+				for _, crd := range crds.Items {
+					if err := collector.SubmitResourceTasks(crd); err != nil {
+						return fmt.Errorf("failed to collect CRD %s: %w", crd.Name, err)
+					}
+				}
+				return nil
+			},
+		},
 	})
 
 	if collector.FeatureSet[enterpriseFeatures.SRv6].Enabled {
