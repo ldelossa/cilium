@@ -11,6 +11,7 @@ enum egressgw_ha_test {
 	TEST_HA_REDIRECT_EXCL_CIDR,
 	TEST_HA_REDIRECT_SKIP_NO_GATEWAY,
 	TEST_HA_XDP_REPLY,
+	TEST_HA_DROP_NO_EGRESS_IP,
 };
 
 // From https://github.com/isovalent/cilium/commit/74df7db70f538453ff9677ad64d29d726a438d61

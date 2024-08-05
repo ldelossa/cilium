@@ -64,6 +64,7 @@ const (
 	ep3IP = "10.0.0.3"
 
 	destCIDR        = "1.1.1.0/24"
+	destCIDR3       = "1.1.3.0/24"
 	destIP          = "1.1.1.1"
 	allZeroDestCIDR = "0.0.0.0/0"
 	excludedCIDR1   = "1.1.1.22/32"
@@ -81,6 +82,9 @@ const (
 	// Special values for gatewayIP, see pkg/egressgateway/manager.go
 	gatewayNotFoundValue     = "0.0.0.0"
 	gatewayExcludedCIDRValue = "0.0.0.1"
+
+	// Special values for egressIP, see pkg/egressgateway/manager.go
+	egressIPNotFoundValue = "0.0.0.0"
 
 	policy1UID = "d68a62ea-f358-4016-87c2-7ae9724f74f7"
 	policy2UID = "953b7b1a-1fb3-42e6-add5-4763381e124f"

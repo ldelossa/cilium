@@ -754,6 +754,27 @@ func TestEgressGatewayManagerHAGroup(t *testing.T) {
 		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
+	// Test a policy without valid egressIP
+	k.addPolicy(t, &policyParams{
+		name:              "policy-3",
+		uid:               policy3UID,
+		endpointLabels:    ep1Labels,
+		destinationCIDR:   destCIDR3,
+		nodeLabels:        nodeGroup1Labels,
+		iface:             "no_interface",
+		activeGatewayIPs:  []string{node1IP, node2IP},
+		healthyGatewayIPs: []string{node1IP, node2IP},
+	})
+
+	k.assertEgressRules(t, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep1IP, destCIDR3, egressIPNotFoundValue, node1IP},
+		{ep1IP, destCIDR3, egressIPNotFoundValue, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
 	// Update the EP 1 labels in order for it to not be a match
 	k.updateEndpointLabels(t, &ep1, id1, map[string]string{})
 	k.assertEgressRules(t, []egressRule{
