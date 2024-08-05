@@ -57,9 +57,6 @@ int egressgw_ha_redirect_setup(struct __ctx_buff *ctx)
 	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, 1,
 				     { GATEWAY_NODE_IP }, 0);
 
-	/* Avoid policy drop */
-	policy_add_egress_allow_all_entry();
-
 	/* Jump into the entrypoint */
 	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
@@ -73,7 +70,6 @@ int egressgw_ha_redirect_check(const struct __ctx_buff *ctx)
 			.status_code = TC_ACT_REDIRECT,
 	});
 
-	policy_delete_egress_entry();
 	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
 
 	return ret;
@@ -100,9 +96,6 @@ int egressgw_ha_skip_excluded_cidr_redirect_setup(struct __ctx_buff *ctx)
 	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, 1,
 				     { EGRESS_GATEWAY_EXCLUDED_CIDR }, 0);
 
-	/* Avoid policy drop */
-	policy_add_egress_allow_all_entry();
-
 	/* Jump into the entrypoint */
 	tail_call_static(ctx, entry_call_map, TO_NETDEV);
 	/* Fail if we didn't jump */
@@ -116,7 +109,6 @@ int egressgw_ha_skip_excluded_cidr_redirect_check(const struct __ctx_buff *ctx)
 			.status_code = TC_ACT_OK,
 	});
 
-	policy_delete_egress_entry();
 	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
 	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
 
@@ -140,9 +132,6 @@ int egressgw_skip_no_gateway_redirect_setup(struct __ctx_buff *ctx)
 	ipcache_v4_add_entry_with_mask_size(v4_all, 0, WORLD_IPV4_ID, 0, 0, 0);
 	create_ct_entry(ctx, client_port(TEST_HA_REDIRECT_SKIP_NO_GATEWAY));
 	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, 0, {}, 0);
-
-	/* Avoid policy drop */
-	policy_add_egress_allow_all_entry();
 
 	/* Jump into the entrypoint */
 	tail_call_static(ctx, entry_call_map, TO_NETDEV);
@@ -171,7 +160,6 @@ int egressgw_ha_skip_no_gateway_redirect_check(const struct __ctx_buff *ctx)
 		test_fatal("metrics entry not found");
 	assert(entry->count == 1);
 
-	policy_delete_egress_entry();
 	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
 
 	test_finish();
