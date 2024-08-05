@@ -12,12 +12,12 @@
 # https://raw.githubusercontent.com/GoogleContainerTools/distroless/main/cosign.pub
 ARG BASE_IMAGE=gcr.io/distroless/static-debian11:nonroot@sha256:63ebe035fbdd056ed682e6a87b286d07d3f05f12cb46f26b2b44fc10fc4a59ed
 ARG GOLANG_IMAGE=docker.io/library/golang:1.22.5@sha256:829eff99a4b2abffe68f6a3847337bf6455d69d17e49ec1a97dac78834754bd6
-ARG CILIUM_BUILDER_IMAGE=quay.io/cilium/cilium-builder:c8badc075421b6282610e5fbfe565d24fc54a9d9@sha256:c671a8399e7a78bf56e8281997dff390398e44c9cb6cd40ee9ef34e59358e22c
+ARG CILIUM_BUILDER_IMAGE=quay.io/cilium/cilium-builder:8c2dda7094c15d65d305705e4897b4114ad63261@sha256:8614c028f2bccab9a109b95783216445bcf640e1730b407909df357e535c70e7
 
 # BUILDPLATFORM is an automatic platform ARG enabled by Docker BuildKit.
 # Represents the plataform where the build is happening, do not mix with
 # TARGETARCH
-FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} as builder
+FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} AS builder
 
 # TARGETOS is an automatic platform ARG enabled by Docker BuildKit.
 ARG TARGETOS
@@ -40,7 +40,7 @@ RUN --mount=type=bind,readwrite,target=/go/src/github.com/cilium/cilium --mount=
 # BUILDPLATFORM is an automatic platform ARG enabled by Docker BuildKit.
 # Represents the plataform where the build is happening, do not mix with
 # TARGETARCH
-FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} as gops
+FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} AS gops
 
 # build-gops.sh will build both archs at the same time
 WORKDIR /go/src/github.com/cilium/cilium/images/runtime
@@ -51,12 +51,12 @@ RUN --mount=type=bind,readwrite,target=/go/src/github.com/cilium/cilium --mount=
 #
 # gRPC health probes
 #
-FROM --platform=${BUILDPLATFORM} ${CILIUM_BUILDER_IMAGE} as grpc_health_probe
+FROM --platform=${BUILDPLATFORM} ${CILIUM_BUILDER_IMAGE} AS grpc_health_probe
 ARG BUILDPLATFORM
 COPY images/hubble-relay/download-grpc-health-probe.sh /tmp/download-grpc-health-probe.sh
 RUN /tmp/download-grpc-health-probe.sh
 
-FROM ${BASE_IMAGE} as release
+FROM ${BASE_IMAGE} AS release
 # TARGETOS is an automatic platform ARG enabled by Docker BuildKit.
 ARG TARGETOS
 # TARGETARCH is an automatic platform ARG enabled by Docker BuildKit.
