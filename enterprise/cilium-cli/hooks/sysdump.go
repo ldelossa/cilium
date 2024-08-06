@@ -554,7 +554,7 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				if err := collector.WriteYAML("all-crds-<ts>.yaml", crdList); err != nil {
 					return fmt.Errorf("failed to write CRD list to YAML file: %w", err)
 				}
-		
+
 				return nil
 			},
 		},
