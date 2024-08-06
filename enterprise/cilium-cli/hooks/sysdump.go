@@ -536,6 +536,28 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				return nil
 			},
 		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting all Custom Resource Definitions (CRDs)",
+			Quick:           true,
+			Task: func(ctx context.Context) error {
+				crdGVR := schema.GroupVersionResource{
+					Group:    "apiextensions.k8s.io",
+					Version:  "v1",
+					Resource: "customresourcedefinitions",
+				}
+				n := corev1.NamespaceAll
+				crdList, err := collector.Client.ListUnstructured(ctx, crdGVR, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to list CRDs: %w", err)
+				}
+				if err := collector.WriteYAML("all-crds-<ts>.yaml", crdList); err != nil {
+					return fmt.Errorf("failed to write CRD list to YAML file: %w", err)
+				}
+
+				return nil
+			},
+		},
 	})
 
 	if collector.FeatureSet[enterpriseFeatures.SRv6].Enabled {
