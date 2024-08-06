@@ -62,9 +62,9 @@ env:
   clusterName: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}
   cilium_cli_ci_version:
   # renovate: datasource=github-releases depName=eksctl-io/eksctl
-  eksctl_version: v0.186.0
+  eksctl_version: v0.187.0
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  kubectl_version: v1.30.2
+  kubectl_version: v1.30.3
 
 jobs:
   echo-inputs:
@@ -261,7 +261,7 @@ jobs:
           spot: false
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@1afb3ff7eb6ace8ab5f8d4d844afe02e2018bb4e # v0.16.13
+        uses: cilium/cilium-cli@e386af2b9f500e4c40436ac660cd6602da104fc7 # v0.16.14
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}

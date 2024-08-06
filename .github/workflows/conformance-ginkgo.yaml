@@ -272,7 +272,7 @@ jobs:
           persist-credentials: false
 
       - name: Install cilium-cli
-        uses: cilium/cilium-cli@1afb3ff7eb6ace8ab5f8d4d844afe02e2018bb4e # v0.16.13
+        uses: cilium/cilium-cli@e386af2b9f500e4c40436ac660cd6602da104fc7 # v0.16.14
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           ci-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -411,7 +411,7 @@ jobs:
              -cilium.hubble-relay-tag=${{ needs.setup-vars.outputs.SHA }} \
              -cilium.kubeconfig=/root/.kube/config \
              -cilium.provision-k8s=false \
-             -cilium.operator-suffix=-ci"
+             -cilium.operator-suffix=-ci ${{ env.CILIUM_GINKGO_EXTRA_ARGS }}"
 
               ./test.test \
                --ginkgo.focus="${{ matrix.cliFocus }}" \
@@ -427,7 +427,7 @@ jobs:
                -cilium.hubble-relay-tag=${{ needs.setup-vars.outputs.SHA }} \
                -cilium.kubeconfig=/root/.kube/config \
                -cilium.provision-k8s=false \
-               -cilium.operator-suffix=-ci
+               -cilium.operator-suffix=-ci ${{ env.CILIUM_GINKGO_EXTRA_ARGS }}
 
       - name: Fetch artifacts
         if: ${{ !success() && steps.provision-vh-vms.outcome == 'success' }}

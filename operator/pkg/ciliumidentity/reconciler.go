@@ -43,7 +43,7 @@ type reconciler struct {
 	// (that is, when processing a pod event and a CID event concurrently).
 	cidCreateLock lock.RWMutex
 	cesEnabled    bool
-	queueOps      queueOperations
+	queueOps      queueOperation
 
 	nsStore  resource.Store[*slim_corev1.Namespace]
 	podStore resource.Store[*slim_corev1.Pod]
@@ -62,7 +62,7 @@ func newReconciler(
 	ciliumEndpoint resource.Resource[*cilium_api_v2.CiliumEndpoint],
 	ciliumEndpointSlice resource.Resource[*v2alpha1.CiliumEndpointSlice],
 	cesEnabled bool,
-	queueOps queueOperations,
+	queueOps queueOperation,
 ) (*reconciler, error) {
 	logger.Info("Creating CID controller Operator reconciler")
 
@@ -328,7 +328,7 @@ func (r *reconciler) allocateCIDForPod(pod *slim_corev1.Pod) error {
 	}
 
 	if isNewCID {
-		r.queueOps.enqueueCIDReconciliation(cidResourceKey(cidName), 0)
+		r.queueOps.enqueueReconciliation(CIDItem{cidResourceKey(cidName)}, 0)
 	}
 
 	return nil
@@ -430,7 +430,7 @@ func (r *reconciler) updateAllPodsInNamespace(namespace string) error {
 	var lastErr error
 
 	for _, pod := range podList {
-		r.queueOps.enqueuePodReconciliation(podResourceKey(pod.Name, pod.Namespace), 0)
+		r.queueOps.enqueueReconciliation(PodItem{podResourceKey(pod.Name, pod.Namespace)}, 0)
 	}
 
 	return lastErr
