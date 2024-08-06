@@ -53,7 +53,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  cilium_cli_ci_version:
   helmChartPath: ./untrusted/install/kubernetes/cilium
   clusterName1: cluster1-${{ github.run_id }}
   clusterName2: cluster2-${{ github.run_id }}
@@ -267,7 +266,6 @@ jobs:
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
-          ci-version: ${{ env.cilium_cli_ci_version }}
           local-path: './enterprise/cilium-cli'
 
       - name: Generate Kind configuration files

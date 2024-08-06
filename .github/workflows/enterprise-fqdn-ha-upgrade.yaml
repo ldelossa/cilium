@@ -53,7 +53,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  cilium_cli_ci_version:
   kind_config: .github/kind-config.yaml
 
 jobs:
@@ -194,7 +193,7 @@ jobs:
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
-          ci-version: ${{ env.cilium_cli_ci_version }}
+          local-path: './enterprise/cilium-cli'
 
       - name: Create kind cluster
         if: ${{ steps.vars.outputs.stable_version != '' }}

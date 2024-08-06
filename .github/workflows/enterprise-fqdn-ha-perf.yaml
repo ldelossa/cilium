@@ -149,6 +149,7 @@ jobs:
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
+          local-path: './enterprise/cilium-cli'
 
       - name: Install Kops
         uses: cilium/scale-tests-action/install-kops@8c351e39623bb4129e64705c64285d5330cb0ec9 # main
