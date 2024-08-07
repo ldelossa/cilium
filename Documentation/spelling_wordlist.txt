@@ -578,6 +578,7 @@ openapi
 openssl
 originatingTLS
 os
+oseq
 otx
 pahole
 parsable
