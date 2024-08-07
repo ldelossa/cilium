@@ -97,6 +97,10 @@ func (r *ImportedVPNRouteReconciler) Reconcile(ctx context.Context, p reconciler
 			r.Logger.Debug("Initialization is not done, skipping imported VPN route reconciliation")
 			return nil
 		}
+		if errors.Is(err, UpdateConfigNotSetErr) {
+			r.Logger.Debug("Instance config not yet set, skipping imported VPN route reconciliation")
+			return nil
+		}
 		return err
 	}
 

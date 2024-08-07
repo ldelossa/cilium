@@ -31,7 +31,8 @@ import (
 )
 
 var (
-	NotInitializedErr = fmt.Errorf("not initialized")
+	NotInitializedErr     = fmt.Errorf("not initialized")
+	UpdateConfigNotSetErr = fmt.Errorf("config missing")
 )
 
 // EnterpriseReconcileParams is an enterprise specific version of
@@ -199,7 +200,7 @@ func (u *reconcileParamsUpgrader) upgradeState(params reconcilerv2.StateReconcil
 	}
 
 	if params.UpdatedInstance == nil || params.UpdatedInstance.Config == nil {
-		return EnterpriseStateReconcileParams{}, fmt.Errorf("invalid params")
+		return EnterpriseStateReconcileParams{}, UpdateConfigNotSetErr
 	}
 
 	nc, exists, err := u.store.GetByKey(resource.Key{Name: u.getNodeName()})
