@@ -36,9 +36,10 @@ type EnterpriseHooks struct {
 type EnterpriseOptions struct {
 	HubbleUINamespace string
 
-	HubbleTimescapeReleaseName string
-	HubbleTimescapeSelector    string
-	HubbleTimescapeNamespace   string
+	HubbleTimescapeReleaseName  string
+	HubbleTimescapeSelector     string
+	HubbleTimescapeNamespace    string
+	HubbleTimescapeBugtoolFlags []string
 
 	HubbleEnterpriseReleaseName string
 	HubbleEnterpriseNamespace   string
@@ -126,6 +127,9 @@ cilium sysdump --node-list node-a,node-b,node-c`
 			cmd.Flags().StringVar(&eh.Opts.HubbleTimescapeSelector,
 				"hubble-timescape-selector", eh.Opts.HubbleTimescapeSelector,
 				"The labels used to target Hubble Timescape pods")
+			cmd.Flags().StringArrayVar(&eh.Opts.HubbleTimescapeBugtoolFlags,
+				"hubble-timescape-bugtool-flags", nil,
+				"Optional set of flags to pass to hubble timescape bugtool command.")
 		}
 	}
 }
