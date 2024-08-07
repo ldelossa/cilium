@@ -76,22 +76,22 @@ jobs:
         include:
           - name: 1
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240730.211420'
+            kernel: '5.15-20240806.173325'
             tunnel: vxlan
             encryption: false
           - name: 2
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.6-20240730.211420'
+            kernel: '6.6-20240806.173325'
             tunnel: vxlan
             encryption: false
           - name: 3
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240730.211420'
+            kernel: '5.15-20240806.173325'
             tunnel: vxlan
             encryption: true
           - name: 4
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.6-20240730.211420'
+            kernel: '6.6-20240806.173325'
             tunnel: vxlan
             encryption: true
     timeout-minutes: 60
@@ -139,7 +139,7 @@ jobs:
           echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@e386af2b9f500e4c40436ac660cd6602da104fc7 # v0.16.14
+        uses: cilium/cilium-cli@99ff3d9edd4050d7b5c9d1f51dcf6ebeeb613d15 # v0.16.15
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -194,7 +194,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cilium-sysdumps-${{ matrix.name }}
           path: cilium-sysdump-*.zip
@@ -214,7 +214,7 @@ jobs:
     steps:
       - name: Merge Sysdumps
         if: ${{ needs.enterprise-multicast-test.result == 'failure' }}
-        uses: actions/upload-artifact/merge@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact/merge@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cilium-sysdumps
           pattern: cilium-sysdumps-*

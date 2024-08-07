@@ -70,7 +70,7 @@ jobs:
           wait: 0 # The control-plane never becomes ready, since no CNI is present
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@e386af2b9f500e4c40436ac660cd6602da104fc7 # v0.16.14
+        uses: cilium/cilium-cli@99ff3d9edd4050d7b5c9d1f51dcf6ebeeb613d15 # v0.16.15
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cilium-sysdumps
           path: cilium-sysdump-*.zip
