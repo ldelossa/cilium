@@ -204,6 +204,7 @@ func (p *IsovalentAdvertisement) familySelectedAdvertisements(family v2alpha1.Ci
 
 func (p *IsovalentAdvertisement) GetConfiguredVRFAdvertisements(conf *v1alpha1.IsovalentBGPNodeInstance, selectAdvertTypes ...v1alpha1.IsovalentBGPAdvertType) (VRFAdvertisements, error) {
 	if !p.initialized.Load() {
+		p.logger.Debug("IsovalentAdvertisement reconciler helper is not initialized")
 		return make(VRFAdvertisements), nil
 	}
 
@@ -260,6 +261,19 @@ func PeerAdvertisementsEqual(first, second PeerAdvertisements) bool {
 
 	for peer, peerAdverts := range first {
 		if !FamilyAdvertisementsEqual(peerAdverts, second[peer]) {
+			return false
+		}
+	}
+	return true
+}
+
+func VRFAdvertisementsEqual(first, second VRFAdvertisements) bool {
+	if len(first) != len(second) {
+		return false
+	}
+
+	for vrf, vrfAdverts := range first {
+		if !FamilyAdvertisementsEqual(vrfAdverts, second[vrf]) {
 			return false
 		}
 	}

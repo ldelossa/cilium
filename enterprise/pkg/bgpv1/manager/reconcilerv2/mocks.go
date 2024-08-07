@@ -18,6 +18,7 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 
+	srv6 "github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -165,4 +166,38 @@ func InitMockStore[T runtime.Object](objects []T) resource.Store[T] {
 		store.Upsert(obj)
 	}
 	return store
+}
+
+type mockSRv6Manager struct {
+	lock.Mutex
+	preinstalledVRFs map[k8stypes.NamespacedName]*srv6.VRF
+}
+
+func newMockSRv6Manager(vrfs map[k8stypes.NamespacedName]*srv6.VRF) *mockSRv6Manager {
+	return &mockSRv6Manager{
+		preinstalledVRFs: vrfs,
+	}
+}
+
+func (m *mockSRv6Manager) GetVRFByName(vrfName k8stypes.NamespacedName) (*srv6.VRF, bool) {
+	m.Lock()
+	defer m.Unlock()
+
+	vrf, exists := m.preinstalledVRFs[vrfName]
+	if !exists {
+		return nil, false
+	}
+
+	return vrf.DeepCopy(), true
+}
+
+func (m *mockSRv6Manager) GetEgressPolicies() []*srv6.EgressPolicy {
+	return nil
+}
+
+func (m *mockSRv6Manager) upsertVRF(key k8stypes.NamespacedName, vrf *srv6.VRF) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.preinstalledVRFs[key] = vrf
 }

@@ -56,6 +56,7 @@ type EnterpriseStateReconcileParams struct {
 // reconcilerv2.BGPInstance. It must be created with
 // reconcileParamsUpgrader.upgrade.
 type EnterpriseBGPInstance struct {
+	ASN    uint32
 	Config *v1alpha1.IsovalentBGPNodeInstance
 	Router types.Router
 
@@ -166,6 +167,7 @@ func (u *reconcileParamsUpgrader) upgrade(params reconcilerv2.ReconcileParams) (
 		}
 		return EnterpriseReconcileParams{
 			BGPInstance: &EnterpriseBGPInstance{
+				ASN: params.BGPInstance.ASN,
 				// So far, we don't need to keep the previous
 				// config. Once we have a use case for it, we
 				// can consider storing it in the metadata and

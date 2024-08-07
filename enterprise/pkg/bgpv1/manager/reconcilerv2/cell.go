@@ -42,5 +42,6 @@ var ConfigReconcilers = cell.Group(
 		NewImportRoutePolicyReconciler,
 		NewImportedVPNRouteReconciler,
 		NewPodCIDRVRFReconciler,
+		NewServiceVRFReconciler,
 	),
 )
