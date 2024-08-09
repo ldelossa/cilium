@@ -26,6 +26,7 @@ import (
 
 	daemon_k8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
+	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
@@ -52,6 +53,7 @@ func TestReconcileParamsUpgrader(t *testing.T) {
 			client.NewFakeClientset,
 			k8s.CiliumBGPNodeConfigResource,
 			k8s.IsovalentBGPNodeConfigResource,
+			signaler.NewBGPCPSignaler,
 			cell.NewSimpleHealth,
 			func(r job.Registry, health cell.Health) job.Group {
 				return r.NewGroup(health)
