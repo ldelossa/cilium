@@ -8,6 +8,10 @@ inputs:
     description: 'Run CuTE tests.'
     required: false
     default: 'true'
+  test-concurrency:
+    description: 'Run connectivity tests concurrently.'
+    required: false
+    default: '1'
 runs:
   using: composite
   steps:
@@ -28,6 +32,6 @@ runs:
       shell: bash
       run: |
         echo "🏃🏃🏃 Running CuTE tests ..."
-        make test
+        make test TEST_CONCURRENCY=${{ inputs.test-concurrency }}
         # --flush-ct interrupts the flows, so we need to set up again.
         cilium connectivity test --include-conn-disrupt-test --conn-disrupt-test-setup

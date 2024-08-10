@@ -4,6 +4,10 @@ inputs:
   cute-dir:
     description: 'Directory with a CuTE code.'
     required: true
+  test-concurrency:
+    description: 'Run connectivity tests concurrently.'
+    required: false
+    default: '1'
 runs:
   using: composite
   steps:
@@ -175,6 +179,7 @@ runs:
       uses: ./.github/actions/enterprise-cute-verify-state
       with:
         cute-dir: ./${{ inputs.cute-dir }}
+        test-concurrency: ${{ inputs.test-concurrency }}
 
     - name: Scale up cluster
       working-directory: ./${{ inputs.cute-dir }}
@@ -189,6 +194,7 @@ runs:
       uses: ./.github/actions/enterprise-cute-verify-state
       with:
         cute-dir: ./${{ inputs.cute-dir }}
+        test-concurrency: ${{ inputs.test-concurrency }}
 
     - name: Scale down cluster
       working-directory: ./${{ inputs.cute-dir }}
