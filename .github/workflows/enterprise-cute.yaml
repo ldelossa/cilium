@@ -98,6 +98,7 @@ jobs:
           upgrade=""
           notify=""
           owner=""
+          test_concurrency=1
 
           input="${{ inputs.extra-args }}"
           IFS='&' args=($input)
@@ -133,6 +134,9 @@ jobs:
             owner=*)
               owner="${a##*owner=}"
               ;;
+            test_concurrency=*)
+              test_concurrency="${a##*test_concurrency=}"
+              ;;
             *)
               echo -n "unknown param: $a"
               exit 1
@@ -152,6 +156,7 @@ jobs:
           echo oss=$oss >> $GITHUB_OUTPUT
           echo notify=$notify >> $GITHUB_OUTPUT
           echo owner=$owner >> $GITHUB_OUTPUT
+          echo test_concurrency=$test_concurrency >> $GITHUB_OUTPUT
 
       - name: Set helm repositories
         run: |
@@ -257,6 +262,7 @@ jobs:
           echo "Upgrade: ${{ steps.vars.outputs.upgrade }}"
           echo "Upgrade target: ${{ steps.cute_props.outputs.upgrade_target }}"
           echo "Slack notification channel: ${{ steps.vars.outputs.notify }}"
+          echo "Connectivity tests concurrency: ${{ steps.vars.outputs.test_concurrency }}"
 
       - name: Install Cilium CLI
         run: |
@@ -474,13 +480,14 @@ jobs:
         uses: ./.github/actions/enterprise-cute-test-ipsec
         with:
           cute-dir: ./cute/${{ steps.vars.outputs.cute_dir }}
+          test-concurrency: ${{ steps.vars.outputs.test_concurrency }}
 
       - name: Run CuTE tests
         id: tests
         timeout-minutes: 90
         working-directory: ./cute/${{ steps.vars.outputs.cute_dir }}
         run: |
-          make test
+          make test TEST_CONCURRENCY=${{ steps.vars.outputs.test_concurrency }}
 
       - name: Prepare notification message
         if: ${{ always() && steps.vars.outputs.notify != '' }}
