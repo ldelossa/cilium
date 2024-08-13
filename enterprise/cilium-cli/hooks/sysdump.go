@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 
+	enterpriseSysdump "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/sysdump"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
 	corev1 "k8s.io/api/core/v1"
@@ -191,6 +192,39 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 				if err = collector.SubmitLogsTasks(sysdump.FilterPods(pods, collector.NodeList),
 					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
 					return fmt.Errorf("failed to collect logs from 'hubble-timescape' pods")
+				}
+				return nil
+			},
+		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting bugtool output from 'hubble-timescape' pods",
+			Quick:           false,
+			Task: func(ctx context.Context) error {
+				pods := &corev1.PodList{}
+				var err error
+
+				namespaces := []string{collector.Options.CiliumNamespace}
+				if opts.HubbleTimescapeNamespace != collector.Options.CiliumNamespace {
+					namespaces = append(namespaces, opts.HubbleTimescapeNamespace)
+				}
+
+				for _, ns := range namespaces {
+					p, err := collector.Client.ListPods(ctx, ns, metav1.ListOptions{
+						LabelSelector: opts.HubbleTimescapeSelector,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to get bugtool info from 'hubble-timescape' pods")
+					}
+					pods.Items = append(pods.Items, p.Items...)
+				}
+				if err = enterpriseSysdump.SubmitTimescapeBugtoolTasks(
+					collector,
+					sysdump.FilterPods(pods, collector.NodeList),
+					"hubble-timescape-bugtool",
+					opts.HubbleTimescapeBugtoolFlags,
+				); err != nil {
+					return fmt.Errorf("error collecting bugtool output from 'hubble-timescape' pods: %w", err)
 				}
 				return nil
 			},
