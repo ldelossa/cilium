@@ -25,6 +25,7 @@ import (
 	entTypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -148,6 +149,12 @@ func (r *LocatorPoolReconciler) Priority() int {
 func (r *LocatorPoolReconciler) Name() string {
 	return "LocatorPool"
 }
+
+func (r *LocatorPoolReconciler) Init(_ *instance.BGPInstance) error {
+	return nil
+}
+
+func (r *LocatorPoolReconciler) Cleanup(_ *instance.BGPInstance) {}
 
 func (r *LocatorPoolReconciler) Reconcile(ctx context.Context, p reconcilerv2.ReconcileParams) error {
 	if !r.initialized.Load() {

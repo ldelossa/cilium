@@ -411,21 +411,12 @@ func TestLBServiceHealthChecker(t *testing.T) {
 			testSC.Config = oldc
 
 			diffstore := store.NewFakeDiffStore[*slim_corev1.Service]()
-			for _, obj := range tt.existingServices {
-				diffstore.Upsert(obj)
-			}
-			_, _, err = diffstore.Diff() // call Diff to reset changes in the DiffStore
-			require.NoError(t, err)
-			for _, obj := range tt.upsertedServices {
-				diffstore.Upsert(obj)
-			}
-			for _, key := range tt.deletedServices {
-				diffstore.Delete(key)
-			}
-
 			epDiffStore := store.NewFakeDiffStore[*k8s.Endpoints]()
 
 			ossReconciler := reconciler.NewServiceReconciler(diffstore, epDiffStore).Reconciler.(*reconciler.ServiceReconciler)
+			ossReconciler.Init(testSC)
+			defer ossReconciler.Cleanup(testSC)
+
 			serviceAnnouncements := ossReconciler.GetMetadata(testSC)
 
 			rParams := lbServiceReconcilerParams{
@@ -435,6 +426,17 @@ func TestLBServiceHealthChecker(t *testing.T) {
 				Signaler:  signaler.NewBGPCPSignaler(),
 			}
 			ceeReconciler := newLBServiceReconciler(rParams).Reconciler.(*lbServiceReconciler)
+
+			for _, obj := range tt.existingServices {
+				diffstore.Upsert(obj)
+			}
+			for _, obj := range tt.upsertedServices {
+				diffstore.Upsert(obj)
+			}
+			for _, key := range tt.deletedServices {
+				diffstore.Delete(key)
+			}
+
 			ceeReconciler.ossLBServiceReconciler = ossReconciler
 
 			for _, svc := range tt.existingServices {

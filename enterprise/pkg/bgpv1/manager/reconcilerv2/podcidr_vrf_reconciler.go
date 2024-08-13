@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	entTypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	srv6 "github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -93,6 +94,12 @@ func (r *PodCIDRVRFReconciler) Name() string {
 func (r *PodCIDRVRFReconciler) Priority() int {
 	return 31 // somewhere around OSS PodCIDR Reconciler
 }
+
+func (r *PodCIDRVRFReconciler) Init(_ *instance.BGPInstance) error {
+	return nil
+}
+
+func (r *PodCIDRVRFReconciler) Cleanup(_ *instance.BGPInstance) {}
 
 func (r *PodCIDRVRFReconciler) Reconcile(ctx context.Context, p reconcilerv2.ReconcileParams) error {
 	iParams, err := r.Upgrader.upgrade(p)

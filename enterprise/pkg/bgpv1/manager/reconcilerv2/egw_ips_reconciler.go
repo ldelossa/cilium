@@ -23,6 +23,7 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	entTypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -87,6 +88,12 @@ func (r *EgressGatewayIPsReconciler) Priority() int {
 func (r *EgressGatewayIPsReconciler) Name() string {
 	return "EgressGatewayIPs"
 }
+
+func (r *EgressGatewayIPsReconciler) Init(_ *instance.BGPInstance) error {
+	return nil
+}
+
+func (r *EgressGatewayIPsReconciler) Cleanup(_ *instance.BGPInstance) {}
 
 func (r *EgressGatewayIPsReconciler) Reconcile(ctx context.Context, p reconcilerv2.ReconcileParams) error {
 	iParams, err := r.upgrader.upgrade(p)

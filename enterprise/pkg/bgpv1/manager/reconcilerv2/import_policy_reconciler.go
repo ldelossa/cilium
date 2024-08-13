@@ -90,6 +90,12 @@ func (r *ImportRoutePolicyReconciler) Priority() int {
 	return 59
 }
 
+func (r *ImportRoutePolicyReconciler) Init(_ *instance.BGPInstance) error {
+	return nil
+}
+
+func (r *ImportRoutePolicyReconciler) Cleanup(_ *instance.BGPInstance) {}
+
 func (r *ImportRoutePolicyReconciler) Reconcile(ctx context.Context, p reconcilerv2.ReconcileParams) error {
 	if !r.initialized.Load() {
 		r.Logger.Debug("Not initialized yet, skipping import route policy reconciliation")

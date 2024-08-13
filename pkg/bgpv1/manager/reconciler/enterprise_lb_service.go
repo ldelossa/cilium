@@ -47,8 +47,8 @@ func (r *ServiceReconciler) WithdrawService(ctx context.Context, sc *instance.Se
 	return r.withdrawService(ctx, sc, key)
 }
 
-func (r *ServiceReconciler) DiffReconciliationServiceList() (toReconcile []*slim_corev1.Service, toWithdraw []resource.Key, err error) {
-	return r.diffReconciliationServiceList()
+func (r *ServiceReconciler) DiffReconciliationServiceList(sc *instance.ServerWithConfig) (toReconcile []*slim_corev1.Service, toWithdraw []resource.Key, err error) {
+	return r.diffReconciliationServiceList(sc)
 }
 
 func (r *ServiceReconciler) GetMetadata(sc *instance.ServerWithConfig) LBServiceReconcilerMetadata {
