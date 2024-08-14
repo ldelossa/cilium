@@ -346,6 +346,19 @@
       "status": "not_affected",
       "status_notes": "This flags on /usr/bin/hubble and /cni/loopback, neither of which are affected.",
       "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-v23v-6jw2-98fq"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/docker-plugin-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Triggers on v1.13, upgrade is not trivial, and the vulnerability has no impact on the plugin",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
