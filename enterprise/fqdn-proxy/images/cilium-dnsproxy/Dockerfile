@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG BASE_IMAGE=scratch
-ARG GOLANG_IMAGE=docker.io/library/golang:1.22.6@sha256:305aae5c6d68e9c122246147f2fde17700d477c9062b6724c4d182abf6d3907e
+ARG GOLANG_IMAGE=docker.io/library/golang:1.23.0@sha256:613a108a4a4b1dfb6923305db791a19d088f77632317cfc3446825c54fb862cd
 ARG CILIUM_BUILDER_IMAGE=quay.io/cilium/cilium-builder:874230be6e22cf9ff9c4515097b5aee80b76ee8d@sha256:940c75b1a94de9d5f529ef40fcea3f71fef592f8744984eae93862852f4870d9
 
 # This is for copying tar command.
