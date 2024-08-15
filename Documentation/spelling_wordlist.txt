@@ -316,6 +316,7 @@ etcd
 eth
 ethernet
 ethtool
+existingSecret
 extTrafficPolicy
 extern
 externalIPs
@@ -435,6 +436,9 @@ jsgt
 jsle
 jslt
 json
+k8sServiceHost
+k8sServiceLookupConfigMapName
+k8sServiceLookupNamespace
 kTLS
 kafka
 kallsyms
@@ -459,9 +463,6 @@ kubespray
 kvstore
 kvstoremesh
 kvstores
-k8sServiceHost
-k8sServiceLookupConfigMapName
-k8sServiceLookupNamespace
 lan
 latencies
 leia
@@ -741,6 +742,7 @@ toGroups
 tofqdns
 tolerations
 toolchain
+toto
 traceparent
 tracepoint
 tracepoints

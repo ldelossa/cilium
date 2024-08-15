@@ -26,6 +26,7 @@ import (
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	"github.com/cilium/cilium/enterprise/pkg/bfd/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	bgptypes "github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -107,6 +108,12 @@ func (r *BFDStateReconciler) Name() string {
 func (r *BFDStateReconciler) Priority() int {
 	return 100 // low priority, let the configuration reconcilers do their work first
 }
+
+func (r *BFDStateReconciler) Init(_ *instance.BGPInstance) error {
+	return nil
+}
+
+func (r *BFDStateReconciler) Cleanup(_ *instance.BGPInstance) {}
 
 // Reconcile checks if a BFD peer that was configured for the router instance went down,
 // and if yes, it hard-resets the BGP peering for that peer address on the router instance.

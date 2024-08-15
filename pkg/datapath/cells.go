@@ -35,6 +35,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
+	"github.com/cilium/cilium/pkg/loadbalancer/experimental"
 	"github.com/cilium/cilium/pkg/maps"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
 	"github.com/cilium/cilium/pkg/maps/nodemap"
@@ -179,13 +180,13 @@ func newDatapath(params datapathParams) types.Datapath {
 		NodeMap:        params.NodeMap,
 		NodeAddressing: params.NodeAddressing,
 		BWManager:      params.BandwidthManager,
-		Loader:         params.Loader,
 		NodeManager:    params.NodeManager,
 		DB:             params.DB,
 		Devices:        params.Devices,
 		Orchestrator:   params.Orchestrator,
 		NodeHandler:    params.NodeHandler,
 		NodeNeighbors:  params.NodeNeighbors,
+		ExpConfig:      params.ExpConfig,
 	})
 
 	params.LC.Append(cell.Hook{
@@ -242,4 +243,6 @@ type datapathParams struct {
 	NodeIDHandler types.NodeIDHandler
 
 	NodeNeighbors types.NodeNeighbors
+
+	ExpConfig experimental.Config
 }

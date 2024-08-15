@@ -29,6 +29,7 @@ import (
 
 	"github.com/cilium/cilium/enterprise/operator/pkg/bgpv2/config"
 	srv6 "github.com/cilium/cilium/enterprise/pkg/srv6/srv6manager"
+	"github.com/cilium/cilium/pkg/bgpv1/manager/instance"
 	"github.com/cilium/cilium/pkg/bgpv1/manager/reconcilerv2"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -82,6 +83,12 @@ func (r *ImportedVPNRouteReconciler) Name() string {
 func (r *ImportedVPNRouteReconciler) Priority() int {
 	return 20
 }
+
+func (r *ImportedVPNRouteReconciler) Init(_ *instance.BGPInstance) error {
+	return nil
+}
+
+func (r *ImportedVPNRouteReconciler) Cleanup(_ *instance.BGPInstance) {}
 
 func (r *ImportedVPNRouteReconciler) Reconcile(ctx context.Context, p reconcilerv2.StateReconcileParams) error {
 	iParams, err := r.Upgrader.upgradeState(p)

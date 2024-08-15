@@ -156,6 +156,12 @@ func (r *lbServiceReconciler) Priority() int {
 	return r.ossLBServiceReconciler.Priority() - 1 // must be lower (higher priority) than the OSS recocniler we are overriding
 }
 
+func (r *lbServiceReconciler) Init(_ *instance.ServerWithConfig) error {
+	return nil
+}
+
+func (r *lbServiceReconciler) Cleanup(_ *instance.ServerWithConfig) {}
+
 // Start is a hive lifecycle hook called when running the hive.
 func (r *lbServiceReconciler) Start(ctx cell.HookContext) error {
 	r.mutex.Lock()
@@ -274,7 +280,7 @@ func (r *lbServiceReconciler) fullReconciliation(ctx context.Context, sc *instan
 // svcDiffReconciliation performs reconciliation, only on services which have been created, updated or deleted
 // since the last diff reconciliation.
 func (r *lbServiceReconciler) svcDiffReconciliation(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, ls ossreconciler.LocalServices) error {
-	toReconcile, toWithdraw, err := r.ossLBServiceReconciler.DiffReconciliationServiceList()
+	toReconcile, toWithdraw, err := r.ossLBServiceReconciler.DiffReconciliationServiceList(sc)
 	if err != nil {
 		return err
 	}

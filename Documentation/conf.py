@@ -44,7 +44,18 @@ extensions = ['myst_parser',
               'sphinx_tabs.tabs',
               'sphinxcontrib.googleanalytics',
               'sphinxcontrib.spelling',
-              'versionwarning.extension']
+              'versionwarning.extension',
+              "sphinxext.rediraffe",
+]
+
+rediraffe_redirects = 'redirects.txt'
+# rediraffe_branch is the base for which rediraffe compares the current HEAD to
+# to detect which Documentation pages have moved or been deleted so it can
+# check for missing redirects and automatically generate new redirect files.
+# The value specified is the commit before we branched v1.16 found using:
+# `git merge-base v1.16 main`
+rediraffe_branch = '5614531067a83e20d24bccc7b12b314330d043c3'
+rediraffe_auto_redirect_perc = 90
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -189,6 +200,13 @@ html_theme = "sphinx_rtd_theme_cilium"
 html_context = {
     'release': release
 }
+
+# Set canonical URL from the Read the Docs Domain
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+
+# Tell Jinja2 templates the build is running on Read the Docs
+if os.environ.get("READTHEDOCS", "") == "True":
+    html_context["READTHEDOCS"] = True
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
