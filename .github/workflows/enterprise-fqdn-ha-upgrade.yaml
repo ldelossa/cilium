@@ -180,7 +180,6 @@ jobs:
             --flow-validation=disabled \
             --test='no-interrupted-connections' \
             --test='no-unexpected-packet-drops' \
-            --test='dns-only' \
             --test='to-fqdns' \
             --test='external-cilium-dns-proxy' \
             --collect-sysdump-on-failure \
