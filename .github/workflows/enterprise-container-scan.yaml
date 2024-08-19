@@ -1,7 +1,7 @@
 name: Enterprise container vulnerability scan
 on:
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "0 4 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -17,16 +17,16 @@ jobs:
     strategy:
       matrix:
         image: [cilium, clustermesh-apiserver, docker-plugin, hubble-relay, operator-generic]
-        branch: [v1.13, v1.14, v1.15, v1.16]
+        # We don't scan Enterprise images for maintained OSS branches, because
+        # OSS syncs don't happen frequently enough to give an accurate picture
+        # of the dependencies used by Cilium. We only scan the Enterprise images
+        # for the oldest maintained Enterprise version, which does not receive
+        # OSS dependency updates.
+        branch: [v1.13-ce, v1.14, v1.15, v1.16]
         include:
           - image: kvstoremesh
             branch: v1.14
     steps:
-      - name: Checkout code to scan
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-        with:
-          ref: ${{ matrix.branch }}
-          persist-credentials: false
       - name: Checkout latest VEX data
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -41,7 +41,12 @@ jobs:
       - name: Scan image
         id: scan
         run: |
-          ${{ steps.grype.outputs.cmd }} quay.io/cilium/${{ matrix.image }}-ci:${{ matrix.branch }} \
+          if [ ${{ matrix.branch }} == "v1.13-ce" ]; then
+            org="isovalent-dev"
+          else
+            org="cilium"
+          fi
+          ${{ steps.grype.outputs.cmd }} quay.io/"$org"/${{ matrix.image }}-ci:${{ matrix.branch }} \
             --output json=results.json --output table=results.txt --fail-on medium \
             --vex vex/.github/enterprise/.openvex.json \
             --config vex/.github/enterprise/.grype.yaml
