@@ -84,7 +84,6 @@ jobs:
       matrix:
         include:
           - name: '1'
-            tunnel: 'vxlan'
             ipfamily: 'ipv4'
             encryption: 'disabled'
             kube-proxy: 'none'
@@ -152,7 +151,8 @@ jobs:
             --helm-set=clustermesh.config.hasOverlappingPodCIDR=true \
             --helm-set enterprise.clustermesh.enableOverlappingPodCIDRSupport=true \
             --helm-set=enterprise.ciliummesh.enabled=true \
-            --helm-set=tunnel=vxlan \
+            --helm-set=routingMode=tunnel \
+            --helm-set=tunnelProtocol=vxlan \
             --helm-set=autoDirectNodeRoutes=false \
             --helm-set=kubeProxyReplacement=true \
             --helm-set=k8s.requireIPv4PodCIDR=true \
