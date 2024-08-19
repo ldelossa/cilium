@@ -43,17 +43,24 @@ type ciliumMeshPolicyParams struct {
 
 	Config Config
 
-	Loader types.Loader
-
 	Lifecycle cell.Lifecycle
 	Logger    logrus.FieldLogger
 }
 
 type CiliumMeshPolicyWriter interface {
 	WriteEndpoint(ip netip.Addr, pm *policymap.PolicyMap) error
+
+	// A botch to fix a hive dependency cycle: Since the Maps are collected
+	// (depended on) by the Loader, but this Map initialisation depends on the
+	// loader, we have a cycle. Since the map init is async, we can break the
+	// cycle by registering the loader to the policy map init.
+	registerLoader(loader types.Loader)
 }
 
 type ciliumMeshPolicyMap struct {
+	// To avoid a hive dependency cycle, see registerLoader.
+	loaderChan chan types.Loader
+
 	m           *ebpf.Map
 	initialized chan struct{}
 }
@@ -72,6 +79,10 @@ func (cmpm *ciliumMeshPolicyMap) writeEndpoint(keys []*lxcmap.EndpointKey, fd in
 		}
 	}
 	return nil
+}
+
+func (cmpm *ciliumMeshPolicyMap) registerLoader(loader types.Loader) {
+	cmpm.loaderChan <- loader
 }
 
 // WriteEndpoint writes the policy map file descriptor into the map so that
@@ -100,7 +111,7 @@ func newCiliumMeshPolicyParams(p ciliumMeshPolicyParams) (out struct {
 		return
 	}
 
-	out.MapOut = bpf.NewMapOut(CiliumMeshPolicyWriter(createWithName(p.Lifecycle, p.Loader, MapName)))
+	out.MapOut = bpf.NewMapOut(CiliumMeshPolicyWriter(createWithName(p.Lifecycle, MapName)))
 
 	return
 }
@@ -124,7 +135,7 @@ type CiliumMeshPolicyValue struct{ Fd uint32 }
 //
 // The specified name allows non-standard map paths to be used, for instance
 // for testing purposes.
-func createWithName(lc cell.Lifecycle, loadr types.Loader, name string) *ciliumMeshPolicyMap {
+func createWithName(lc cell.Lifecycle, name string) *ciliumMeshPolicyMap {
 	innerMapSpec := &ebpf.MapSpec{
 		Name:       innerMapName,
 		Type:       ebpf.LPMTrie,
@@ -145,10 +156,18 @@ func createWithName(lc cell.Lifecycle, loadr types.Loader, name string) *ciliumM
 
 	initialized := make(chan struct{})
 
+	cmpms := &ciliumMeshPolicyMap{
+		// Buffered so that a call to registerLoader does not block.
+		loaderChan:  make(chan types.Loader, 1),
+		m:           cmpm,
+		initialized: initialized,
+	}
+
 	lc.Append(cell.Hook{
 		OnStart: func(hc cell.HookContext) error {
 			go func() {
-				<-loadr.HostDatapathInitialized()
+				loader := <-cmpms.loaderChan
+				<-loader.HostDatapathInitialized()
 				cmpm.OpenOrCreate()
 				close(initialized)
 			}()
@@ -160,10 +179,7 @@ func createWithName(lc cell.Lifecycle, loadr types.Loader, name string) *ciliumM
 		},
 	})
 
-	return &ciliumMeshPolicyMap{
-		m:           cmpm,
-		initialized: initialized,
-	}
+	return cmpms
 }
 
 func (v CiliumMeshPolicyValue) String() string { return fmt.Sprintf("fd=%d", v.Fd) }
