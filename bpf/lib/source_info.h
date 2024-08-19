@@ -55,14 +55,14 @@ __id_for_file(const char *const header_name)
 	_strcase_(104, "icmp6.h");
 	_strcase_(105, "nodeport.h");
 	_strcase_(106, "lb.h");
-	_strcase_(107, "encrypt.h");
-	_strcase_(108, "mcast.h");
-	_strcase_(109, "ipv4.h");
-	_strcase_(110, "conntrack.h");
-	_strcase_(111, "l3.h");
-	_strcase_(112, "trace.h");
-	_strcase_(113, "encap.h");
-	_strcase_(114, "encrypt.h");
+	_strcase_(107, "mcast.h");
+	_strcase_(108, "ipv4.h");
+	_strcase_(109, "conntrack.h");
+	_strcase_(110, "l3.h");
+	_strcase_(111, "trace.h");
+	_strcase_(112, "encap.h");
+	_strcase_(113, "encrypt.h");
+	_strcase_(114, "host_firewall.h");
 
 	/* @@ source files list end */
 

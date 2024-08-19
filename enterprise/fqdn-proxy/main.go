@@ -458,9 +458,14 @@ func RestoreRules() {
 
 			for _, ipRule := range msgIPRules.List {
 				translatedRule := restore.IPRule{Re: restore.RuleRegex{Pattern: &ipRule.Regex}}
-				translatedRule.IPs = make(map[string]struct{}, len(ipRule.Ips))
+				translatedRule.IPs = make(map[restore.RuleIPOrCIDR]struct{}, len(ipRule.Ips))
 				for _, IP := range ipRule.Ips {
-					translatedRule.IPs[IP] = struct{}{}
+					parsedIP, err := restore.ParseRuleIPOrCIDR(IP)
+					if err != nil {
+						log.WithError(err).WithField("ip", IP).Warning("failed to parse IP")
+						continue
+					}
+					translatedRule.IPs[parsedIP] = struct{}{}
 				}
 				ipRules = append(ipRules, translatedRule)
 			}
@@ -474,7 +479,7 @@ func RestoreRules() {
 }
 
 // LookupEndpointIDByIP wraps logic to lookup an endpoint with any backend.
-func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, error) {
+func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, bool, error) {
 	// Make sure to send IPv4 addresses as [4]byte instead of [16]byte over gRPC, so they aren't
 	// mistakenly treated as IPv6-mapped IPv4 addresses anywhere in the Cilium agent.
 	var bs []byte
@@ -492,10 +497,10 @@ func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, error) {
 		endpoint, ok := cache.endpointByIP[ip.String()]
 		cache.lock.RUnlock()
 		if !ok {
-			return nil, fmt.Errorf("could not lookup endpoint for ip %s: %w", ip, err)
+			return nil, false, fmt.Errorf("could not lookup endpoint for ip %s: %w", ip, err)
 		}
 		LogWarningTrigger.TriggerWithReason(fmt.Sprintf("endpoint retrieved from cache: %s", err))
-		return endpoint, nil
+		return endpoint, false, nil
 	}
 	endpoint := &endpoint.Endpoint{
 		ID: uint16(ep.ID),
@@ -508,7 +513,7 @@ func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, error) {
 	cache.lock.Lock()
 	cache.endpointByIP[ip.String()] = endpoint
 	cache.lock.Unlock()
-	return endpoint, nil
+	return endpoint, false, nil
 }
 
 // LookupSecIDByIP wraps logic to lookup an IP's security ID from the
@@ -749,7 +754,7 @@ func (s *FQDNProxyServer) GetRules(ctx context.Context, endpointIDMsg *pb.Endpoi
 				Ips:   make([]string, 0, len(ipRule.IPs)),
 			}
 			for ip := range ipRule.IPs {
-				msgRule.Ips = append(msgRule.Ips, ip)
+				msgRule.Ips = append(msgRule.Ips, ip.String())
 			}
 
 			msgRules.List = append(msgRules.List, msgRule)
