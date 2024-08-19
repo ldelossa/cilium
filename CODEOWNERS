@@ -738,6 +738,7 @@ Vagrantfile @cilium/ci-structure
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
 /enterprise/pkg/fqdnha/ @isovalent/dns-proxy
+/enterprise/pkg/maps/ciliummeshpolicymap/ @isovalent/cilium-mesh
 /enterprise/pkg/maps/ctnat/ @isovalent/clustermesh
 /enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
 /enterprise/pkg/multicast/ @isovalent/traffic-engineering
