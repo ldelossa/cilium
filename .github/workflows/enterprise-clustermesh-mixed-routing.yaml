@@ -93,7 +93,6 @@ jobs:
             encryption: 'disabled'
             endpoint-routes: true # C1=T, C2=F (C2 is fixed).
             mode: 'clustermesh'
-            skip_disrupt_check: false
 
           - name: '2'
             routing: 'tunnel'
@@ -102,7 +101,6 @@ jobs:
             encryption: 'disabled'
             endpoint-routes: true # C1=T, C2=F (C2 is fixed).
             mode: 'clustermesh'
-            skip_disrupt_check: false
 
           - name: '3'
             routing: 'mixed'
@@ -111,7 +109,6 @@ jobs:
             encryption: 'disabled'
             endpoint-routes: true # C1=T, C2=F (C2 is fixed).
             mode: 'clustermesh'
-            skip_disrupt_check: false
 
           - name: '4'
             routing: 'native'
@@ -120,7 +117,6 @@ jobs:
             encryption: 'disabled'
             endpoint-routes: false # C1=F, C2=F (C2 is fixed).
             mode: 'kvstoremesh'
-            skip_disrupt_check: false
 
           - name: '5'
             routing: 'tunnel'
@@ -129,7 +125,6 @@ jobs:
             encryption: 'disabled'
             endpoint-routes: false # C1=F, C2=F (C2 is fixed).
             mode: 'kvstoremesh'
-            skip_disrupt_check: false
 
           - name: '6'
             routing: 'mixed'
@@ -138,7 +133,6 @@ jobs:
             encryption: 'disabled'
             endpoint-routes: false # C1=F, C2=F (C2 is fixed).
             mode: 'kvstoremesh'
-            skip_disrupt_check: false
 
           - name: '7'
             routing: 'native'
@@ -147,7 +141,6 @@ jobs:
             encryption: 'wireguard'
             endpoint-routes: true # C1=T, C2=F (C2 is fixed).
             mode: 'external'
-            skip_disrupt_check: false
 
           - name: '8'
             routing: 'tunnel'
@@ -156,7 +149,6 @@ jobs:
             encryption: 'wireguard'
             endpoint-routes: true # C1=T, C2=F (C2 is fixed).
             mode: 'external'
-            skip_disrupt_check: false
 
           - name: '9'
             routing: 'mixed'
@@ -165,12 +157,7 @@ jobs:
             encryption: 'wireguard'
             endpoint-routes: true # C1=T, C2=F (C2 is fixed).
             mode: 'external'
-            # Disabled due to flakes in the connectivity tests, likely caused by
-            # cilium/cilium: #31985 and/or #31979.
-            # See issue: https://github.com/isovalent/cilium/issues/4037
-            #
-            # TODO: Re-enable when the issue is resolved.
-            skip_disrupt_check: true
+
 
     steps:
       - name: Collect Workflow Telemetry
@@ -435,7 +422,6 @@ jobs:
 
 
       - name: Start the Cilium CLI connectivity disruption tests
-        if: ${{ matrix.skip_disrupt_check == false }}
         run: |
           cilium --context ${{ env.contextName1 }} connectivity test \
             --multi-cluster=${{ matrix.routing != 'mixed' && env.contextName2 || '' }} \
@@ -444,7 +430,6 @@ jobs:
             --conn-disrupt-dispatch-interval 0ms
 
       - name: Perform an early sanity check for unexpected packet drops (${{ join(matrix.*, ', ') }})
-        if: ${{ matrix.skip_disrupt_check == false }}
         run: |
           cilium --context ${{ env.contextName1 }} connectivity test \
             --multi-cluster=${{ matrix.routing != 'mixed' && env.contextName2 || '' }} \
@@ -471,7 +456,6 @@ jobs:
           cilium --context ${{ env.contextName2 }} clustermesh status --wait --wait-duration=5m
 
       - name: Gather additional troubleshooting information
-        if: ${{ matrix.skip_disrupt_check == false }}
         shell: bash -ex {0}
         run: |
           CLIENT_CTX=${{ matrix.routing != 'mixed' && env.contextName2 || env.contextName1 }}
@@ -482,7 +466,6 @@ jobs:
           kubectl --context $CLIENT_CTX logs -n cilium-test -l kind=test-conn-disrupt --prefix --previous --ignore-errors --timestamps
 
       - name: Assert that long running connections were not disrupted (${{ join(matrix.*, ', ') }})
-        if: ${{ matrix.skip_disrupt_check == false }}
         run: |
           cilium --context ${{ env.contextName1 }} connectivity test \
             --multi-cluster=${{ matrix.routing != 'mixed' && env.contextName2 || '' }} \
