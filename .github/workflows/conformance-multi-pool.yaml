@@ -223,7 +223,7 @@ jobs:
         id: ips
         run: |
           for pod in client client2 echo-same-node echo-other-node; do
-            kubectl get pod -n cilium-test -l "name=${pod}" -o jsonpath="${pod}={.items[*].status.podIP}{'\n'}" >> "$GITHUB_OUTPUT"
+            kubectl get pod -n cilium-test-1 -l "name=${pod}" -o jsonpath="${pod}={.items[*].status.podIP}{'\n'}" >> "$GITHUB_OUTPUT"
           done
 
           for pool in cilium-test-pool client-pool echo-other-node-pool; do

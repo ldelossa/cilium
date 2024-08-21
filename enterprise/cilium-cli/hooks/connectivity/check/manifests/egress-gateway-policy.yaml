@@ -6,7 +6,7 @@ spec:
   selectors:
   - podSelector:
       matchLabels:
-        io.kubernetes.pod.namespace: cilium-test
+        io.kubernetes.pod.namespace: cilium-test-1
         kind: # set by the check package in WithIsovalentEgressGatewayPolicy()
   destinationCIDRs:
   - 0.0.0.0/0

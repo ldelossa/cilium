@@ -2,7 +2,7 @@ apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
   name: client-egress-to-fqdns-cilium-io
-  namespace: cilium-test
+  namespace: cilium-test-1
 spec:
   egress:
   - toFQDNs:

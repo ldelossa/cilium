@@ -25,7 +25,7 @@ function apply_policy() {
 }
 
 function remove_policy() {
-    kubectl delete -n cilium-test ciliumnetworkpolicy/client-egress-to-fqdns-cilium-io
+    kubectl delete -n cilium-test-1 ciliumnetworkpolicy/client-egress-to-fqdns-cilium-io
 }
 
 function cilium_conn_test() {
@@ -35,18 +35,18 @@ function cilium_conn_test() {
 
 function test_dns() {
     cmd_ec=0
-    kubectl exec -n cilium-test deploy/client -- nslookup cilium.io || cmd_ec=$?
-    kubectl exec -n cilium-test deploy/client -- curl --max-time 10 cilium.io || cmd_ec=$?
-    kubectl exec -n cilium-test deploy/client -- nslookup google.com || cmd_ec=$?
+    kubectl exec -n cilium-test-1 deploy/client -- nslookup cilium.io || cmd_ec=$?
+    kubectl exec -n cilium-test-1 deploy/client -- curl --max-time 10 cilium.io || cmd_ec=$?
+    kubectl exec -n cilium-test-1 deploy/client -- nslookup google.com || cmd_ec=$?
 }
 
 function test_curl() {
     cmd_ec=0
-    kubectl exec -n cilium-test deploy/client -- curl --max-time 10 google.com || cmd_ec=$?
+    kubectl exec -n cilium-test-1 deploy/client -- curl --max-time 10 google.com || cmd_ec=$?
 }
 
 function delete_tests() {
-    kubectl delete ns cilium-test
+    kubectl delete ns cilium-test-1
 }
 
 function bring_cilium_down() {

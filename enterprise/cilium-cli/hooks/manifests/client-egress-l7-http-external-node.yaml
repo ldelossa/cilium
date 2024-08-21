@@ -1,6 +1,6 @@
 ---
 # All clients are allowed to contact
-# echo-external-node.cilium-test.svc.cluster.local/client-ip
+# echo-external-node.cilium-test-1.svc.cluster.local/client-ip
 # on port http-8080.
 # The toFQDNs section relies on DNS introspection being performed by
 # the client-egress-only-dns policy.
@@ -9,13 +9,13 @@ kind: CiliumNetworkPolicy
 metadata:
   name: client-egress-l7-http-external-node
 spec:
-  description: "Allow GET echo-external-node.cilium-test.svc.cluster.local:8080/client-ip"
+  description: "Allow GET echo-external-node.cilium-test-1.svc.cluster.local:8080/client-ip"
   endpointSelector:
     matchLabels:
       any:kind: client
   egress:
   - toFQDNs:
-    - matchName: "echo-external-node.cilium-test.svc.cluster.local"
+    - matchName: "echo-external-node.cilium-test-1.svc.cluster.local"
     toPorts:
     - ports:
       - port: "8080"
