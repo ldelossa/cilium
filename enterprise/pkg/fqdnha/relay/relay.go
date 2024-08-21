@@ -182,7 +182,7 @@ func (s *FQDNProxyAgentServer) GetAllRules(ctx context.Context, empty *pb.Empty)
 					Ips:   make([]string, 0, len(ipRule.IPs)),
 				}
 				for ip := range ipRule.IPs {
-					msgRule.Ips = append(msgRule.Ips, ip)
+					msgRule.Ips = append(msgRule.Ips, ip.String())
 				}
 
 				msgRules.List = append(msgRules.List, msgRule)

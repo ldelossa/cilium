@@ -12,6 +12,8 @@ package ciliummeshpolicymap
 
 import (
 	"github.com/cilium/hive/cell"
+
+	"github.com/cilium/cilium/pkg/datapath/types"
 )
 
 var Cell = cell.Module(
@@ -23,4 +25,9 @@ var Cell = cell.Module(
 	cell.Provide(
 		newCiliumMeshPolicyParams,
 	),
+	cell.Invoke(func(l types.Loader, pw CiliumMeshPolicyWriter) {
+		if pw != nil && l != nil {
+			pw.registerLoader(l)
+		}
+	}),
 )

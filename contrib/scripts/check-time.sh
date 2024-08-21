@@ -38,6 +38,9 @@ EXCLUDED_DIRS=(
   "testutils"
   "vendor"
 
+  # Not for cilium-cli
+  "cilium-cli"
+
   # Source shared with other binaries
   "hive"
   "lock"

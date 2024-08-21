@@ -88,7 +88,7 @@ func TestConnectionLifecycle(t *testing.T) {
 		IPv4:    false,
 		IPv6:    false,
 	},
-		func(ip netip.Addr) (endpoint *endpoint.Endpoint, err error) { return nil, nil },
+		func(ip netip.Addr) (endpoint *endpoint.Endpoint, isHost bool, err error) { return nil, false, nil },
 		nil,
 		nil,
 		func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
@@ -175,7 +175,7 @@ func TestDumpRules(t *testing.T) {
 		IPv4:    false,
 		IPv6:    false,
 	},
-		func(ip netip.Addr) (endpoint *endpoint.Endpoint, err error) { return nil, nil },
+		func(ip netip.Addr) (endpoint *endpoint.Endpoint, isHost bool, err error) { return nil, false, nil },
 		nil,
 		nil,
 		func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
