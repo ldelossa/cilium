@@ -160,7 +160,7 @@ jobs:
             region: eu-central-1,
             deploy: cute,
             upgrade: stable,
-            ipsec: true,
+            ipsec: false,
             owner: U02T9JVUR0B # Hart
           },
           {
