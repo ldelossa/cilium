@@ -16,11 +16,15 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/types"
 )
 
+var defaultConfig = Config{
+	EnableCiliumMesh: false,
+}
+
 var Cell = cell.Module(
 	"enterprise-ciliummesh-pol-maps",
 	"Cilium Mesh Policy Map",
 
-	cell.Config(Config{}),
+	cell.Config(defaultConfig),
 
 	cell.Provide(
 		newCiliumMeshPolicyParams,

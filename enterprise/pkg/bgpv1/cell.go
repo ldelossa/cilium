@@ -37,6 +37,6 @@ var Cell = cell.Module(
 	reconciler.ConfigReconcilers,
 	reconcilerv2.ConfigReconcilers,
 
-	// set enterprise BGP config object in agent
-	cell.Config(config.Config{}),
+	// set enterprise BGP config objct in agent
+	cell.Config(config.DefaultConfig),
 )

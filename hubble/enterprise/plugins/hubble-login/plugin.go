@@ -234,6 +234,7 @@ func refresh(ctx context.Context, provider *oidc.Provider, l *Login, additionalS
 		ClientSecret: l.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		Scopes:       append([]string{oidc.ScopeOpenID}, additionalScopes...),
+		RedirectURL:  "",
 	}
 
 	savedToken, err := readToken(l.Issuer)
@@ -270,6 +271,7 @@ func login(ctx context.Context, provider *oidc.Provider, l *Login, params loginP
 		ClientSecret: l.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		Scopes:       append([]string{oidc.ScopeOpenID}, params.additionalScopes...),
+		RedirectURL:  "",
 	}
 
 	// Refresh token flow, only used if we have valid creds with a refresh token
@@ -446,7 +448,13 @@ func readLoginCredentials() (map[string]Login, error) {
 
 func oauth2TokenToToken(ctx context.Context, provider *oidc.Provider, l *Login, oauth2Token *oauth2.Token) (*Token, error) {
 	oidcConfig := &oidc.Config{
-		ClientID: l.ClientID,
+		ClientID:                   l.ClientID,
+		SupportedSigningAlgs:       nil,
+		SkipClientIDCheck:          false,
+		SkipExpiryCheck:            false,
+		SkipIssuerCheck:            false,
+		Now:                        nil,
+		InsecureSkipSignatureCheck: false,
 	}
 	verifier := provider.Verifier(oidcConfig)
 

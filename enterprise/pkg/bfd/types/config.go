@@ -21,3 +21,7 @@ type BFDConfig struct {
 func (cfg BFDConfig) Flags(flags *pflag.FlagSet) {
 	flags.Bool("enable-bfd", cfg.BFDEnabled, "Enables BFD subsystem")
 }
+
+var DefaultConfig = BFDConfig{
+	BFDEnabled: false,
+}

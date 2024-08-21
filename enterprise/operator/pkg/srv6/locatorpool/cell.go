@@ -32,7 +32,7 @@ var Cell = cell.Module(
 
 	// provide locator pool
 	cell.Provide(newLocPoolManager),
-	cell.Config(Config{}),
+	cell.Config(defaultConfig),
 
 	cell.ProvidePrivate(
 		newLocatorPoolResource,
@@ -47,6 +47,10 @@ var Cell = cell.Module(
 // Config contains the configuration for the srv6 locator pool.
 type Config struct {
 	Enabled bool `mapstructure:"srv6-locator-pool-enabled"`
+}
+
+var defaultConfig = Config{
+	Enabled: false,
 }
 
 // Flags implements cell.Flagger interface.

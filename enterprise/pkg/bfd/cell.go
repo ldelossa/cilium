@@ -22,7 +22,7 @@ var Cell = cell.Module(
 	"bfd-subsystem",
 	"BFD Subsystem",
 
-	cell.Config(types.BFDConfig{}),
+	cell.Config(types.DefaultConfig),
 
 	server.Cell,
 	reconciler.Cell,

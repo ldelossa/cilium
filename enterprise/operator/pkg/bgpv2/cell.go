@@ -43,6 +43,6 @@ var Cell = cell.Module(
 
 	cell.ProvidePrivate(signaler.NewBGPCPSignaler),
 
-	cell.Config(config.Config{}),
+	cell.Config(config.DefaultConfig),
 	cell.Invoke(RegisterBGPResourceMapper),
 )

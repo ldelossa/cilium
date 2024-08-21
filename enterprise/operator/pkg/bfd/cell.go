@@ -26,6 +26,6 @@ var Cell = cell.Module(
 		k8s.IsovalentBFDNodeConfigOverrideResource,
 	),
 
-	cell.Config(types.BFDConfig{}),
+	cell.Config(types.DefaultConfig),
 	cell.Invoke(registerBFDReconciler),
 )

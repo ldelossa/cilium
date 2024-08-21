@@ -14,6 +14,10 @@ import (
 	"github.com/cilium/hive/cell"
 )
 
+var defaultConfig = Config{
+	SvcHealthCheckingEnabled: false,
+}
+
 // ConfigReconcilers contains cells of enterprise-only reconcilers
 var ConfigReconcilers = cell.Group(
 
@@ -26,5 +30,5 @@ var ConfigReconcilers = cell.Group(
 	cell.Invoke(wireLBServiceReconcilers),
 
 	// config of the enterprise reconcilers
-	cell.Config(Config{}),
+	cell.Config(defaultConfig),
 )

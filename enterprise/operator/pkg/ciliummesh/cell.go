@@ -26,7 +26,7 @@ var Cell = cell.Module(
 
 	// provide locator pool
 	cell.Provide(newCiliumMeshManager),
-	cell.Config(Config{}),
+	cell.Config(defaultConfig),
 
 	// Invoke an empty function to force its construction / starting.
 	cell.Invoke(func(*CiliumMeshManager) {}),
@@ -35,6 +35,10 @@ var Cell = cell.Module(
 // Config contains the configuration for the cilium mesh
 type Config struct {
 	Enabled bool `mapstructure:"enable-cilium-mesh"`
+}
+
+var defaultConfig = Config{
+	Enabled: false,
 }
 
 // Flags implements cell.Flagger interface.

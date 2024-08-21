@@ -10,7 +10,9 @@
 
 package config
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/spf13/pflag"
+)
 
 const (
 	// enterpriseBGPEnabled is the name of the flag to enable the SRv6 locator pool.
@@ -25,4 +27,8 @@ type Config struct {
 // Flags implements cell.Flagger interface.
 func (cfg Config) Flags(flags *pflag.FlagSet) {
 	flags.Bool(enterpriseBGPEnabled, cfg.Enabled, "Enable enterprise BGP in Cilium")
+}
+
+var DefaultConfig = Config{
+	Enabled: false,
 }

@@ -17,11 +17,15 @@ import (
 	"github.com/cilium/cilium/pkg/metrics"
 )
 
+var defaultConfig = cemrcfg.Config{
+	FallbackRoutingMode: cemrcfg.FallbackDisabled,
+}
+
 var Cell = cell.Module(
 	"mixed-routing",
 	"Support for mixed routing mode",
 
-	cell.Config(cemrcfg.Config{}),
+	cell.Config(defaultConfig),
 	metrics.Metric(newMetrics),
 
 	cell.Provide(

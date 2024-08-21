@@ -20,6 +20,10 @@ import (
 	"github.com/cilium/cilium/pkg/ipcache"
 )
 
+var defaultConfig = config.Config{
+	EnableExternalDNSProxy: false,
+}
+
 var Cell = cell.Module(
 	"enterprise-fqdn-ha-proxy",
 	"FQDN HA proxy",
@@ -31,7 +35,7 @@ var Cell = cell.Module(
 	// Convert concrete objects into more restricted interfaces used by fqdn-ha-proxy.
 	cell.ProvidePrivate(func(ipcache *ipcache.IPCache) relay.IPCacheGetter { return ipcache }),
 
-	cell.Config(config.Config{}),
+	cell.Config(defaultConfig),
 
 	cell.Invoke(func(
 		proxyAgentServer *relay.FQDNProxyAgentServer,

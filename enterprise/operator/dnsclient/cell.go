@@ -28,7 +28,7 @@ var Cell = cell.Module(
 	"dns-client",
 	"Isovalent DNS client",
 
-	cell.Config(Config{}),
+	cell.Config(defaultConfig),
 	cell.Provide(newClient),
 	metrics.Metric(newMetrics),
 )
@@ -37,10 +37,14 @@ type Config struct {
 	DNSServerAddresses []string
 }
 
+var defaultConfig = Config{
+	DNSServerAddresses: nil,
+}
+
 func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.StringSlice(
 		DNSServerAddresses,
-		nil,
+		def.DNSServerAddresses,
 		"A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form \"<ip>:<port>\". "+
 			"When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.",
 	)

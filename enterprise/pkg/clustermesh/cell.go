@@ -20,11 +20,16 @@ import (
 	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
 
+var defaultConfig = cecmcfg.Config{
+	EnableClusterAwareAddressing: false,
+	EnableInterClusterSNAT:       false,
+}
+
 var Cell = cell.Module(
 	"enterprise-clustermesh",
 	"ClusterMesh is the Isovalent Enterprise for Cilium multicluster implementation",
 
-	cell.Config(cecmcfg.Config{}),
+	cell.Config(defaultConfig),
 
 	cell.Provide(
 		// Inject the ClusterIDManager implementation with the extended logic
