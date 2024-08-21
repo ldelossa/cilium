@@ -16,9 +16,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cilium/cilium-cli/api"
-	"github.com/cilium/cilium-cli/connectivity/check"
-	"github.com/cilium/cilium-cli/sysdump"
+	"github.com/cilium/cilium/cilium-cli/api"
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/sysdump"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )

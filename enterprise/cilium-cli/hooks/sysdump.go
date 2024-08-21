@@ -27,7 +27,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
-	"github.com/cilium/cilium-cli/sysdump"
+	"github.com/cilium/cilium/cilium-cli/sysdump"
 )
 
 const (

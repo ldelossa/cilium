@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/cilium/cilium-cli/connectivity/check"
-	"github.com/cilium/cilium-cli/utils/features"
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/utils/features"
 
 	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
 

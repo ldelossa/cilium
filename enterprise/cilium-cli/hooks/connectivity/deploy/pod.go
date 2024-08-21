@@ -13,7 +13,7 @@ package deploy
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 )
 
 // MustGetEchoPodOtherNode returns the representation of the "echo-other-node"

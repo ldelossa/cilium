@@ -14,9 +14,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cilium/cilium-cli/connectivity/check"
-	"github.com/cilium/cilium-cli/defaults"
-	"github.com/cilium/cilium-cli/utils/features"
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/defaults"
+	"github.com/cilium/cilium/cilium-cli/utils/features"
 )
 
 func HubbleCLIVersion() check.Scenario {

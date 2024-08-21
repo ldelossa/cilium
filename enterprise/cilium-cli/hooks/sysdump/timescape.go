@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cilium/cilium-cli/sysdump"
+	"github.com/cilium/cilium/cilium-cli/sysdump"
 
 	corev1 "k8s.io/api/core/v1"
 )

@@ -6,7 +6,6 @@ go 1.22.0
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cilium/cilium v1.16.0-rc.1
-	github.com/cilium/cilium-cli v0.16.13
 	github.com/google/go-cmp v0.6.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0

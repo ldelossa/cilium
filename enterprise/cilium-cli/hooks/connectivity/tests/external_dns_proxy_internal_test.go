@@ -13,7 +13,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 
 	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
 

@@ -15,8 +15,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 
-	"github.com/cilium/cilium-cli/connectivity/check"
-	"github.com/cilium/cilium-cli/utils/features"
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/utils/features"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	enterpriseK8s "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/k8s"

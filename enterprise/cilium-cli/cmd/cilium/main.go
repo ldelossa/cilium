@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cilium/cilium-cli/cli"
-	_ "github.com/cilium/cilium-cli/logging" // necessary to disable unwanted cfssl log messages
+	"github.com/cilium/cilium/cilium-cli/cli"
+	_ "github.com/cilium/cilium/cilium-cli/logging" // necessary to disable unwanted cfssl log messages
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks"
 )
