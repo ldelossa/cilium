@@ -40,6 +40,7 @@ const (
 	allowAllAlpha   = "AllAlphaFeatures"
 	allowAllBeta    = "AllBetaFeatures"
 	allowAllLimited = "AllLimitedFeatures"
+	allowAll        = "AllFeatures"
 )
 
 var logger = logrus.WithField(logfields.LogSubsys, "cilium-feature-checks")
@@ -63,6 +64,12 @@ func newGateChecker(fcfg *FeatureGatesConfig) (*gateChecker, error) {
 			continue
 		case allowAllLimited:
 			logger.Info("allowing all limited features")
+			gc.allowAllLimited = true
+			continue
+		case allowAll:
+			logger.Info("allowing all features (note: this is not recommended for production use)")
+			gc.allowAllAlpha = true
+			gc.allowAllBeta = true
 			gc.allowAllLimited = true
 			continue
 		}
