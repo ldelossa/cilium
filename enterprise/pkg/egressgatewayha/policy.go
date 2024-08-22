@@ -24,6 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
+	"go4.org/netipx"
 	"golang.org/x/exp/maps"
 	core_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/linux/netdevice"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
-	"github.com/cilium/cilium/pkg/ip"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	k8sLabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
@@ -575,7 +575,7 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 		return
 	}
 
-	localNodeK8sAddr, ok := ip.AddrFromIP(localNode.GetK8sNodeIP())
+	localNodeK8sAddr, ok := netipx.FromStdIP(localNode.GetK8sNodeIP())
 	if !ok {
 		log.Error("Failed to parse local node IP")
 		return

@@ -27,7 +27,10 @@ func TestConfigValidate(t *testing.T) {
 	}{
 		{
 			name: "ClusterAwareAddressing disabled",
-			cfg:  Config{},
+			cfg: Config{
+				EnableClusterAwareAddressing: false,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{
 				RoutingMode:          option.RoutingModeNative,
 				KubeProxyReplacement: option.KubeProxyReplacementFalse,
@@ -35,20 +38,29 @@ func TestConfigValidate(t *testing.T) {
 			assertion: assert.NoError,
 		},
 		{
-			name:      "ClusterAwareAddressing disabled but InterClusterSNAT enabled",
-			cfg:       Config{EnableInterClusterSNAT: true},
+			name: "ClusterAwareAddressing disabled but InterClusterSNAT enabled",
+			cfg: Config{
+				EnableInterClusterSNAT:       true,
+				EnableClusterAwareAddressing: false,
+			},
 			dcfg:      &option.DaemonConfig{},
 			assertion: assert.Error,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and native routing mode",
-			cfg:       Config{EnableClusterAwareAddressing: true},
+			name: "ClusterAwareAddressing enabled and native routing mode",
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:      &option.DaemonConfig{RoutingMode: option.RoutingModeNative},
 			assertion: assert.Error,
 		},
 		{
 			name: "ClusterAwareAddressing enabled and KPR true (NodePort disabled)",
-			cfg:  Config{EnableClusterAwareAddressing: true},
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementTrue,
 				EnableNodePort:       false,
@@ -57,7 +69,10 @@ func TestConfigValidate(t *testing.T) {
 		},
 		{
 			name: "ClusterAwareAddressing enabled and KPR true (NodePort enabled)",
-			cfg:  Config{EnableClusterAwareAddressing: true},
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementTrue,
 				EnableNodePort:       true,
@@ -66,7 +81,10 @@ func TestConfigValidate(t *testing.T) {
 		},
 		{
 			name: "ClusterAwareAddressing enabled and KPR false (NodePort disabled)",
-			cfg:  Config{EnableClusterAwareAddressing: true},
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementFalse,
 				EnableNodePort:       false,
@@ -75,7 +93,10 @@ func TestConfigValidate(t *testing.T) {
 		},
 		{
 			name: "ClusterAwareAddressing enabled and KPR false (NodePort enabled)",
-			cfg:  Config{EnableClusterAwareAddressing: true},
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementFalse,
 				EnableNodePort:       true,
@@ -83,32 +104,47 @@ func TestConfigValidate(t *testing.T) {
 			assertion: assert.NoError,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and KPR true",
-			cfg:       Config{EnableClusterAwareAddressing: true},
+			name: "ClusterAwareAddressing enabled and KPR true",
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:      &option.DaemonConfig{KubeProxyReplacement: option.KubeProxyReplacementTrue},
 			assertion: assert.NoError,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and EndpointRoutes enabled",
-			cfg:       Config{EnableClusterAwareAddressing: true},
+			name: "ClusterAwareAddressing enabled and EndpointRoutes enabled",
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:      &option.DaemonConfig{EnableEndpointRoutes: true},
 			assertion: assert.Error,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and EndpointHealthChecking enabled",
-			cfg:       Config{EnableClusterAwareAddressing: true},
+			name: "ClusterAwareAddressing enabled and EndpointHealthChecking enabled",
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:      &option.DaemonConfig{EnableEndpointHealthChecking: true},
 			assertion: assert.Error,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and IPSec encryption enabled",
-			cfg:       Config{EnableClusterAwareAddressing: true},
+			name: "ClusterAwareAddressing enabled and IPSec encryption enabled",
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:      &option.DaemonConfig{EnableIPSec: true},
 			assertion: assert.Error,
 		},
 		{
-			name:      "ClusterAwareAddressing enabled and Wireguard encryption enabled",
-			cfg:       Config{EnableClusterAwareAddressing: true},
+			name: "ClusterAwareAddressing enabled and Wireguard encryption enabled",
+			cfg: Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:      &option.DaemonConfig{EnableWireguard: true},
 			assertion: assert.Error,
 		},

@@ -13,6 +13,7 @@ package stats
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/maps/nat/stats"
@@ -47,6 +48,7 @@ func TestTopkMetrics(t *testing.T) {
 			stats.Config, statedb.Table[stats.NatMapStats]) {
 			return jg.NewGroup(nil), ms, stats.Config{
 				NatMapStatKStoredEntries: 5,
+				NATMapStatInterval:       time.Duration(0),
 			}, rwt
 		}),
 		cell.Invoke(func(tk *topkMetrics, rwt statedb.RWTable[stats.NatMapStats]) {

@@ -18,11 +18,11 @@ import (
 	"net/netip"
 	"time"
 
+	"go4.org/netipx"
+
 	"github.com/cilium/dns"
 	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
-
-	"github.com/cilium/cilium/pkg/ip"
 )
 
 // ErrNonExistentDomain is the error returned in case of a NXDOMAIN response
@@ -157,7 +157,7 @@ func (c *client) query(ctx context.Context, fqdn string, ipv6 bool) ([]netip.Add
 
 	netIPs := make([]netip.Addr, 0, len(ips))
 	for _, addr := range ips {
-		netIP, ok := ip.AddrFromIP(addr)
+		netIP, ok := netipx.FromStdIP(addr)
 		if !ok {
 			c.logger.WithField("addr", addr).Warning("Failed to process IP from DNS response, omitting IP from DNS response.")
 			continue

@@ -60,8 +60,8 @@ func NewEnterpriseHook() *EnterpriseHooks {
 
 // AddConnectivityTests registers connectivity tests that are specific to
 // Isovalent Enterprise for Cilium.
-func (eh *EnterpriseHooks) AddConnectivityTests(ct *check.ConnectivityTest) error {
-	return eh.ec.addConnectivityTests(ct)
+func (eh *EnterpriseHooks) AddConnectivityTests(ct ...*check.ConnectivityTest) error {
+	return eh.ec.addConnectivityTests(ct...)
 }
 
 // AddSysdumpTasks registers sysdump tasks that are specific to Isovalent

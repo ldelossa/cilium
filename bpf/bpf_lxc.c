@@ -43,7 +43,6 @@
 
 #include "lib/lb.h"
 #include "lib/drop.h"
-#include "lib/dbg.h"
 #include "lib/trace.h"
 #include "lib/csum.h"
 #include "lib/srv6.h"
@@ -1978,7 +1977,7 @@ ipv4_policy(struct __ctx_buff *ctx, struct iphdr *ip4, int ifindex, __u32 src_la
 
 skip_policy_enforcement:
 	if (ret == CT_NEW) {
-#if defined(ENABLE_NODEPORT) && defined(ENABLE_IPSEC)
+#if defined(ENABLE_NODEPORT) && (defined(ENABLE_IPSEC) || defined(ENABLE_SRV6))
 		/* Needed for hostport support, until
 		 * https://github.com/cilium/cilium/issues/32897 is fixed.
 		 */

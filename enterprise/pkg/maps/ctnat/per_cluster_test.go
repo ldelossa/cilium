@@ -75,7 +75,10 @@ func TestPerClusterMapsLifecycle(t *testing.T) {
 	}{
 		{
 			name: "cluster-aware addressing disabled",
-			cfg:  cecmcfg.Config{EnableClusterAwareAddressing: false},
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: false,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{EnableIPv4: true, EnableIPv6: false},
 			init: func(t *testing.T) {
 				// Create the maps to ensure that they get effectively cleaned up
@@ -86,8 +89,11 @@ func TestPerClusterMapsLifecycle(t *testing.T) {
 			assertV6: require.NoFileExists,
 		},
 		{
-			name:     "cluster-aware addressing enabled, ipv4, ipv6",
-			cfg:      cecmcfg.Config{EnableClusterAwareAddressing: true},
+			name: "cluster-aware addressing enabled, ipv4, ipv6",
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:     &option.DaemonConfig{EnableIPv4: true, EnableIPv6: true},
 			init:     func(t *testing.T) {},
 			assertV4: require.FileExists,
@@ -95,7 +101,10 @@ func TestPerClusterMapsLifecycle(t *testing.T) {
 		},
 		{
 			name: "cluster-aware addressing enabled, ipv6 only",
-			cfg:  cecmcfg.Config{EnableClusterAwareAddressing: true},
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{EnableIPv4: false, EnableIPv6: true},
 			init: func(t *testing.T) {
 				// Create the IPv4 maps to ensure that they get effectively cleaned up

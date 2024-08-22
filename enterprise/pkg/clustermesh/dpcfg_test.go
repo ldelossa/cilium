@@ -37,14 +37,20 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 		expected dpcfgdef.Map
 	}{
 		{
-			name:     "ClusterAwareAddressing disabled",
-			cfg:      cecmcfg.Config{},
+			name: "ClusterAwareAddressing disabled",
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: false,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg:     &option.DaemonConfig{ClusterID: 10},
 			expected: dpcfgdef.Map{},
 		},
 		{
 			name: "ClusterAwareAddressing enabled",
-			cfg:  cecmcfg.Config{EnableClusterAwareAddressing: true},
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			dcfg: &option.DaemonConfig{ClusterID: 10},
 			expected: dpcfgdef.Map{
 				"CLUSTER_ID":                      "10",
@@ -53,7 +59,10 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 		},
 		{
 			name: "ClusterAwareAddressing and EnableInterClusterSNAT enabled, ipv4 disabled",
-			cfg:  cecmcfg.Config{EnableClusterAwareAddressing: true, EnableInterClusterSNAT: true},
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       true,
+			},
 			dcfg: &option.DaemonConfig{ClusterID: 10},
 			expected: dpcfgdef.Map{
 				"CLUSTER_ID":                      "10",
@@ -63,7 +72,10 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 		},
 		{
 			name: "ClusterAwareAddressing and EnableInterClusterSNAT enabled, ipv4 enabled",
-			cfg:  cecmcfg.Config{EnableClusterAwareAddressing: true, EnableInterClusterSNAT: true},
+			cfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       true,
+			},
 			dcfg: &option.DaemonConfig{ClusterID: 10, EnableIPv4: true},
 			expected: dpcfgdef.Map{
 				"CLUSTER_ID":                      "10",

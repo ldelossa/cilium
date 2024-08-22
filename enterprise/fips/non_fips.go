@@ -1,4 +1,4 @@
-// go:build !fips
+//go:build !fips
 
 //  Copyright (C) Isovalent, Inc. - All Rights Reserved.
 //

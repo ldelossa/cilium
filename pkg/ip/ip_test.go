@@ -547,47 +547,47 @@ func TestPreviousIP(t *testing.T) {
 func TestNextIP(t *testing.T) {
 	expectedNext := net.ParseIP("10.0.0.0")
 	ip := net.ParseIP("9.255.255.255")
-	nextIP := GetNextIP(ip)
+	nextIP := getNextIP(ip)
 	require.EqualValues(t, expectedNext, nextIP)
 
 	// Check that overflow does not occur.
 	ip = net.ParseIP("255.255.255.255")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = ip
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = ip
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = []byte{0xa, 0, 0, 0}
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = []byte{0xa, 0, 0, 1}
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = []byte{0xff, 0xff, 0xff, 0xff}
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = []byte{0xff, 0xff, 0xff, 0xff}
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = net.ParseIP("10.0.0.0")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("10.0.0.1")
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = net.ParseIP("0:0:0:0:ffff:ffff:ffff:ffff")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("0:0:0:1:0:0:0:0")
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = net.ParseIP("ffff:ffff:ffff:fffe:ffff:ffff:ffff:ffff")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("ffff:ffff:ffff:ffff:0:0:0:0")
 	require.EqualValues(t, expectedNext, nextIP)
 
 	ip = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:fffe")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
 	require.EqualValues(t, expectedNext, nextIP)
 }
@@ -980,42 +980,6 @@ func TestGetIPAtIndex(t *testing.T) {
 		_, ipNet, _ := net.ParseCIDR(tt.cidr)
 		if got := GetIPAtIndex(*ipNet, tt.index); !got.Equal(tt.want) {
 			t.Errorf("GetIPAtIndex() = %v, want %v", got, tt.want)
-		}
-	}
-}
-
-func TestAddrFromIP(t *testing.T) {
-	type args struct {
-		ip       net.IP
-		wantAddr netip.Addr
-		wantOk   bool
-	}
-
-	tests := []args{
-		{
-			net.ParseIP("10.0.0.1"),
-			netip.MustParseAddr("10.0.0.1"),
-			true,
-		},
-		{
-			net.ParseIP("a::1"),
-			netip.MustParseAddr("a::1"),
-			true,
-		},
-		{
-			net.ParseIP("::ffff:10.0.0.1"),
-			netip.MustParseAddr("10.0.0.1"),
-			true,
-		},
-	}
-	for _, tt := range tests {
-		addr, ok := AddrFromIP(tt.ip)
-		if ok != tt.wantOk {
-			t.Errorf("AddrFromIP(net.IP(%v)) should success", []byte(tt.ip))
-		}
-
-		if addr != tt.wantAddr {
-			t.Errorf("AddrFromIP(net.IP(%v)) = %v want %v", []byte(tt.ip), addr, tt.wantAddr)
 		}
 	}
 }
