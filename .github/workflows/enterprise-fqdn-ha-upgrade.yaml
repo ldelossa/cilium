@@ -287,14 +287,13 @@ jobs:
       - name: 2. Upgrade Cilium ${{ steps.vars.outputs.sha }}
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
-          cilium uninstall --wait
-          cilium install ${{ steps.vars.outputs.cilium_newest_install }}
+          cilium upgrade ${{ steps.vars.outputs.cilium_newest_install }}
           cilium status --wait
 
       - name: 2. Run FQDN connectivity tests
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
-          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }}
+          cilium connectivity test --debug ${{ steps.vars.outputs.connectivity_test_defaults }}
 
       - name: 2. Apply policy
         if: ${{ steps.vars.outputs.stable_version != '' }}
@@ -322,8 +321,7 @@ jobs:
       - name: 3. Bring Cilium up
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
-          cilium uninstall --wait
-          cilium install ${{ steps.vars.outputs.cilium_newest_install }}
+          cilium upgrade ${{ steps.vars.outputs.cilium_newest_install }}
           cilium status --wait
 
       - name: 3. Upgrade Cilium DNS proxy ${{ steps.vars.outputs.sha }}
@@ -365,8 +363,7 @@ jobs:
       - name: 4. Downgrade Cilium ${{ steps.vars.outputs.stable_version }}
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
-          cilium uninstall --wait
-          cilium install ${{ steps.vars.outputs.cilium_stable_install }}
+          cilium upgrade ${{ steps.vars.outputs.cilium_stable_install }}
           cilium status --wait
 
       - name: 4. Run FQDN connectivity tests
