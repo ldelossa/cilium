@@ -24,6 +24,7 @@ echo "CILIUM_CLI_RELEASE_REPO=isovalent/cilium-cli-releases" >> "$GITHUB_ENV"
 # renovate: datasource=github-releases depName=isovalent/cilium-cli-releases
 CILIUM_CLI_VERSION="v0.16.3-cee.1"
 echo "CILIUM_CLI_VERSION=$CILIUM_CLI_VERSION" >> "$GITHUB_ENV"
+echo "CILIUM_CLI_IMAGE_REPO=quay.io/isovalent-dev/cilium-cli-ci" >> $GITHUB_ENV
 echo "CILIUM_CLI_SKIP_BUILD=false" >> $GITHUB_ENV
 
 echo "PUSH_TO_DOCKER_HUB=false" >> "$GITHUB_ENV"
