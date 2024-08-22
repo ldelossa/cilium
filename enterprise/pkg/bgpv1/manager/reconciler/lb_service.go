@@ -317,12 +317,15 @@ func (r *lbServiceReconciler) svcDiffReconciliation(ctx context.Context, sc *ins
 	return nil
 }
 
-// reconcileService gets the desired routes of a given service and makes sure that is what is being announced.
-func (r *lbServiceReconciler) reconcileService(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls ossreconciler.LocalServices) error {
+func (r *lbServiceReconciler) svcDesiredRoutes(newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls ossreconciler.LocalServices) ([]netip.Prefix, error) {
+	// The service with no-advertisement annotation should not be announced
+	if r.svcHasNoAdvertisementAnnotations(svc) {
+		return []netip.Prefix{}, nil
+	}
 
 	desiredRoutes, err := r.ossLBServiceReconciler.SvcDesiredRoutes(newc, svc, ls)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve svc desired routes: %w", err)
+		return nil, fmt.Errorf("failed to retrieve svc desired routes: %w", err)
 	}
 
 	// ignore service frontends with no healthy backends
@@ -336,6 +339,15 @@ func (r *lbServiceReconciler) reconcileService(ctx context.Context, sc *instance
 		}
 	}
 
+	return desiredRoutes, nil
+}
+
+// reconcileService gets the desired routes of a given service and makes sure that is what is being announced.
+func (r *lbServiceReconciler) reconcileService(ctx context.Context, sc *instance.ServerWithConfig, newc *v2alpha1api.CiliumBGPVirtualRouter, svc *slim_corev1.Service, ls ossreconciler.LocalServices) error {
+	desiredRoutes, err := r.svcDesiredRoutes(newc, svc, ls)
+	if err != nil {
+		return err
+	}
 	return r.ossLBServiceReconciler.ReconcileServiceRoutes(ctx, sc, svc, desiredRoutes)
 }
 
@@ -421,6 +433,14 @@ func (r *lbServiceReconciler) svcFrontendHealthy(svc *slim_corev1.Service, front
 		}
 	}
 	return true
+}
+
+// svcHasNoAdvertisementAnnotations checks whether a service has no-advertisement annotations set
+func (r *lbServiceReconciler) svcHasNoAdvertisementAnnotations(svc *slim_corev1.Service) bool {
+	if _, exists := annotation.Get(svc, enterpriseannotation.ServiceNoAdvertisement); exists {
+		return true
+	}
+	return false
 }
 
 // getSvcByID retrieves a service by the provided service ID.

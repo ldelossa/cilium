@@ -511,3 +511,95 @@ func TestLBServiceHealthChecker(t *testing.T) {
 		})
 	}
 }
+
+func TestNoAdvertisementAnnotation(t *testing.T) {
+	vip0 := "10.0.0.1"
+	vip1 := "10.0.0.2"
+
+	baseSvc := &slim_corev1.Service{
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+			Labels: map[string]string{
+				"color": "blue",
+			},
+		},
+		Spec: slim_corev1.ServiceSpec{
+			Type: slim_corev1.ServiceTypeLoadBalancer,
+		},
+	}
+
+	withAnnotation := baseSvc.DeepCopy()
+	withAnnotation.Annotations = map[string]string{
+		annotation.ServiceNoAdvertisement: "true",
+	}
+	withAnnotation.Status = slim_corev1.ServiceStatus{
+		LoadBalancer: slim_corev1.LoadBalancerStatus{
+			Ingress: []slim_corev1.LoadBalancerIngress{
+				{
+					IP: vip0,
+				},
+			},
+		},
+	}
+
+	withoutAnnotation := baseSvc.DeepCopy()
+	withoutAnnotation.Status = slim_corev1.ServiceStatus{
+		LoadBalancer: slim_corev1.LoadBalancerStatus{
+			Ingress: []slim_corev1.LoadBalancerIngress{
+				{
+					IP: vip1,
+				},
+			},
+		},
+	}
+
+	sc, err := instance.NewServerWithConfig(context.Background(), log, types.ServerParameters{
+		Global: types.BGPGlobal{
+			ASN:        64125,
+			RouterID:   "127.0.0.1",
+			ListenPort: -1,
+		},
+	})
+	require.NoError(t, err)
+
+	diffStore := store.NewFakeDiffStore[*slim_corev1.Service]()
+	epDiffStore := store.NewFakeDiffStore[*k8s.Endpoints]()
+
+	ossReconciler := reconciler.NewServiceReconciler(diffStore, epDiffStore).Reconciler.(*reconciler.ServiceReconciler)
+	ossReconciler.Init(sc)
+	defer ossReconciler.Cleanup(sc)
+
+	rParams := lbServiceReconcilerParams{
+		In:        cell.In{},
+		Lifecycle: &cell.DefaultLifecycle{},
+		Cfg:       Config{SvcHealthCheckingEnabled: true},
+		Signaler:  signaler.NewBGPCPSignaler(),
+	}
+
+	ceeReconciler := newLBServiceReconciler(rParams).Reconciler.(*lbServiceReconciler)
+	ceeReconciler.ossLBServiceReconciler = ossReconciler
+
+	// Upsert services
+	diffStore.Upsert(withAnnotation)
+	diffStore.Upsert(withoutAnnotation)
+
+	vRouter := &v2alpha1api.CiliumBGPVirtualRouter{
+		LocalASN:              64125,
+		Neighbors:             []v2alpha1api.CiliumBGPNeighbor{},
+		ServiceSelector:       &slim_metav1.LabelSelector{MatchLabels: map[string]string{"color": "blue"}},
+		ServiceAdvertisements: []v2alpha1api.BGPServiceAddressType{v2alpha1api.BGPLoadBalancerIPAddr},
+	}
+
+	t.Run("with no-advertisement annotation", func(t *testing.T) {
+		prefixes, err := ceeReconciler.svcDesiredRoutes(vRouter, withAnnotation, nil)
+		require.NoError(t, err)
+		require.Empty(t, prefixes)
+	})
+
+	t.Run("without no-advertisement annotation", func(t *testing.T) {
+		prefixes, err := ceeReconciler.svcDesiredRoutes(vRouter, withoutAnnotation, nil)
+		require.NoError(t, err)
+		require.Contains(t, prefixes, netip.MustParsePrefix(vip1+"/32"))
+	})
+}
