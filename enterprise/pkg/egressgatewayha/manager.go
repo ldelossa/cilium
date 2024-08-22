@@ -23,6 +23,7 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"go4.org/netipx"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 
@@ -34,7 +35,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
-	"github.com/cilium/cilium/pkg/ip"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sLabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
@@ -754,7 +754,7 @@ func (manager *Manager) removeExpiredCtEntries() {
 		})
 
 	policyMatchesCtEntry := func(policy *PolicyConfig, ctKey *egressmapha.EgressCtKey4, ctVal *egressmapha.EgressCtVal4) bool {
-		gatewayIP, ok := ip.AddrFromIP(ctVal.Gateway.IP())
+		gatewayIP, ok := netipx.FromStdIP(ctVal.Gateway.IP())
 		if !ok {
 			log.Error("Cannot parse CT entry's gateway IP while removing expired entries")
 			return false

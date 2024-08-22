@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/hive/job"
 	"github.com/cilium/stream"
 	"github.com/sirupsen/logrus"
+	"go4.org/netipx"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
@@ -28,7 +29,6 @@ import (
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
-	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipam"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -1064,7 +1064,7 @@ func (m *Manager) allocateSID(pool, metadata string) (*sidmanager.SIDInfo, error
 			return nil, err
 		}
 
-		addr, ok := ip.AddrFromIP(res.IP)
+		addr, ok := netipx.FromStdIP(res.IP)
 		if !ok {
 			err := fmt.Errorf("failed to convert IP to Addr")
 			if releaseErr := m.sidAlloc.Release(res.IP, ""); releaseErr != nil {
