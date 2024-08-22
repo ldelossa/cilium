@@ -27,4 +27,12 @@ const (
 	//  - none (default)
 	//      same as "1" - the service routes will be advertised when there is at least 1 healthy backend.
 	ServiceHealthBGPAdvertiseThreshold = ossannotation.ServicePrefix + "/health-check-bgp-advertise-threshold"
+
+	// ServiceNoAdvertisement annotation is used to disable advertisement
+	// of specific Service. This is useful when the service is selected by
+	// for example, BGP Control Plane, but we still want to disable
+	// advertisement. This annotation is used by the IsovalentLB internally
+	// to prevent "placeholder" services from being advertised. It is not
+	// intended to be used by users.
+	ServiceNoAdvertisement = ossannotation.ServicePrefix + "/no-advertisement"
 )
