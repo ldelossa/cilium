@@ -33,7 +33,7 @@ func TestConfigValidate(t *testing.T) {
 	}{
 		{
 			name:      "mixed routing mode disabled",
-			cfg:       Config{},
+			cfg:       Config{FallbackRoutingMode: FallbackDisabled},
 			dcfg:      &option.DaemonConfig{IPAM: ipamopt.IPAMENI, NodePortMode: option.NodePortModeHybrid},
 			assertion: assert.NoError,
 		},

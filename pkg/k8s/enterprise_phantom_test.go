@@ -77,7 +77,10 @@ func TestPhantomServiceMutator(t *testing.T) {
 }
 
 func TestPhantomServiceUpdate(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{})
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
+		EnableClusterAwareAddressing: false,
+		EnableInterClusterSNAT:       false,
+	})
 
 	svc := store.ClusterService{
 		Cluster:   "other",
@@ -128,7 +131,10 @@ func TestPhantomServiceUpdate(t *testing.T) {
 }
 
 func TestPhantomServiceDelete(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{})
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
+		EnableClusterAwareAddressing: false,
+		EnableInterClusterSNAT:       false,
+	})
 
 	svc := store.ClusterService{
 		Cluster:   "other",
@@ -171,7 +177,10 @@ func TestPhantomServiceDelete(t *testing.T) {
 }
 
 func TestGlobalToPhantomToGlobalService(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{})
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
+		EnableClusterAwareAddressing: false,
+		EnableInterClusterSNAT:       false,
+	})
 
 	k8sSvc := slim_corev1.Service{
 		ObjectMeta: slim_metav1.ObjectMeta{

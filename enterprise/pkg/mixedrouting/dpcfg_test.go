@@ -37,7 +37,7 @@ func TestDatapathConfigProvider(t *testing.T) {
 	}{
 		{
 			name:                "native routing, mixed routing mode not enabled",
-			cfg:                 cemrcfg.Config{},
+			cfg:                 cemrcfg.Config{FallbackRoutingMode: cemrcfg.FallbackDisabled},
 			dcfg:                &option.DaemonConfig{RoutingMode: option.RoutingModeNative},
 			assertProtoDisabled: assert.True,
 			assertTunnelMode:    assert.NotContains,
@@ -58,7 +58,7 @@ func TestDatapathConfigProvider(t *testing.T) {
 		},
 		{
 			name:                "tunnel routing, mixed routing mode not enabled",
-			cfg:                 cemrcfg.Config{},
+			cfg:                 cemrcfg.Config{FallbackRoutingMode: cemrcfg.FallbackDisabled},
 			dcfg:                &option.DaemonConfig{RoutingMode: option.RoutingModeTunnel},
 			assertProtoDisabled: assert.False,
 			assertTunnelMode:    assert.NotContains,

@@ -38,15 +38,21 @@ func TestInjectCEPrefixClusterMutator(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name:     "cluster-aware addressing enabled, local node",
-			cmcfg:    cecmcfg.Config{EnableClusterAwareAddressing: true},
+			name: "cluster-aware addressing enabled, local node",
+			cmcfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			localID:  11,
 			nodeID:   11,
 			expected: 0,
 		},
 		{
-			name:     "cluster-aware addressing enabled, remote node",
-			cmcfg:    cecmcfg.Config{EnableClusterAwareAddressing: true},
+			name: "cluster-aware addressing enabled, remote node",
+			cmcfg: cecmcfg.Config{
+				EnableClusterAwareAddressing: true,
+				EnableInterClusterSNAT:       false,
+			},
 			localID:  11,
 			nodeID:   22,
 			expected: 22,
