@@ -9,34 +9,14 @@ Release process and checklist for `cilium-cli` enterprise edition.
 
 ### Define environment variables
 
-Define the `OSS_VERSION`, `CEE_VERSION` and `CEE_VERSION_TAG` variables. For
-example, if you are releasing v0.16.14-cee.1 based on v0.16.14 OSS:
+Find the OSS version in https://github.com/cilium/cilium-cli/releases, and
+verify that main-ce branch contains the commit used to build the OSS release.
 
-    export OSS_VERSION=v0.16.14
-    export CEE_VERSION=${OSS_VERSION}-cee.1
+Define the `CEE_VERSION` and `CEE_VERSION_TAG` variables. For example, if you
+are releasing v0.16.17-cee.1 based on v0.16.17 OSS:
+
+    export CEE_VERSION=v0.16.17-cee.1
     export CEE_VERSION_TAG=enterprise/cilium-cli/${CEE_VERSION}
-
-### Update upstream release
-
-In this directory, update to the given `cilium-cli` OSS upstream version:
-
-    go get github.com/cilium/cilium-cli@${OSS_VERSION}
-    go mod tidy
-    git add go.mod go.sum
-
-## Prepare the release
-
-Release notes need to be added to the  `release-notes` directory with a
-filename `$CEE_VERSION.md` (e.g. `release-notes/v0.15.0-cee.1.md`) before you
-make a release. Also update the versions in the section at the top so the
-environment variable definitions can be copied for the next release.
-
-    git checkout -b pr/prepare-${CEE_VERSION}
-    git add RELEASE.md release-notes/$CEE_VERSION.md
-    git commit -s -m "enterprise/cilium-cli: prepare for $CEE_VERSION release"
-    git push isovalent HEAD
-
-Then open a pull request against `main-ce` branch. Wait for the PR to be reviewed and merged.
 
 ## Tag a release
 
