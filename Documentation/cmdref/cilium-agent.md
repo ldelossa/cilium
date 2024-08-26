@@ -19,7 +19,7 @@ cilium-agent [flags]
       --allow-icmp-frag-needed                                       Allow ICMP Fragmentation Needed type packets for purposes like TCP Path MTU. (default true)
       --allow-localhost string                                       Policy when to allow local stack to reach local endpoints { auto | always | policy } (default "auto")
       --annotate-k8s-node                                            Annotate Kubernetes node
-      --api-rate-limit stringToString                                API rate limiting configuration (example: --api-rate-limit endpoint-create=rate-limit:10/m,rate-burst:2) (default [])
+      --api-rate-limit string                                        API rate limiting configuration (example: --api-rate-limit endpoint-create=rate-limit:10/m,rate-burst:2)
       --arping-refresh-period duration                               Period for remote node ARP entry refresh (set 0 to disable) (default 30s)
       --auto-create-cilium-node-resource                             Automatically create CiliumNode resource for own node on startup (default true)
       --auto-direct-node-routes                                      Enable automatic L2 routing between nodes
@@ -118,6 +118,7 @@ cilium-agent [flags]
       --enable-cilium-mesh                                           Enables Cilium Mesh feature
       --enable-cluster-aware-addressing                              Enable cluster-aware addressing, to support overlapping PodCIDRs
       --enable-custom-calls                                          Enable tail call hooks for custom eBPF programs
+      --enable-dynamic-config                                        Enables support for dynamic agent config
       --enable-encryption-strict-mode                                Enable encryption strict mode
       --enable-endpoint-health-checking                              Enable connectivity health checking between virtual endpoints (default true)
       --enable-endpoint-routes                                       Use per endpoint routes instead of routing via cilium_host
