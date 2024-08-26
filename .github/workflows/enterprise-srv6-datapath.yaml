@@ -79,19 +79,19 @@ jobs:
         include:
           - name: '1'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240806.173325'
+            kernel: '5.15-20240822.104709'
             encap-mode: 'srh' # reduced not supported on kernels below 6.0
             sid-manger-enabled: 'true'
 
           - name: '2'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.1-20240806.173325'
+            kernel: '6.1-20240822.104709'
             encap-mode: 'reduced'
             sid-manger-enabled: 'true'
 
           - name: '3'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.6-20240806.173325'
+            kernel: '6.6-20240822.104709'
             encap-mode: 'reduced'
             sid-manger-enabled: 'false'
 
@@ -156,7 +156,7 @@ jobs:
           echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@99ff3d9edd4050d7b5c9d1f51dcf6ebeeb613d15 # v0.16.15
+        uses: cilium/cilium-cli@62bd4511031211b50a4623870955a5ad27b43e3b # v0.16.16
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
