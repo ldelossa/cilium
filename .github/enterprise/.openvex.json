@@ -359,6 +359,70 @@
       "status": "not_affected",
       "status_notes": "Triggers on v1.13, upgrade is not trivial, and the vulnerability has no impact on the plugin",
       "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-q7w8-72mr-vpgw"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        },
+        {
+          "@id": "pkg:oci/clustermesh-apiserver-ci"
+        },
+        {
+          "@id": "pkg:oci/docker-plugin-ci"
+        },
+        {
+          "@id": "pkg:oci/hubble-relay-ci"
+        },
+        {
+          "@id": "pkg:oci/operator-generic-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Triggers on the Go package import in various Cilium binaries but is not applicable",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-7ww5-4wqc-m92c"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/docker-plugin-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "docker-plugin is only used for some runtime tests. The vulnerability won't affect customers.",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-vwf8-q6fw-4wcm"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Reported for /usr/bin/hubble, which doesn't use the affected functionality",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "GHSA-qcm3-7879-xcww"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Reported for /usr/bin/hubble, which doesn't use the affected functionality",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
