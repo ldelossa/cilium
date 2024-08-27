@@ -337,7 +337,7 @@ jobs:
             export VMUSER=root
             echo '127.0.0.1 localhost' >> /etc/hosts
             echo '::1 localhost' >> /etc/hosts
-            /tmp/provision/runtime_install.sh
+            /tmp/provision/runtime_install.sh ${{ env.CILIUM_RUNTIME_EXTRA_ARGS }}
             service docker restart
 
       - name: Runtime tests
@@ -370,7 +370,8 @@ jobs:
           -cilium.hubble-relay-image=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/hubble-relay-ci \
           -cilium.hubble-relay-tag=${{ steps.vars.outputs.sha }} \
           -cilium.operator-suffix=-ci \
-          -cilium.SSHConfig="cat ./cilium-ssh-config.txt"
+          -cilium.SSHConfig="cat ./cilium-ssh-config.txt" \
+          -cilium.extra-opts="${{ env.CILIUM_RUNTIME_EXTRA_ARGS }}"
 
       - name: Runtime privileged tests
         if: ${{ matrix.focus == 'privileged' }}
