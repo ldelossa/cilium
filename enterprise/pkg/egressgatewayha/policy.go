@@ -799,9 +799,16 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 	gwc := &config.gatewayConfig
 	for groupIndex, gc := range config.groupConfigs {
 		groupStatus := &config.groupStatuses[groupIndex]
+		// We use the local node IP to determine if the current node
+		// matches the list of active gateway IPs
+		localNodeMatchesGatewayIP := false
 
 		if !gwc.azAffinity.enabled() {
 			gwc.activeGatewayIPs = append(gwc.activeGatewayIPs, groupStatus.activeGatewayIPs...)
+
+			if slices.Contains(groupStatus.activeGatewayIPs, localNodeK8sAddr) {
+				localNodeMatchesGatewayIP = true
+			}
 		} else {
 			for az, gwIPs := range groupStatus.activeGatewayIPsByAZ {
 				azGwIPs, ok := gwc.activeGatewayIPsByAZ[az]
@@ -811,29 +818,16 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 					}
 				}
 				azGwIPs.gatewayIPs = append(azGwIPs.gatewayIPs, gwIPs...)
+
+				if slices.Contains(gwIPs, localNodeK8sAddr) {
+					localNodeMatchesGatewayIP = true
+					azGwIPs.localNodeConfiguredAsGateway = true
+				}
+
 				gwc.activeGatewayIPsByAZ[az] = azGwIPs
 			}
 		}
 		gwc.healthyGatewayIPs = append(gwc.healthyGatewayIPs, groupStatus.healthyGatewayIPs...)
-
-		// We use the local node IP to determine if the current node
-		// matches the list of active gateway IPs
-		localNodeMatchesGatewayIP := false
-
-		if !gwc.azAffinity.enabled() {
-			if slices.Contains(gwc.activeGatewayIPs, localNodeK8sAddr) {
-				localNodeMatchesGatewayIP = true
-			}
-		} else {
-			for az, azActiveGatewayIPs := range gwc.activeGatewayIPsByAZ {
-				if slices.Contains(azActiveGatewayIPs.gatewayIPs, localNodeK8sAddr) {
-					localNodeMatchesGatewayIP = true
-
-					azActiveGatewayIPs.localNodeConfiguredAsGateway = true
-					gwc.activeGatewayIPsByAZ[az] = azActiveGatewayIPs
-				}
-			}
-		}
 
 		logger := log.WithFields(logrus.Fields{
 			logfields.IsovalentEgressGatewayPolicyName: config.id,
