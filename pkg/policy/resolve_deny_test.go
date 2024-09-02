@@ -19,7 +19,6 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 )
 
 func GenerateL3IngressDenyRules(numRules int) (api.Rules, identity.IdentityMap) {
@@ -455,11 +454,11 @@ func TestMapStateWithIngressDenyWildcard(t *testing.T) {
 			IngressPolicyEnabled: true,
 		},
 		PolicyOwner: DummyOwner{},
-		policyMapState: newMapState().withState(map[Key]MapStateEntry{
+		policyMapState: newMapState().withState(MapStateMap{
 			// Although we have calculated deny policies, the overall policy
 			// will still allow egress to world.
-			{TrafficDirection: trafficdirection.Egress.Uint8(), InvertedPortMask: 0xffff /* This is a wildcard */}: allowEgressMapStateEntry,
-			{DestPort: 80, Nexthdr: 6}: rule1MapStateEntry,
+			EgressKey():                  allowEgressMapStateEntry,
+			IngressKey().WithTCPPort(80): rule1MapStateEntry,
 		}, td.sc),
 	}
 
@@ -616,15 +615,15 @@ func TestMapStateWithIngressDeny(t *testing.T) {
 			IngressPolicyEnabled: true,
 		},
 		PolicyOwner: DummyOwner{},
-		policyMapState: newMapState().withState(map[Key]MapStateEntry{
+		policyMapState: newMapState().withState(MapStateMap{
 			// Although we have calculated deny policies, the overall policy
 			// will still allow egress to world.
-			{TrafficDirection: trafficdirection.Egress.Uint8(), InvertedPortMask: 0xffff /* This is a wildcard */}: allowEgressMapStateEntry,
-			{Identity: uint32(identity.ReservedIdentityWorld), DestPort: 80, Nexthdr: 6}:                           rule1MapStateEntry.WithOwners(cachedSelectorWorld),
-			{Identity: uint32(identity.ReservedIdentityWorldIPv4), DestPort: 80, Nexthdr: 6}:                       rule1MapStateEntry.WithOwners(cachedSelectorWorldV4, cachedSelectorWorld),
-			{Identity: uint32(identity.ReservedIdentityWorldIPv6), DestPort: 80, Nexthdr: 6}:                       rule1MapStateEntry.WithOwners(cachedSelectorWorldV6, cachedSelectorWorld),
-			{Identity: 192, DestPort: 80, Nexthdr: 6}:                                                              rule1MapStateEntry,
-			{Identity: 194, DestPort: 80, Nexthdr: 6}:                                                              rule1MapStateEntry,
+			EgressKey(): allowEgressMapStateEntry,
+			IngressKey().WithIdentity(identity.ReservedIdentityWorld).WithTCPPort(80):     rule1MapStateEntry.WithOwners(cachedSelectorWorld),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv4).WithTCPPort(80): rule1MapStateEntry.WithOwners(cachedSelectorWorldV4, cachedSelectorWorld),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv6).WithTCPPort(80): rule1MapStateEntry.WithOwners(cachedSelectorWorldV6, cachedSelectorWorld),
+			IngressKey().WithIdentity(192).WithTCPPort(80):                                rule1MapStateEntry,
+			IngressKey().WithIdentity(194).WithTCPPort(80):                                rule1MapStateEntry,
 		}, td.sc),
 	}
 
@@ -632,11 +631,11 @@ func TestMapStateWithIngressDeny(t *testing.T) {
 	// maps on the policy got cleared
 
 	require.Equal(t, Keys{
-		{Identity: 192, DestPort: 80, Nexthdr: 6}: {},
-		{Identity: 194, DestPort: 80, Nexthdr: 6}: {},
+		ingressKey(192, 6, 80, 0): {},
+		ingressKey(194, 6, 80, 0): {},
 	}, adds)
 	require.Equal(t, Keys{
-		{Identity: 193, DestPort: 80, Nexthdr: 6}: {},
+		ingressKey(193, 6, 80, 0): {},
 	}, deletes)
 
 	// Have to remove circular reference before testing for Equality to avoid an infinite loop

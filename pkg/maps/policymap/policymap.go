@@ -5,7 +5,6 @@ package policymap
 
 import (
 	"fmt"
-	"math/bits"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/byteorder"
+	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
@@ -46,9 +46,9 @@ const (
 	// be reported for the policy map.
 	PressureMetricThreshold = 0.1
 
-	// SinglePortMask represents the mask argument required to lookup or
+	// SinglePortPrefixLen represents the mask argument required to lookup or
 	// insert a single port key into the bpf map.
-	SinglePortMask = 0xffff
+	SinglePortPrefixLen = uint8(16)
 )
 
 // policyEntryFlags is a new type used to define the flags used in the policy
@@ -137,6 +137,15 @@ func (k *PolicyKey) GetPortMask() uint16 {
 	portPrefixLen := prefixLen - NexthdrBits
 	portLen := prefixLenPortLenMap[portPrefixLen]
 	return ^portLen
+}
+
+// GetPortPrefixLen returns the prefix length applicable to the port in the key
+func (k *PolicyKey) GetPortPrefixLen() uint8 {
+	prefixLen := k.Prefixlen - StaticPrefixBits
+	if prefixLen <= NexthdrBits {
+		return 0
+	}
+	return uint8(prefixLen - NexthdrBits)
 }
 
 const (
@@ -308,28 +317,21 @@ func (key *PolicyKey) New() bpf.MapKey { return &PolicyKey{} }
 
 // NewKey returns a PolicyKey representing the specified parameters in network
 // byte-order.
-func NewKey(id uint32, dport, mask uint16, proto uint8, trafficDirection uint8) PolicyKey {
-
+func NewKey(trafficDirection trafficdirection.TrafficDirection, id identity.NumericIdentity, proto u8proto.U8proto, dport uint16, portPrefixLen uint8) PolicyKey {
 	prefixLen := StaticPrefixBits
 	if proto != 0 || dport != 0 {
 		prefixLen += NexthdrBits
 		if dport != 0 {
-			prefixLen += DestPortBits - uint32(bits.TrailingZeros16(mask))
+			prefixLen += uint32(portPrefixLen)
 		}
 	}
 	return PolicyKey{
 		Prefixlen:        prefixLen,
-		Identity:         id,
-		TrafficDirection: trafficDirection,
-		Nexthdr:          proto,
+		Identity:         uint32(id),
+		TrafficDirection: uint8(trafficDirection),
+		Nexthdr:          uint8(proto),
 		DestPortNetwork:  byteorder.HostToNetwork16(dport),
 	}
-}
-
-// newKey returns a PolicyKey representing the specified parameters in network
-// byte-order.
-func newKey(id uint32, dport, portMask uint16, proto u8proto.U8proto, trafficDirection trafficdirection.TrafficDirection) PolicyKey {
-	return NewKey(id, dport, portMask, uint8(proto), trafficDirection.Uint8())
 }
 
 // newEntry returns a PolicyEntry representing the specified parameters in
@@ -375,8 +377,8 @@ func (pm *PolicyMap) AllowKey(key PolicyKey, authType uint8, proxyPort uint16) e
 // Allow pushes an entry into the PolicyMap to allow traffic in the given
 // `trafficDirection` for identity `id` with destination port `dport` over
 // protocol `proto`. It is assumed that `dport` and `proxyPort` are in host byte-order.
-func (pm *PolicyMap) Allow(id uint32, dport, portMask uint16, proto u8proto.U8proto, trafficDirection trafficdirection.TrafficDirection, authType uint8, proxyPort uint16) error {
-	key := newKey(id, dport, portMask, proto, trafficDirection)
+func (pm *PolicyMap) Allow(trafficDirection trafficdirection.TrafficDirection, id identity.NumericIdentity, proto u8proto.U8proto, dport uint16, portPrefixLen uint8, authType uint8, proxyPort uint16) error {
+	key := NewKey(trafficDirection, id, proto, dport, portPrefixLen)
 	return pm.AllowKey(key, authType, proxyPort)
 }
 
@@ -390,16 +392,16 @@ func (pm *PolicyMap) DenyKey(key PolicyKey) error {
 // Deny pushes an entry into the PolicyMap to deny traffic in the given
 // `trafficDirection` for identity `id` with destination port `dport` over
 // protocol `proto`. It is assumed that `dport` is in host byte-order.
-func (pm *PolicyMap) Deny(id uint32, dport, portMask uint16, proto u8proto.U8proto, trafficDirection trafficdirection.TrafficDirection) error {
-	key := newKey(id, dport, portMask, proto, trafficDirection)
+func (pm *PolicyMap) Deny(trafficDirection trafficdirection.TrafficDirection, id identity.NumericIdentity, proto u8proto.U8proto, dport uint16, portPrefixLen uint8) error {
+	key := NewKey(trafficDirection, id, proto, dport, portPrefixLen)
 	return pm.DenyKey(key)
 }
 
 // Exists determines whether PolicyMap currently contains an entry that
 // allows traffic in `trafficDirection` for identity `id` with destination port
 // `dport`over protocol `proto`. It is assumed that `dport` is in host byte-order.
-func (pm *PolicyMap) Exists(id uint32, dport, portMask uint16, proto u8proto.U8proto, trafficDirection trafficdirection.TrafficDirection) bool {
-	key := newKey(id, dport, portMask, proto, trafficDirection)
+func (pm *PolicyMap) Exists(trafficDirection trafficdirection.TrafficDirection, id identity.NumericIdentity, proto u8proto.U8proto, dport uint16, portPrefixLen uint8) bool {
+	key := NewKey(trafficDirection, id, proto, dport, portPrefixLen)
 	_, err := pm.Lookup(&key)
 	return err == nil
 }
@@ -414,8 +416,8 @@ func (pm *PolicyMap) DeleteKey(key PolicyKey) error {
 // sending traffic in direction `trafficDirection` with destination port `dport`
 // over protocol `proto`. It is assumed that `dport` is in host byte-order.
 // Returns an error if the deletion did not succeed.
-func (pm *PolicyMap) Delete(id uint32, dport, portMask uint16, proto u8proto.U8proto, trafficDirection trafficdirection.TrafficDirection) error {
-	k := newKey(id, dport, portMask, proto, trafficDirection)
+func (pm *PolicyMap) Delete(trafficDirection trafficdirection.TrafficDirection, id identity.NumericIdentity, proto u8proto.U8proto, dport uint16, portPrefixLen uint8) error {
+	k := NewKey(trafficDirection, id, proto, dport, portPrefixLen)
 	return pm.Map.Delete(&k)
 }
 

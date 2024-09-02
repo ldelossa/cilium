@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package ratelimitmetricsmap
+package ratelimitmap
 
 import (
 	"fmt"
@@ -18,15 +18,15 @@ import (
 )
 
 var Cell = cell.Module(
-	"ratelimitmetricsmap",
-	"eBPF Ratelimit Metrics Map",
+	"ratelimitmap",
+	"eBPF Ratelimit Map",
 	cell.Invoke(RegisterCollector),
 )
 
 // DumpCallback represents the signature of the callback function expected by
 // the DumpWithCallback method, which in turn is used to iterate all the
 // keys/values of a ratelimit metrics map.
-type DumpCallback func(*Key, *Value)
+type DumpCallback func(*MetricsKey, *MetricsValue)
 
 // RatelimitMetricsMap interface represents a ratelimit metrics map, and can be reused
 // to implement mock maps for unit tests.
@@ -38,25 +38,43 @@ type ratelimitMetricsMap struct {
 	*bpf.Map
 }
 
+type ratelimitMap struct {
+	*bpf.Map
+}
+
 var (
-	// RatelimitMetrics is the bpf ratelimit metrics map.
-	RatelimitMetrics = ratelimitMetricsMap{bpf.NewMap(
-		MapName,
+	// ratelimitMetrics is the bpf ratelimit metrics map.
+	ratelimitMetrics = ratelimitMetricsMap{bpf.NewMap(
+		MetricsMapName,
 		ebpf.Hash,
+		&MetricsKey{},
+		&MetricsValue{},
+		MaxMetricsEntries,
+		0,
+	)}
+	// ratelimit is the bpf ratelimit map.
+	ratelimit = ratelimitMap{bpf.NewMap(
+		MapName,
+		ebpf.LRUHash,
 		&Key{},
 		&Value{},
 		MaxEntries,
 		0,
 	)}
-	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "ratelimit-map-metrics")
+	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "ratelimit-map")
 )
 
 const (
-	// MapName for ratelimit metrics map.
-	MapName = "cilium_ratelimit_metrics"
+	// MetricsMapName for ratelimit metrics map.
+	MetricsMapName = "cilium_ratelimit_metrics"
+	// MapName for ratelimit map.
+	MapName = "cilium_ratelimit"
+	// MetricsMaxEntries is the maximum number of keys that can be present in
+	// the Ratelimit Metrics Map.
+	MaxMetricsEntries = 64
 	// MaxEntries is the maximum number of keys that can be present in the
-	// Ratelimit Metrics Map.
-	MaxEntries = 64
+	// Ratelimit Map.
+	MaxEntries = 1024
 )
 
 // usageType represents source of ratelimiter usage in datapath code.
@@ -79,9 +97,10 @@ func (t usageType) String() string {
 	return ""
 }
 
-// Key must be in sync with struct ratelimit_metrics_key in <bpf/lib/ratelimit.h>
+// Key must be in sync with struct ratelimit_key in <bpf/lib/ratelimit.h>
 type Key struct {
 	Usage usageType `align:"usage"`
+	Key   uint32    `align:"key"`
 }
 
 func (k *Key) New() bpf.MapKey {
@@ -95,9 +114,10 @@ func (k *Key) String() string {
 	return fmt.Sprintf("%d", k.Usage)
 }
 
-// Value must be in sync with struct ratelimit_metrics_value in <bpf/lib/ratelimit.h>
+// Value must be in sync with struct ratelimit_value in <bpf/lib/ratelimit.h>
 type Value struct {
-	Dropped uint64 `align:"dropped"`
+	LastTopup uint64 `align:"last_topup"`
+	Tokens    uint64 `align:"tokens"`
 }
 
 func (v *Value) New() bpf.MapValue {
@@ -108,6 +128,38 @@ func (v *Value) String() string {
 	if v == nil {
 		return ""
 	}
+	return fmt.Sprintf("%d %d", v.LastTopup, v.Tokens)
+}
+
+// MetricsKey must be in sync with struct ratelimit_metrics_key in <bpf/lib/ratelimit.h>
+type MetricsKey struct {
+	Usage usageType `align:"usage"`
+}
+
+func (k *MetricsKey) New() bpf.MapKey {
+	return &MetricsKey{}
+}
+
+func (k *MetricsKey) String() string {
+	if k == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", k.Usage)
+}
+
+// MetricsValue must be in sync with struct ratelimit_metrics_value in <bpf/lib/ratelimit.h>
+type MetricsValue struct {
+	Dropped uint64 `align:"dropped"`
+}
+
+func (v *MetricsValue) New() bpf.MapValue {
+	return &MetricsValue{}
+}
+
+func (v *MetricsValue) String() string {
+	if v == nil {
+		return ""
+	}
 	return fmt.Sprintf("%d", v.Dropped)
 }
 
@@ -115,8 +167,8 @@ func (v *Value) String() string {
 // passing each key/value pair to the cb callback
 func (rm ratelimitMetricsMap) DumpWithCallback(cb DumpCallback) error {
 	return rm.Map.DumpWithCallback(func(k bpf.MapKey, v bpf.MapValue) {
-		key := k.(*Key)
-		value := v.(*Value)
+		key := k.(*MetricsKey)
+		value := v.(*MetricsValue)
 		cb(key, value)
 	})
 }
@@ -144,7 +196,7 @@ func (rc *ratelimitMetricsMapCollector) Collect(ch chan<- prometheus.Metric) {
 	rc.mutex.Lock()
 	defer rc.mutex.Unlock()
 
-	err := RatelimitMetrics.DumpWithCallback(func(k *Key, val *Value) {
+	err := ratelimitMetrics.DumpWithCallback(func(k *MetricsKey, val *MetricsValue) {
 		rc.droppedMap[k.Usage] = float64(val.Dropped)
 	})
 	if err != nil {
@@ -171,4 +223,11 @@ func RegisterCollector() {
 		log.WithError(err).Error("Failed to register ratelimit metrics map collector to Prometheus registry. " +
 			"BPF ratelimit metrics will not be collected")
 	}
+}
+
+func InitMaps() error {
+	if err := ratelimit.OpenOrCreate(); err != nil {
+		return err
+	}
+	return ratelimitMetrics.OpenOrCreate()
 }

@@ -165,6 +165,11 @@ Users (Alphabetically)
       U: CiliumNetworkPolicy, Hubble, ClusterMesh
       L: https://clickhouse.com
 
+    * N: Cloutomate
+      D: Cloutomate uses Cilium as CNI for itself and customer installations
+      U: Networking Observability and Security, Service Mesh, Cluster Mesh
+      L: https://cloutomate.de
+
     * N: Cognite
       D: Cognite is an industrial DataOps provider and uses Cilium as the CNI plugin
       Q: @Robert Collins
@@ -343,6 +348,12 @@ Users (Alphabetically)
       U: Networking, CiliumNetworkPolicy at L7, kube-proxy replacement, encryption
       L: https://www.cloud-migration.ch/
       Q: @fakod
+
+    * N: Intility AS
+      D: Intility is a managed service provider for enterprises and we use Cilium, Tetragon and Hubble to deliver world class managed Kubernetes clusters to customers from our own private cloud
+      U: Networking, CiliumNetworkPolicy, CiliumCIDRGroup, security, CNI
+      L: https://intility.com/container-platform/
+      Q: @jonasks, @daniwk, @stianfro
 
      * N: Isovalent
        D: Cilium is the platform that powers Isovalent’s enterprise networking, observability, and security solutions
@@ -570,6 +581,12 @@ Users (Alphabetically)
       U: Mainly Service load-balancing
       Q: @francoisj
 
+    * N: Qpoint
+      D: An eBPF-based egress observability platform for your cloud and production applications
+      U: CNI, bpf2go to compile a C source file into eBPF bytecode and then to Go
+      L: https://www.qpoint.io/ and https://github.com/qpoint-io
+      Q: @Marc Barry
+
     * N: Rancher Labs, now part of SUSE
       D: Rancher Labs certified Kubernetes distribution RKE2 can be deployed with Cilium.
       U: Networking and network policy
@@ -619,6 +636,12 @@ Users (Alphabetically)
       U: Networking, Service, kube-proxy replacement, Network Policy, Hubble
       L: https://sealos.io
       Q: @fanux, @yangchuansheng
+
+    * N: SeatGeek
+      D: SeatGeek uses Cilium as the default CNI for AWS hosted clusters
+      U: CNI, ClusterMesh, Network Policy, Hubble
+      L: https://seatgeek.com
+      Q: @byxorna
 
     * N: Seznam.cz
       D: Seznam.cz uses Cilium in multiple scenarios in on-prem DCs. At first as L4LB which loadbalances external traffic into k8s+openstack clusters then as CNI in multiple k8s and openstack clusters which are all connected in a clustermesh to enforce NetworkPolicies across pods/VMs.

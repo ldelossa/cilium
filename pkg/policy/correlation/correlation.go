@@ -55,12 +55,9 @@ func CorrelatePolicy(endpointGetter getters.EndpointGetter, f *flowpb.Flow) {
 		return
 	}
 
-	derivedFrom, rev, ok := lookupPolicyForKey(epInfo, policy.Key{
-		Identity:         uint32(remoteIdentity),
-		DestPort:         dport,
-		Nexthdr:          uint8(proto),
-		TrafficDirection: uint8(direction),
-	}, f.GetPolicyMatchType())
+	derivedFrom, rev, ok := lookupPolicyForKey(epInfo,
+		policy.KeyForDirection(direction).WithIdentity(remoteIdentity).WithPortProto(proto, dport),
+		f.GetPolicyMatchType())
 	if !ok {
 		logger.WithFields(logrus.Fields{
 			logfields.Identity:         remoteIdentity,
@@ -159,12 +156,8 @@ func lookupPolicyForKey(ep getters.EndpointInfo, key policy.Key, matchType uint3
 		//  - ports:
 		//    - port: 80
 		//      protocol: TCP // protocol is optional for this match.
-		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(policy.Key{
-			Identity:         0,
-			DestPort:         key.DestPort,
-			Nexthdr:          key.Nexthdr,
-			TrafficDirection: key.TrafficDirection,
-		})
+		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(
+			policy.KeyForDirection(key.TrafficDirection()).WithPortProto(key.Nexthdr, key.DestPort))
 	case monitorAPI.PolicyMatchProtoOnly:
 		// Check for protocol-only policies.
 		//
@@ -175,13 +168,8 @@ func lookupPolicyForKey(ep getters.EndpointInfo, key policy.Key, matchType uint3
 		//  ingress:
 		//  - ports:
 		//    - protocol: TCP
-		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(policy.Key{
-			Identity:         0,
-			DestPort:         0,
-			InvertedPortMask: 0xffff, // this is a wildcard
-			Nexthdr:          key.Nexthdr,
-			TrafficDirection: key.TrafficDirection,
-		})
+		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(
+			policy.KeyForDirection(key.TrafficDirection()).WithProto(key.Nexthdr))
 	case monitorAPI.PolicyMatchL3Only:
 		// Check for L3 policy rules.
 		//
@@ -193,13 +181,8 @@ func lookupPolicyForKey(ep getters.EndpointInfo, key policy.Key, matchType uint3
 		//  - podSelector:
 		//      matchLabels:
 		//        app: client
-		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(policy.Key{
-			Identity:         key.Identity,
-			DestPort:         0,
-			InvertedPortMask: 0xffff, // this is a wildcard
-			Nexthdr:          0,
-			TrafficDirection: key.TrafficDirection,
-		})
+		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(
+			policy.KeyForDirection(key.TrafficDirection()).WithIdentity(key.Identity))
 	case monitorAPI.PolicyMatchAll:
 		// Check for allow-all policy rules.
 		//
@@ -209,13 +192,8 @@ func lookupPolicyForKey(ep getters.EndpointInfo, key policy.Key, matchType uint3
 		//  podSelector: {}
 		//  ingress:
 		//  - {}
-		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(policy.Key{
-			Identity:         0,
-			DestPort:         0,
-			InvertedPortMask: 0xffff, // this is a wildcard
-			Nexthdr:          0,
-			TrafficDirection: key.TrafficDirection,
-		})
+		derivedFrom, rev, ok = ep.GetRealizedPolicyRuleLabelsForKey(
+			policy.KeyForDirection(key.TrafficDirection()))
 	}
 
 	return derivedFrom, rev, ok

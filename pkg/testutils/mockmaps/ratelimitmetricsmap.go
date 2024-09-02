@@ -4,17 +4,17 @@
 package mockmaps
 
 import (
-	"github.com/cilium/cilium/pkg/maps/ratelimitmetricsmap"
+	"github.com/cilium/cilium/pkg/maps/ratelimitmap"
 )
 
 // RatelimitMetricsRecord designates a map entry (key + value).
 // This type is used for mock maps.
 type RatelimitMetricsRecord struct {
-	Key   ratelimitmetricsmap.Key
-	Value ratelimitmetricsmap.Value
+	Key   ratelimitmap.MetricsKey
+	Value ratelimitmap.MetricsValue
 }
 
-// RatelimitMetricsMockMap implements the RatelimitMetricsMap interface and can be used for unit tests.
+// RatelimitMetricsMockMap implements the ratelimitmap interface and can be used for unit tests.
 type RatelimitMetricsMockMap struct {
 	Entries []RatelimitMetricsRecord
 }
@@ -27,7 +27,7 @@ func NewRatelimitMetricsMockMap(records []MetricsRecord) *MetricsMockMap {
 }
 
 // DumpWithCallback runs the callback on each entry of the mock map.
-func (m *RatelimitMetricsMockMap) DumpWithCallback(cb ratelimitmetricsmap.DumpCallback) error {
+func (m *RatelimitMetricsMockMap) DumpWithCallback(cb ratelimitmap.DumpCallback) error {
 	if cb == nil {
 		return nil
 	}

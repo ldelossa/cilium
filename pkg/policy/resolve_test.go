@@ -18,7 +18,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/policy/trafficdirection"
+	"github.com/cilium/cilium/pkg/u8proto"
 )
 
 var (
@@ -186,11 +186,11 @@ func (d DummyOwner) HasBPFPolicyMap() bool {
 	return true
 }
 
-func (d DummyOwner) GetNamedPort(ingress bool, name string, proto uint8) uint16 {
+func (d DummyOwner) GetNamedPort(ingress bool, name string, proto u8proto.U8proto) uint16 {
 	return 80
 }
 
-func (d DummyOwner) GetNamedPortLocked(ingress bool, name string, proto uint8) uint16 {
+func (d DummyOwner) GetNamedPortLocked(ingress bool, name string, proto u8proto.U8proto) uint16 {
 	return 80
 }
 
@@ -547,9 +547,9 @@ func TestMapStateWithIngressWildcard(t *testing.T) {
 			EgressPolicyEnabled:  false,
 		},
 		PolicyOwner: DummyOwner{},
-		policyMapState: newMapState().withState(map[Key]MapStateEntry{
-			{TrafficDirection: trafficdirection.Egress.Uint8(), InvertedPortMask: 0xffff}: allowEgressMapStateEntry,
-			{DestPort: 80, Nexthdr: 6}: rule1MapStateEntry,
+		policyMapState: newMapState().withState(MapStateMap{
+			EgressKey():                  allowEgressMapStateEntry,
+			IngressKey().WithTCPPort(80): rule1MapStateEntry,
 		}, td.sc),
 	}
 
@@ -716,13 +716,13 @@ func TestMapStateWithIngress(t *testing.T) {
 			EgressPolicyEnabled:  false,
 		},
 		PolicyOwner: DummyOwner{},
-		policyMapState: newMapState().withState(map[Key]MapStateEntry{
-			{TrafficDirection: trafficdirection.Egress.Uint8(), InvertedPortMask: 0xffff /*This is a wildcard*/}: allowEgressMapStateEntry,
-			{Identity: uint32(identity.ReservedIdentityWorld), DestPort: 80, Nexthdr: 6}:                         rule1MapStateEntry.WithOwners(cachedSelectorWorld),
-			{Identity: uint32(identity.ReservedIdentityWorldIPv4), DestPort: 80, Nexthdr: 6}:                     rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV4),
-			{Identity: uint32(identity.ReservedIdentityWorldIPv6), DestPort: 80, Nexthdr: 6}:                     rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV6),
-			{Identity: 192, DestPort: 80, Nexthdr: 6}:                                                            rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
-			{Identity: 194, DestPort: 80, Nexthdr: 6}:                                                            rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
+		policyMapState: newMapState().withState(MapStateMap{
+			EgressKey(): allowEgressMapStateEntry,
+			IngressKey().WithIdentity(identity.ReservedIdentityWorld).WithTCPPort(80):     rule1MapStateEntry.WithOwners(cachedSelectorWorld),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv4).WithTCPPort(80): rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV4),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv6).WithTCPPort(80): rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV6),
+			IngressKey().WithIdentity(192).WithTCPPort(80):                                rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
+			IngressKey().WithIdentity(194).WithTCPPort(80):                                rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
 		}, td.sc),
 	}
 
@@ -738,11 +738,11 @@ func TestMapStateWithIngress(t *testing.T) {
 	require.Nil(t, policy.policyMapChanges.changes)
 
 	require.Equal(t, Keys{
-		{Identity: 192, DestPort: 80, Nexthdr: 6}: {},
-		{Identity: 194, DestPort: 80, Nexthdr: 6}: {},
+		ingressKey(192, 6, 80, 0): {},
+		ingressKey(194, 6, 80, 0): {},
 	}, adds)
 	require.Equal(t, Keys{
-		{Identity: 193, DestPort: 80, Nexthdr: 6}: {},
+		ingressKey(193, 6, 80, 0): {},
 	}, deletes)
 
 	// Assign an empty mutex so that checker.Equal does not complain about the
@@ -763,15 +763,10 @@ func TestMapStateWithIngress(t *testing.T) {
 //
 // Returning true for either return value indicates all traffic is allowed.
 func (p *EndpointPolicy) allowsIdentity(identity identity.NumericIdentity) (ingress, egress bool) {
-	key := Key{
-		Identity:         uint32(identity),
-		InvertedPortMask: 0xffff, // wildcard port
-	}
-
 	if !p.IngressPolicyEnabled {
 		ingress = true
 	} else {
-		key.TrafficDirection = trafficdirection.Ingress.Uint8()
+		key := IngressKey().WithIdentity(identity)
 		if v, exists := p.policyMapState.Get(key); exists && !v.IsDeny {
 			ingress = true
 		}
@@ -780,7 +775,7 @@ func (p *EndpointPolicy) allowsIdentity(identity identity.NumericIdentity) (ingr
 	if !p.EgressPolicyEnabled {
 		egress = true
 	} else {
-		key.TrafficDirection = trafficdirection.Egress.Uint8()
+		key := EgressKey().WithIdentity(identity)
 		if v, exists := p.policyMapState.Get(key); exists && !v.IsDeny {
 			egress = true
 		}
@@ -843,14 +838,8 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					IngressPolicyEnabled: true,
 					EgressPolicyEnabled:  true,
 				},
-				PolicyMapState: newMapState().withState(map[Key]MapStateEntry{
-					{
-						Identity:         0,
-						DestPort:         0,
-						InvertedPortMask: 0xffff, // This is a wildcard.
-						Nexthdr:          0,
-						TrafficDirection: trafficdirection.Ingress.Uint8(),
-					}: {},
+				PolicyMapState: newMapState().withState(MapStateMap{
+					IngressKey(): {},
 				}, td.sc),
 			},
 			args: args{
@@ -866,14 +855,8 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					IngressPolicyEnabled: true,
 					EgressPolicyEnabled:  true,
 				},
-				PolicyMapState: newMapState().withState(map[Key]MapStateEntry{
-					{
-						Identity:         0,
-						DestPort:         0,
-						InvertedPortMask: 0xffff, // This is a wildcard.
-						Nexthdr:          0,
-						TrafficDirection: trafficdirection.Egress.Uint8(),
-					}: {},
+				PolicyMapState: newMapState().withState(MapStateMap{
+					EgressKey(): {},
 				}, td.sc),
 			},
 			args: args{
@@ -889,14 +872,8 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					IngressPolicyEnabled: true,
 					EgressPolicyEnabled:  true,
 				},
-				PolicyMapState: newMapState().withState(map[Key]MapStateEntry{
-					{
-						Identity:         0,
-						DestPort:         0,
-						InvertedPortMask: 0xffff, // This is a wildcard.
-						Nexthdr:          0,
-						TrafficDirection: trafficdirection.Ingress.Uint8(),
-					}: {IsDeny: true},
+				PolicyMapState: newMapState().withState(MapStateMap{
+					IngressKey(): {IsDeny: true},
 				}, td.sc),
 			},
 			args: args{
@@ -912,14 +889,8 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					IngressPolicyEnabled: false,
 					EgressPolicyEnabled:  true,
 				},
-				PolicyMapState: newMapState().withState(map[Key]MapStateEntry{
-					{
-						Identity:         0,
-						DestPort:         0,
-						InvertedPortMask: 0xffff, // This is a wildcard.
-						Nexthdr:          0,
-						TrafficDirection: trafficdirection.Ingress.Uint8(),
-					}: {IsDeny: true},
+				PolicyMapState: newMapState().withState(MapStateMap{
+					IngressKey(): {IsDeny: true},
 				}, td.sc),
 			},
 			args: args{
@@ -935,14 +906,8 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					IngressPolicyEnabled: true,
 					EgressPolicyEnabled:  true,
 				},
-				PolicyMapState: newMapState().withState(map[Key]MapStateEntry{
-					{
-						Identity:         0,
-						DestPort:         0,
-						InvertedPortMask: 0xffff, // This a wildcard.
-						Nexthdr:          0,
-						TrafficDirection: trafficdirection.Egress.Uint8(),
-					}: {IsDeny: true},
+				PolicyMapState: newMapState().withState(MapStateMap{
+					EgressKey(): {IsDeny: true},
 				}, td.sc),
 			},
 			args: args{
@@ -958,14 +923,8 @@ func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 					IngressPolicyEnabled: true,
 					EgressPolicyEnabled:  false,
 				},
-				PolicyMapState: newMapState().withState(map[Key]MapStateEntry{
-					{
-						Identity:         0,
-						DestPort:         0,
-						InvertedPortMask: 0xffff, // This is a wildcard.
-						Nexthdr:          0,
-						TrafficDirection: trafficdirection.Egress.Uint8(),
-					}: {IsDeny: true},
+				PolicyMapState: newMapState().withState(MapStateMap{
+					EgressKey(): {IsDeny: true},
 				}, td.sc),
 			},
 			args: args{
