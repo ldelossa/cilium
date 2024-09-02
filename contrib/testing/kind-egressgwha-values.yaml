@@ -1,7 +1,6 @@
 bpf:
   masquerade: true
 kubeProxyReplacement: true
-l7Proxy: false
 enterprise:
   egressGatewayHA:
     enabled: true
