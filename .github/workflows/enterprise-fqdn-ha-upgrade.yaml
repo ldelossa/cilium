@@ -87,7 +87,11 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ inputs.context-ref || github.sha }}
-          persist-credentials: false
+          # We keep the credentials here, to make sure we're able to run
+          # "git fetch" in print-downgrade-version.sh in a few steps below.
+          # This remains faster than downloading the full project history to
+          # make tags available to print-downgrade-version.sh.
+          persist-credentials: true
 
       - name: Set Environment Variables
         uses: ./.github/actions/set-env-variables
