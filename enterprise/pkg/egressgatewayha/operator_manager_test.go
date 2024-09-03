@@ -1762,7 +1762,7 @@ func TestEgressCIDRAllocation(t *testing.T) {
 	})
 
 	k.assertIegpGatewayStatus(t, gatewayStatus{
-		activeGatewayIPs:  []string{node4IP, node2IP, node1IP, node3IP},
+		activeGatewayIPs:  []string{node1IP, node2IP, node3IP, node4IP},
 		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
 		egressIPByGatewayIP: map[string]string{
 			node1IP: "10.100.255.48",
@@ -1779,9 +1779,11 @@ func TestEgressCIDRAllocation(t *testing.T) {
 	})
 
 	// Adding one node should lead to only 4 IPs allocated, since the pool is a "/30" CIDR
+	// Moreover, the node5 IP should not be present among the active gateways, since the egress
+	// IP allocation failed for that node.
 	k.addNode(t, node5Name, node5IP, nodeGroup1Labels)
 	k.assertIegpGatewayStatus(t, gatewayStatus{
-		activeGatewayIPs:  []string{node4IP, node2IP, node1IP, node3IP, node5IP},
+		activeGatewayIPs:  []string{node1IP, node2IP, node3IP, node4IP},
 		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP, node5IP},
 		egressIPByGatewayIP: map[string]string{
 			node1IP: "10.100.255.48",
@@ -1825,7 +1827,7 @@ func TestEgressCIDRAllocation(t *testing.T) {
 	k.makeNodesHealthy("k8s2")
 	k.makeNodesHealthy("k8s3")
 	k.assertIegpGatewayStatus(t, gatewayStatus{
-		activeGatewayIPs:  []string{node1IP, node5IP, node3IP, node2IP},
+		activeGatewayIPs:  []string{node1IP, node2IP, node3IP, node5IP},
 		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node5IP},
 		egressIPByGatewayIP: map[string]string{
 			node1IP: "10.100.255.48",
@@ -1862,7 +1864,7 @@ func TestEgressCIDRAllocation(t *testing.T) {
 	policy.iface = "" // clear the interface, since having both iface and egressIP is not supported
 	addPolicy(t, k.fakeSet, k.policies, policy)
 	k.assertIegpGatewayStatus(t, gatewayStatus{
-		activeGatewayIPs:  []string{node5IP},
+		activeGatewayIPs:  []string{},
 		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node5IP},
 	})
 	k.assertIegpStatusConditions(t, []metav1.Condition{
@@ -1912,7 +1914,7 @@ func TestEgressCIDRAllocationWithConflicts(t *testing.T) {
 
 	// since policy2 is requesting allocations from a conflicting CIDR, it won't get any IP
 	k.assertIegpGatewayStatusFromPolicy(t, policy1.name, gatewayStatus{
-		activeGatewayIPs:  []string{node2IP, node1IP},
+		activeGatewayIPs:  []string{node1IP, node2IP},
 		healthyGatewayIPs: []string{node1IP, node2IP},
 		egressIPByGatewayIP: map[string]string{
 			node1IP: "10.100.255.48",
@@ -1926,7 +1928,7 @@ func TestEgressCIDRAllocationWithConflicts(t *testing.T) {
 		},
 	})
 	k.assertIegpGatewayStatusFromPolicy(t, policy2.name, gatewayStatus{
-		activeGatewayIPs:    []string{node4IP, node3IP},
+		activeGatewayIPs:    []string{},
 		healthyGatewayIPs:   []string{node3IP, node4IP},
 		egressIPByGatewayIP: map[string]string{},
 	})

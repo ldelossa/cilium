@@ -716,6 +716,28 @@ func (config *PolicyConfig) updateGroupStatuses(operatorManager *OperatorManager
 	var conditions []meta_v1.Condition
 	if len(config.egressCIDRs) > 0 {
 		groupStatuses, conditions = config.allocateEgressIPs(operatorManager, groupStatuses)
+
+		// when using egw IPAM, a gateway should not be considered active if a valid egress IP
+		// cannot be assigned. Therefore, we remove each gateway IP without an egress IP from
+		// both the list of active gateways and the map of active gateways by affinity zones
+		for i := range groupStatuses {
+			updActiveGws := maps.Keys(groupStatuses[i].egressIPByGatewayIP)
+			slices.SortFunc(updActiveGws, func(a, b netip.Addr) int {
+				return a.Compare(b)
+			})
+			groupStatuses[i].activeGatewayIPs = updActiveGws
+
+			updGwsByAz := make(map[string][]netip.Addr, len(groupStatuses[i].activeGatewayIPsByAZ))
+			for az, gwsByAZ := range groupStatuses[i].activeGatewayIPsByAZ {
+				updGwsByAz[az] = []netip.Addr{}
+				for _, gw := range gwsByAZ {
+					if slices.Contains(groupStatuses[i].activeGatewayIPs, gw) {
+						updGwsByAz[az] = append(updGwsByAz[az], gw)
+					}
+				}
+			}
+			groupStatuses[i].activeGatewayIPsByAZ = updGwsByAz
+		}
 	}
 
 	// After building the list of active and healthy gateway IPs, update the
