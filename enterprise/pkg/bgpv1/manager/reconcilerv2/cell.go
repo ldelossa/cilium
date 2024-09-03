@@ -39,7 +39,7 @@ var ConfigReconcilers = cell.Group(
 		NewEgressGatewayIPsReconciler,
 		NewBFDStateReconciler,
 		NewSRv6LocatorPoolReconciler,
-		NewImportRoutePolicyReconciler,
+		NewVPNRoutePolicyReconciler,
 		NewImportedVPNRouteReconciler,
 		NewPodCIDRVRFReconciler,
 		NewServiceVRFReconciler,

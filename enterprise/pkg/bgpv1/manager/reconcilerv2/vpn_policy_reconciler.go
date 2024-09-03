@@ -28,13 +28,13 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/resource"
 )
 
-type ImportRoutePolicyReconcilerOut struct {
+type VPNRoutePolicyReconcilerOut struct {
 	cell.Out
 
 	Reconciler reconcilerv2.ConfigReconciler `group:"bgp-config-reconciler-v2"`
 }
 
-type ImportRoutePolicyReconcilerIn struct {
+type VPNRoutePolicyReconcilerIn struct {
 	cell.In
 
 	Logger          logrus.FieldLogger
@@ -43,28 +43,29 @@ type ImportRoutePolicyReconcilerIn struct {
 	Group           job.Group
 }
 
-// ImportRoutePolicyReconciler is a reconciler that configures import route policies.
-// This is per peer policy to allow routes from adj-in to loc-rib.
-type ImportRoutePolicyReconciler struct {
+// VPNRoutePolicyReconciler is a reconciler that configures VPNv4 related route policies:
+//   - import route policy per peer allowing VPNv4 routes from adj-in to loc-rib.
+//   - export route policy per peer allowing VPNv4 routes from loc-rib to adj-out.
+type VPNRoutePolicyReconciler struct {
 	initialized     atomic.Bool
 	Logger          logrus.FieldLogger
 	PeerConfigStore resource.Store[*v2alpha1.CiliumBGPPeerConfig]
 }
 
-type ImportRoutePolicyMetadata struct {
-	ImportPolicies reconcilerv2.RoutePolicyMap
+type VPNRoutePolicyMetadata struct {
+	VPNPolicies reconcilerv2.RoutePolicyMap
 }
 
-func NewImportRoutePolicyReconciler(in ImportRoutePolicyReconcilerIn) ImportRoutePolicyReconcilerOut {
+func NewVPNRoutePolicyReconciler(in VPNRoutePolicyReconcilerIn) VPNRoutePolicyReconcilerOut {
 	if !in.Config.Enabled {
-		return ImportRoutePolicyReconcilerOut{}
+		return VPNRoutePolicyReconcilerOut{}
 	}
 
-	rp := &ImportRoutePolicyReconciler{
-		Logger: in.Logger.WithField(types.ReconcilerLogField, "import-route-policy"),
+	rp := &VPNRoutePolicyReconciler{
+		Logger: in.Logger.WithField(types.ReconcilerLogField, "vpn-route-policy"),
 	}
 
-	in.Group.Add(job.OneShot("init-import-route-policy", func(ctx context.Context, health cell.Health) error {
+	in.Group.Add(job.OneShot("init-vpn-route-policy", func(ctx context.Context, health cell.Health) error {
 		pcs, err := in.PeerConfigStore.Store(ctx)
 		if err != nil {
 			return err
@@ -75,35 +76,35 @@ func NewImportRoutePolicyReconciler(in ImportRoutePolicyReconcilerIn) ImportRout
 		return nil
 	}))
 
-	return ImportRoutePolicyReconcilerOut{
+	return VPNRoutePolicyReconcilerOut{
 		Reconciler: rp,
 	}
 }
 
-func (r *ImportRoutePolicyReconciler) Name() string {
-	return "import-route-policy"
+func (r *VPNRoutePolicyReconciler) Name() string {
+	return "vpn-route-policy"
 }
 
-func (r *ImportRoutePolicyReconciler) Priority() int {
+func (r *VPNRoutePolicyReconciler) Priority() int {
 	// This reconciler should run just before the OSS Neighbor reconciler,
-	// so gobgp will already have desired import policies in place.
+	// so gobgp will already have desired VPN policies in place.
 	return 59
 }
 
-func (r *ImportRoutePolicyReconciler) Init(_ *instance.BGPInstance) error {
+func (r *VPNRoutePolicyReconciler) Init(_ *instance.BGPInstance) error {
 	return nil
 }
 
-func (r *ImportRoutePolicyReconciler) Cleanup(_ *instance.BGPInstance) {}
+func (r *VPNRoutePolicyReconciler) Cleanup(_ *instance.BGPInstance) {}
 
-func (r *ImportRoutePolicyReconciler) Reconcile(ctx context.Context, p reconcilerv2.ReconcileParams) error {
+func (r *VPNRoutePolicyReconciler) Reconcile(ctx context.Context, p reconcilerv2.ReconcileParams) error {
 	if !r.initialized.Load() {
-		r.Logger.Debug("Not initialized yet, skipping import route policy reconciliation")
+		r.Logger.Debug("Not initialized yet, skipping VPN route policy reconciliation")
 		return nil
 	}
 
 	if p.DesiredConfig == nil {
-		return fmt.Errorf("BUG: passed nil desired config to import route policy reconciler")
+		return fmt.Errorf("BUG: passed nil desired config to VPN route policy reconciler")
 	}
 
 	desiredPolicies, err := r.getDesiredRoutePolicies(p.DesiredConfig)
@@ -111,7 +112,7 @@ func (r *ImportRoutePolicyReconciler) Reconcile(ctx context.Context, p reconcile
 		return err
 	}
 
-	updatedImportPolicies, err := reconcilerv2.ReconcileRoutePolicies(&reconcilerv2.ReconcileRoutePoliciesParams{
+	updatedPolicies, err := reconcilerv2.ReconcileRoutePolicies(&reconcilerv2.ReconcileRoutePoliciesParams{
 		Logger: r.Logger.WithFields(
 			logrus.Fields{
 				types.InstanceLogField: p.DesiredConfig.Name,
@@ -120,18 +121,18 @@ func (r *ImportRoutePolicyReconciler) Reconcile(ctx context.Context, p reconcile
 		Ctx:             ctx,
 		Router:          p.BGPInstance.Router,
 		DesiredPolicies: desiredPolicies,
-		CurrentPolicies: r.GetMetadata(p.BGPInstance).ImportPolicies,
+		CurrentPolicies: r.GetMetadata(p.BGPInstance).VPNPolicies,
 	})
 
-	r.SetMetadata(p.BGPInstance, ImportRoutePolicyMetadata{
-		ImportPolicies: updatedImportPolicies,
+	r.SetMetadata(p.BGPInstance, VPNRoutePolicyMetadata{
+		VPNPolicies: updatedPolicies,
 	})
 
 	return err
 }
 
-func (r *ImportRoutePolicyReconciler) getDesiredRoutePolicies(desiredConfig *v2alpha1.CiliumBGPNodeInstance) (reconcilerv2.RoutePolicyMap, error) {
-	desiredImportPolicies := make(reconcilerv2.RoutePolicyMap)
+func (r *VPNRoutePolicyReconciler) getDesiredRoutePolicies(desiredConfig *v2alpha1.CiliumBGPNodeInstance) (reconcilerv2.RoutePolicyMap, error) {
+	desiredPolicies := make(reconcilerv2.RoutePolicyMap)
 
 	for _, peer := range desiredConfig.Peers {
 		// get peer address
@@ -167,25 +168,36 @@ func (r *ImportRoutePolicyReconciler) getDesiredRoutePolicies(desiredConfig *v2a
 		}
 
 		if vpnPeer {
-			policyName := fmt.Sprintf("%s-%s", r.Name(), peer.Name) // each policy is unique per peer
-			desiredImportPolicies[policyName] = CreateImportAcceptRoutePolicy(policyName, peerAddr)
+			// import route policy allowing VPNv4 routes from adj-in to loc-rib
+			importPolicyName := fmt.Sprintf("%s-import-%s", r.Name(), peer.Name)
+			desiredPolicies[importPolicyName] = acceptRoutePolicy(types.RoutePolicyTypeImport, importPolicyName, peerAddr)
+
+			// export route policy allowing all VPNv4 routes from  loc-rib to adj-out
+			exportPolicyName := fmt.Sprintf("%s-export-%s", r.Name(), peer.Name)
+			desiredPolicies[exportPolicyName] = acceptRoutePolicy(types.RoutePolicyTypeExport, exportPolicyName, peerAddr)
 		}
 	}
-	return desiredImportPolicies, nil
+
+	return desiredPolicies, nil
 }
 
-// TODO: Create route policy which checks AFI/SAFI of the peer.
-func CreateImportAcceptRoutePolicy(name string, peerAddr netip.Addr) *types.RoutePolicy {
+func acceptRoutePolicy(policyType types.RoutePolicyType, name string, peerAddr netip.Addr) *types.RoutePolicy {
 	// create /32 or /128 prefix from peer address
 	peerPrefix := netip.PrefixFrom(peerAddr, peerAddr.BitLen())
 
 	return &types.RoutePolicy{
 		Name: name,
-		Type: types.RoutePolicyTypeImport,
+		Type: policyType,
 		Statements: []*types.RoutePolicyStatement{
 			{
 				Conditions: types.RoutePolicyConditions{
 					MatchNeighbors: []string{peerPrefix.String()},
+					MatchFamilies: []types.Family{
+						{
+							Afi:  types.AfiIPv4,
+							Safi: types.SafiMplsVpn,
+						},
+					},
 				},
 				Actions: types.RoutePolicyActions{
 					RouteAction: types.RoutePolicyActionAccept,
@@ -195,15 +207,15 @@ func CreateImportAcceptRoutePolicy(name string, peerAddr netip.Addr) *types.Rout
 	}
 }
 
-func (r *ImportRoutePolicyReconciler) GetMetadata(i *instance.BGPInstance) ImportRoutePolicyMetadata {
+func (r *VPNRoutePolicyReconciler) GetMetadata(i *instance.BGPInstance) VPNRoutePolicyMetadata {
 	if _, found := i.Metadata[r.Name()]; !found {
-		i.Metadata[r.Name()] = ImportRoutePolicyMetadata{
-			ImportPolicies: make(reconcilerv2.RoutePolicyMap),
+		i.Metadata[r.Name()] = VPNRoutePolicyMetadata{
+			VPNPolicies: make(reconcilerv2.RoutePolicyMap),
 		}
 	}
-	return i.Metadata[r.Name()].(ImportRoutePolicyMetadata)
+	return i.Metadata[r.Name()].(VPNRoutePolicyMetadata)
 }
 
-func (r *ImportRoutePolicyReconciler) SetMetadata(i *instance.BGPInstance, m ImportRoutePolicyMetadata) {
+func (r *VPNRoutePolicyReconciler) SetMetadata(i *instance.BGPInstance, m VPNRoutePolicyMetadata) {
 	i.Metadata[r.Name()] = m
 }

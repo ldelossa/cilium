@@ -58,14 +58,20 @@ var (
 		},
 	}
 
-	expectedPeerRoutePolicy = func(name, peerAddr string) *types.RoutePolicy {
+	expectedPeerRoutePolicy = func(policyType types.RoutePolicyType, name, peerAddr string) *types.RoutePolicy {
 		return &types.RoutePolicy{
 			Name: name,
-			Type: types.RoutePolicyTypeImport,
+			Type: policyType,
 			Statements: []*types.RoutePolicyStatement{
 				{
 					Conditions: types.RoutePolicyConditions{
 						MatchNeighbors: []string{peerAddr},
+						MatchFamilies: []types.Family{
+							{
+								Afi:  types.AfiIPv4,
+								Safi: types.SafiMplsVpn,
+							},
+						},
 					},
 					Actions: types.RoutePolicyActions{
 						RouteAction: types.RoutePolicyActionAccept,
@@ -74,24 +80,36 @@ var (
 			},
 		}
 	}
+
+	importPeerPolicy = expectedPeerRoutePolicy(
+		types.RoutePolicyTypeImport,
+		"vpn-route-policy-import-red-peer-65001",
+		"192.168.0.10/32",
+	)
+
+	exportPeerPolicy = expectedPeerRoutePolicy(
+		types.RoutePolicyTypeExport,
+		"vpn-route-policy-export-red-peer-65001",
+		"192.168.0.10/32",
+	)
 )
 
-func TestImportAllowRoutePolicy(t *testing.T) {
-	logger = logrus.WithField("unit_test", "reconcilerv2_import_route_policy_test")
+func TestVPNRoutePolicy(t *testing.T) {
+	logger = logrus.WithField("unit_test", "reconcilerv2_vpn_route_policy_test")
 
 	logrus.SetLevel(logrus.DebugLevel)
 
 	tests := []struct {
 		name                string
-		preImportRPs        reconcilerv2.RoutePolicyMap
+		preRPs              reconcilerv2.RoutePolicyMap
 		peerConfigs         []*v2alpha1.CiliumBGPPeerConfig
 		testBGPNodeInstance *v2alpha1.CiliumBGPNodeInstance
-		expectedImportRPs   reconcilerv2.RoutePolicyMap
+		expectedRPs         reconcilerv2.RoutePolicyMap
 	}{
 		{
-			name:         "ipv4-unicast peer, no import policy",
-			preImportRPs: nil,
-			peerConfigs:  []*v2alpha1.CiliumBGPPeerConfig{peerConfigIPv4Unicast},
+			name:        "ipv4-unicast peer, no policy",
+			preRPs:      nil,
+			peerConfigs: []*v2alpha1.CiliumBGPPeerConfig{peerConfigIPv4Unicast},
 			testBGPNodeInstance: &v2alpha1.CiliumBGPNodeInstance{
 				Name:     "bgp-65001",
 				LocalASN: ptr.To[int64](65001),
@@ -105,12 +123,12 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedImportRPs: make(reconcilerv2.RoutePolicyMap),
+			expectedRPs: make(reconcilerv2.RoutePolicyMap),
 		},
 		{
-			name:         "ipv4-vpn peer, import policy applied",
-			preImportRPs: nil,
-			peerConfigs:  []*v2alpha1.CiliumBGPPeerConfig{peerConfigIPv4VPN},
+			name:        "ipv4-vpn peer, policies applied",
+			preRPs:      nil,
+			peerConfigs: []*v2alpha1.CiliumBGPPeerConfig{peerConfigIPv4VPN},
 			testBGPNodeInstance: &v2alpha1.CiliumBGPNodeInstance{
 				Name:     "bgp-65001",
 				LocalASN: ptr.To[int64](65001),
@@ -124,18 +142,16 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedImportRPs: reconcilerv2.RoutePolicyMap{
-				"import-route-policy-red-peer-65001": expectedPeerRoutePolicy(
-					"import-route-policy-red-peer-65001",
-					"192.168.0.10/32"),
+			expectedRPs: reconcilerv2.RoutePolicyMap{
+				importPeerPolicy.Name: importPeerPolicy,
+				exportPeerPolicy.Name: exportPeerPolicy,
 			},
 		},
 		{
-			name: "ipv4-unicast peer, cleanup old import policy",
-			preImportRPs: reconcilerv2.RoutePolicyMap{
-				"import-route-policy-red-peer-65001": expectedPeerRoutePolicy(
-					"import-route-policy-red-peer-65001",
-					"192.168.0.10/32"),
+			name: "ipv4-unicast peer, cleanup old policies",
+			preRPs: reconcilerv2.RoutePolicyMap{
+				importPeerPolicy.Name: importPeerPolicy,
+				exportPeerPolicy.Name: exportPeerPolicy,
 			},
 			peerConfigs: []*v2alpha1.CiliumBGPPeerConfig{peerConfigIPv4Unicast},
 			testBGPNodeInstance: &v2alpha1.CiliumBGPNodeInstance{
@@ -151,14 +167,13 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedImportRPs: make(reconcilerv2.RoutePolicyMap),
+			expectedRPs: make(reconcilerv2.RoutePolicyMap),
 		},
 		{
-			name: "no peer found, cleanup old import policy",
-			preImportRPs: reconcilerv2.RoutePolicyMap{
-				"import-route-policy-red-peer-65001": expectedPeerRoutePolicy(
-					"import-route-policy-red-peer-65001",
-					"192.168.0.10/32"),
+			name: "no peer found, cleanup old policies",
+			preRPs: reconcilerv2.RoutePolicyMap{
+				importPeerPolicy.Name: importPeerPolicy,
+				exportPeerPolicy.Name: exportPeerPolicy,
 			},
 			peerConfigs: []*v2alpha1.CiliumBGPPeerConfig{peerConfigIPv4Unicast},
 			testBGPNodeInstance: &v2alpha1.CiliumBGPNodeInstance{
@@ -174,7 +189,7 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedImportRPs: make(reconcilerv2.RoutePolicyMap),
+			expectedRPs: make(reconcilerv2.RoutePolicyMap),
 		},
 	}
 
@@ -184,7 +199,7 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 
 			testOSSBGPInstance := instance.NewFakeBGPInstance()
 
-			reconciler := &ImportRoutePolicyReconciler{
+			reconciler := &VPNRoutePolicyReconciler{
 				Logger:          logger,
 				PeerConfigStore: newMockResourceStore[*v2alpha1.CiliumBGPPeerConfig](),
 			}
@@ -196,8 +211,8 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 			reconciler.initialized.Store(true)
 
 			// set preconfigured route policies
-			reconciler.SetMetadata(testOSSBGPInstance, ImportRoutePolicyMetadata{
-				ImportPolicies: tt.preImportRPs,
+			reconciler.SetMetadata(testOSSBGPInstance, VPNRoutePolicyMetadata{
+				VPNPolicies: tt.preRPs,
 			})
 
 			// reconcile peer configs
@@ -209,7 +224,7 @@ func TestImportAllowRoutePolicy(t *testing.T) {
 				req.NoError(err)
 			}
 
-			req.Equal(tt.expectedImportRPs, reconciler.GetMetadata(testOSSBGPInstance).ImportPolicies)
+			req.Equal(tt.expectedRPs, reconciler.GetMetadata(testOSSBGPInstance).VPNPolicies)
 		})
 	}
 }
