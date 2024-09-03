@@ -1971,3 +1971,49 @@ func TestEgressCIDRAllocationWithoutCIDRs(t *testing.T) {
 	})
 	k.assertIegpStatusConditions(t, []metav1.Condition{})
 }
+
+func TestEgressCIDRAllocationWithAZAffinity(t *testing.T) {
+	k := setupEgressGatewayOperatorTestSuite(t)
+
+	k.addNode(t, node1Name, node1IP, nodeGroup1LabelsAZ1)
+	k.addNode(t, node2Name, node2IP, nodeGroup1LabelsAZ1)
+	k.addNode(t, node3Name, node3IP, nodeGroup1LabelsAZ2)
+	k.addNode(t, node4Name, node4IP, nodeGroup1LabelsAZ2)
+
+	// Create a new HA policy that selects k8s{1,2,3,4} nodes with a /31 egress CIDR
+	k.addPolicy(t, &policyParams{
+		name:            "policy-1",
+		uid:             policy1UID,
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+		egressCIDRs:     []string{"10.100.255.48/31"},
+		azAffinity:      azAffinityLocalOnly,
+	})
+
+	// only node1 and node2 are listed in activeGatewayIPs and activeGatewayIPsByAZ
+	// since they are the only two gateways with an assigned egress IP
+	k.assertIegpGatewayStatus(t, gatewayStatus{
+		activeGatewayIPs: []string{node1IP, node2IP},
+		activeGatewayIPsByAZ: map[string][]string{
+			"az-1": {node1IP, node2IP},
+			"az-2": {},
+		},
+		egressIPByGatewayIP: map[string]string{
+			node1IP: "10.100.255.48",
+			node2IP: "10.100.255.49",
+		},
+		healthyGatewayIPs: []string{node1IP, node2IP, node3IP, node4IP},
+	})
+	k.assertIegpStatusConditions(t, []metav1.Condition{
+		{
+			Type:   egwIPAMRequestSatisfied,
+			Status: metav1.ConditionFalse,
+		},
+		{
+			Type:   egwIPAMPoolExhausted,
+			Status: metav1.ConditionUnknown,
+		},
+	})
+}
