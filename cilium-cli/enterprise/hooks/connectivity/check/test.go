@@ -23,14 +23,14 @@ import (
 
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium/cilium-cli/defaults"
+	enterpriseTests "github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/tests"
+	enterpriseFeatures "github.com/cilium/cilium/cilium-cli/enterprise/hooks/utils/features"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	isovalentv1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/scheme"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
-	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
 //go:embed manifests/egress-gateway-policy.yaml

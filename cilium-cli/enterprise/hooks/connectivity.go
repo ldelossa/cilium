@@ -18,15 +18,13 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/enterprise/defaults"
+	enterpriseCheck "github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/deploy"
+	enterpriseTests "github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/tests"
+	enterpriseFeatures "github.com/cilium/cilium/cilium-cli/enterprise/hooks/utils/features"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/versioncheck"
-
-	"github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
-	enterpriseCheck "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/check"
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
 const (
@@ -92,9 +90,9 @@ func (ec *EnterpriseConnectivity) addConnectivityTests(cts ...*check.Connectivit
 }
 
 func (ec *EnterpriseConnectivity) addConnectivityTestFlags(flags *pflag.FlagSet) {
-	flags.StringSliceVar(&tests.Params.EgressGateway.CIDRs, "egw-ipam-cidrs", defaults.EgressGatewayCIDRsDefault, "CIDRs to use to allocate Egress IPs in egress gateway ha ipam connectivity tests")
-	flags.UintVar(&tests.Params.EgressGateway.Retry, "egw-ipam-retry", defaults.EgressGatewayConnectRetryDefault, "Number of retries on connection failure to external targets for egress gateway ha IPAM tests")
-	flags.DurationVar(&tests.Params.EgressGateway.RetryDelay, "egw-ipam-retry-delay", defaults.EgressGatewayConnectRetryDelayDefault, "Delay between retries to external targets for egress gateway ha IPAM tests")
+	flags.StringSliceVar(&enterpriseTests.Params.EgressGateway.CIDRs, "egw-ipam-cidrs", defaults.EgressGatewayCIDRsDefault, "CIDRs to use to allocate Egress IPs in egress gateway ha ipam connectivity tests")
+	flags.UintVar(&enterpriseTests.Params.EgressGateway.Retry, "egw-ipam-retry", defaults.EgressGatewayConnectRetryDefault, "Number of retries on connection failure to external targets for egress gateway ha IPAM tests")
+	flags.DurationVar(&enterpriseTests.Params.EgressGateway.RetryDelay, "egw-ipam-retry-delay", defaults.EgressGatewayConnectRetryDelayDefault, "Delay between retries to external targets for egress gateway ha IPAM tests")
 }
 
 func (ec *EnterpriseConnectivity) addHubbleVersionTests(cts ...*check.ConnectivityTest) error {

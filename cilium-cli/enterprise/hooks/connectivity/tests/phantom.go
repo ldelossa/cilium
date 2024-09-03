@@ -15,9 +15,8 @@ import (
 	"fmt"
 
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/deploy"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
-
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
 )
 
 func PodToPhantomService() check.Scenario {

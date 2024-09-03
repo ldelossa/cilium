@@ -17,9 +17,6 @@ import (
 	"regexp"
 	"strings"
 
-	enterpriseSysdump "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/sysdump"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
-
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +24,8 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
+	enterpriseSysdump "github.com/cilium/cilium/cilium-cli/enterprise/hooks/sysdump"
+	enterpriseFeatures "github.com/cilium/cilium/cilium-cli/enterprise/hooks/utils/features"
 	"github.com/cilium/cilium/cilium-cli/sysdump"
 )
 

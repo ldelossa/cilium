@@ -14,14 +14,14 @@ import (
 	"context"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium/cilium-cli/defaults"
+	enterpriseDefaults "github.com/cilium/cilium/cilium-cli/enterprise/defaults"
 	"github.com/cilium/cilium/cilium-cli/sysdump"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/versioncheck"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
 )
 
 const (

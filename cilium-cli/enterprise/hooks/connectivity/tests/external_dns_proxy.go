@@ -15,13 +15,12 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/cilium/cilium/cilium-cli/connectivity/check"
-	"github.com/cilium/cilium/cilium-cli/utils/features"
-
-	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	enterpriseDefaults "github.com/cilium/cilium/cilium-cli/enterprise/defaults"
+	"github.com/cilium/cilium/cilium-cli/utils/features"
 )
 
 // ExternalCiliumDNSProxy returns the scenario for the tests related to the external cilium-dnsproxy component.

@@ -17,12 +17,11 @@ import (
 
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium/cilium-cli/connectivity/sniff"
+	"github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/deploy"
+	enterpriseFeatures "github.com/cilium/cilium/cilium-cli/enterprise/hooks/utils/features"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/node/addressing"
 	wgtypes "github.com/cilium/cilium/pkg/wireguard/types"
-
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
 type mixedRoutingSetupFnType func(context.Context, *check.ConnectivityTest) error

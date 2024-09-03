@@ -19,9 +19,9 @@ import (
 
 	"github.com/cilium/cilium/cilium-cli/api"
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium/cilium-cli/enterprise/hooks/connectivity/tests"
+	enterpriseFeatures "github.com/cilium/cilium/cilium-cli/enterprise/hooks/utils/features"
 	"github.com/cilium/cilium/cilium-cli/sysdump"
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
-	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
 // EnterpriseHooks implements cli.Hooks interface to add connectivity tests and

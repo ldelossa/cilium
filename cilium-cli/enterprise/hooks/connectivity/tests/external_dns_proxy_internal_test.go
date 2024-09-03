@@ -13,12 +13,11 @@ package tests
 import (
 	"testing"
 
-	"github.com/cilium/cilium/cilium-cli/connectivity/check"
-
-	enterpriseDefaults "github.com/isovalent/cilium/enterprise/cilium-cli/defaults"
-
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/cilium/cilium/cilium-cli/connectivity/check"
+	enterpriseDefaults "github.com/cilium/cilium/cilium-cli/enterprise/defaults"
 )
 
 func TestExternalCiliumDNSProxySource(t *testing.T) {

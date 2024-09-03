@@ -15,9 +15,8 @@ import (
 	"os"
 
 	"github.com/cilium/cilium/cilium-cli/cli"
+	"github.com/cilium/cilium/cilium-cli/enterprise/hooks"
 	_ "github.com/cilium/cilium/cilium-cli/logging" // necessary to disable unwanted cfssl log messages
-
-	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks"
 )
 
 func main() {

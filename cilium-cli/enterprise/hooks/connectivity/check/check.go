@@ -11,7 +11,7 @@
 package check
 
 import (
-	enterpriseK8s "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/k8s"
+	enterpriseK8s "github.com/cilium/cilium/cilium-cli/enterprise/hooks/k8s"
 )
 
 type deploymentClients struct {
