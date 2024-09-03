@@ -53,5 +53,5 @@ everything looks ok.
 ## Update Cilium Enterprise Docs
 
 After the release is published, make a PR to update the
-[`CILIUM_CLI_VERSION`](https://github.com/isovalent/cilium-enterprise-docs/blob/main/CILIUM_CLI_VERSION)
+[`CILIUM_CLI_VERSION`](https://github.com/isovalent/cilium-enterprise-docs/blob/main/docs/CILIUM_CLI_VERSION)
 in the [cilium-enterprise-docs repo](https://github.com/isovalent/cilium-enterprise-docs).
