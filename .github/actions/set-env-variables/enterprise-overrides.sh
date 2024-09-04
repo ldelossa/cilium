@@ -19,6 +19,7 @@ echo "QUAY_OSS_CHARTS_ORGANIZATION_DEV=cilium-charts-dev" >> $GITHUB_ENV
 echo "BRANCH_SUFFIX=-ce" >> "$GITHUB_ENV"
 echo "TAG_SUFFIX=-cee.1" >> "$GITHUB_ENV"
 echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true --helm-set=enterprise.egressGatewayHA.enabled=true" >> "$GITHUB_ENV"
+echo "BGP_CONTROL_PLANE_HELM_VALUES=--helm-set=enterprise.bgpControlPlane.enabled=true --helm-set=enterprise.bfd.enabled=true" >> "$GITHUB_ENV"
 
 echo "CILIUM_CLI_RELEASE_REPO=isovalent/cilium-cli-releases" >> "$GITHUB_ENV"
 # renovate: datasource=github-releases depName=isovalent/cilium-cli-releases
