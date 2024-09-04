@@ -678,6 +678,8 @@ Makefile* @cilium/build
 #   Responsible for maintaining DNS Proxy HA
 # - @isovalent/egress-gateway
 #   Responsible for maintaining egress-gateway and egress-gateway-ha
+# - @isovalent/foundations
+#   Responsible for maintaining mindful foundation of Cilium Enterprise codebase.
 # - @isovalent/helm:
 #   Provide input on the way that Helm can be used to configure features. These
 #   owners are a stand-in for the user community to bring a user perspective to
@@ -785,6 +787,7 @@ Makefile* @cilium/build
 /enterprise/pkg/ciliummesh @isovalent/cilium-mesh
 /enterprise/pkg/clustermesh/ @isovalent/clustermesh
 /enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
+/enterprise/pkg/features/ @isovalent/foundations
 /enterprise/pkg/fqdnha/ @isovalent/dns-proxy
 /enterprise/pkg/maps/ciliummeshpolicymap/ @isovalent/cilium-mesh
 /enterprise/pkg/maps/ctnat/ @isovalent/clustermesh
