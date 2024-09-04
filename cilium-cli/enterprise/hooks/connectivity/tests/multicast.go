@@ -13,6 +13,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/netip"
@@ -212,7 +213,7 @@ func getMulticastGroups(ctx context.Context, t *check.Test, entClients []*enterp
 	for _, client := range entClients {
 		groups, err := client.ListIsovalentMulticastGroups(ctx, metav1.ListOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("failed to list multicast groups: %v", err)
+			return nil, fmt.Errorf("failed to list multicast groups: %w", err)
 		}
 
 		for _, groupResource := range groups.Items {
@@ -232,7 +233,7 @@ func getMulticastPods(ctx context.Context, t *check.Test, selector string) (map[
 	for _, client := range ct.Clients() {
 		pods, err := client.ListPods(ctx, ct.Params().TestNamespace, metav1.ListOptions{LabelSelector: selector})
 		if err != nil {
-			return nil, fmt.Errorf("failed to list pods: %v", err)
+			return nil, fmt.Errorf("failed to list pods: %w", err)
 		}
 
 		for _, pod := range pods.Items {
@@ -261,7 +262,7 @@ func startMulticastListeners(ctx, killCtx context.Context, t *check.Test, subscr
 				err := pod.K8sClient.ExecInPodWithWriters(ctx, killCtx, pod.Pod.Namespace, pod.Pod.Name, "", cmd, io.Discard, io.Discard)
 				if err != nil {
 					// if killCtx is canceled, we can return
-					if killCtx.Err() != nil && killCtx.Err() == context.Canceled {
+					if killCtx.Err() != nil && errors.Is(killCtx.Err(), context.Canceled) {
 						return
 					}
 					t.Fatalf("Failed to start socat in pod %s: %v", pod.Name(), err)
@@ -341,7 +342,7 @@ func waitForBpfEntries(ctx context.Context, f func() error) error {
 	for {
 		if err := f(); err != nil {
 			if err := w.Retry(err); err != nil {
-				return fmt.Errorf("Failed to validate BPF map entries: %v", err)
+				return fmt.Errorf("Failed to validate BPF map entries: %w", err)
 			}
 			continue
 		}
@@ -356,13 +357,11 @@ func validateBpfGroupEntries(ctx context.Context, t *check.Test, groupAddrs []st
 	for _, ciliumPod := range ct.CiliumPods() {
 		runningEntries, err := getGroupMapEntries(ctx, t, ciliumPod)
 		if err != nil {
-			return fmt.Errorf("failed to get running multicast BPF map entries: %v", err)
+			return fmt.Errorf("failed to get running multicast BPF map entries: %w", err)
 		}
 
 		expectedEntries := make([]string, len(groupAddrs))
-		for i, group := range groupAddrs {
-			expectedEntries[i] = group
-		}
+		copy(expectedEntries, groupAddrs)
 
 		// check if the expected entries are present
 		runningEntriesSet := sets.New[string]()
@@ -390,12 +389,12 @@ func validateBpfSubscriberEntries(ctx context.Context, t *check.Test, subscriber
 	for _, ciliumPod := range ct.CiliumPods() {
 		runningEntries, err := getSubscriberMapEntries(ctx, t, ciliumPod)
 		if err != nil {
-			return fmt.Errorf("failed to get running multicast BPF map entries: %v", err)
+			return fmt.Errorf("failed to get running multicast BPF map entries: %w", err)
 		}
 
 		expectedEntries, err := expectedEntries(ctx, t, ciliumPod, subscriberPods, groupAddrs)
 		if err != nil {
-			return fmt.Errorf("failed to get expected multicast BPF map entries: %v", err)
+			return fmt.Errorf("failed to get expected multicast BPF map entries: %w", err)
 		}
 
 		// check if the expected entries are present
@@ -445,7 +444,7 @@ func expectedEntries(ctx context.Context, t *check.Test, ciliumPod check.Pod, su
 	for _, group := range groupAddrs {
 		addr, err := netip.ParseAddr(group)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse group address: %v", err)
+			return nil, fmt.Errorf("failed to parse group address: %w", err)
 		}
 
 		expectedEntries = append(expectedEntries, subscriberData{
@@ -458,18 +457,18 @@ func expectedEntries(ctx context.Context, t *check.Test, ciliumPod check.Pod, su
 			isRemote := subPod.NodeName() != ciliumPod.NodeName()
 			sAddr, err := netip.ParseAddr(subPod.Pod.Status.PodIP)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse subscriber pod IP: %v", err)
+				return nil, fmt.Errorf("failed to parse subscriber pod IP: %w", err)
 			}
 
 			if isRemote {
 				// sAddr will be the remote node's IP. Remote node is node on which the subscriber pod is running.
-				remoteNode, ok := ct.CiliumNodes()[check.NodeIdentity{ct.K8sClient().ClusterName(), subPod.NodeName()}]
+				remoteNode, ok := ct.CiliumNodes()[check.NodeIdentity{Cluster: ct.K8sClient().ClusterName(), Name: subPod.NodeName()}]
 				if !ok {
 					return nil, fmt.Errorf("failed to get node %s", subPod.NodeName())
 				}
 				sAddr, err = netip.ParseAddr(remoteNode.GetIP(false).String())
 				if err != nil {
-					return nil, fmt.Errorf("failed to parse remote node IP: %v", err)
+					return nil, fmt.Errorf("failed to parse remote node IP: %w", err)
 				}
 			}
 
@@ -554,13 +553,13 @@ func validateMulticastMessages(ctx context.Context, t *check.Test, sourcePods, s
 	// validate group files present in subscriber pods
 	subscriberPodMessages, err := getMulticastMessageFiles(ctx, t, subscriberPods, groupAddrs)
 	if err != nil {
-		return fmt.Errorf("failed to get multicast message files: %v", err)
+		return fmt.Errorf("failed to get multicast message files: %w", err)
 	}
 
 	// validate each group file contains messages from source pods ( number of messages from each source pod and order of messages)
 	err = validateMulticastMessageFile(t, sourcePods, subscriberPodMessages, groupAddrs, numOfMessages)
 	if err != nil {
-		return fmt.Errorf("multicast message file validation failed: %v", err)
+		return fmt.Errorf("multicast message file validation failed: %w", err)
 	}
 
 	return nil
@@ -590,15 +589,15 @@ func getMulticastMessageFiles(ctx context.Context, t *check.Test, subscriberPods
 					filesCmd := strings.Split("ls -la /tmp", " ")
 					files, err := pod.K8sClient.ExecInPod(ctx, pod.Pod.Namespace, pod.Pod.Name, "", filesCmd)
 					if err != nil {
-						return nil, fmt.Errorf("failed to list files in pod %s: %v", pod.Name(), err)
+						return nil, fmt.Errorf("failed to list files in pod %s: %w", pod.Name(), err)
 					}
 					t.Logf("Multicast log files in pod %s: %s", pod.Name(), files.String())
 				}
 
-				return nil, fmt.Errorf("failed to read multicast file %s from pod %s: %v", testFile, pod.Name(), err)
+				return nil, fmt.Errorf("failed to read multicast file %s from pod %s: %w", testFile, pod.Name(), err)
 			}
 
-			lines := strings.Split(string(stdout.Bytes()), "\n")
+			lines := strings.Split(stdout.String(), "\n")
 			for _, line := range lines {
 				if line == "" {
 					continue
@@ -632,7 +631,7 @@ func getMulticastMessageFiles(ctx context.Context, t *check.Test, subscriberPods
 
 func validateMulticastMessageFile(t *check.Test, sourcePods map[string]check.Pod, subscriberPods map[string][]multicastMessage, groupAddrs []string, numOfMessages int) error {
 	// validate each group file contains messages from source pods ( number of messages from each source pod and order of messages)
-	for _, subscriberPodMsgs := range subscriberPods {
+	for pod, subscriberPodMsgs := range subscriberPods {
 		expectedSourceMsgs := make(map[string]map[string]int) // key is source pod name, value is map of group to current messageID
 
 		// initialize expectedSourceMsgs
@@ -667,7 +666,7 @@ func validateMulticastMessageFile(t *check.Test, sourcePods map[string]check.Pod
 		for sourcePodName, groupMsgs := range expectedSourceMsgs {
 			for group, msgID := range groupMsgs {
 				if msgID != numOfMessages {
-					return fmt.Errorf("subscriber pod %s did not receive all messages from (s,g) (%s,%s), expected %d, got %d", sourcePodName, group, numOfMessages, msgID)
+					return fmt.Errorf("subscriber pod %s did not receive all messages from (s,g) (%s,%s), expected %d, got %d", pod, sourcePodName, group, numOfMessages, msgID)
 				}
 			}
 		}

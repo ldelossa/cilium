@@ -43,6 +43,7 @@ func NewEnterpriseConnectivityTest(ct *check.ConnectivityTest) *EnterpriseConnec
 	}
 }
 
+//nolint:misspell
 func (ect *EnterpriseConnectivityTest) NewEnterpriseTest(name string) *EnterpriseTest {
 	ct := check.NewTest(name, ect.ConnectivityTest.Params().Verbose, ect.ConnectivityTest.Params().Debug)
 	ect.ConnectivityTest.AddTest(ct)
@@ -61,11 +62,13 @@ func (ect *EnterpriseConnectivityTest) NewEnterpriseTest(name string) *Enterpris
 	return &et
 }
 
+//nolint:misspell
 func (ect *EnterpriseTest) WithFeatureRequirements(reqs ...features.Requirement) *EnterpriseTest {
 	ect.Test.WithFeatureRequirements(reqs...)
 	return ect
 }
 
+//nolint:misspell
 func (ect *EnterpriseConnectivityTest) EntClients() []*enterpriseK8s.EnterpriseClient {
 	return ect.clients.clients()
 }

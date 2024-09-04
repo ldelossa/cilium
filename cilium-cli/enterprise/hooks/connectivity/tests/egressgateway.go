@@ -243,7 +243,7 @@ func extractClientIPsFromEchoServiceResponses(res string) []net.IP {
 // - kind-worker2 as gateway node
 //
 // and the iegp-sample-echo IsovalentEgressGatewayPolicy targeting:
-// - tghe echo service pods (kind=echo) as source
+// - the echo service pods (kind=echo) as source
 // - the 0.0.0.0/0 destination CIDR
 // - kind-worker2 as gateway node
 //
