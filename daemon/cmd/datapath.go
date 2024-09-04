@@ -30,7 +30,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
-	"github.com/cilium/cilium/pkg/maps/ratelimitmetricsmap"
+	"github.com/cilium/cilium/pkg/maps/ratelimitmap"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/maps/vtep"
 	"github.com/cilium/cilium/pkg/maps/worldcidrsmap"
@@ -152,8 +152,8 @@ func (d *Daemon) initMaps() error {
 		return fmt.Errorf("initializing metrics map: %w", err)
 	}
 
-	if err := ratelimitmetricsmap.RatelimitMetrics.OpenOrCreate(); err != nil {
-		return fmt.Errorf("initializing ratelimit metrics map: %w", err)
+	if err := ratelimitmap.InitMaps(); err != nil {
+		return fmt.Errorf("initializing ratelimit maps: %w", err)
 	}
 
 	if option.Config.TunnelingEnabled() {

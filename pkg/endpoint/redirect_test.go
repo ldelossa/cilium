@@ -22,7 +22,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 	"github.com/cilium/cilium/pkg/proxy/endpoint"
 	"github.com/cilium/cilium/pkg/revert"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -55,8 +54,8 @@ func setupRedirectSuite(tb testing.TB) *RedirectSuite {
 	<-s.mgr.InitIdentityAllocator(nil)
 
 	identityCache := identity.IdentityMap{
-		identity.NumericIdentity(identityFoo): labelsFoo,
-		identity.NumericIdentity(identityBar): labelsBar,
+		identityFoo: labelsFoo,
+		identityBar: labelsBar,
 	}
 
 	s.do.idmgr = identitymanager.NewIdentityManager()
@@ -210,7 +209,7 @@ func (s *RedirectSuite) NewTestEndpoint(t *testing.T) *Endpoint {
 	ep := NewTestEndpointWithState(t, s.do, s.do, testipcache.NewMockIPCache(), s.rsp, s.mgr, 12345, StateRegenerating)
 	ep.SetPropertyValue(PropertyFakeEndpoint, false)
 
-	epIdentity, _, err := s.mgr.AllocateIdentity(context.Background(), labelsBar.Labels(), true, identity.NumericIdentity(identityBar))
+	epIdentity, _, err := s.mgr.AllocateIdentity(context.Background(), labelsBar.Labels(), true, identityBar)
 	require.Nil(t, err)
 	ep.SetIdentity(epIdentity, true)
 
@@ -246,12 +245,7 @@ func TestAddVisibilityRedirects(t *testing.T) {
 
 	_, err, _, _ = ep.addNewRedirects(cmp)
 	require.Nil(t, err)
-	v, ok := ep.desiredPolicy.GetPolicyMap().Get(policy.Key{
-		Identity:         0,
-		DestPort:         uint16(80),
-		Nexthdr:          uint8(u8proto.TCP),
-		TrafficDirection: trafficdirection.Ingress.Uint8(),
-	})
+	v, ok := ep.desiredPolicy.GetPolicyMap().Get(policy.IngressKey().WithTCPPort(80))
 	require.Equal(t, true, ok)
 	require.Equal(t, httpPort, v.ProxyPort)
 
@@ -267,12 +261,7 @@ func TestAddVisibilityRedirects(t *testing.T) {
 
 	d, err, _, _ := ep.addNewRedirects(cmp)
 	require.Nil(t, err)
-	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.Key{
-		Identity:         0,
-		DestPort:         uint16(80),
-		Nexthdr:          uint8(u8proto.TCP),
-		TrafficDirection: trafficdirection.Ingress.Uint8(),
-	})
+	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.IngressKey().WithTCPPort(80))
 	require.Equal(t, true, ok)
 	// Check that proxyport was updated accordingly.
 	require.Equal(t, kafkaPort, v.ProxyPort)
@@ -291,30 +280,15 @@ func TestAddVisibilityRedirects(t *testing.T) {
 	realizedRedirects := ep.GetRealizedRedirects()
 	d2, err, _, _ := ep.addNewRedirects(cmp)
 	require.Nil(t, err)
-	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.Key{
-		Identity:         0,
-		DestPort:         uint16(80),
-		Nexthdr:          uint8(u8proto.TCP),
-		TrafficDirection: trafficdirection.Ingress.Uint8(),
-	})
+	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.IngressKey().WithTCPPort(80))
 	require.Equal(t, true, ok)
 	require.Equal(t, kafkaPort, v.ProxyPort)
 
-	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.Key{
-		Identity:         0,
-		DestPort:         uint16(80),
-		Nexthdr:          uint8(u8proto.TCP),
-		TrafficDirection: trafficdirection.Ingress.Uint8(),
-	})
+	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.IngressKey().WithTCPPort(80))
 	require.Equal(t, true, ok)
 	require.Equal(t, kafkaPort, v.ProxyPort)
 
-	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.Key{
-		Identity:         0,
-		DestPort:         uint16(80),
-		Nexthdr:          uint8(u8proto.TCP),
-		TrafficDirection: trafficdirection.Egress.Uint8(),
-	})
+	v, ok = ep.desiredPolicy.GetPolicyMap().Get(policy.EgressKey().WithTCPPort(80))
 	require.Equal(t, true, ok)
 	require.Equal(t, httpPort, v.ProxyPort)
 	pID := policy.ProxyID(ep.ID, false, u8proto.TCP.String(), uint16(80), "")
@@ -348,13 +322,13 @@ func TestAddVisibilityRedirects(t *testing.T) {
 
 var (
 	// Identity, labels, selectors for an endpoint named "foo"
-	identityFoo = uint32(100)
+	identityFoo = identity.NumericIdentity(100)
 	labelsFoo   = labels.ParseSelectLabelArray("foo", "red")
 	selectFoo_  = api.NewESFromLabels(labels.ParseSelectLabel("foo"))
 	selectRed_  = api.NewESFromLabels(labels.ParseSelectLabel("red"))
 	denyFooL3__ = selectFoo_
 
-	identityBar = uint32(200)
+	identityBar = identity.NumericIdentity(200)
 
 	labelsBar  = labels.ParseSelectLabelArray("bar", "blue")
 	selectBar_ = api.NewESFromLabels(labels.ParseSelectLabel("bar"))
@@ -393,12 +367,10 @@ var (
 		policy.LabelAllowAnyEgress,
 		labels.LabelSourceReserved)}
 
-	dirIngress      = trafficdirection.Ingress.Uint8()
-	dirEgress       = trafficdirection.Egress.Uint8()
-	mapKeyAllL7     = policy.Key{Identity: 0, DestPort: 80, Nexthdr: 6, TrafficDirection: dirIngress}
-	mapKeyFoo       = policy.Key{Identity: identityFoo, DestPort: 0, InvertedPortMask: 0xffff, Nexthdr: 0, TrafficDirection: dirIngress}
-	mapKeyFooL7     = policy.Key{Identity: identityFoo, DestPort: 80, Nexthdr: 6, TrafficDirection: dirIngress}
-	mapKeyAllowAllE = policy.Key{Identity: 0, DestPort: 0, Nexthdr: 0, InvertedPortMask: 0xffff, TrafficDirection: dirEgress}
+	mapKeyAllL7     = policy.IngressKey().WithTCPPort(80)
+	mapKeyFoo       = policy.IngressKey().WithIdentity(identityFoo)
+	mapKeyFooL7     = policy.IngressKey().WithIdentity(identityFoo).WithTCPPort(80)
+	mapKeyAllowAllE = policy.EgressKey()
 )
 
 // combineL4L7 returns a new PortRule that refers to the specified l4 ports and
@@ -414,7 +386,7 @@ func combineL4L7(l4 []api.PortRule, l7 *api.L7Rules) []api.PortRule {
 	return result
 }
 
-func (s *RedirectSuite) testMapState(initMap map[policy.Key]policy.MapStateEntry) policy.MapState {
+func (s *RedirectSuite) testMapState(initMap policy.MapStateMap) policy.MapState {
 	return policy.NewMapState().WithState(initMap, s.do.repo.GetSelectorCache())
 }
 
@@ -433,7 +405,7 @@ func TestRedirectWithDeny(t *testing.T) {
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
 
-	expected := s.testMapState(map[policy.Key]policy.MapStateEntry{
+	expected := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
 			DerivedFromRules: labels.LabelArrayList{AllowAnyEgressLabels},
 		},
@@ -462,7 +434,7 @@ func TestRedirectWithDeny(t *testing.T) {
 	// entries and make any conclusions from it.
 	require.Equal(t, 1, len(desiredRedirects))
 
-	expected2 := s.testMapState(map[policy.Key]policy.MapStateEntry{
+	expected2 := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
 			DerivedFromRules: labels.LabelArrayList{AllowAnyEgressLabels},
 		},
@@ -596,12 +568,12 @@ func TestRedirectWithPriority(t *testing.T) {
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
 
-	expected := s.testMapState(map[policy.Key]policy.MapStateEntry{
+	expected := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
 			DerivedFromRules: labels.LabelArrayList{AllowAnyEgressLabels},
 		},
 		mapKeyAllL7: {
-			DerivedFromRules: labels.LabelArrayList{lblsL4AllowListener1, lblsL4AllowPort80, lblsL4L7AllowListener2Priority1},
+			DerivedFromRules: labels.LabelArrayList{lblsL4AllowPort80},
 		},
 	})
 	if !ep.desiredPolicy.GetPolicyMap().Equals(expected) {
@@ -623,17 +595,17 @@ func TestRedirectWithPriority(t *testing.T) {
 	require.Equal(t, crd1Port, desiredRedirects["12345:ingress:TCP:80:/cec1/listener1"])
 	require.Equal(t, 2, len(desiredRedirects))
 
-	expected2 := s.testMapState(map[policy.Key]policy.MapStateEntry{
+	expected2 := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
 			DerivedFromRules: labels.LabelArrayList{AllowAnyEgressLabels},
 		},
 		mapKeyFooL7: {
 			ProxyPort:        crd2Port,
 			Listener:         "/cec2/listener2",
-			DerivedFromRules: labels.LabelArrayList{lblsL4AllowListener1, lblsL4AllowPort80, lblsL4L7AllowListener2Priority1},
+			DerivedFromRules: labels.LabelArrayList{lblsL4AllowListener1, lblsL4L7AllowListener2Priority1},
 		},
 		mapKeyAllL7: {
-			DerivedFromRules: labels.LabelArrayList{lblsL4AllowListener1, lblsL4AllowPort80, lblsL4L7AllowListener2Priority1},
+			DerivedFromRules: labels.LabelArrayList{lblsL4AllowPort80},
 		},
 	})
 	if !ep.desiredPolicy.GetPolicyMap().Equals(expected2) {
@@ -677,12 +649,12 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 	err = ep.setDesiredPolicy(res)
 	require.Nil(t, err)
 
-	expected := s.testMapState(map[policy.Key]policy.MapStateEntry{
+	expected := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
 			DerivedFromRules: labels.LabelArrayList{AllowAnyEgressLabels},
 		},
 		mapKeyAllL7: {
-			DerivedFromRules: labels.LabelArrayList{lblsL4L7AllowListener1Priority1, lblsL4AllowPort80, lblsL4L7AllowListener2Priority1},
+			DerivedFromRules: labels.LabelArrayList{lblsL4AllowPort80},
 		},
 	})
 	if !ep.desiredPolicy.GetPolicyMap().Equals(expected) {
@@ -704,17 +676,17 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 	require.Equal(t, crd1Port, desiredRedirects["12345:ingress:TCP:80:/cec1/listener1"])
 	require.Equal(t, 2, len(desiredRedirects))
 
-	expected2 := s.testMapState(map[policy.Key]policy.MapStateEntry{
+	expected2 := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
 			DerivedFromRules: labels.LabelArrayList{AllowAnyEgressLabels},
 		},
 		mapKeyFooL7: {
 			ProxyPort:        crd1Port,
 			Listener:         "/cec1/listener1",
-			DerivedFromRules: labels.LabelArrayList{lblsL4L7AllowListener1Priority1, lblsL4AllowPort80, lblsL4L7AllowListener2Priority1},
+			DerivedFromRules: labels.LabelArrayList{lblsL4L7AllowListener1Priority1, lblsL4L7AllowListener2Priority1},
 		},
 		mapKeyAllL7: {
-			DerivedFromRules: labels.LabelArrayList{lblsL4L7AllowListener1Priority1, lblsL4AllowPort80, lblsL4L7AllowListener2Priority1},
+			DerivedFromRules: labels.LabelArrayList{lblsL4AllowPort80},
 		},
 	})
 	if !ep.desiredPolicy.GetPolicyMap().Equals(expected2) {

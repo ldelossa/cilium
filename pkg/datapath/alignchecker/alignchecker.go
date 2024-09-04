@@ -18,7 +18,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/metricsmap"
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
-	"github.com/cilium/cilium/pkg/maps/ratelimitmetricsmap"
+	"github.com/cilium/cilium/pkg/maps/ratelimitmap"
 	"github.com/cilium/cilium/pkg/maps/recorder"
 	"github.com/cilium/cilium/pkg/maps/signalmap"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
@@ -120,8 +120,10 @@ func init() {
 		"auth_info":               {authmap.AuthInfo{}},
 		"skip_lb4_key":            {lbmap.SkipLB4Key{}},
 		"skip_lb6_key":            {lbmap.SkipLB6Key{}},
-		"ratelimit_metrics_key":   {ratelimitmetricsmap.Key{}},
-		"ratelimit_metrics_value": {ratelimitmetricsmap.Value{}},
+		"ratelimit_key":           {ratelimitmap.Key{}},
+		"ratelimit_value":         {ratelimitmap.Value{}},
+		"ratelimit_metrics_key":   {ratelimitmap.MetricsKey{}},
+		"ratelimit_metrics_value": {ratelimitmap.MetricsValue{}},
 	})
 
 	registerToCheckSizes(map[string][]any{

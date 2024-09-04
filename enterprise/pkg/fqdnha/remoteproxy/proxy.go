@@ -169,7 +169,7 @@ type fqdnRuleKey struct {
 func msgKey(msg *fqdnpb.FQDNRules) fqdnRuleKey {
 	pp := restore.PortProto(msg.DestPort)
 	if msg.DestProto != 0 {
-		pp = restore.MakeV2PortProto(uint16(msg.DestPort), uint8(msg.DestProto))
+		pp = restore.MakeV2PortProto(uint16(msg.DestPort), u8proto.U8proto(msg.DestProto))
 	}
 	return fqdnRuleKey{msg.EndpointID, uint32(pp)}
 }

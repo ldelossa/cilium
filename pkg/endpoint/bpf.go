@@ -28,6 +28,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
+	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/loadinfo"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -36,8 +37,10 @@ import (
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
+	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 	"github.com/cilium/cilium/pkg/revert"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/u8proto"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -201,11 +204,11 @@ type proxyPolicy struct {
 	*policy.L4Filter
 	ps       *policy.PerSelectorPolicy
 	port     uint16
-	protocol uint8
+	protocol u8proto.U8proto
 }
 
 // newProxyPolicy returns a new instance of proxyPolicy by value
-func (e *Endpoint) newProxyPolicy(l4 *policy.L4Filter, ps *policy.PerSelectorPolicy, port uint16, proto uint8) proxyPolicy {
+func (e *Endpoint) newProxyPolicy(l4 *policy.L4Filter, ps *policy.PerSelectorPolicy, port uint16, proto u8proto.U8proto) proxyPolicy {
 	return proxyPolicy{L4Filter: l4, ps: ps, port: port, protocol: proto}
 }
 
@@ -216,7 +219,7 @@ func (p *proxyPolicy) GetPort() uint16 {
 }
 
 // GetProtocol returns the destination protocol number on which the proxy policy applies
-func (p *proxyPolicy) GetProtocol() uint8 {
+func (p *proxyPolicy) GetProtocol() u8proto.U8proto {
 	return p.protocol
 }
 
@@ -243,7 +246,7 @@ func (e *Endpoint) addNewRedirectsFromDesiredPolicy(ingress bool, desiredRedirec
 
 	changes := policy.ChangeState{
 		Adds: make(policy.Keys),
-		Old:  make(map[policy.Key]policy.MapStateEntry),
+		Old:  make(policy.MapStateMap),
 	}
 
 	// create or update proxy redirects
@@ -329,7 +332,7 @@ func (e *Endpoint) addVisibilityRedirects(ingress bool, desiredRedirects map[str
 		revertStack  revert.RevertStack
 		changes      = policy.ChangeState{
 			Adds: make(policy.Keys),
-			Old:  make(map[policy.Key]policy.MapStateEntry),
+			Old:  make(policy.MapStateMap),
 		}
 	)
 
@@ -1128,8 +1131,7 @@ func (e *Endpoint) updatePolicyMapPressureMetric() {
 
 func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) bool {
 	// Convert from policy.Key to policymap.Key
-	policymapKey := policymap.NewKey(keyToDelete.Identity, keyToDelete.DestPort, keyToDelete.PortMask(),
-		keyToDelete.Nexthdr, keyToDelete.TrafficDirection)
+	policymapKey := policymap.NewKey(keyToDelete.TrafficDirection(), keyToDelete.Identity, keyToDelete.Nexthdr, keyToDelete.DestPort, keyToDelete.PortPrefixLen())
 
 	// Do not error out if the map entry was already deleted from the bpf map.
 	// Incremental updates depend on this being OK in cases where identity change
@@ -1162,8 +1164,7 @@ func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) boo
 
 func (e *Endpoint) addPolicyKey(keyToAdd policy.Key, entry policy.MapStateEntry, incremental bool) bool {
 	// Convert from policy.Key to policymap.Key
-	policymapKey := policymap.NewKey(keyToAdd.Identity, keyToAdd.DestPort, keyToAdd.PortMask(),
-		keyToAdd.Nexthdr, keyToAdd.TrafficDirection)
+	policymapKey := policymap.NewKey(keyToAdd.TrafficDirection(), keyToAdd.Identity, keyToAdd.Nexthdr, keyToAdd.DestPort, keyToAdd.PortPrefixLen())
 
 	var err error
 	if entry.IsDeny {
@@ -1394,13 +1395,9 @@ func (e *Endpoint) dumpPolicyMapToMapState() (policy.MapState, error) {
 	cb := func(key bpf.MapKey, value bpf.MapValue) {
 		policymapKey := key.(*policymap.PolicyKey)
 		// Convert from policymap.Key to policy.Key
-		policyKey := policy.Key{
-			Identity:         policymapKey.Identity,
-			DestPort:         policymapKey.GetDestPort(),
-			InvertedPortMask: ^policymapKey.GetPortMask(),
-			Nexthdr:          policymapKey.Nexthdr,
-			TrafficDirection: policymapKey.TrafficDirection,
-		}
+		policyKey := policy.KeyForDirection(trafficdirection.TrafficDirection(policymapKey.TrafficDirection)).
+			WithIdentity(identity.NumericIdentity(policymapKey.Identity)).
+			WithPortProtoPrefix(u8proto.U8proto(policymapKey.Nexthdr), policymapKey.GetDestPort(), policymapKey.GetPortPrefixLen())
 		policymapEntry := value.(*policymap.PolicyEntry)
 		// Convert from policymap.PolicyEntry to policy.MapStateEntry.
 		policyEntry := policy.MapStateEntry{

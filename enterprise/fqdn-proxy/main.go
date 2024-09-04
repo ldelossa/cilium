@@ -60,6 +60,7 @@ import (
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
+	"github.com/cilium/cilium/pkg/u8proto"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -720,7 +721,7 @@ func (s *FQDNProxyServer) UpdateAllowed(ctx context.Context, rules *pb.FQDNRules
 	if rules.DestProto == 0 {
 		portProto = restore.PortProto(rules.DestPort)
 	} else {
-		portProto = restore.MakeV2PortProto(uint16(rules.DestPort), uint8(rules.DestProto))
+		portProto = restore.MakeV2PortProto(uint16(rules.DestPort), u8proto.U8proto(rules.DestProto))
 	}
 	s.proxy.UpdateAllowedFromSelectorRegexes(rules.EndpointID, portProto, cachedSelectorREEntry)
 	return &pb.Empty{}, nil
