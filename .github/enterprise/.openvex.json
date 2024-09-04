@@ -423,6 +423,19 @@
       "status": "not_affected",
       "status_notes": "Reported for /usr/bin/hubble, which doesn't use the affected functionality",
       "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-41996"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Reported for OpenSSL binaries which are shipped in the container but unused",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
