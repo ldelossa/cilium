@@ -192,7 +192,6 @@ jobs:
             oss: false,
             region: us-west-2,
             deploy: cute,
-            upgrade: stable,
             ipsec: false,
             owner: U04GD9ACYTE # Philip
           },
