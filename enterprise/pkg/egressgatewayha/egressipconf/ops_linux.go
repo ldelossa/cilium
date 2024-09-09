@@ -121,12 +121,12 @@ func (ops *ops) Delete(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 	}
 
 	if err := route.DeleteRule(netlink.FAMILY_V4, ruleForEgressIP(entry.Addr)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("failed to upsert rule for address %s: %w", entry.Addr, err)
+		return fmt.Errorf("failed to delete rule for address %s: %w", entry.Addr, err)
 	}
 
 	for _, dest := range entry.Destinations {
 		if err := route.DeleteV4(routeForEgressIP(entry.Addr, dest, iface)); err != nil && !errors.Is(err, syscall.ESRCH) {
-			return fmt.Errorf("failed to delete route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
+			return fmt.Errorf("failed to delete route for egress IP %s and interface %s: %w", entry.Addr, iface.Attrs().Name, err)
 		}
 	}
 
