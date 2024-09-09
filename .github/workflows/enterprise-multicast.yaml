@@ -76,19 +76,19 @@ jobs:
         include:
           - name: 1
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240822.104709'
+            kernel: '5.15-20240909.102418'
             encryption: false
           - name: 2
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.6-20240822.104709'
+            kernel: '6.6-20240909.102418'
             encryption: false
           - name: 3
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240822.104709'
+            kernel: '5.15-20240909.102418'
             encryption: true
           - name: 4
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.6-20240822.104709'
+            kernel: '6.6-20240909.102418'
             encryption: true
     timeout-minutes: 60
     steps:
