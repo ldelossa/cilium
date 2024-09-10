@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/statedb/reconciler"
 
 	"github.com/cilium/cilium/enterprise/datapath/tables"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 // Cell manages the configuration of Egress IPs and associated routes
@@ -28,7 +29,11 @@ var Cell = cell.Group(
 	),
 )
 
-func registerReconciler(params reconciler.Params, table statedb.RWTable[*tables.EgressIPEntry]) error {
+func registerReconciler(params reconciler.Params, table statedb.RWTable[*tables.EgressIPEntry], dCfg *option.DaemonConfig) error {
+	if !dCfg.EnableIPv4EgressGatewayHA {
+		return nil
+	}
+
 	_, err := reconciler.Register(
 		params,
 		table,

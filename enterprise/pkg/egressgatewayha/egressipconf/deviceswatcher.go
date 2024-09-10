@@ -23,6 +23,7 @@ import (
 
 	enterpriseTables "github.com/cilium/cilium/enterprise/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tables"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 func newDevicesWatcher(
@@ -32,7 +33,12 @@ func newDevicesWatcher(
 	db *statedb.DB,
 	devicesTbl statedb.Table[*tables.Device],
 	egressIPsTbl statedb.RWTable[*enterpriseTables.EgressIPEntry],
+	dCfg *option.DaemonConfig,
 ) {
+	if !dCfg.EnableIPv4EgressGatewayHA {
+		return
+	}
+
 	devices, devicesWatch := tables.SelectedDevices(devicesTbl, db.ReadTxn())
 
 	jg.Add(job.OneShot("egw-ipam-devices-watcher", func(ctx context.Context, _ cell.Health) error {
