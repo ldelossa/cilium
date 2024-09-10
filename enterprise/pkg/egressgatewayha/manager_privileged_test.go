@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/hivetest"
 	"github.com/cilium/statedb"
+	"github.com/cilium/statedb/reconciler"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
@@ -50,6 +51,10 @@ type EgressGatewayTestSuite struct {
 	reconciliationEventsCount uint64
 }
 
+type mockReconciler struct{}
+
+func (m *mockReconciler) Prune() {}
+
 func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 	testutils.PrivilegedTest(t)
 
@@ -75,34 +80,25 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 		},
 	})
 
-	manager, err := newEgressGatewayManager(Params{
-		Lifecycle:         lc,
-		Config:            Config{2 * time.Second, 1 * time.Millisecond},
-		DaemonConfig:      &option.DaemonConfig{},
-		IdentityAllocator: identityAllocator,
-		PolicyMap:         policyMap,
-		CtMap:             ctMap,
-		Policies:          k.policies,
-		Endpoints:         k.endpoints,
-		Nodes:             k.ciliumNodes,
-		LocalNodeStore:    localNodeStore,
-		BGPSignaler:       signaler.NewBGPCPSignaler(),
-		Sysctl:            k.sysctl,
-	})
-	require.NoError(t, err)
-	require.NotNil(t, manager)
+	var (
+		db            *statedb.DB
+		egressIPTable statedb.RWTable[*tables.EgressIPEntry]
+		r             reconciler.Reconciler[*tables.EgressIPEntry]
+	)
 
-	k.manager = manager
-
-	// create a hive to provide statedb and egress-ips table
+	// create a hive to provide statedb, egress-ips table and a mock reconcile
 	h := hive.New(
 		cell.Provide(
 			tables.NewEgressIPTable,
+			func() reconciler.Reconciler[*tables.EgressIPEntry] {
+				return &mockReconciler{}
+			},
 		),
 
-		cell.Invoke(func(db *statedb.DB, table statedb.RWTable[*tables.EgressIPEntry]) {
-			k.manager.db = db
-			k.manager.egressIPTable = table
+		cell.Invoke(func(db_ *statedb.DB, table statedb.RWTable[*tables.EgressIPEntry], reconciler reconciler.Reconciler[*tables.EgressIPEntry]) {
+			db = db_
+			egressIPTable = table
+			r = reconciler
 		}),
 	)
 
@@ -112,6 +108,28 @@ func setupEgressGatewayTestSuite(t *testing.T) *EgressGatewayTestSuite {
 	t.Cleanup(func() {
 		require.NoError(t, h.Stop(tlog, context.TODO()))
 	})
+
+	manager, err := newEgressGatewayManager(Params{
+		Lifecycle:          lc,
+		Config:             Config{2 * time.Second, 1 * time.Millisecond},
+		DaemonConfig:       &option.DaemonConfig{},
+		IdentityAllocator:  identityAllocator,
+		PolicyMap:          policyMap,
+		CtMap:              ctMap,
+		Policies:           k.policies,
+		Endpoints:          k.endpoints,
+		Nodes:              k.ciliumNodes,
+		LocalNodeStore:     localNodeStore,
+		BGPSignaler:        signaler.NewBGPCPSignaler(),
+		Sysctl:             k.sysctl,
+		DB:                 db,
+		EgressIPTable:      egressIPTable,
+		EgressIPReconciler: r,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, manager)
+
+	k.manager = manager
 
 	k.reconciliationEventsCount = k.manager.reconciliationEventsCount.Load()
 

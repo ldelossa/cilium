@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"slices"
 	"syscall"
 
 	"github.com/cilium/statedb"
@@ -133,8 +134,80 @@ func (ops *ops) Delete(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 	return nil
 }
 
-func (ops *ops) Prune(ctx context.Context, _ statedb.ReadTxn, iter statedb.Iterator[*tables.EgressIPEntry]) error {
-	// addresses not in the table will never be pruned
+func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter statedb.Iterator[*tables.EgressIPEntry]) error {
+	rulesFilter, rulesMask := rulesFilter()
+	rules, err := netlink.RuleListFiltered(netlink.FAMILY_V4, rulesFilter, rulesMask)
+	if err != nil {
+		return fmt.Errorf("failed to list egress-gateway IPAM rules: %w", err)
+	}
+
+	routesFilter, routesMask := routesFilter()
+	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, routesFilter, routesMask)
+	if err != nil {
+		return fmt.Errorf("failed to list egress-gateway IPAM routes: %w", err)
+	}
+
+	// build a map of in-use egressIP -> destinations:
+	egressRoutes := make(map[netip.Addr][]netip.Prefix)
+	statedb.ProcessEach(iter, func(entry *tables.EgressIPEntry, _ uint64) error {
+		egressRoutes[entry.Addr] = append(egressRoutes[entry.Addr], entry.Destinations...)
+		return nil
+	})
+
+	// prune rules and routes that are not part of the desired state (that is,
+	// the stateDB current snapshot).
+	// We avoid pruning IP addresses since we can't reliably identify Cilium-managed egress IPs.
+	for _, rule := range rules {
+		if rule.Src == nil {
+			continue
+		}
+
+		prefix, ok := netipx.FromStdIPNet(rule.Src)
+		if !ok {
+			return fmt.Errorf("failed to convert netlink rule src")
+		}
+		addr := prefix.Masked().Addr()
+		if _, ok := egressRoutes[addr]; ok {
+			continue
+		}
+
+		if err := route.DeleteRule(netlink.FAMILY_V4, ruleForEgressIP(addr)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to delete rule for address %s while pruning: %w", addr, err)
+		}
+	}
+
+	for _, r := range routes {
+		if r.Dst == nil {
+			continue
+		}
+
+		addr, ok := netipx.FromStdIP(r.Src)
+		if !ok {
+			return fmt.Errorf("failed to convert netlink route src")
+		}
+
+		inUse := false
+		if _, ok := egressRoutes[addr]; ok {
+			dst, ok := netipx.FromStdIPNet(r.Dst)
+			if !ok {
+				return fmt.Errorf("failed to convert netlink route dst")
+			}
+			inUse = slices.Contains(egressRoutes[addr], dst)
+		}
+		if inUse {
+			continue
+		}
+
+		if err := netlink.RouteDel(&netlink.Route{
+			Dst:      r.Dst,
+			Src:      addr.AsSlice(),
+			Table:    RouteTableEgressGatewayIPAM,
+			Protocol: linux_defaults.RTProto,
+		}); err != nil {
+			return fmt.Errorf("failed to delete route for egress IP %s while pruning: %w", addr, err)
+		}
+	}
+
 	return nil
 }
 
@@ -181,4 +254,19 @@ func ipNetToPrefix(prefix net.IPNet) netip.Prefix {
 	addr, _ := netip.AddrFromSlice(prefix.IP)
 	cidr, _ := prefix.Mask.Size()
 	return netip.PrefixFrom(addr, cidr)
+}
+
+func rulesFilter() (*netlink.Rule, uint64) {
+	return &netlink.Rule{
+		Priority: RulePriorityEgressGatewayIPAM,
+		Table:    RouteTableEgressGatewayIPAM,
+		Protocol: linux_defaults.RTProto,
+	}, netlink.RT_FILTER_PRIORITY | netlink.RT_FILTER_TABLE | netlink.RT_FILTER_PROTOCOL
+}
+
+func routesFilter() (*netlink.Route, uint64) {
+	return &netlink.Route{
+		Table:    RouteTableEgressGatewayIPAM,
+		Protocol: unix.RTPROT_KERNEL,
+	}, netlink.RT_FILTER_TABLE | netlink.RT_FILTER_PROTOCOL
 }

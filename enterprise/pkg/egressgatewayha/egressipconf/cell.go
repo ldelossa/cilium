@@ -42,8 +42,6 @@ func registerReconciler(params reconciler.Params, table statedb.RWTable[*tables.
 		(*tables.EgressIPEntry).GetStatus,
 		newOps(),
 		nil,
-
-		reconciler.WithoutPruning(),
 	)
 	return err
 }
