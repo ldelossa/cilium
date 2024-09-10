@@ -58,9 +58,8 @@ kind-image-fast-enterprise-agent: kind-ready build-enterprise-cli build-enterpri
 			docker exec -ti $${node_name} rm -f "${dst}/cilium-agent"; \
 			docker cp "./enterprise/daemon/cilium-agent" $${node_name}:"${dst}"; \
 			docker exec -ti $${node_name} chmod +x "${dst}/cilium-agent"; \
-			\
-			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l k8s-app=cilium --force; \
 		done; \
+		kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l k8s-app=cilium --force; \
 	done
 
 .PHONY: kind-image-fast-enterprise-operator
@@ -73,9 +72,8 @@ kind-image-fast-enterprise-operator: kind-ready build-enterprise-operator ## Bui
 			docker exec -ti $${node_name} rm -f "${dst}/cilium-operator-generic"; \
 			docker cp "./enterprise/operator/cilium-operator-generic" $${node_name}:"${dst}"; \
 			docker exec -ti $${node_name} chmod +x "${dst}/cilium-operator-generic"; \
-			\
-			kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l name=cilium-operator --force; \
 		done; \
+		kubectl --context=kind-$${cluster_name} delete pods -n kube-system -l name=cilium-operator --force; \
 	done
 
 .PHONY: kind-image-enterprise-fast
