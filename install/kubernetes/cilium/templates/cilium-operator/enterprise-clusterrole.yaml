@@ -31,6 +31,7 @@ rules:
   - isovalentbgpadvertisements.isovalent.com
   - isovalentbgpnodeconfigs.isovalent.com
   - isovalentbgpnodeconfigoverrides.isovalent.com
+  - isovalentbgpvrfconfigs.isovalent.com
 {{- end }}
 {{- if .Values.enterprise.ciliummesh.enabled }}
   - isovalentmeshendpoints.isovalent.com
