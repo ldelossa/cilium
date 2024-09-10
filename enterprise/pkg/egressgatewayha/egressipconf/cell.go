@@ -23,18 +23,20 @@ import (
 // on behalf of the IsovalentEgressGatewayPolicies.
 var Cell = cell.Group(
 	cell.ProvidePrivate(tables.NewEgressIPTable),
-	cell.Invoke(
-		registerReconciler,
-		newDevicesWatcher,
-	),
+	cell.ProvidePrivate(startReconciler),
+	cell.Invoke(newDevicesWatcher),
 )
 
-func registerReconciler(params reconciler.Params, table statedb.RWTable[*tables.EgressIPEntry], dCfg *option.DaemonConfig) error {
+func startReconciler(
+	params reconciler.Params,
+	table statedb.RWTable[*tables.EgressIPEntry],
+	dCfg *option.DaemonConfig,
+) (reconciler.Reconciler[*tables.EgressIPEntry], error) {
 	if !dCfg.EnableIPv4EgressGatewayHA {
-		return nil
+		return nil, nil
 	}
 
-	_, err := reconciler.Register(
+	reconciler, err := reconciler.Register(
 		params,
 		table,
 		(*tables.EgressIPEntry).Clone,
@@ -43,5 +45,5 @@ func registerReconciler(params reconciler.Params, table statedb.RWTable[*tables.
 		newOps(),
 		nil,
 	)
-	return err
+	return reconciler, err
 }

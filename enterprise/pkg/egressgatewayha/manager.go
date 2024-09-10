@@ -22,6 +22,7 @@ import (
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/statedb"
+	"github.com/cilium/statedb/reconciler"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"go4.org/netipx"
@@ -92,6 +93,8 @@ const (
 	eventUpdateNode
 	eventDeleteNode
 )
+
+const policyInitializerName = "isovalentegressgatewaypolicy-synced"
 
 type Config struct {
 	// Healthcheck timeout after which an egress gateway is marked not healthy.
@@ -194,6 +197,10 @@ type Manager struct {
 
 	egressIPTable statedb.RWTable[*enterprise_tables.EgressIPEntry]
 
+	egressIPReconciler reconciler.Reconciler[*enterprise_tables.EgressIPEntry]
+
+	policyInitializer func(txn statedb.WriteTxn)
+
 	db *statedb.DB
 }
 
@@ -212,8 +219,9 @@ type Params struct {
 	Sysctl            sysctl.Sysctl
 	BGPSignaler       *signaler.BGPCPSignaler
 
-	DB            *statedb.DB
-	EgressIPTable statedb.RWTable[*enterprise_tables.EgressIPEntry]
+	DB                 *statedb.DB
+	EgressIPTable      statedb.RWTable[*enterprise_tables.EgressIPEntry]
+	EgressIPReconciler reconciler.Reconciler[*enterprise_tables.EgressIPEntry]
 
 	Lifecycle cell.Lifecycle
 }
@@ -266,6 +274,13 @@ func NewEgressGatewayManager(p Params) (out struct {
 }
 
 func newEgressGatewayManager(p Params) (*Manager, error) {
+	// Initializer prevents the reconciler from pruning old IPAM-related routing policy rules
+	// and routes from the node network configuration until we have had a chance to recompute
+	// the new state after all k8s caches are synced.
+	txn := p.DB.WriteTxn(p.EgressIPTable)
+	policyInitializer := p.EgressIPTable.RegisterInitializer(txn, policyInitializerName)
+	txn.Commit()
+
 	manager := &Manager{
 		nodeDataStore:                 make(map[string]nodeTypes.Node),
 		policyConfigs:                 make(map[policyID]*PolicyConfig),
@@ -284,6 +299,8 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		bgpSignaler:                   p.BGPSignaler,
 		db:                            p.DB,
 		egressIPTable:                 p.EgressIPTable,
+		egressIPReconciler:            p.EgressIPReconciler,
+		policyInitializer:             policyInitializer,
 	}
 
 	t, err := trigger.NewTrigger(trigger.Parameters{
@@ -865,6 +882,18 @@ nextCtKey:
 	}
 }
 
+func (manager *Manager) finishInitializer(initializer func(txn statedb.WriteTxn)) {
+	txn := manager.db.WriteTxn(manager.egressIPTable)
+	initializer(txn)
+	txn.Commit()
+	// This works around a StateDB bug (see https://github.com/cilium/statedb/pull/47)
+	// where the reconciler does not fire on an empty (but initialized) table.
+	if manager.egressIPTable.Initialized(manager.db.ReadTxn()) {
+		log.Debug("Pruning IPAM related rules and routes")
+		manager.egressIPReconciler.Prune()
+	}
+}
+
 // reconcileLocked is responsible for reconciling the state of the manager (i.e. the
 // desired state) with the actual state of the node (egress policy map entries).
 //
@@ -899,6 +928,13 @@ func (manager *Manager) reconcileLocked() {
 
 	if manager.eventBitmapIsSet(eventK8sSyncDone, eventAddPolicy, eventDeletePolicy, eventUpdateNode, eventDeleteNode) {
 		manager.regenerateGatewayConfigs()
+
+		if manager.eventBitmapIsSet(eventK8sSyncDone) {
+			// All caches have been synced and the first gateway configs regeneration took place.
+			// Now it is safe to start pruning IPAM-related routing policy rules and routes that
+			// do not appear in the egress-ips stateDB table.
+			manager.finishInitializer(manager.policyInitializer)
+		}
 
 		// Sysctl updates are handled by a reconciler, with the initial update attempting to wait some time
 		// for a synchronous reconciliation. Thus these updates are already resilient so in case of failure
