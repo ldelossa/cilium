@@ -36,6 +36,7 @@ var ConfigReconcilers = cell.Group(
 	),
 
 	cell.Provide(
+		NewServiceReconciler,
 		NewEgressGatewayIPsReconciler,
 		NewBFDStateReconciler,
 		NewSRv6LocatorPoolReconciler,
@@ -44,4 +45,10 @@ var ConfigReconcilers = cell.Group(
 		NewPodCIDRVRFReconciler,
 		NewServiceVRFReconciler,
 	),
+
+	// wire the enterprise Service reconciler with the OSS version
+	cell.Invoke(WireServiceReconcilers),
+
+	// config of the enterprise reconcilers
+	cell.Config(defaultConfig),
 )

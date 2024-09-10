@@ -19,4 +19,19 @@ const (
 
 	// VRFLogField is used as key for VRF in the log field.
 	VRFLogField = "vrf"
+
+	// ServiceIDLogField is used as a key for service ID in the log field.
+	ServiceIDLogField = "service_id"
+
+	// ServiceAddressLogField is used as a key for service address in the log field.
+	ServiceAddressLogField = "service_address"
+
+	// BackendCountLogField is used as a key for service backend count in the log field.
+	BackendCountLogField = "backend_count"
+
+	// ToReconcileLogField is used as a key for count of items to reconcile in the log field.
+	ToReconcileLogField = "to_reconcile"
+
+	// ToWithdrawLogField is used as a key for count of items to withdraw in the log field.
+	ToWithdrawLogField = "to_withdraw"
 )
