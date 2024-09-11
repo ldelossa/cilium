@@ -107,6 +107,43 @@
       ]
     },
     {
+      "matchPackageNames": [
+        "docker.io/library/ubuntu"
+      ],
+      "allowedVersions": "22.04",
+      "matchBaseBranches": [
+        "v1.13-ce"
+      ],
+    },
+    {
+      "matchPackageNames": [
+        "docker.io/library/golang",
+        "go"
+      ],
+      "allowedVersions": "<1.23",
+      "matchBaseBranches": [
+        "v1.13-ce"
+      ]
+    },
+    {
+      "matchPackageNames": [
+        "docker.io/library/alpine"
+      ],
+      "allowedVersions": "<3.18",
+      "matchBaseBranches": [
+        "v1.13-ce"
+      ]
+    },
+    {
+      "matchPackageNames": [
+        "quay.io/cilium/certgen",
+      ],
+      "allowedVersions": "<0.2.0",
+      "matchBaseBranches": [
+        "v1.13-ce"
+      ]
+    },
+    {
       "groupName": "all kind-images",
       "groupSlug": "all-kind-images",
       "matchPackageNames": [
@@ -131,6 +168,19 @@
       "versioning": "regex:^((?<compatibility>[a-z-]+)|((?<major>\\d+)\\.(?<minor>\\d+)))\\-(?<patch>\\d+)\\.(?<build>\\d+)(@(?<currentDigest>sha256:[a-f0-9]+))?$"
     },
     {
+      "groupName": "stable lvh-images",
+      "groupSlug": "stable-lvh-images",
+      "matchPackageNames": [
+        "cilium/little-vm-helper",
+        "quay.io/lvh-images/complexity-test",
+        "quay.io/lvh-images/kind"
+      ],
+      "allowedVersions": "!/bpf-next-.*/",
+      "matchBaseBranches": [
+        "v1.13-ce"
+      ],
+    },
+    {
       // Do not allow any updates for major.minor, they will be done by maintainers
       "enabled": false,
       "matchPackageNames": [
@@ -149,6 +199,16 @@
         "quay.io/cilium/kindest-node"
       ],
       "ignoreUnstable": false,
+    },
+    {
+      "matchDepNames": [
+        "quay.io/cilium/cilium-envoy"
+      ],
+      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+).*$",
+      "allowedVersions": "<1.29",
+      "matchBaseBranches": [
+        "v1.13-ce"
+      ]
     }
   ],
   "regexManagers": [
