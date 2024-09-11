@@ -85,7 +85,7 @@ encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 			       __u32 seclabel, __u32 dstid,
 			       const struct trace_ctx *trace)
 {
-#ifdef ENABLE_IPSEC
+#if defined(ENABLE_IPSEC) && !defined(ENABLE_ENCRYPTED_OVERLAY)
 	if (encrypt_key)
 		return set_ipsec_encrypt(ctx, encrypt_key, tunnel_endpoint,
 					 seclabel, true, false);
@@ -107,7 +107,7 @@ __encap_and_redirect_lxc(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 	int ifindex __maybe_unused;
 	int ret __maybe_unused;
 
-#ifdef ENABLE_IPSEC
+#if defined(ENABLE_IPSEC) && !defined(ENABLE_ENCRYPTED_OVERLAY)
 	if (encrypt_key)
 		return set_ipsec_encrypt(ctx, encrypt_key, tunnel_endpoint,
 					 seclabel, false, false);
@@ -155,7 +155,7 @@ encap_and_redirect_lxc(struct __ctx_buff *ctx,
 	if (!tunnel)
 		return DROP_NO_TUNNEL_ENDPOINT;
 
-# ifdef ENABLE_IPSEC
+#if defined(ENABLE_IPSEC) && !defined(ENABLE_ENCRYPTED_OVERLAY)
 	if (tunnel->key) {
 		__u8 min_encrypt_key = get_min_encrypt_key(tunnel->key);
 
