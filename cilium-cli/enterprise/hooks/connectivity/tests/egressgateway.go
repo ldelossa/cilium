@@ -33,6 +33,8 @@ const (
 	EgressGroupLabelValue = "test"
 
 	K8sZoneLabel = "topology.kubernetes.io/zone"
+
+	EgressGatewayIPAMRoutingTable = 2050
 )
 
 // bpfEgressGatewayPolicyEntry represents an entry in the BPF egress gateway policy map
@@ -52,6 +54,28 @@ func (e *bpfEgressGatewayPolicyEntry) matches(t bpfEgressGatewayPolicyEntry) boo
 		t.DestCIDR == e.DestCIDR &&
 		t.EgressIP == e.EgressIP &&
 		cmp.Equal(t.GatewayIPs, e.GatewayIPs, cmpopts.EquateEmpty())
+}
+
+// ipAddrEntry represents an entry from "ip --json addr show" output
+// only the fields relevant for the tests are defined
+type ipAddrEntry struct {
+	AddrInfo []addrInfo `json:"addr_info"`
+}
+
+type addrInfo struct {
+	Local string
+}
+
+// ipRuleEntry represents an entry from "ip --json rule show" output
+// only the fields relevant for the tests are defined
+type ipRuleEntry struct {
+	Src string
+}
+
+// ipRouteEntry represents an entry from "ip --json route show" output
+// only the fields relevant for the tests are defined
+type ipRouteEntry struct {
+	PrefSrc string
 }
 
 // waitForBpfPolicyEntries waits for the egress gateway policy maps on each node to be populated with the entries
@@ -153,6 +177,101 @@ func waitForAllocatedEgressIP(ctx context.Context, t *check.Test, policyName str
 		}
 
 		return masqueradeIP
+	}
+}
+
+func waitforGwNetworkConfig(ctx context.Context, t *check.Test, nodeEgressIPCallback func(ciliumPod check.Pod) *net.IP) {
+	ct := t.Context()
+
+	w := wait.NewObserver(ctx, wait.Parameters{Timeout: 10 * time.Second})
+	defer w.Cancel()
+
+	ensureNodeNetworkConfig := func() error {
+		for _, ciliumPod := range ct.CiliumPods() {
+			egressIP := nodeEgressIPCallback(ciliumPod)
+			if egressIP == nil {
+				// no egress IP assigned to this node
+				continue
+			}
+
+			cmd := strings.Split("ip --json --family inet addr show", " ")
+			stdout, err := ciliumPod.K8sClient.ExecInPod(ctx, ciliumPod.Pod.Namespace, ciliumPod.Pod.Name, defaults.AgentContainerName, cmd)
+			if err != nil {
+				t.Fatalf("failed to run ip addr show command: %s", err)
+			}
+
+			var addrEntries []ipAddrEntry
+			if err := json.Unmarshal(stdout.Bytes(), &addrEntries); err != nil {
+				t.Fatalf("failed to unmarshal ip addr show command output: %s", err)
+			}
+
+			var addrs []net.IP
+			for _, entry := range addrEntries {
+				for _, info := range entry.AddrInfo {
+					addrs = append(addrs, net.ParseIP(info.Local))
+				}
+			}
+			found := slices.ContainsFunc(addrs, func(addr net.IP) bool {
+				return addr.Equal(*egressIP)
+			})
+			if !found {
+				return fmt.Errorf("egress IP %s is not assigned to any interface in gateway node %s", egressIP, getGatewayNodeInternalIP(ct, ciliumPod.NodeName()))
+			}
+
+			cmd = strings.Split(fmt.Sprintf("ip --json rule show table %d", EgressGatewayIPAMRoutingTable), " ")
+			stdout, err = ciliumPod.K8sClient.ExecInPod(ctx, ciliumPod.Pod.Namespace, ciliumPod.Pod.Name, defaults.AgentContainerName, cmd)
+			if err != nil {
+				t.Fatalf("failed to run ip rule show command: %s", err)
+			}
+
+			var rules []ipRuleEntry
+			if err := json.Unmarshal(stdout.Bytes(), &rules); err != nil {
+				t.Fatalf("failed to unmarshal ip rule show command output: %s", err)
+			}
+			found = false
+			for _, rule := range rules {
+				if net.ParseIP(rule.Src).Equal(*egressIP) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("no rule found for egress IP %s in gateway node %s", egressIP, getGatewayNodeInternalIP(ct, ciliumPod.NodeName()))
+			}
+
+			cmd = strings.Split(fmt.Sprintf("ip --json route show table %d", EgressGatewayIPAMRoutingTable), " ")
+			stdout, err = ciliumPod.K8sClient.ExecInPod(ctx, ciliumPod.Pod.Namespace, ciliumPod.Pod.Name, defaults.AgentContainerName, cmd)
+			if err != nil {
+				t.Fatalf("failed to run ip route show command: %s", err)
+			}
+
+			var routes []ipRouteEntry
+			if err := json.Unmarshal(stdout.Bytes(), &routes); err != nil {
+				t.Fatalf("failed to unmarshal ip route show command output: %s", err)
+			}
+			found = false
+			for _, route := range routes {
+				if net.ParseIP(route.PrefSrc).Equal(*egressIP) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("no route found for egress IP %s in gateway node %s", egressIP, getGatewayNodeInternalIP(ct, ciliumPod.NodeName()))
+			}
+		}
+
+		return nil
+	}
+
+	for {
+		if err := ensureNodeNetworkConfig(); err != nil {
+			if err := w.Retry(err); err != nil {
+				t.Fatal("Failed to ensure egress gateway network configuration is properly setup:", err)
+			}
+			continue
+		}
+		return
 	}
 }
 
@@ -847,6 +966,13 @@ func (s *egressGatewayHAIPAM) Run(ctx context.Context, t *check.Test) {
 		return targetEntries
 	})
 
+	waitforGwNetworkConfig(ctx, t, func(ciliumPod check.Pod) *net.IP {
+		if ciliumPod.NodeName() != egressGatewayNode {
+			return nil
+		}
+		return &masqueradeIP
+	})
+
 	// Traffic matching an egress gateway policy should leave the cluster masqueraded with the egress IP (pod to external service)
 	i := 0
 	for _, client := range ct.ClientPods() {
@@ -919,12 +1045,12 @@ func (s *egressGatewayHAIPAMMultipleGateways) Run(ctx context.Context, t *check.
 
 	policyName := "iegp-sample-client"
 
-	gatewayIPsToMasqueradeIPs := make(map[string]string, len(gatewayIPsToNames))
+	gatewayIPsToMasqueradeIPs := make(map[string]net.IP, len(gatewayIPsToNames))
 	masqueradeIPs := make([]string, 0, len(gatewayIPsToNames))
 	for gatewayIP := range gatewayIPsToNames {
 		masqueradeIP := waitForAllocatedEgressIP(ctx, t, policyName, 0, gatewayIP)
 		masqueradeIPs = append(masqueradeIPs, masqueradeIP.String())
-		gatewayIPsToMasqueradeIPs[gatewayIP] = masqueradeIP.String()
+		gatewayIPsToMasqueradeIPs[gatewayIP] = masqueradeIP
 	}
 
 	// wait for the policy map to be populated
@@ -934,7 +1060,7 @@ func (s *egressGatewayHAIPAMMultipleGateways) Run(ctx context.Context, t *check.
 
 		for gatewayIP, nodeName := range gatewayIPsToNames {
 			if ciliumPod.Pod.Spec.NodeName == nodeName {
-				egressIP = gatewayIPsToMasqueradeIPs[gatewayIP]
+				egressIP = gatewayIPsToMasqueradeIPs[gatewayIP].String()
 			}
 			egressGatewayNodeInternalIPs = append(egressGatewayNodeInternalIPs, gatewayIP)
 		}
@@ -961,6 +1087,16 @@ func (s *egressGatewayHAIPAMMultipleGateways) Run(ctx context.Context, t *check.
 		}
 
 		return targetEntries
+	})
+
+	waitforGwNetworkConfig(ctx, t, func(ciliumPod check.Pod) *net.IP {
+		for gatewayIP, nodeName := range gatewayIPsToNames {
+			if ciliumPod.Pod.Spec.NodeName == nodeName {
+				masqueradeIP := gatewayIPsToMasqueradeIPs[gatewayIP]
+				return &masqueradeIP
+			}
+		}
+		return nil
 	})
 
 	// run the test
