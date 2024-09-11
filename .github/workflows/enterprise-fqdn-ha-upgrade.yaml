@@ -282,6 +282,12 @@ jobs:
         run: |
           ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
 
+      - name: 1. Delete policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl delete -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
+
       # Step 2: Upgrade Cilium to PR/HEAD and run FQDN HA specific tests.
 
       - name: 2. Upgrade Cilium ${{ steps.vars.outputs.sha }}
@@ -315,6 +321,12 @@ jobs:
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
           ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      - name: 2. Delete policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl delete -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
 
       # Step 3: Upgrade FQDN HA to PR/HEAD and run FQDN HA specific tests.
 
@@ -358,6 +370,12 @@ jobs:
         run: |
           ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
 
+      - name: 3. Delete policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl delete -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
+
       # Step 4: Downgrade Cilium to stable and run FQDN HA specific tests.
 
       - name: 4. Downgrade Cilium ${{ steps.vars.outputs.stable_version }}
@@ -391,6 +409,12 @@ jobs:
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
           ./enterprise/fqdn-proxy/scripts/test-fqdn-ha.sh
+
+      - name: 4. Delete policy
+        if: ${{ steps.vars.outputs.stable_version != '' }}
+        run: |
+          kubectl delete -f ./enterprise/fqdn-proxy/scripts/compat/fqdn-policy-egress.yaml
+          sleep 10
 
       - name: Post-test information gathering
         if: ${{ !success() }}
