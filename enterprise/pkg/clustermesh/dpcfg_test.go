@@ -41,6 +41,7 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: false,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:     &option.DaemonConfig{ClusterID: 10},
 			expected: dpcfgdef.Map{},
@@ -50,6 +51,7 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{ClusterID: 10},
 			expected: dpcfgdef.Map{
@@ -62,6 +64,7 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       true,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{ClusterID: 10},
 			expected: dpcfgdef.Map{
@@ -75,6 +78,7 @@ func TestDatapathNodeHeaderConfigProvider(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       true,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{ClusterID: 10, EnableIPv4: true},
 			expected: dpcfgdef.Map{

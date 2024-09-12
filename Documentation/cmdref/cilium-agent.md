@@ -169,6 +169,7 @@ cilium-agent [flags]
       --enable-nat46x64-gateway                                      Enable NAT46 and NAT64 gateway
       --enable-node-port                                             Enable NodePort type services by Cilium
       --enable-node-selector-labels                                  Enable use of node label based identity
+      --enable-phantom-services                                      Enable phantom services handling (default true)
       --enable-pmtu-discovery                                        Enable path MTU discovery to send ICMP fragmentation-needed replies to the client
       --enable-policy string                                         Enable policy enforcement (default "default")
       --enable-recorder                                              Enable BPF datapath pcap recorder

@@ -56,6 +56,7 @@ cilium-agent hive [flags]
       --enable-l2-pod-announcements                                  Enable announcing Pod IPs with Gratuitous ARP
       --enable-monitor                                               Enable the monitor unix domain socket server (default true)
       --enable-multi-network                                         Enable support for multiple pod networks
+      --enable-phantom-services                                      Enable phantom services handling (default true)
       --enable-route-mtu-for-cni-chaining                            Enable route MTU for pod netns when CNI chaining is used
       --enable-service-topology                                      Enable support for service topology aware hints
       --endpoint-bpf-prog-watchdog-interval duration                 Interval to trigger endpoint BPF programs load check watchdog (default 30s)

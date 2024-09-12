@@ -87,6 +87,10 @@ func (s *CEServiceMerger) mergeServiceUpdateLocked(service *serviceStore.Cluster
 			}
 		}
 
+		if !s.cmcfg.EnablePhantomServices {
+			return
+		}
+
 		var oldService *Service
 		if !globalOk || !svc.EqualsClusterService(service) {
 			log.WithField(logfields.ServiceName, service.String()).Debug("Added new phantom service")

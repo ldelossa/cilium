@@ -1809,6 +1809,14 @@
                 }
               },
               "type": "object"
+            },
+            "phantomServices": {
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
             }
           },
           "type": "object"

@@ -77,7 +77,7 @@ func TestConfigValidate(t *testing.T) {
 			name:      "mixed routing mode enabled, fallback tunnel, overlapping PodCIDR enabled",
 			cfg:       Config{FallbackRoutingMode: FallbackTunnel},
 			dcfg:      &option.DaemonConfig{IPAM: ipamopt.IPAMKubernetes},
-			cmcfg:     cecmcfg.Config{EnableClusterAwareAddressing: true, EnableInterClusterSNAT: true},
+			cmcfg:     cecmcfg.Config{EnableClusterAwareAddressing: true, EnableInterClusterSNAT: true, EnablePhantomServices: true},
 			assertion: assert.Error,
 		},
 		{

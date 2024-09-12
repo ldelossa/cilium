@@ -23,6 +23,7 @@ import (
 var defaultConfig = cecmcfg.Config{
 	EnableClusterAwareAddressing: false,
 	EnableInterClusterSNAT:       false,
+	EnablePhantomServices:        true,
 }
 
 var Cell = cell.Module(

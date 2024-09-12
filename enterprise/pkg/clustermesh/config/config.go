@@ -25,6 +25,9 @@ const (
 
 	// EnableInterClusterSNAT enables inter-cluster SNAT
 	EnableInterClusterSNAT = "enable-inter-cluster-snat"
+
+	// EnablePhantomServices enables phantom service handling
+	EnablePhantomServices = "enable-phantom-services"
 )
 
 type Config struct {
@@ -33,11 +36,15 @@ type Config struct {
 
 	// EnableInterClusterSNAT enables inter-cluster SNAT
 	EnableInterClusterSNAT bool
+
+	// EnablePhantomServices enables phantom services support
+	EnablePhantomServices bool
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.Bool(EnableClusterAwareAddressing, def.EnableClusterAwareAddressing, "Enable cluster-aware addressing, to support overlapping PodCIDRs")
 	flags.Bool(EnableInterClusterSNAT, def.EnableInterClusterSNAT, "Enable inter-cluster SNAT, to support overlapping PodCIDRs")
+	flags.Bool(EnablePhantomServices, def.EnablePhantomServices, "Enable phantom services handling")
 }
 
 func (cfg Config) Validate(dcfg *option.DaemonConfig) error {

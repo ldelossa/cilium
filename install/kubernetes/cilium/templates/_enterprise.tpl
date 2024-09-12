@@ -72,4 +72,6 @@ auto-create-default-pod-network: {{ .Values.enterprise.multiNetwork.autoCreateDe
 export-file-path: {{ $defaultExportFilePath | quote }}
   {{- end }}
 
+enable-phantom-services: {{ .Values.enterprise.clustermesh.phantomServices.enabled | quote}}
+
 {{- end }}

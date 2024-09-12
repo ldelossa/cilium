@@ -352,6 +352,7 @@ contributors across the globe, there is almost always someone available to help.
 | enterprise.ciliummesh.enabled | bool | `false` | Enables Cilium Mesh |
 | enterprise.clustermesh.enableOverlappingPodCIDRSupport | bool | `false` | Enable overlapping PodCIDR support |
 | enterprise.clustermesh.mixedRoutingMode.enabled | bool | `false` | Enable meshing clusters configured with a different primary routing mode. Inter-cluster traffic is forwarded according to the locally configured mode when matching that of the target cluster, native routing if both clusters use native routing, tunnel if both clusters use tunnel, and defaults to tunnel in the case of a mismatch. The tunnel protocol must be configured to the same value in all clusters. Limited to Cluster Scope or Kubernetes Host Scope IPAM modes. Incompatible with the Direct Server Return (DSR) LB mode. |
+| enterprise.clustermesh.phantomServices.enabled | bool | `true` | Enable Phantom Services support |
 | enterprise.egressGatewayHA | object | `{"enabled":false,"reconciliationTriggerInterval":"1s"}` | Enables egress gateway HA |
 | enterprise.egressGatewayHA.reconciliationTriggerInterval | string | `"1s"` | Time between triggers of egress gateway state reconciliations |
 | enterprise.featureGates | list | `[]` |  |

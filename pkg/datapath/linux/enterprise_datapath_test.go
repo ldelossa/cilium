@@ -42,6 +42,7 @@ func TestInjectCEPrefixClusterMutator(t *testing.T) {
 			cmcfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			localID:  11,
 			nodeID:   11,
@@ -52,6 +53,7 @@ func TestInjectCEPrefixClusterMutator(t *testing.T) {
 			cmcfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			localID:  11,
 			nodeID:   22,

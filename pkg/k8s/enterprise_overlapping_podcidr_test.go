@@ -40,6 +40,7 @@ func TestMergeExternalServiceUpdateClusterAware(t *testing.T) {
 			cmcfg: cmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			expected: cmtypes.MustParseAddrCluster("3.3.3.3@11"),
 		},

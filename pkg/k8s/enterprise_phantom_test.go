@@ -80,6 +80,7 @@ func TestPhantomServiceUpdate(t *testing.T) {
 	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
 		EnableClusterAwareAddressing: false,
 		EnableInterClusterSNAT:       false,
+		EnablePhantomServices:        true,
 	})
 
 	svc := store.ClusterService{
@@ -134,6 +135,7 @@ func TestPhantomServiceDelete(t *testing.T) {
 	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
 		EnableClusterAwareAddressing: false,
 		EnableInterClusterSNAT:       false,
+		EnablePhantomServices:        true,
 	})
 
 	svc := store.ClusterService{
@@ -176,10 +178,54 @@ func TestPhantomServiceDelete(t *testing.T) {
 	require.Len(t, event.Endpoints.Backends, 0, "Received incorrect service event")
 }
 
+func TestPhantomServiceDisabled(t *testing.T) {
+	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
+		EnableClusterAwareAddressing: false,
+		EnableInterClusterSNAT:       false,
+		EnablePhantomServices:        false,
+	})
+
+	svc := store.ClusterService{
+		Cluster:   "other",
+		Namespace: "bar",
+		Name:      "foo",
+		Frontends: map[string]store.PortConfiguration{
+			"1.1.1.1": {},
+		},
+		Backends: map[string]store.PortConfiguration{
+			"3.3.3.3": map[string]*loadbalancer.L4Addr{
+				"port": {Protocol: loadbalancer.TCP, Port: 80},
+			},
+		},
+	}
+
+	swg := lock.NewStoppableWaitGroup()
+	id := ServiceID{Cluster: svc.Cluster, Name: svc.Name, Namespace: svc.Namespace}
+
+	// The service is not marked as phantom, hence it should not be present in the cache.
+	svc.IncludeExternal, svc.Shared = true, true
+	require.False(t, isPhantomService(&svc), "The service should not be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.NotContains(t, svcCache.sc.services, id, "The service should not have been added to the cache")
+
+	// The service is now marked as phantom, but phantom services are disabled hence it should be not present in the cache.
+	svc.IncludeExternal, svc.Shared = false, true
+	require.True(t, isPhantomService(&svc), "The service should be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.NotContains(t, svcCache.sc.services, id, "The service should not have been added to the cache")
+
+	select {
+	case event := <-svcCache.sc.Events:
+		require.Fail(t, "Received unexpected service event", event)
+	default:
+	}
+}
+
 func TestGlobalToPhantomToGlobalService(t *testing.T) {
 	svcCache := NewCEServiceMerger(NewServiceCache(nil, nil), cmcfg.Config{
 		EnableClusterAwareAddressing: false,
 		EnableInterClusterSNAT:       false,
+		EnablePhantomServices:        true,
 	})
 
 	k8sSvc := slim_corev1.Service{

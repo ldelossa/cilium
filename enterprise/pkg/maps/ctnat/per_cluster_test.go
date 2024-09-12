@@ -78,6 +78,7 @@ func TestPerClusterMapsLifecycle(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: false,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{EnableIPv4: true, EnableIPv6: false},
 			init: func(t *testing.T) {
@@ -93,6 +94,7 @@ func TestPerClusterMapsLifecycle(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:     &option.DaemonConfig{EnableIPv4: true, EnableIPv6: true},
 			init:     func(t *testing.T) {},
@@ -104,6 +106,7 @@ func TestPerClusterMapsLifecycle(t *testing.T) {
 			cfg: cecmcfg.Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{EnableIPv4: false, EnableIPv6: true},
 			init: func(t *testing.T) {

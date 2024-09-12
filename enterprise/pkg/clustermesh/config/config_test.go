@@ -30,6 +30,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: false,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{
 				RoutingMode:          option.RoutingModeNative,
@@ -42,6 +43,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableInterClusterSNAT:       true,
 				EnableClusterAwareAddressing: false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{},
 			assertion: assert.Error,
@@ -51,6 +53,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{RoutingMode: option.RoutingModeNative},
 			assertion: assert.Error,
@@ -60,6 +63,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementTrue,
@@ -72,6 +76,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementTrue,
@@ -84,6 +89,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementFalse,
@@ -96,6 +102,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg: &option.DaemonConfig{
 				KubeProxyReplacement: option.KubeProxyReplacementFalse,
@@ -108,6 +115,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{KubeProxyReplacement: option.KubeProxyReplacementTrue},
 			assertion: assert.NoError,
@@ -117,6 +125,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{EnableEndpointRoutes: true},
 			assertion: assert.Error,
@@ -126,6 +135,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{EnableEndpointHealthChecking: true},
 			assertion: assert.Error,
@@ -135,6 +145,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{EnableIPSec: true},
 			assertion: assert.Error,
@@ -144,6 +155,7 @@ func TestConfigValidate(t *testing.T) {
 			cfg: Config{
 				EnableClusterAwareAddressing: true,
 				EnableInterClusterSNAT:       false,
+				EnablePhantomServices:        true,
 			},
 			dcfg:      &option.DaemonConfig{EnableWireguard: true},
 			assertion: assert.Error,
