@@ -11,10 +11,13 @@
 package tests
 
 import (
+	"cmp"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/cilium-cli/connectivity/check"
 	enterpriseDefaults "github.com/cilium/cilium/cilium-cli/enterprise/defaults"
@@ -23,6 +26,9 @@ import (
 func TestExternalCiliumDNSProxySource(t *testing.T) {
 	ciliumDNSProxyPod := check.Pod{
 		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cilium-dnsproxy-t5j79",
+			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
@@ -36,6 +42,9 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 
 	podWithPrometheusMissing := check.Pod{
 		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cilium-dnsproxy-lm2xk",
+			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
@@ -53,7 +62,7 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 	}{
 		"nominal case": {
 			dnsProxyPods: map[string]check.Pod{
-				"cilium-dnsproxy-lm2xk": ciliumDNSProxyPod,
+				ciliumDNSProxyPod.Pod.Name: ciliumDNSProxyPod,
 			},
 			want: check.MetricsSource{
 				Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
@@ -63,8 +72,8 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 		},
 		"with two pods": {
 			dnsProxyPods: map[string]check.Pod{
-				"cilium-dnsproxy-lm2xk": podWithPrometheusMissing,
-				"cilium-dnsproxy-t5j79": ciliumDNSProxyPod,
+				podWithPrometheusMissing.Pod.Name: podWithPrometheusMissing,
+				ciliumDNSProxyPod.Pod.Name:        ciliumDNSProxyPod,
 			},
 			want: check.MetricsSource{
 				Name: enterpriseDefaults.ExternalCiliumDNSProxyName,
@@ -82,10 +91,17 @@ func TestExternalCiliumDNSProxySource(t *testing.T) {
 		},
 	}
 
+	sortPods := func(a, b check.Pod) int {
+		return cmp.Compare(a.Name(), b.Name())
+	}
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			got := ExternalCiliumDNSProxySource(tc.dnsProxyPods)
-			assert.Equal(t, tc.want, got)
+			slices.SortFunc(got.Pods, sortPods)
+			want := tc.want
+			slices.SortFunc(want.Pods, sortPods)
+			assert.Equal(t, want, got)
 		})
 	}
 }
