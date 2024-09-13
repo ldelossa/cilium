@@ -207,7 +207,7 @@ cilium-agent [flags]
       --export-file-compress                                         Compress rotated files (default true)
       --export-file-max-backups int                                  Number of rotated files to keep (default 3)
       --export-file-max-size int                                     Maximum size of the file in megabytes (default 100)
-      --export-file-path string                                      Absolute path of the export file location. An empty string disables the flow export (default "/var/run/cilium/hubble/hubble.log")
+      --export-file-path string                                      Absolute path of the export file location. An empty string disables the flow export
       --export-file-rotation-interval duration                       Interval at which to rotate JSON export files in addition to rotating them by size
       --export-flow-allowlist string                                 Allowlist filters for flows
       --export-flow-denylist string                                  Denylist filters for flows

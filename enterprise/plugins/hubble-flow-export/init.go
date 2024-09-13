@@ -74,7 +74,7 @@ func New(vp *viper.Viper) (plugins.Instance, error) {
 
 func (e *export) AddAgentFlags() *pflag.FlagSet {
 	fs := &pflag.FlagSet{}
-	fs.String(exportFilePath, "/var/run/cilium/hubble/hubble.log",
+	fs.String(exportFilePath, "",
 		"Absolute path of the export file location. An empty string disables the flow export")
 	fs.Int(exportFileMaxSize, 100, "Maximum size of the file in megabytes")
 	fs.Duration("export-file-rotation-interval", 0,
