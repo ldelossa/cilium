@@ -290,6 +290,32 @@ func TestGlobalToPhantomToGlobalService(t *testing.T) {
 	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
 	require.Equal(t, localID, event.ID, "Received incorrect service event")
 	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
+
+	// Delete the local service.
+	svcCache.sc.DeleteService(&k8sSvc, swg)
+	event = <-svcCache.sc.Events
+	require.Equal(t, DeleteService, event.Action, "Received incorrect service event")
+	require.Equal(t, localID, event.ID, "Received incorrect service event")
+
+	// The service is now marked as phantom again, hence it should be present when
+	// indexed by cluster name.
+	svc.IncludeExternal, svc.Shared = false, true
+	require.True(t, isPhantomService(&svc), "The service should be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.NotContains(t, svcCache.sc.services, localID, "The service should not be in cache (by local ID)")
+	require.Contains(t, svcCache.sc.services, globalID, "The service should be in cache (by global ID)")
+
+	event = <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, globalID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
+
+	// Create the local service again. The event should not contain any remote endpoints.
+	svcCache.sc.UpdateService(&k8sSvc, swg)
+	event = <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, localID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 0, "Received incorrect service event")
 }
 
 func TestGetAnnotationPhantom(t *testing.T) {

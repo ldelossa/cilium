@@ -79,6 +79,14 @@ func (s *CEServiceMerger) mergeServiceUpdateLocked(service *serviceStore.Cluster
 
 	svc, globalOk := s.sc.services[globalID]
 	if isPhantomService(service) {
+		// Remove any possible endpoints associated with the corresponding global
+		// service, to correctly handle the transition from global to phantom.
+		if eps, ok := s.sc.externalEndpoints[localID]; ok {
+			if _, ok := eps.endpoints[service.Cluster]; ok {
+				s.sc.mergeExternalServiceDeleteLocked(service, swg)
+			}
+		}
+
 		var oldService *Service
 		if !globalOk || !svc.EqualsClusterService(service) {
 			log.WithField(logfields.ServiceName, service.String()).Debug("Added new phantom service")
@@ -88,15 +96,6 @@ func (s *CEServiceMerger) mergeServiceUpdateLocked(service *serviceStore.Cluster
 			oldService = svc
 			svc = ParseClusterService(service)
 			s.sc.services[globalID] = svc
-
-			if !globalOk {
-				// Check if a global service with the same namespace/name exists in the local cluster,
-				// and in that case trigger an update also for that, to ensure that leftover endpoints
-				// are removed when transitioning from global to phantom.
-				if local, localOk := s.sc.services[localID]; localOk && local.IncludeExternal {
-					s.sc.mergeExternalServiceDeleteLocked(service, swg)
-				}
-			}
 		}
 
 		// oldService is propagated to handle possible changes of the frontend
