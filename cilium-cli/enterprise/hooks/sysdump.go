@@ -34,6 +34,9 @@ const (
 	enterpriseAgentContainerName = "enterprise"
 	enterpriseBugtoolPrefix      = "hubble-enterprise-bugtool"
 	enterpriseCLICommand         = "hubble-enterprise"
+
+	dnsProxyContainerName   = "cilium-dnsproxy"
+	dnsProxyMetricsPortName = "metrics"
 )
 
 var (
@@ -257,19 +260,23 @@ func addSysdumpTasks(collector *sysdump.Collector, opts *EnterpriseOptions) erro
 		},
 		{
 			CreatesSubtasks: true,
-			Description:     "Collecting logs from 'cilium-dnsproxy' pods",
+			Description:     "Collecting logs and metrics from 'cilium-dnsproxy' pods",
 			Quick:           false,
 			Task: func(ctx context.Context) error {
 				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
 					LabelSelector: "k8s-app=cilium-dnsproxy",
 				})
 				if err != nil {
-					return fmt.Errorf("failed to get logs from 'cilium-dnsproxy' pods")
+					return fmt.Errorf("failed to get logs from 'cilium-dnsproxy' pods: %w", err)
 				}
 				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
 					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
-					return fmt.Errorf("failed to collect logs from 'cilium-dnsproxy' pods")
+					return fmt.Errorf("failed to collect logs from 'cilium-dnsproxy' pods: %w", err)
 				}
+				if err = collector.SubmitMetricsSubtask(p, dnsProxyContainerName, dnsProxyMetricsPortName); err != nil {
+					return fmt.Errorf("failed to collect metrics from 'cilium-dnsproxy' pods: %w", err)
+				}
+
 				return nil
 			},
 		},
