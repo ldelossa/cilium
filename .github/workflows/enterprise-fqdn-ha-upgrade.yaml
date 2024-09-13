@@ -300,7 +300,7 @@ jobs:
       - name: 2. Run FQDN connectivity tests
         if: ${{ steps.vars.outputs.stable_version != '' }}
         run: |
-          cilium connectivity test --debug ${{ steps.vars.outputs.connectivity_test_defaults }}
+          cilium connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }}
 
       - name: 2. Apply policy
         if: ${{ steps.vars.outputs.stable_version != '' }}
