@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -52,9 +53,13 @@ func (ops *ops) Update(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 		return fmt.Errorf("failed to get device %s by name: %w", entry.Interface, err)
 	}
 
+	ops.logger.Debug("Adding address", "egress IP", entry.Addr, "interface", entry.Interface)
+
 	if err := netlink.AddrAdd(iface, addrForEgressIP(entry.Addr)); err != nil && !errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("failed to add egress IP %s to interface %s", entry.Addr, iface.Attrs().Name)
 	}
+
+	ops.logger.Debug("Upserting rule", "egress IP", entry.Addr)
 
 	if err := route.ReplaceRule(ruleForEgressIP(entry.Addr)); err != nil {
 		return fmt.Errorf("failed to upsert rule for address %s: %w", entry.Addr, err)
@@ -85,6 +90,8 @@ func (ops *ops) Update(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 			}
 		}
 		if !found {
+			ops.logger.Debug("Deleting stale route", "egress IP", entry.Addr, "destination", r.Dst, "interface", iface.Attrs().Name)
+
 			if err := route.DeleteV4(routeForEgressIP(entry.Addr, ipNetToPrefix(*r.Dst), iface)); err != nil && !errors.Is(err, syscall.ESRCH) {
 				return fmt.Errorf("failed to delete route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
 			}
@@ -102,6 +109,8 @@ func (ops *ops) Update(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 			}
 		}
 		if !found {
+			ops.logger.Debug("Upserting route", "egress IP", entry.Addr, "destination", dest, "interface", iface.Attrs().Name)
+
 			if err := route.Upsert(routeForEgressIP(entry.Addr, dest, iface)); err != nil {
 				return fmt.Errorf("failed to append route for egress IP %s and interface %s", entry.Addr, iface.Attrs().Name)
 			}
@@ -117,15 +126,21 @@ func (ops *ops) Delete(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 		return fmt.Errorf("failed to get device %s by name: %w", entry.Interface, err)
 	}
 
+	ops.logger.Debug("Deleting address", "egress IP", entry.Addr, "interface", entry.Interface)
+
 	if err := netlink.AddrDel(iface, addrForEgressIP(entry.Addr)); err != nil && !errors.Is(err, unix.EADDRNOTAVAIL) {
 		return fmt.Errorf("failed to delete egress IP %s to interface %s", entry.Addr, iface.Attrs().Name)
 	}
+
+	ops.logger.Debug("Deleting rule", "egress IP", entry.Addr)
 
 	if err := route.DeleteRule(netlink.FAMILY_V4, ruleForEgressIP(entry.Addr)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("failed to delete rule for address %s: %w", entry.Addr, err)
 	}
 
 	for _, dest := range entry.Destinations {
+		ops.logger.Debug("Deleting route", "egress IP", entry.Addr, "destination", dest, "interface", iface.Attrs().Name)
+
 		if err := route.DeleteV4(routeForEgressIP(entry.Addr, dest, iface)); err != nil && !errors.Is(err, syscall.ESRCH) {
 			return fmt.Errorf("failed to delete route for egress IP %s and interface %s: %w", entry.Addr, iface.Attrs().Name, err)
 		}
@@ -171,6 +186,8 @@ func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter statedb.Ite
 			continue
 		}
 
+		ops.logger.Debug("Pruning rule", "egress IP", addr)
+
 		if err := route.DeleteRule(netlink.FAMILY_V4, ruleForEgressIP(addr)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("failed to delete rule for address %s while pruning: %w", addr, err)
 		}
@@ -198,6 +215,8 @@ func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter statedb.Ite
 			continue
 		}
 
+		ops.logger.Debug("Pruning route", "egress IP", addr, "destination", r.Dst)
+
 		if err := netlink.RouteDel(&netlink.Route{
 			Dst:      r.Dst,
 			Src:      addr.AsSlice(),
@@ -211,11 +230,13 @@ func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter statedb.Ite
 	return nil
 }
 
-func newOps() *ops {
-	return &ops{}
+func newOps(logger *slog.Logger) *ops {
+	return &ops{logger}
 }
 
-type ops struct{}
+type ops struct {
+	logger *slog.Logger
+}
 
 var _ reconciler.Operations[*tables.EgressIPEntry] = &ops{}
 

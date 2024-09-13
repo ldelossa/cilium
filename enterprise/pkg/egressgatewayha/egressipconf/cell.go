@@ -42,7 +42,7 @@ func startReconciler(
 		(*tables.EgressIPEntry).Clone,
 		(*tables.EgressIPEntry).SetStatus,
 		(*tables.EgressIPEntry).GetStatus,
-		newOps(),
+		newOps(params.Log),
 		nil,
 	)
 	return reconciler, err

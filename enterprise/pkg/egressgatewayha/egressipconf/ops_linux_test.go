@@ -14,6 +14,7 @@ package egressipconf
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/netip"
 	"testing"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/cilium/cilium/enterprise/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
+	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/testutils/netns"
 )
@@ -65,7 +67,7 @@ func TestOps(t *testing.T) {
 	egressIP := netip.MustParseAddr("192.168.1.50")
 	destinations := []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24"), netip.MustParsePrefix("192.168.2.0/24")}
 
-	ops := &ops{}
+	ops := &ops{slog.New(logging.SlogNopHandler)}
 
 	// Initial Update()
 	entry := &tables.EgressIPEntry{
@@ -313,7 +315,7 @@ func TestPrune(t *testing.T) {
 	ifName := link.Attrs().Name
 	ifIndex := link.Attrs().Index
 
-	ops := &ops{}
+	ops := &ops{slog.New(logging.SlogNopHandler)}
 
 	egressIP_1 := netip.MustParseAddr("192.168.1.50")
 	destinations_1_1 := netip.MustParsePrefix("192.168.1.0/24")
