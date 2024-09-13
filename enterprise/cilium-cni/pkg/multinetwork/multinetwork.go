@@ -223,7 +223,7 @@ func installIsovalentPodNetworkRoutes(state *cmd.CmdState, routes []*enterpriseM
 // To solve this, we install a source IP based IP rule that redirects
 // packet with a pre-determined source IP over the interface where that IP
 // is attached to.
-func installMultiNetworkSourceRoutes(state *cmd.CmdState, ifNumber int, ipam *models.IPAMResponse, routeMTU int) error {
+func installMultiNetworkSourceRoutes(state *cmd.CmdState, ifNumber int, ipam *models.IPAMResponse, routeMTU int) {
 	// This shouldn't conflict with the main routing table IDs (253-255)
 	// because we don't expect more than 243 (253-10) networks being used at the
 	// same time.
@@ -256,8 +256,6 @@ func installMultiNetworkSourceRoutes(state *cmd.CmdState, ifNumber int, ipam *mo
 			Protocol: linux_defaults.RTProto,
 		})
 	}
-
-	return nil
 }
 
 // PrepareEndpoint returns the interface configuration 'cmd' of the container
@@ -306,10 +304,7 @@ func (e *endpointConfiguration) PrepareEndpoint(ipam *models.IPAMResponse) (stat
 			return nil, nil, fmt.Errorf("failed to create IsovalentPodNetwork routes: %w", err)
 		}
 
-		err = installMultiNetworkSourceRoutes(state, e.ifNumber, ipam, routeMTU)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create multi-network source routes: %w", err)
-		}
+		installMultiNetworkSourceRoutes(state, e.ifNumber, ipam, routeMTU)
 	}
 
 	return state, ep, nil
