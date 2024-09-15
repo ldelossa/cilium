@@ -41,7 +41,7 @@ env:
   name: ${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  kubectl_version: v1.31.0
+  kubectl_version: v1.31.1
   upload_dir: github-upload
   artifact_retention_days: 15
 
