@@ -1450,6 +1450,17 @@ skip_host_firewall:
 	}
 #endif
 
+#if defined(ENABLE_IPSEC)
+	if ((ctx->mark & MARK_MAGIC_ENCRYPT) != MARK_MAGIC_ENCRYPT) {
+		cilium_dbg(ctx, DBG_UNSPEC, 1, 0);
+		ret =  ipsec_maybe_redirect_to_encrypt(ctx, proto);
+		if (ret == CTX_ACT_REDIRECT)
+			return ret;
+		else if (IS_ERR(ret))
+			goto drop_err;
+	}
+#endif /* ENABLE_IPSEC */
+
 #if defined(ENABLE_ENCRYPTED_OVERLAY)
 	if (ctx_is_overlay(ctx) && get_identity(ctx) == ENCRYPTED_OVERLAY_ID) {
 		/* This is overlay traffic that should be recirculated
