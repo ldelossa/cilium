@@ -1450,26 +1450,16 @@ skip_host_firewall:
 	}
 #endif
 
-#if defined(ENABLE_ENCRYPTED_OVERLAY)
-	if (ctx_is_overlay(ctx) && get_identity(ctx) == ENCRYPTED_OVERLAY_ID) {
-		/* This is overlay traffic that should be recirculated
-		 * to the stack for XFRM encryption.
-		 */
-		ret = encrypt_overlay_and_redirect(ctx);
-		if (ret == CTX_ACT_REDIRECT) {
-			/* we are redirecting back into the stack, so TRACE_TO_STACK
-			 * for tracepoint
-			 */
-			send_trace_notify(ctx, TRACE_TO_STACK, src_sec_identity,
-					  dst_sec_identity,
-					  TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
-					  TRACE_REASON_ENCRYPT_OVERLAY, 0);
+#if defined(ENABLE_IPSEC) && defined(ENABLE_ENCRYPTED_OVERLAY)
+	if ((ctx->mark & MARK_MAGIC_ENCRYPT) != MARK_MAGIC_ENCRYPT) {
+		cilium_dbg(ctx, DBG_UNSPEC, 1, 0);
+		ret =  ipsec_maybe_redirect_to_encrypt(ctx, proto);
+		if (ret == CTX_ACT_REDIRECT)
 			return ret;
-		}
-		if (IS_ERR(ret))
+		else if (IS_ERR(ret))
 			goto drop_err;
 	}
-#endif /* ENABLE_ENCRYPTED_OVERLAY */
+#endif /* ENABLE_IPSEC */
 
 #ifdef ENABLE_WIREGUARD
 	/* Redirect the packet to the WireGuard tunnel device for encryption

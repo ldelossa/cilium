@@ -13,6 +13,7 @@
 #include "lib/eps.h"
 #include "lib/ipv4.h"
 #include "lib/vxlan.h"
+#include "lib/identity.h"
 
 /* We cap key index at 4 bits because mark value is used to map ctx to key */
 #define MAX_KEY_INDEX 15
@@ -203,6 +204,91 @@ do_decrypt(struct __ctx_buff *ctx, __u16 proto)
 #else
 	return ctx_redirect(ctx, CILIUM_IFINDEX, 0);
 #endif /* ENABLE_ROUTING */
+}
+
+static __always_inline int
+ipsec_maybe_redirect_to_encrypt(struct __ctx_buff *ctx, __be16 proto)
+{
+	struct remote_endpoint_info *dst = NULL;
+	struct remote_endpoint_info __maybe_unused *src = NULL;
+	void *data __maybe_unused, *data_end __maybe_unused;
+	struct iphdr __maybe_unused *ip4;
+	__u32 magic __maybe_unused = 0;
+	int ret = 0;
+	__u8 dst_mac = 0;
+
+	if (!eth_is_supported_ethertype(proto))
+		return DROP_UNSUPPORTED_L2;
+
+	switch (proto) {
+# ifdef ENABLE_IPV4
+	case bpf_htons(ETH_P_IP):
+		if (!revalidate_data(ctx, &data, &data_end, &ip4))
+			return DROP_INVALID;
+
+#  if defined(TUNNEL_MODE)
+		/* In tunneling mode IPsec needs to encrypt tunnel traffic,
+		 * so that src sec ID can be transferred.
+		 *
+		 * This also handles IPv6, as IPv6 pkts are encapsulated w/
+		 * IPv4 tunneling.
+		 */
+		if (ctx_is_overlay(ctx)) {
+			ret = set_ipsec_encrypt(ctx, 0, ip4->daddr,
+						get_identity(ctx), false,
+						true);
+			if (ret != CTX_ACT_OK)
+				return ret;
+			goto overlay_encrypt;
+		}
+#  endif /* TUNNEL_MODE */
+
+		dst = lookup_ip4_remote_endpoint(ip4->daddr, 0);
+		src = lookup_ip4_remote_endpoint(ip4->saddr, 0);
+		break;
+# endif /* ENABLE_IPV4 */
+
+# ifdef ENABLE_IPV6
+	case bpf_htons(ETH_P_IPV6):
+		/* ipv6 traffic not currently supported unless its tunneled */
+# endif /* ENABLE_IPv6 */
+	default:
+		return CTX_ACT_OK;
+	}
+
+	/* only hairpin pod-to-pod or overlay traffic back into the stack for
+	 * XFRM encryption
+	 */
+	if (!src || src->sec_identity == HOST_ID)
+		return CTX_ACT_OK;
+	if (!identity_is_cluster(src->sec_identity))
+		return CTX_ACT_OK;
+	if (identity_is_remote_node(src->sec_identity))
+		return CTX_ACT_OK;
+
+	/* mark packet for encryption based on ipcache's key */
+	ret = set_ipsec_encrypt(ctx, dst->key, ip4->daddr, src->sec_identity, false, true);
+	if (ret != CTX_ACT_OK)
+		return ret;
+
+#  if defined(TUNNEL_MODE) && defined(ENABLE_IPV4)
+overlay_encrypt:
+#  endif
+	/*
+	 * source mac is our current egress interface, lets copy it to dmac
+	 * so redirecting to ingress side of the same interface doesn't fail.
+	 */
+	if (eth_load_saddr(ctx, &dst_mac, 0) != 0)
+		return DROP_INVALID;
+	if (eth_store_daddr(ctx, &dst_mac, 0) != 0)
+		return DROP_WRITE_ERROR;
+
+	/* redirect to ingress side of ifindex so the packet has xfrm applied */
+	ret = ctx_redirect(ctx, ctx->ifindex, BPF_F_INGRESS);
+	if (ret != CTX_ACT_REDIRECT)
+		return DROP_INVALID;
+
+	return ret;
 }
 
 #if defined(ENABLE_ENCRYPTED_OVERLAY)
