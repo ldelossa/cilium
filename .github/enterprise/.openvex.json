@@ -436,6 +436,69 @@
       "status": "not_affected",
       "status_notes": "Reported for OpenSSL binaries which are shipped in the container but unused",
       "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-34156"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        },
+        {
+          "@id": "pkg:oci/clustermesh-apiserver-ci"
+        },
+        {
+          "@id": "pkg:oci/docker-plugin-ci"
+        },
+        {
+          "@id": "pkg:oci/hubble-relay-ci"
+        },
+        {
+          "@id": "pkg:oci/operator-generic-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Reported for libcilium.so, loopback binary, gops, grpc_health_probe, and v1.13-ce Cilium binaries, none of which are affected",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-34158"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        },
+        {
+          "@id": "pkg:oci/clustermesh-apiserver-ci"
+        },
+        {
+          "@id": "pkg:oci/docker-plugin-ci"
+        },
+        {
+          "@id": "pkg:oci/hubble-relay-ci"
+        },
+        {
+          "@id": "pkg:oci/operator-generic-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Reported for libcilium.so, loopback binary, gops, grpc_health_probe, and v1.13-ce Cilium binaries, none of which are affected",
+      "justification": "vulnerable_code_not_in_execute_path"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-6119"
+      },
+      "products": [
+        {
+          "@id": "pkg:oci/cilium-ci"
+        }
+      ],
+      "status": "not_affected",
+      "status_notes": "Flags on OpenSSL binaries on the 1.13-ce container that are shipped but not used",
+      "justification": "vulnerable_code_not_in_execute_path"
     }
   ]
 }
