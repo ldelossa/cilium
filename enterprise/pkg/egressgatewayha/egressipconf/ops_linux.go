@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/cilium/cilium/enterprise/datapath/tables"
+	"github.com/cilium/cilium/pkg/datapath/garp"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 )
@@ -57,6 +58,11 @@ func (ops *ops) Update(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 
 	if err := netlink.AddrAdd(iface, addrForEgressIP(entry.Addr)); err != nil && !errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("failed to add egress IP %s to interface %s", entry.Addr, iface.Attrs().Name)
+	}
+
+	err = garp.SendOnInterfaceIdx(iface.Attrs().Index, entry.Addr)
+	if err != nil {
+		ops.logger.Warn("failed to send gratuitous arp reply", "egress IP", entry.Addr, "iface index", iface.Attrs().Index, "error", err)
 	}
 
 	ops.logger.Debug("Upserting rule", "egress IP", entry.Addr)
