@@ -110,6 +110,13 @@ jobs:
       - name: Set Environment Variables
         uses: ./.github/actions/set-env-variables
 
+      - name: Get Cilium's default values
+        id: default_vars
+        uses: ./.github/actions/helm-default
+        with:
+          image-tag: ${{ inputs.SHA || github.sha }}
+          chart-dir: ./untrusted/install/kubernetes/cilium
+
       - name: Set up job variables
         id: vars
         run: |
@@ -119,15 +126,7 @@ jobs:
             SHA="${{ github.sha }}"
           fi
 
-          CILIUM_INSTALL_DEFAULTS="--chart-directory=./untrusted/install/kubernetes/cilium \
-            --helm-set=debug.enabled=true \
-            --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
-            --helm-set=image.useDigest=false \
-            --helm-set=image.tag=${SHA} \
-            --helm-set=operator.image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator \
-            --helm-set=operator.image.suffix=-ci \
-            --helm-set=operator.image.tag=${SHA} \
-            --helm-set=operator.image.useDigest=false \
+          CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
             --nodes-without-cilium \
             --helm-set=autoDirectNodeRoutes=true \
             --helm-set=bpf.masquerade=false \
