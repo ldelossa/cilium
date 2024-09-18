@@ -82,7 +82,7 @@ type BGPAdvertisement struct {
 	// Service defines configuration options for advertisementType service.
 	//
 	// +kubebuilder:validation:Optional
-	Service *v2alpha1.BGPServiceOptions `json:"service,omitempty"`
+	Service *BGPServiceOptions `json:"service,omitempty"`
 
 	// Selector is a label selector to select objects of the type specified by AdvertisementType.
 	// If not specified, no objects of the type specified by AdvertisementType are selected for advertisement.
@@ -95,4 +95,23 @@ type BGPAdvertisement struct {
 	//
 	// +kubebuilder:validation:Optional
 	Attributes *v2alpha1.BGPAttributes `json:"attributes,omitempty"`
+}
+
+// BGPServiceOptions defines the configuration for Service advertisement type.
+type BGPServiceOptions struct {
+	// Addresses is a list of service address types which needs to be advertised via BGP.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Addresses []v2alpha1.BGPServiceAddressType `json:"addresses,omitempty"`
+
+	// AggregationLength is the length of the prefix to be advertised.
+	// If not specified, exact route is advertised with prefix length of 32 for IPv4
+	// and 128 for IPv6.
+	//
+	// This option does not change prefix lengths of VIPs for services which have
+	// externalTrafficPolicy set to Local.
+	//
+	// +kubebuilder:validation:Optional
+	AggregationLength *int32 `json:"aggregationLength,omitempty"`
 }

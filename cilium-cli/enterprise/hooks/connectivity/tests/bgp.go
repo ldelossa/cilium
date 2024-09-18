@@ -142,7 +142,7 @@ func configureBGPPeering(ctx context.Context, t *check.Test, ipFamily features.I
 				},
 				{
 					AdvertisementType: isovalentv1alpha1.BGPServiceAdvert,
-					Service: &ciliumv2alpha1.BGPServiceOptions{
+					Service: &isovalentv1alpha1.BGPServiceOptions{
 						Addresses: []ciliumv2alpha1.BGPServiceAddressType{ciliumv2alpha1.BGPClusterIPAddr},
 					},
 					Selector: &slimv1.LabelSelector{

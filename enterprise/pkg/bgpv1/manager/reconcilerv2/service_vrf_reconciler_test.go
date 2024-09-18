@@ -214,7 +214,7 @@ var (
 
 	vrf1BGPAdvert = v1alpha1.BGPAdvertisement{
 		AdvertisementType: "Service",
-		Service: &v2alpha1.BGPServiceOptions{
+		Service: &v1alpha1.BGPServiceOptions{
 			Addresses: []v2alpha1.BGPServiceAddressType{
 				v2alpha1.BGPLoadBalancerIPAddr,
 			},
@@ -235,7 +235,7 @@ var (
 
 	vrf2BGPAdvert = v1alpha1.BGPAdvertisement{
 		AdvertisementType: "Service",
-		Service: &v2alpha1.BGPServiceOptions{
+		Service: &v1alpha1.BGPServiceOptions{
 			Addresses: []v2alpha1.BGPServiceAddressType{
 				v2alpha1.BGPLoadBalancerIPAddr,
 			},

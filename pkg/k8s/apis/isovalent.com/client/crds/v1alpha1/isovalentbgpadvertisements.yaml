@@ -218,6 +218,14 @@ spec:
                             type: string
                           minItems: 1
                           type: array
+                        aggregationLength:
+                          description: "AggregationLength is the length of the prefix
+                            to be advertised. If not specified, exact route is advertised
+                            with prefix length of 32 for IPv4 and 128 for IPv6. \n
+                            This option does not change prefix lengths of VIPs for
+                            services which have externalTrafficPolicy set to Local."
+                          format: int32
+                          type: integer
                       type: object
                   required:
                   - advertisementType

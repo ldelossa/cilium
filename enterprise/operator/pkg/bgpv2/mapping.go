@@ -360,7 +360,7 @@ func createOSSAdvertisement(entAdvertisement *v1alpha1.IsovalentBGPAdvertisement
 
 		ossAdvert := v2alpha1.BGPAdvertisement{
 			AdvertisementType: advertType,
-			Service:           advert.Service,
+			Service:           ossServiceOptionFromEnt(advert.Service),
 			Selector:          advert.Selector,
 			Attributes:        advert.Attributes,
 		}
@@ -368,6 +368,16 @@ func createOSSAdvertisement(entAdvertisement *v1alpha1.IsovalentBGPAdvertisement
 	}
 
 	return newOSSAdvertisement
+}
+
+func ossServiceOptionFromEnt(advert *v1alpha1.BGPServiceOptions) *v2alpha1.BGPServiceOptions {
+	if advert == nil {
+		return nil
+	}
+
+	return &v2alpha1.BGPServiceOptions{
+		Addresses: advert.Addresses,
+	}
 }
 
 func ossAdvertTypeFromEnt(advert v1alpha1.IsovalentBGPAdvertType) v2alpha1.BGPAdvertisementType {
