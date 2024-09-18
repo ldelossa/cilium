@@ -59,7 +59,7 @@ jobs:
   echo-inputs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     name: Echo Workflow Dispatch Inputs
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Echo Workflow Dispatch Inputs
         run: |
@@ -76,7 +76,7 @@ jobs:
 
   upgrade-and-downgrade:
     name: "Upgrade and Downgrade Test"
-    runs-on: ubuntu-latest-4cores-16gb
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false

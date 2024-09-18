@@ -68,7 +68,7 @@ jobs:
 
   installation-and-connectivity:
     name: Setup & Test
-    runs-on: ubuntu-latest-4cores-16gb
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Collect Workflow Telemetry
