@@ -575,7 +575,7 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 	for i := range groupStatuses {
 		if addr := config.groupConfigs[i].egressIP; addr.IsValid() {
 			msg := "egressIP not supported together with egressCIDR"
-			operatorManager.health.Degraded(msg, fmt.Errorf("found egress IP %s in policy %s", addr, config.id))
+			operatorManager.health.Degraded(msg, fmt.Errorf("found egress IP %s in policy %s", addr, config.id.Name))
 			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
 				{
 					Type:               egwIPAMUnsupportedEgressIP,
@@ -622,7 +622,7 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 		}
 	}
 
-	operatorManager.health.OK(fmt.Sprintf("IP allocations completed successfully for policy %s", config.id))
+	operatorManager.health.OK(fmt.Sprintf("IP allocations completed successfully for policy %s", config.id.Name))
 
 	return groupStatuses, conditionsForSuccess(config.generation)
 }
