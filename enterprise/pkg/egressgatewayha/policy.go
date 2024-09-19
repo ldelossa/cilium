@@ -538,8 +538,8 @@ func (config *PolicyConfig) allocateEgressIPs(operatorManager *OperatorManager, 
 		// detect conflicting CIDRs
 		if conflicting, found := operatorManager.cidrConflicts[policyEgressCIDR{config.id, cidr}]; found {
 			msg := fmt.Sprintf(
-				"egress CIDR %s in policy %s overlaps with egress group %s in policy %s",
-				cidr, config.id, conflicting.cidr, conflicting.origin,
+				"egress CIDR %s in policy %s overlaps with egress CIDR %s in policy %s",
+				cidr, config.id.Name, conflicting.cidr, conflicting.origin.Name,
 			)
 			return groupStatuses, conditionsForFailure(config.generation, []meta_v1.Condition{
 				{
