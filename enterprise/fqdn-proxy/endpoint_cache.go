@@ -15,6 +15,8 @@
 package main
 
 import (
+	"net/netip"
+
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -24,8 +26,8 @@ import (
 // AgentDataCache is a cache which stores data retrieved from agent by
 // DNS proxy so that proxy can function when agent is unavailable
 type AgentDataCache struct {
-	endpointByIP map[string]*endpoint.Endpoint
-	identityByIP map[string]ipcache.Identity
+	endpointByIP map[netip.Addr]*endpoint.Endpoint
+	identityByIP map[netip.Addr]ipcache.Identity
 	ipBySecID    map[identity.NumericIdentity][]string
 
 	lock lock.RWMutex
@@ -33,8 +35,8 @@ type AgentDataCache struct {
 
 func NewCache() AgentDataCache {
 	return AgentDataCache{
-		endpointByIP: make(map[string]*endpoint.Endpoint),
-		identityByIP: make(map[string]ipcache.Identity),
+		endpointByIP: make(map[netip.Addr]*endpoint.Endpoint),
+		identityByIP: make(map[netip.Addr]ipcache.Identity),
 		ipBySecID:    make(map[identity.NumericIdentity][]string),
 	}
 }

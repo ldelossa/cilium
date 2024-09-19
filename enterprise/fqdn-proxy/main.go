@@ -495,7 +495,7 @@ func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, bool, error) {
 	ep, err := client().LookupEndpointByIP(context.TODO(), &pb.FQDN_IP{IP: bs})
 	if err != nil {
 		cache.lock.RLock()
-		endpoint, ok := cache.endpointByIP[ip.String()]
+		endpoint, ok := cache.endpointByIP[ip]
 		cache.lock.RUnlock()
 		if !ok {
 			return nil, false, fmt.Errorf("could not lookup endpoint for ip %s: %w", ip, err)
@@ -512,7 +512,7 @@ func LookupEndpointIDByIP(ip netip.Addr) (*endpoint.Endpoint, bool, error) {
 		K8sPodName:   ep.PodName,
 	}
 	cache.lock.Lock()
-	cache.endpointByIP[ip.String()] = endpoint
+	cache.endpointByIP[ip] = endpoint
 	cache.lock.Unlock()
 	return endpoint, false, nil
 }
@@ -523,7 +523,7 @@ func LookupSecIDByIP(ip netip.Addr) (secID ipcache.Identity, exists bool) {
 	id, err := client().LookupSecurityIdentityByIP(context.TODO(), &pb.FQDN_IP{IP: ip.AsSlice()})
 	if err != nil {
 		cache.lock.RLock()
-		cachedID, ok := cache.identityByIP[ip.String()]
+		cachedID, ok := cache.identityByIP[ip]
 		cache.lock.RUnlock()
 		if !ok {
 			log.Errorf("could not lookup security identity for ip %s: %v", ip, err)
@@ -541,7 +541,7 @@ func LookupSecIDByIP(ip netip.Addr) (secID ipcache.Identity, exists bool) {
 	}
 
 	cache.lock.Lock()
-	cache.identityByIP[ip.String()] = identity
+	cache.identityByIP[ip] = identity
 	cache.lock.Unlock()
 
 	return identity, id.Exists
