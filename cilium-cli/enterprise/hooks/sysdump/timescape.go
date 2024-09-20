@@ -12,6 +12,7 @@ package sysdump
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -21,9 +22,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cilium/cilium/cilium-cli/sysdump"
-
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/cilium/cilium/cilium-cli/sysdump"
 )
 
 // SubmitTimescapeBugtoolTasks takes a list of timescape pods and will submit tasks to collect bugtool output for them
@@ -32,17 +33,26 @@ func SubmitTimescapeBugtoolTasks(c *sysdump.Collector, pods []*corev1.Pod, times
 	for _, p := range pods {
 		switch p.GetLabels()["app.kubernetes.io/component"] {
 		case "server":
-			err := submitTimescapeBugtoolTaskForContainer(c, p, "server", timescapeBugtoolPrefix, bugtoolFlags)
+			err := submitTimescapeBugtoolTaskForContainer(c, p, "server", timescapeBugtoolTaskConfig{
+				prefix:     timescapeBugtoolPrefix,
+				extraFlags: bugtoolFlags,
+			})
 			if err != nil {
 				submitErrors = append(submitErrors, err)
 			}
 		case "ingester":
-			err := submitTimescapeBugtoolTaskForContainer(c, p, "ingester", timescapeBugtoolPrefix, bugtoolFlags)
+			err := submitTimescapeBugtoolTaskForContainer(c, p, "ingester", timescapeBugtoolTaskConfig{
+				prefix:     timescapeBugtoolPrefix,
+				extraFlags: bugtoolFlags,
+			})
 			if err != nil {
 				submitErrors = append(submitErrors, err)
 			}
 		case "lite":
-			err := submitTimescapeBugtoolTaskForContainer(c, p, "timescape", timescapeBugtoolPrefix, bugtoolFlags)
+			err := submitTimescapeBugtoolTaskForContainer(c, p, "timescape", timescapeBugtoolTaskConfig{
+				prefix:     timescapeBugtoolPrefix,
+				extraFlags: bugtoolFlags,
+			})
 			if err != nil {
 				submitErrors = append(submitErrors, err)
 			}
@@ -56,29 +66,53 @@ func SubmitTimescapeBugtoolTasks(c *sysdump.Collector, pods []*corev1.Pod, times
 	}
 	return errors.Join(submitErrors...)
 }
-func submitTimescapeBugtoolTaskForContainer(c *sysdump.Collector, p *corev1.Pod, containerName string, timescapeBugtoolPrefix string, bugtoolFlags []string) error {
-	workerID := fmt.Sprintf("%s-%s-%s-%s", timescapeBugtoolPrefix, p.Namespace, p.Name, containerName)
+
+type timescapeBugtoolTaskConfig struct {
+	prefix     string
+	extraFlags []string
+}
+
+func submitTimescapeBugtoolTaskForContainer(c *sysdump.Collector, p *corev1.Pod, containerName string, cfg timescapeBugtoolTaskConfig) error {
+	workerID := fmt.Sprintf("%s-%s-%s-%s", cfg.prefix, p.Namespace, p.Name, containerName)
 	if err := c.Pool.Submit(workerID, func(ctx context.Context) error {
+		var errs error
 
-		// Run 'hubble-timescape bugtool' in the pod and collect stdout
-		command := append([]string{"/usr/bin/hubble-timescape", "bugtool", "--out", "-"}, bugtoolFlags...)
-
-		out, e, err := c.Client.ExecInPodWithStderr(ctx, p.Namespace, p.Name, containerName, command)
+		out, err := runTimescapeBugtool(ctx, c.Client, p.Namespace, p.Name, containerName, cfg)
 		if err != nil {
-			return fmt.Errorf("failed to collect 'timescape-bugtool' output for %q in namespace %q: %w:\n%s", p.Name, p.Namespace, err, e.String())
+			// Even if the bugtool run failed, there might be valid partial output,
+			// let's still try to capture it
+			errs = errors.Join(errs, err)
 		}
 
 		// Extract content
 		dir := c.AbsoluteTempPath(fmt.Sprintf("%s-<ts>", workerID))
-		if err := untarTo(&out, dir); err != nil {
-			return err
+		if err := untarTo(out, dir); err != nil {
+			errs = errors.Join(errs, err)
 		}
 
+		if errs != nil {
+			return fmt.Errorf("failure collecting 'timescape-bugtool' output for %q in namespace %q, the output might be missing or incomplete:\n %w", p.Name, p.Namespace, errs)
+		}
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to submit 'timescape-bugtool' task for %q: %w", p.Name, err)
 	}
 	return nil
+}
+
+type timescapeBugtoolKubernetesClient interface {
+	ExecInPodWithStderr(ctx context.Context, namespace, pod, container string, command []string) (bytes.Buffer, bytes.Buffer, error)
+}
+
+func runTimescapeBugtool(ctx context.Context, c timescapeBugtoolKubernetesClient, namespace string, name string, containerName string, cfg timescapeBugtoolTaskConfig) (io.Reader, error) {
+	// Run 'hubble-timescape bugtool' in the pod and collect stdout
+	command := append([]string{"/usr/bin/hubble-timescape", "bugtool", "--out", "-"}, cfg.extraFlags...)
+
+	out, e, err := c.ExecInPodWithStderr(ctx, namespace, name, containerName, command)
+	if err != nil {
+		return &out, fmt.Errorf("failed run 'timescape bugtool': %w:\n%s", err, e.String())
+	}
+	return &out, nil
 }
 
 func untarTo(in io.Reader, dst string) error {
