@@ -22,9 +22,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/blang/semver/v4"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/cilium/cilium/cilium-cli/sysdump"
+	"github.com/cilium/cilium/pkg/versioncheck"
 )
 
 // SubmitTimescapeBugtoolTasks takes a list of timescape pods and will submit tasks to collect bugtool output for them
@@ -42,16 +44,18 @@ func SubmitTimescapeBugtoolTasks(c *sysdump.Collector, pods []*corev1.Pod, times
 			}
 		case "ingester":
 			err := submitTimescapeBugtoolTaskForContainer(c, p, "ingester", timescapeBugtoolTaskConfig{
-				prefix:     timescapeBugtoolPrefix,
-				extraFlags: bugtoolFlags,
+				prefix:            timescapeBugtoolPrefix,
+				extraFlags:        bugtoolFlags,
+				collectClickhouse: true,
 			})
 			if err != nil {
 				submitErrors = append(submitErrors, err)
 			}
 		case "lite":
 			err := submitTimescapeBugtoolTaskForContainer(c, p, "timescape", timescapeBugtoolTaskConfig{
-				prefix:     timescapeBugtoolPrefix,
-				extraFlags: bugtoolFlags,
+				prefix:            timescapeBugtoolPrefix,
+				extraFlags:        bugtoolFlags,
+				collectClickhouse: true,
 			})
 			if err != nil {
 				submitErrors = append(submitErrors, err)
@@ -70,6 +74,8 @@ func SubmitTimescapeBugtoolTasks(c *sysdump.Collector, pods []*corev1.Pod, times
 type timescapeBugtoolTaskConfig struct {
 	prefix     string
 	extraFlags []string
+
+	collectClickhouse bool
 }
 
 func submitTimescapeBugtoolTaskForContainer(c *sysdump.Collector, p *corev1.Pod, containerName string, cfg timescapeBugtoolTaskConfig) error {
@@ -105,14 +111,57 @@ type timescapeBugtoolKubernetesClient interface {
 }
 
 func runTimescapeBugtool(ctx context.Context, c timescapeBugtoolKubernetesClient, namespace string, name string, containerName string, cfg timescapeBugtoolTaskConfig) (io.Reader, error) {
-	// Run 'hubble-timescape bugtool' in the pod and collect stdout
-	command := append([]string{"/usr/bin/hubble-timescape", "bugtool", "--out", "-"}, cfg.extraFlags...)
+	var errs error
+	command := []string{"/usr/bin/hubble-timescape", "bugtool", "--out", "-"}
 
+	if cfg.collectClickhouse {
+		// Only available since v1.5.0
+		// Check timescape version to decide what flags are valid
+		v, err := getTimescapeVersion(ctx, c, namespace, name, containerName)
+		if err != nil {
+			// If there is an error collect it and treat it as the most recent version
+			errs = errors.Join(errs, fmt.Errorf("failed to get timescape version, continuing with most recent version: %w", err))
+		}
+		if v == nil || versioncheck.MustCompile(">=1.5.0")(*v) {
+			command = append(command, "--collect-clickhouse-stats")
+		}
+	}
+
+	command = append(command, cfg.extraFlags...)
+	// Run 'hubble-timescape bugtool' in the pod and collect stdout
 	out, e, err := c.ExecInPodWithStderr(ctx, namespace, name, containerName, command)
 	if err != nil {
-		return &out, fmt.Errorf("failed run 'timescape bugtool': %w:\n%s", err, e.String())
+		errs = errors.Join(errs, fmt.Errorf("failed run 'timescape bugtool': %w:\n%s", err, e.String()))
 	}
-	return &out, nil
+	return &out, errs
+}
+
+func getTimescapeVersion(ctx context.Context, c timescapeBugtoolKubernetesClient, namespace string, name string, containerName string) (*semver.Version, error) {
+	o, _, err := c.ExecInPodWithStderr(
+		ctx,
+		namespace,
+		name,
+		containerName,
+		[]string{"/usr/bin/hubble-timescape", "version"},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch timescape version of pod %q: %w", name, err)
+	}
+
+	// The version string is of the form
+	// hubble-timescape 1.x.x compiled with go1.xx.x on linux/amd64
+	// Take the second field and try to parse it
+	fields := strings.Fields(strings.TrimSpace(o.String()))
+	if len(fields) < 2 {
+		return nil, fmt.Errorf("unable to parse timescape version %q of pod %q: %w", o, name, err)
+	}
+	v, _, _ := strings.Cut(strings.TrimSpace(fields[1]), "-") // strips proprietary -releaseX suffix
+	podVersion, err := semver.ParseTolerant(v)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse timescape version %q of pod %q: %w", o, name, err)
+	}
+
+	return &podVersion, nil
 }
 
 func untarTo(in io.Reader, dst string) error {

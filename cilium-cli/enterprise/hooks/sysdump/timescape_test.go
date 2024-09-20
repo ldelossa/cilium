@@ -14,8 +14,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/blang/semver/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -82,7 +84,138 @@ func TestRunTimescapeBugtool(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "partial-failure", string(data))
 	})
+	t.Run("collect ClickHouse", func(t *testing.T) {
+		c := timescapeMockK8sClient{
+			execFunc: func(_ context.Context, namespace string, pod string, container string, command []string) (bytes.Buffer, bytes.Buffer, error) {
+				assert.Equal(t, "hubble-timescape", namespace)
+				assert.Equal(t, "hubble-timescape-server-667b5d554c-mxnfb", pod)
+				assert.Equal(t, "server", container)
 
+				switch command[1] {
+				case "bugtool":
+					assert.Equal(t, []string{"/usr/bin/hubble-timescape", "bugtool", "--out", "-", "--collect-clickhouse-stats"}, command)
+					out := bytes.NewBufferString("clickhouse")
+					return *out, bytes.Buffer{}, nil
+				case "version":
+					assert.Equal(t, []string{"/usr/bin/hubble-timescape", "version"}, command)
+					out := bytes.NewBufferString("hubble-timescape 1.5.2 compiled with go1.22.6 on linux/amd64")
+					return *out, bytes.Buffer{}, nil
+				}
+				return bytes.Buffer{}, bytes.Buffer{}, fmt.Errorf("unexpected command %v", command)
+			},
+		}
+		out, err := runTimescapeBugtool(context.TODO(), c, "hubble-timescape", "hubble-timescape-server-667b5d554c-mxnfb", "server", timescapeBugtoolTaskConfig{
+			prefix:            "timescape-bugtool",
+			collectClickhouse: true,
+		})
+		require.NoError(t, err)
+		data, err := safeio.ReadAllLimit(out, 1000)
+		require.NoError(t, err)
+		assert.Equal(t, "clickhouse", string(data))
+	})
+	t.Run("don't collect ClickHouse pre v1.5.0", func(t *testing.T) {
+		c := timescapeMockK8sClient{
+			execFunc: func(_ context.Context, namespace string, pod string, container string, command []string) (bytes.Buffer, bytes.Buffer, error) {
+				assert.Equal(t, "hubble-timescape", namespace)
+				assert.Equal(t, "hubble-timescape-server-667b5d554c-mxnfb", pod)
+				assert.Equal(t, "server", container)
+
+				switch command[1] {
+				case "bugtool":
+					assert.Equal(t, []string{"/usr/bin/hubble-timescape", "bugtool", "--out", "-"}, command)
+					out := bytes.NewBufferString("no clickhouse")
+					return *out, bytes.Buffer{}, nil
+				case "version":
+					assert.Equal(t, []string{"/usr/bin/hubble-timescape", "version"}, command)
+					out := bytes.NewBufferString("hubble-timescape 1.4.2 compiled with go1.22.6 on linux/amd64")
+					return *out, bytes.Buffer{}, nil
+				}
+				return bytes.Buffer{}, bytes.Buffer{}, fmt.Errorf("unexpected command %v", command)
+			},
+		}
+		out, err := runTimescapeBugtool(context.TODO(), c, "hubble-timescape", "hubble-timescape-server-667b5d554c-mxnfb", "server", timescapeBugtoolTaskConfig{
+			prefix:            "timescape-bugtool",
+			collectClickhouse: true,
+		})
+		require.NoError(t, err)
+		data, err := safeio.ReadAllLimit(out, 1000)
+		require.NoError(t, err)
+		assert.Equal(t, "no clickhouse", string(data))
+	})
+
+}
+
+func TestGetTimescapeVersion(t *testing.T) {
+	tcs := map[string]struct {
+		output        string
+		expectErr     bool
+		expectVersion semver.Version
+	}{
+		"simple": {
+			output:    "hubble-timescape 1.4.0 compiled with go1.22.6 on linux/amd64",
+			expectErr: false,
+			expectVersion: semver.Version{
+				Major: 1,
+				Minor: 4,
+				Patch: 0,
+			},
+		},
+		"with patch": {
+			output:    "hubble-timescape 1.5.2 compiled with go1.22.6 on linux/amd64",
+			expectErr: false,
+			expectVersion: semver.Version{
+				Major: 1,
+				Minor: 5,
+				Patch: 2,
+			},
+		},
+		"drop pre-release": {
+			output:    "hubble-timescape 1.2.6-rc.1 compiled with go1.22.6 on linux/amd64",
+			expectErr: false,
+			expectVersion: semver.Version{
+				Major: 1,
+				Minor: 2,
+				Patch: 6,
+			},
+		},
+		"missing build info": {
+			output:    "hubble-timescape 2.1.6",
+			expectErr: false,
+			expectVersion: semver.Version{
+				Major: 2,
+				Minor: 1,
+				Patch: 6,
+			},
+		},
+		"unknown": {
+			output:    "unknown",
+			expectErr: true,
+		},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			c := timescapeMockK8sClient{
+				execFunc: func(_ context.Context, namespace string, pod string, container string, command []string) (bytes.Buffer, bytes.Buffer, error) {
+					assert.Equal(t, "hubble-timescape", namespace)
+					assert.Equal(t, "hubble-timescape-ingester-667b5d554c-mxnfb", pod)
+					assert.Equal(t, "ingester", container)
+					assert.Equal(t, []string{"/usr/bin/hubble-timescape", "version"}, command)
+					out := bytes.NewBufferString(tc.output)
+					return *out, bytes.Buffer{}, nil
+				},
+			}
+			v, err := getTimescapeVersion(context.TODO(), c, "hubble-timescape", "hubble-timescape-ingester-667b5d554c-mxnfb", "ingester")
+			if tc.expectErr {
+				require.Error(t, err)
+				require.Nil(t, v)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, v)
+				assert.Equal(t, tc.expectVersion, *v)
+			}
+		})
+	}
 }
 
 var _ timescapeBugtoolKubernetesClient = timescapeMockK8sClient{}
