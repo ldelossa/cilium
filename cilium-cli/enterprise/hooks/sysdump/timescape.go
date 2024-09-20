@@ -24,6 +24,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/cilium-cli/sysdump"
 	"github.com/cilium/cilium/pkg/versioncheck"
@@ -43,10 +44,16 @@ func SubmitTimescapeBugtoolTasks(c *sysdump.Collector, pods []*corev1.Pod, times
 				submitErrors = append(submitErrors, err)
 			}
 		case "ingester":
-			err := submitTimescapeBugtoolTaskForContainer(c, p, "ingester", timescapeBugtoolTaskConfig{
-				prefix:            timescapeBugtoolPrefix,
-				extraFlags:        bugtoolFlags,
-				collectClickhouse: true,
+			user, pwRef, err := extractMigrateCredentials(p)
+			if err != nil {
+				submitErrors = append(submitErrors, fmt.Errorf("failed to extract privileged ClickHouse credentials from the Timescape Pod, continuing with unprivileged user: %w", err))
+			}
+			err = submitTimescapeBugtoolTaskForContainer(c, p, "ingester", timescapeBugtoolTaskConfig{
+				prefix:                timescapeBugtoolPrefix,
+				extraFlags:            bugtoolFlags,
+				collectClickhouse:     true,
+				clickhouseUsername:    user,
+				clickhousePwSecretRef: pwRef,
 			})
 			if err != nil {
 				submitErrors = append(submitErrors, err)
@@ -75,7 +82,9 @@ type timescapeBugtoolTaskConfig struct {
 	prefix     string
 	extraFlags []string
 
-	collectClickhouse bool
+	collectClickhouse     bool
+	clickhouseUsername    string
+	clickhousePwSecretRef *corev1.SecretKeySelector
 }
 
 func submitTimescapeBugtoolTaskForContainer(c *sysdump.Collector, p *corev1.Pod, containerName string, cfg timescapeBugtoolTaskConfig) error {
@@ -108,6 +117,7 @@ func submitTimescapeBugtoolTaskForContainer(c *sysdump.Collector, p *corev1.Pod,
 
 type timescapeBugtoolKubernetesClient interface {
 	ExecInPodWithStderr(ctx context.Context, namespace, pod, container string, command []string) (bytes.Buffer, bytes.Buffer, error)
+	GetSecret(ctx context.Context, namespace, name string, opts metav1.GetOptions) (*corev1.Secret, error)
 }
 
 func runTimescapeBugtool(ctx context.Context, c timescapeBugtoolKubernetesClient, namespace string, name string, containerName string, cfg timescapeBugtoolTaskConfig) (io.Reader, error) {
@@ -124,6 +134,14 @@ func runTimescapeBugtool(ctx context.Context, c timescapeBugtoolKubernetesClient
 		}
 		if v == nil || versioncheck.MustCompile(">=1.5.0")(*v) {
 			command = append(command, "--collect-clickhouse-stats")
+			if cfg.clickhouseUsername != "" && cfg.clickhousePwSecretRef != nil {
+				pw, err := getSecretKey(ctx, c, namespace, cfg.clickhousePwSecretRef)
+				if err != nil {
+					errs = errors.Join(errs, fmt.Errorf("failed to get timescape clickhouse credentials, continuing with local credentials: %w", err))
+				} else {
+					command = append(command, fmt.Sprintf("--clickhouse-username=%s", cfg.clickhouseUsername), fmt.Sprintf("--clickhouse-password=%s", pw))
+				}
+			}
 		}
 	}
 
@@ -162,6 +180,53 @@ func getTimescapeVersion(ctx context.Context, c timescapeBugtoolKubernetesClient
 	}
 
 	return &podVersion, nil
+}
+
+func getSecretKey(ctx context.Context, c timescapeBugtoolKubernetesClient, namespace string, secretRef *corev1.SecretKeySelector) (string, error) {
+	pwSecret, err := c.GetSecret(ctx, namespace, secretRef.Name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	if pwSecret == nil {
+		return "", errors.New("failed to find secret")
+	}
+
+	pw, ok := pwSecret.Data[secretRef.Key]
+	if !ok {
+		return "", errors.New("failed to find key in secret")
+	}
+	return string(pw), nil
+}
+
+func extractMigrateCredentials(ingesterPod *corev1.Pod) (string, *corev1.SecretKeySelector, error) {
+	var migrateContainer *corev1.Container
+	for _, c := range ingesterPod.Spec.InitContainers {
+		if c.Name == "migrate" {
+			migrateContainer = &c
+		}
+	}
+	if migrateContainer == nil {
+		return "", nil, errors.New("no migrate initContainer found")
+	}
+
+	var chUser string
+	var chPwSecretRef *corev1.SecretKeySelector
+	for _, env := range migrateContainer.Env {
+		switch env.Name {
+		case "HUBBLE_TIMESCAPE_CLICKHOUSE_USERNAME":
+			chUser = env.Value
+		case "HUBBLE_TIMESCAPE_CLICKHOUSE_PASSWORD":
+			chPwSecretRef = env.ValueFrom.SecretKeyRef
+		}
+	}
+	if chPwSecretRef == nil {
+		return "", nil, errors.New("failed to get secret reference from env var `HUBBLE_TIMESCAPE_CLICKHOUSE_PASSWORD`")
+	}
+	if chUser == "" {
+		return "", nil, errors.New("failed to get username form env var `HUBBLE_TIMESCAPE_CLICKHOUSE_USERNAME`")
+	}
+
+	return chUser, chPwSecretRef, nil
 }
 
 func untarTo(in io.Reader, dst string) error {
