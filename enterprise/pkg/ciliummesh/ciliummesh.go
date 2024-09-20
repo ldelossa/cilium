@@ -108,7 +108,7 @@ func newCiliumMeshController(p ciliumMeshParams) *CiliumMeshController {
 	}
 
 	p.JobGroup.Add(
-		job.OneShot("cilium-mesh main", func(ctx context.Context, _ cell.Health) error {
+		job.OneShot("cilium-mesh-main", func(ctx context.Context, _ cell.Health) error {
 			var err error
 			// We need the endpoint creator to be ready before we start handling
 			// events.

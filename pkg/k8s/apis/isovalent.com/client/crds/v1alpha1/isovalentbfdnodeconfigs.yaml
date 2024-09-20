@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: isovalentbfdnodeconfigs.isovalent.com
 spec:
   group: isovalent.com
@@ -23,21 +22,26 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: IsovalentBFDNodeConfig contains node-specific configuration for
-          the BFD agent. This resource may be created and managed by Cilium operator
-          (e.g. based on BGP config), which is indicated by an owner reference, and
-          in which case it is read-only for the users. It may be also created by users,
-          in which case ot is fully owned by the user.
+        description: |-
+          IsovalentBFDNodeConfig contains node-specific configuration for the BFD agent.
+          This resource may be created and managed by Cilium operator (e.g. based on BGP config),
+          which is indicated by an owner reference, and in which case it is read-only for the users.
+          It may be also created by users, in which case ot is fully owned by the user.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -50,72 +54,74 @@ spec:
                   configuration belongs to.
                 type: string
               peers:
-                description: "Peers is a list of BFD peers desired for this node.
-                  \n Note that multiple BFD sessions may be running between two systems.
-                  However, each BFD session between a pair of systems MUST traverse
-                  a separate network-layer path in both directions (RFC 5881, section
-                  2). To satisfy this requirement, multiple peers with the same PeerAddress
-                  are allowed on the node only when they are configured with a different
-                  Interface."
+                description: |-
+                  Peers is a list of BFD peers desired for this node.
+
+                  Note that multiple BFD sessions may be running between two systems.
+                  However, each BFD session between a pair of systems MUST traverse a separate
+                  network-layer path in both directions (RFC 5881, section 2).
+                  To satisfy this requirement, multiple peers with the same PeerAddress are allowed
+                  on the node only when they are configured with a different Interface.
                 items:
                   description: BFDNodePeerConfig contains node-specific BFD peering
                     configuration.
                   properties:
                     bfdProfileRef:
-                      description: "BFDProfileRef is a reference to an IsovalentBFDProfile
-                        resource name containing further BFD configuration for this
-                        peering. \n The peering will not be configured until the referenced
-                        profile exists."
+                      description: |-
+                        BFDProfileRef is a reference to an IsovalentBFDProfile resource name
+                        containing further BFD configuration for this peering.
+
+                        The peering will not be configured until the referenced profile exists.
                       type: string
                     echoSourceAddress:
-                      description: "EchoSourceAddress defines the IP address used
-                        as the source address when sending Echo packets for the BFD
-                        peering. If not configured, the LocalAddress will be used
-                        if configured, or the auto-detected IP address of the egress
-                        interface will be used, which has the following limitations:
-                        \n - The detection of the source address happens during the
-                        session setup, and it does not automatically update upon interface
-                        address changes, \n - Per RFC 5881, the Echo source address
-                        should not be part of the subnet bound to the interface over
-                        which the BFD Echo packet is being transmitted, and it should
-                        not be an IPv6 link-local address to preclude the remote system
-                        from generating ICMP or Neighbor Discovery Redirect messages.
-                        \n These limitations can be addressed by configuring an explicit
-                        EchoSourceAddress, which can be any IP address, even non-existing
-                        on the given node."
+                      description: |-
+                        EchoSourceAddress defines the IP address used as the source address when sending Echo packets for the BFD peering.
+                        If not configured, the LocalAddress will be used if configured, or the auto-detected IP address
+                        of the egress interface will be used, which has the following limitations:
+
+                         - The detection of the source address happens during the session setup, and it does not
+                           automatically update upon interface address changes,
+
+                         - Per RFC 5881, the Echo source address should not be part of the subnet bound to the interface
+                           over which the BFD Echo packet is being transmitted, and it should not be an IPv6 link-local address
+                           to preclude the remote system from generating ICMP or Neighbor Discovery Redirect messages.
+
+                        These limitations can be addressed by configuring an explicit EchoSourceAddress, which can be
+                        any IP address, even non-existing on the given node.
                       format: ip
                       type: string
                     interface:
-                      description: "Interface is the name of a network interface to
-                        which this session is bound to. If not specified: \n - For
-                        directly connected peers, the session is bound to an interface
-                        that is auto-detected during BFD peer reconciliation (based
-                        on the host's routing table and the LocalAddress if specified).
-                        If the routing changes and the peering needs to be re-bound
-                        to another interface, it can be done either by explicitly
-                        specifying the interface, or by any change in the BFD profile
-                        / peer config. \n - For multi-hop peers, the session is not
-                        bound to any specific interface, and no other session with
-                        the same PeerAddress can exist on the node."
+                      description: |-
+                        Interface is the name of a network interface to which this session is bound to. If not specified:
+
+                        - For directly connected peers, the session is bound to an interface that is auto-detected
+                          during BFD peer reconciliation (based on the host's routing table and the LocalAddress if specified).
+                          If the routing changes and the peering needs to be re-bound to another interface,
+                          it can be done either by explicitly specifying the interface, or by any change in the BFD profile / peer config.
+
+                        - For multi-hop peers, the session is not bound to any specific interface, and no other session
+                          with the same PeerAddress can exist on the node.
                       type: string
                     localAddress:
-                      description: "LocalAddress is the local IP address used for
-                        the BFD peering. It must match the IP address configured for
-                        this node on the remote peer. \n If not specified, it is auto-selected
-                        by the operating system using the routing table entries and/or
-                        the IP address on the egress interface towards the peer."
+                      description: |-
+                        LocalAddress is the local IP address used for the BFD peering.
+                        It must match the IP address configured for this node on the remote peer.
+
+                        If not specified, it is auto-selected by the operating system using the routing table entries and/or
+                        the IP address on the egress interface towards the peer.
                       format: ip
                       type: string
                     name:
                       description: Name is a logical name of the peering.
                       type: string
                     peerAddress:
-                      description: PeerAddress is the IP address of the BFD peer.
-                        Supports IPv4 and IPv6 addresses. If a link-local IPv6 address
-                        is used, Interface must be specified.
+                      description: |-
+                        PeerAddress is the IP address of the BFD peer.
+                        Supports IPv4 and IPv6 addresses. If a link-local IPv6 address is used, Interface must be specified.
                       format: ip
                       type: string
                   required:
+                  - bfdProfileRef
                   - name
                   - peerAddress
                   type: object
@@ -130,48 +136,41 @@ spec:
             description: Status is the most recently observed status of the IsovalentBFDNodeConfig.
             properties:
               conditions:
-                description: "Conditions Represents the observations of a IsovalentBFDNodeConfig's
-                  current state. \n The \"Ready\" condition type can be used to observe
-                  if all BFD peers of the IsovalentBFDNodeConfig have been configured
-                  successfully."
+                description: |-
+                  Conditions Represents the observations of a IsovalentBFDNodeConfig's current state.
+
+                  The "Ready" condition type can be used to observe if all BFD peers of the IsovalentBFDNodeConfig
+                  have been configured successfully.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource. --- This struct is intended for direct
-                    use as an array at the field path .status.conditions.  For example,
-                    \n type FooStatus struct{ // Represents the observations of a
-                    foo's current state. // Known .status.conditions.type are: \"Available\",
-                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
-                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
-                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
-                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
-                      description: lastTransitionTime is the last time the condition
-                        transitioned from one status to another. This should be when
-                        the underlying condition changed.  If that is not known, then
-                        using the time when the API field changed is acceptable.
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
-                      description: message is a human readable message indicating
-                        details about the transition. This may be an empty string.
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
                       maxLength: 32768
                       type: string
                     observedGeneration:
-                      description: observedGeneration represents the .metadata.generation
-                        that the condition was set based upon. For instance, if .metadata.generation
-                        is currently 12, but the .status.conditions[x].observedGeneration
-                        is 9, the condition is out of date with respect to the current
-                        state of the instance.
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
                       format: int64
                       minimum: 0
                       type: integer
                     reason:
-                      description: reason contains a programmatic identifier indicating
-                        the reason for the condition's last transition. Producers
-                        of specific condition types may define expected values and
-                        meanings for this field, and whether the values are considered
-                        a guaranteed API. The value should be a CamelCase string.
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
                         This field may not be empty.
                       maxLength: 1024
                       minLength: 1
@@ -186,10 +185,6 @@ spec:
                       type: string
                     type:
                       description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        --- Many .condition.type values are consistent across resources
-                        like Available, but because arbitrary conditions can be useful
-                        (see .node.status.conditions), the ability to deconflict is
-                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -212,9 +207,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

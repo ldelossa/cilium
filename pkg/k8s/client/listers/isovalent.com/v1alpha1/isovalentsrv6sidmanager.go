@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -26,30 +26,10 @@ type IsovalentSRv6SIDManagerLister interface {
 
 // isovalentSRv6SIDManagerLister implements the IsovalentSRv6SIDManagerLister interface.
 type isovalentSRv6SIDManagerLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.IsovalentSRv6SIDManager]
 }
 
 // NewIsovalentSRv6SIDManagerLister returns a new IsovalentSRv6SIDManagerLister.
 func NewIsovalentSRv6SIDManagerLister(indexer cache.Indexer) IsovalentSRv6SIDManagerLister {
-	return &isovalentSRv6SIDManagerLister{indexer: indexer}
-}
-
-// List lists all IsovalentSRv6SIDManagers in the indexer.
-func (s *isovalentSRv6SIDManagerLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentSRv6SIDManager, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentSRv6SIDManager))
-	})
-	return ret, err
-}
-
-// Get retrieves the IsovalentSRv6SIDManager from the index for a given name.
-func (s *isovalentSRv6SIDManagerLister) Get(name string) (*v1alpha1.IsovalentSRv6SIDManager, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("isovalentsrv6sidmanager"), name)
-	}
-	return obj.(*v1alpha1.IsovalentSRv6SIDManager), nil
+	return &isovalentSRv6SIDManagerLister{listers.New[*v1alpha1.IsovalentSRv6SIDManager](indexer, v1alpha1.Resource("isovalentsrv6sidmanager"))}
 }

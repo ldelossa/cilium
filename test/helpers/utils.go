@@ -43,6 +43,9 @@ func IsRunningOnJenkins() bool {
 			log.Infof("build is not running on Jenkins; environment variable '%v' is not set", varName)
 		}
 	}
+	if result {
+		panic("Jenkins is no longer supported")
+	}
 	return result
 }
 
@@ -443,6 +446,8 @@ func getK8sSupportedConstraints(ciliumVersion string) (semver.Range, error) {
 		return nil, err
 	}
 	switch {
+	case IsCiliumV1_17(cst):
+		return versioncheck.MustCompile(">=1.16.0 <1.32.0"), nil
 	case IsCiliumV1_16(cst):
 		return versioncheck.MustCompile(">=1.16.0 <1.31.0"), nil
 	case IsCiliumV1_15(cst):
@@ -633,10 +638,6 @@ func ExistNodeWithoutCilium() bool {
 // DoesNotExistNodeWithoutCilium is the complement function of ExistNodeWithoutCilium.
 func DoesNotExistNodeWithoutCilium() bool {
 	return !ExistNodeWithoutCilium()
-}
-
-func RunsOnJenkins() bool {
-	return os.Getenv("JENKINS_HOME") != ""
 }
 
 // HasSocketLB returns true if the given Cilium pod has TCP and/or

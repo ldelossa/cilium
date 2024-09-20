@@ -36,23 +36,26 @@ const (
 
 	HubbleGenerateCertsCronJobName = "hubble-generate-certs"
 
-	ClusterMeshDeploymentName             = "clustermesh-apiserver"
-	ClusterMeshBinaryName                 = "/usr/bin/clustermesh-apiserver"
-	ClusterMeshContainerName              = "apiserver"
-	ClusterMeshPodSelector                = "k8s-app=clustermesh-apiserver"
-	ClusterMeshMetricsPortName            = "apiserv-metrics"
-	ClusterMeshKVStoreMeshContainerName   = "kvstoremesh"
-	ClusterMeshKVStoreMeshMetricsPortName = "kvmesh-metrics"
-	ClusterMeshEtcdContainerName          = "etcd"
-	ClusterMeshEtcdMetricsPortName        = "etcd-metrics"
-	ClusterMeshServiceName                = "clustermesh-apiserver"
-	ClusterMeshSecretName                 = "cilium-clustermesh" // Secret which contains the clustermesh configuration
-	ClusterMeshKVStoreMeshSecretName      = "cilium-kvstoremesh" // Secret which contains the kvstoremesh configuration
-	ClusterMeshServerSecretName           = "clustermesh-apiserver-server-cert"
-	ClusterMeshAdminSecretName            = "clustermesh-apiserver-admin-cert"
-	ClusterMeshClientSecretName           = "clustermesh-apiserver-client-cert"
-	ClusterMeshRemoteSecretName           = "clustermesh-apiserver-remote-cert"
-	ClusterMeshExternalWorkloadSecretName = "clustermesh-apiserver-external-workload-cert"
+	ClusterMeshDeploymentName              = "clustermesh-apiserver"
+	ClusterMeshBinaryName                  = "/usr/bin/clustermesh-apiserver"
+	ClusterMeshContainerName               = "apiserver"
+	ClusterMeshPodSelector                 = "k8s-app=clustermesh-apiserver"
+	ClusterMeshMetricsPortName             = "apiserv-metrics"
+	ClusterMeshKVStoreMeshContainerName    = "kvstoremesh"
+	ClusterMeshKVStoreMeshMetricsPortName  = "kvmesh-metrics"
+	ClusterMeshEtcdContainerName           = "etcd"
+	ClusterMeshEtcdMetricsPortName         = "etcd-metrics"
+	ClusterMeshServiceName                 = "clustermesh-apiserver"
+	ClusterMeshSecretName                  = "cilium-clustermesh" // Secret which contains the clustermesh configuration
+	ClusterMeshKVStoreMeshSecretName       = "cilium-kvstoremesh" // Secret which contains the kvstoremesh configuration
+	ClusterMeshServerSecretName            = "clustermesh-apiserver-server-cert"
+	ClusterMeshAdminSecretName             = "clustermesh-apiserver-admin-cert"
+	ClusterMeshClientSecretName            = "clustermesh-apiserver-client-cert"
+	ClusterMeshRemoteSecretName            = "clustermesh-apiserver-remote-cert"
+	ClusterMeshExternalWorkloadSecretName  = "clustermesh-apiserver-external-workload-cert"
+	ClusterMeshConnectionModeBidirectional = "bidirectional"
+	ClusterMeshConnectionModeMesh          = "mesh"
+	ClusterMeshConnectionModeUnicast       = "unicast"
 
 	SPIREServerStatefulSetName = "spire-server"
 	SPIREServerConfigMapName   = "spire-server"
@@ -72,7 +75,7 @@ const (
 	// renovate: datasource=docker
 	ConnectivityTestConnDisruptImage = "quay.io/cilium/test-connection-disruption:v0.0.14@sha256:c3fd56e326ae16f6cb63dbb2e26b4e47ec07a123040623e11399a7fe1196baa0"
 	// renovate: datasource=docker
-	ConnectivityTestFRRImage = "quay.io/frrouting/frr:10.0.1@sha256:83e2ff39e9c033c086e02e1cfd32ff188837a666876212f2a875bd85a79afb7c"
+	ConnectivityTestFRRImage = "quay.io/frrouting/frr:10.1.1@sha256:7c7901eb5611f12634395c949e59663e154b37cf006f32c7f4c8650884cdc0b1"
 
 	ConfigMapName = "cilium-config"
 
@@ -109,8 +112,9 @@ const (
 )
 
 var (
-	// renovate: datasource=github-releases depName=cilium/cilium
-	Version = "v1.16.0"
+	// Version is the default Cilium version to be installed. It is set during build based on
+	// the version in stable.txt.
+	Version string
 
 	// HelmRepository specifies Helm repository to download Cilium charts from.
 	HelmRepository = "https://helm.cilium.io"

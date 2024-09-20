@@ -6,6 +6,7 @@ package k8s_test
 import (
 	"context"
 	"fmt"
+	"iter"
 	"sync/atomic"
 	"testing"
 
@@ -192,7 +193,7 @@ func testStateDBReflector(t *testing.T, p reflectorTestParams) {
 
 	var queryAllFunc k8s.QueryAllFunc[*testObject]
 	if p.doQueryAll {
-		queryAllFunc = func(txn statedb.ReadTxn, tbl statedb.Table[*testObject]) statedb.Iterator[*testObject] {
+		queryAllFunc = func(txn statedb.ReadTxn, tbl statedb.Table[*testObject]) iter.Seq2[*testObject, statedb.Revision] {
 			// This method is called on the initial synchronization (e.g. Replace()) and whenever
 			// connection is lost to api-server and resynchronization is needed.
 			queryAllCalled.Store(true)
@@ -252,11 +253,8 @@ func testStateDBReflector(t *testing.T, p reflectorTestParams) {
 	}
 
 	// Wait until the table has been initialized.
-	require.Eventually(
-		t,
-		func() bool { return table.Initialized(db.ReadTxn()) },
-		time.Second,
-		5*time.Millisecond)
+	_, initWatch := table.Initialized(db.ReadTxn())
+	<-initWatch
 
 	// After initialization we should see the node that was created
 	// before starting.
@@ -334,12 +332,18 @@ func testStateDBReflector(t *testing.T, p reflectorTestParams) {
 }
 
 func TestStateDBReflector_jobName(t *testing.T) {
-	cfg := k8s.ReflectorConfig[corev1.Node]{
-		Name: "test",
+	tbl, _ := statedb.NewTable(
+		"node",
+		testNameIndex,
+	)
+	cfg := k8s.ReflectorConfig[*testObject]{
+		Name:  "test",
+		Table: tbl,
 	}
+
 	assert.Equal(
 		t,
-		"k8s-reflector[v1.Node]/test",
+		"k8s-reflector-node-test",
 		cfg.JobName(),
 	)
 }
@@ -381,11 +385,8 @@ func BenchmarkStateDBReflector(b *testing.B) {
 	}
 
 	// Wait until the table has been initialized.
-	require.Eventually(
-		b,
-		func() bool { return table.Initialized(db.ReadTxn()) },
-		time.Second,
-		5*time.Millisecond)
+	_, initWatch := table.Initialized(db.ReadTxn())
+	<-initWatch
 
 	const numObjects = 10000
 

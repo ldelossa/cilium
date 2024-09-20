@@ -7,14 +7,13 @@ package v1alpha1
 
 import (
 	"context"
-	"time"
 
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	scheme "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // IsovalentMulticastGroupsGetter has a method to return a IsovalentMulticastGroupInterface.
@@ -38,118 +37,18 @@ type IsovalentMulticastGroupInterface interface {
 
 // isovalentMulticastGroups implements IsovalentMulticastGroupInterface
 type isovalentMulticastGroups struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1alpha1.IsovalentMulticastGroup, *v1alpha1.IsovalentMulticastGroupList]
 }
 
 // newIsovalentMulticastGroups returns a IsovalentMulticastGroups
 func newIsovalentMulticastGroups(c *IsovalentV1alpha1Client) *isovalentMulticastGroups {
 	return &isovalentMulticastGroups{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1alpha1.IsovalentMulticastGroup, *v1alpha1.IsovalentMulticastGroupList](
+			"isovalentmulticastgroups",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1alpha1.IsovalentMulticastGroup { return &v1alpha1.IsovalentMulticastGroup{} },
+			func() *v1alpha1.IsovalentMulticastGroupList { return &v1alpha1.IsovalentMulticastGroupList{} }),
 	}
-}
-
-// Get takes name of the isovalentMulticastGroup, and returns the corresponding isovalentMulticastGroup object, and an error if there is any.
-func (c *isovalentMulticastGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentMulticastGroup, err error) {
-	result = &v1alpha1.IsovalentMulticastGroup{}
-	err = c.client.Get().
-		Resource("isovalentmulticastgroups").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of IsovalentMulticastGroups that match those selectors.
-func (c *isovalentMulticastGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentMulticastGroupList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha1.IsovalentMulticastGroupList{}
-	err = c.client.Get().
-		Resource("isovalentmulticastgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested isovalentMulticastGroups.
-func (c *isovalentMulticastGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("isovalentmulticastgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a isovalentMulticastGroup and creates it.  Returns the server's representation of the isovalentMulticastGroup, and an error, if there is any.
-func (c *isovalentMulticastGroups) Create(ctx context.Context, isovalentMulticastGroup *v1alpha1.IsovalentMulticastGroup, opts v1.CreateOptions) (result *v1alpha1.IsovalentMulticastGroup, err error) {
-	result = &v1alpha1.IsovalentMulticastGroup{}
-	err = c.client.Post().
-		Resource("isovalentmulticastgroups").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(isovalentMulticastGroup).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a isovalentMulticastGroup and updates it. Returns the server's representation of the isovalentMulticastGroup, and an error, if there is any.
-func (c *isovalentMulticastGroups) Update(ctx context.Context, isovalentMulticastGroup *v1alpha1.IsovalentMulticastGroup, opts v1.UpdateOptions) (result *v1alpha1.IsovalentMulticastGroup, err error) {
-	result = &v1alpha1.IsovalentMulticastGroup{}
-	err = c.client.Put().
-		Resource("isovalentmulticastgroups").
-		Name(isovalentMulticastGroup.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(isovalentMulticastGroup).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the isovalentMulticastGroup and deletes it. Returns an error if one occurs.
-func (c *isovalentMulticastGroups) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("isovalentmulticastgroups").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *isovalentMulticastGroups) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("isovalentmulticastgroups").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched isovalentMulticastGroup.
-func (c *isovalentMulticastGroups) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentMulticastGroup, err error) {
-	result = &v1alpha1.IsovalentMulticastGroup{}
-	err = c.client.Patch(pt).
-		Resource("isovalentmulticastgroups").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: isovalentbfdprofiles.isovalent.com
 spec:
   group: isovalent.com
@@ -27,14 +26,19 @@ spec:
           that can be used across multiple BFD peers.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -43,29 +47,31 @@ spec:
             properties:
               detectMultiplier:
                 default: 3
-                description: "DetectMultiplier defines the BFD Detection time multiplier
-                  (RFC 5880, section 4.1). The negotiated transmit interval, multiplied
-                  by this value, provides the Detection Time for the receiving system.
-                  \n If not specified, defaults to 3."
+                description: |-
+                  DetectMultiplier defines the BFD Detection time multiplier (RFC 5880, section 4.1).
+                  The negotiated transmit interval, multiplied by this value, provides the
+                  Detection Time for the receiving system.
+
+                  If not specified, defaults to 3.
                 format: int32
                 maximum: 255
                 minimum: 2
                 type: integer
               echoFunction:
-                description: "EchoFunction contains configuration of the BFD Echo
-                  Function mode (RFC 5880, section 2.3.). \n If not specified, the
-                  Echo Function is completely disabled for the peer."
+                description: |-
+                  EchoFunction contains configuration of the BFD Echo Function mode (RFC 5880, section 2.3.).
+
+                  If not specified, the Echo Function is completely disabled for the peer.
                 properties:
                   directions:
-                    description: "Directions defines the directions in which the Echo
-                      Function is enabled. If empty, the Echo Function is disabled.
-                      Single or both directions can be configured, see RFC 5880, section
-                      6.4. (The Echo Function and Asymmetry) for more details. \n
-                      Note that enabling Echo Function for a peering bound to a specific
-                      network interface (either explicitly configured or auto-detected)
-                      may result into modifying sysctl kernel parameters for the given
-                      interface (`send_redirects` for `Receive`, `accept_local` &
-                      `rp_filter` for `Transmit`)."
+                    description: |-
+                      Directions defines the directions in which the Echo Function is enabled.
+                      If empty, the Echo Function is disabled. Single or both directions can be configured,
+                      see RFC 5880, section 6.4. (The Echo Function and Asymmetry) for more details.
+
+                      Note that enabling Echo Function for a peering bound to a specific network interface
+                      (either explicitly configured or auto-detected) may result into modifying sysctl kernel parameters
+                      for the given interface (`send_redirects` for `Receive`, `accept_local` & `rp_filter` for `Transmit`).
                     items:
                       description: BFDEchoFunctionDirection defines the direction
                         in which the Echo Function is enabled (RFC 5880, section 2.3.).
@@ -77,21 +83,23 @@ spec:
                     x-kubernetes-list-type: set
                   receiveIntervalMilliseconds:
                     default: 300
-                    description: "ReceiveIntervalMilliseconds defines the BFD Required
-                      Min Echo RX Interval (RFC 5880, section 4.1). This is the minimum
-                      interval, in milliseconds, between received BFD Echo packets
-                      that this system is capable of supporting, less any jitter applied
-                      by the sender. \n If not specified, defaults to 300 milliseconds."
+                    description: |-
+                      ReceiveIntervalMilliseconds defines the BFD Required Min Echo RX Interval (RFC 5880, section 4.1).
+                      This is the minimum interval, in milliseconds, between received BFD Echo packets that this
+                      system is capable of supporting, less any jitter applied by the sender.
+
+                      If not specified, defaults to 300 milliseconds.
                     format: int32
                     maximum: 60000
                     minimum: 0
                     type: integer
                   transmitIntervalMilliseconds:
                     default: 300
-                    description: "TransmitIntervalMilliseconds defines the minimum
-                      interval, in milliseconds, that the local system would like
-                      to use when transmitting BFD Echo packets, less any jitter applied.
-                      \n If not specified, defaults to 300 milliseconds."
+                    description: |-
+                      TransmitIntervalMilliseconds defines the minimum interval, in milliseconds, that the local system
+                      would like to use when transmitting BFD Echo packets, less any jitter applied.
+
+                      If not specified, defaults to 300 milliseconds.
                     format: int32
                     maximum: 60000
                     minimum: 10
@@ -99,36 +107,37 @@ spec:
                 type: object
               minimumTTL:
                 default: 255
-                description: "MinimumTTL controls the minimum expected Time To Live
-                  (TTL) value for an incoming BFD control packet. This value should
-                  be set to 255 for directly connected peers, and lowered for multi
-                  hop sessions, based on the expected number of hops between the cilium
-                  node and the peer. \n If not specified, defaults to 255 (expecting
-                  direct connection between the cilium node and the peer)."
+                description: |-
+                  MinimumTTL controls the minimum expected Time To Live (TTL) value for an incoming BFD control packet.
+                  This value should be set to 255 for directly connected peers, and lowered for multi hop sessions,
+                  based on the expected number of hops between the cilium node and the peer.
+
+                  If not specified, defaults to 255 (expecting direct connection between the cilium node and the peer).
                 format: int32
                 maximum: 255
                 minimum: 1
                 type: integer
               receiveIntervalMilliseconds:
                 default: 300
-                description: "ReceiveIntervalMilliseconds defines the BFD Required
-                  Min RX Interval (RFC 5880, section 4.1). This is the minimum interval,
-                  in milliseconds, between received BFD Control packets that this
-                  system is capable of supporting, less any jitter applied by the
-                  sender. \n If not specified, defaults to 300 milliseconds. When
-                  Echo Function is active, it is automatically adapted to 1 second
-                  if lower interval was configured."
+                description: |-
+                  ReceiveIntervalMilliseconds defines the BFD Required Min RX Interval (RFC 5880, section 4.1).
+                  This is the minimum interval, in milliseconds, between received BFD Control packets that this
+                  system is capable of supporting, less any jitter applied by the sender.
+
+                  If not specified, defaults to 300 milliseconds.
+                  When Echo Function is active, it is automatically adapted to 1 second if lower interval was configured.
                 format: int32
                 maximum: 60000
                 minimum: 10
                 type: integer
               transmitIntervalMilliseconds:
                 default: 300
-                description: "TransmitIntervalMilliseconds defines the BFD Desired
-                  Min TX Interval (RFC 5880, section 4.1). This is the minimum interval,
-                  in milliseconds, that the local system would like to use when transmitting
-                  BFD Control packets, less any jitter applied. \n If not specified,
-                  defaults to 300 milliseconds."
+                description: |-
+                  TransmitIntervalMilliseconds defines the BFD Desired Min TX Interval (RFC 5880, section 4.1).
+                  This is the minimum interval, in milliseconds, that the local system would like to use when
+                  transmitting BFD Control packets, less any jitter applied.
+
+                  If not specified, defaults to 300 milliseconds.
                 format: int32
                 maximum: 60000
                 minimum: 10
@@ -139,9 +148,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

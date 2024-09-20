@@ -138,6 +138,9 @@ func (svc *svcInfo) isExtLocal() bool {
 }
 
 func (svc *svcInfo) isIntLocal() bool {
+	if !option.Config.EnableInternalTrafficPolicy {
+		return false
+	}
 	switch svc.svcType {
 	case lb.SVCTypeClusterIP, lb.SVCTypeNodePort, lb.SVCTypeLoadBalancer, lb.SVCTypeExternalIPs:
 		return svc.svcIntTrafficPolicy == lb.SVCTrafficPolicyLocal
@@ -274,6 +277,7 @@ type Service struct {
 
 	healthCheckers         []HealthChecker
 	healthCheckSubscribers []HealthSubscriber
+	healthCheckChan        chan any
 
 	lbmap         datapathTypes.LBMap
 	lastUpdatedTs atomic.Value
@@ -300,6 +304,7 @@ func newService(monitorAgent monitorAgent.Agent, lbmap datapathTypes.LBMap, back
 		backendByHash:            map[string]*lb.Backend{},
 		monitorAgent:             monitorAgent,
 		healthServer:             localHealthServer,
+		healthCheckChan:          make(chan any),
 		lbmap:                    lbmap,
 		l7lbSvcs:                 map[lb.ServiceName]*L7LBInfo{},
 		backendConnectionHandler: backendConnectionHandler{},
@@ -310,7 +315,7 @@ func newService(monitorAgent monitorAgent.Agent, lbmap datapathTypes.LBMap, back
 	svc.lastUpdatedTs.Store(time.Now())
 
 	for _, hc := range healthCheckers {
-		hc.SetCallback(svc.HealthCheckCallback)
+		hc.SetCallback(svc.healthCheckCallback)
 	}
 
 	return svc
@@ -2114,6 +2119,9 @@ func (s *Service) notifyMonitorServiceUpsert(frontend lb.L3n4AddrID, backends []
 		be = append(be, b)
 	}
 
+	if !option.Config.EnableInternalTrafficPolicy {
+		svcIntTrafficPolicy = lb.SVCTrafficPolicyCluster
+	}
 	msg := monitorAPI.ServiceUpsertMessage(id, fe, be, string(svcType), string(svcExtTrafficPolicy), string(svcIntTrafficPolicy), svcName, svcNamespace)
 	s.monitorAgent.SendEvent(monitorAPI.MessageTypeAgent, msg)
 }

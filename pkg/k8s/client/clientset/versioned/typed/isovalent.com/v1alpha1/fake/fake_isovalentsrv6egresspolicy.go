@@ -27,20 +27,22 @@ var isovalentsrv6egresspoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("Isov
 
 // Get takes name of the isovalentSRv6EgressPolicy, and returns the corresponding isovalentSRv6EgressPolicy object, and an error if there is any.
 func (c *FakeIsovalentSRv6EgressPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentSRv6EgressPolicy, err error) {
+	emptyResult := &v1alpha1.IsovalentSRv6EgressPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentsrv6egresspoliciesResource, name), &v1alpha1.IsovalentSRv6EgressPolicy{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentsrv6egresspoliciesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentSRv6EgressPolicy), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentSRv6EgressPolicies that match those selectors.
 func (c *FakeIsovalentSRv6EgressPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentSRv6EgressPolicyList, err error) {
+	emptyResult := &v1alpha1.IsovalentSRv6EgressPolicyList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentsrv6egresspoliciesResource, isovalentsrv6egresspoliciesKind, opts), &v1alpha1.IsovalentSRv6EgressPolicyList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentsrv6egresspoliciesResource, isovalentsrv6egresspoliciesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentSRv6EgressPolicies) List(ctx context.Context, opts v1.List
 // Watch returns a watch.Interface that watches the requested isovalentSRv6EgressPolicies.
 func (c *FakeIsovalentSRv6EgressPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentsrv6egresspoliciesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentsrv6egresspoliciesResource, opts))
 }
 
 // Create takes the representation of a isovalentSRv6EgressPolicy and creates it.  Returns the server's representation of the isovalentSRv6EgressPolicy, and an error, if there is any.
 func (c *FakeIsovalentSRv6EgressPolicies) Create(ctx context.Context, isovalentSRv6EgressPolicy *v1alpha1.IsovalentSRv6EgressPolicy, opts v1.CreateOptions) (result *v1alpha1.IsovalentSRv6EgressPolicy, err error) {
+	emptyResult := &v1alpha1.IsovalentSRv6EgressPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentsrv6egresspoliciesResource, isovalentSRv6EgressPolicy), &v1alpha1.IsovalentSRv6EgressPolicy{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentsrv6egresspoliciesResource, isovalentSRv6EgressPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentSRv6EgressPolicy), err
 }
 
 // Update takes the representation of a isovalentSRv6EgressPolicy and updates it. Returns the server's representation of the isovalentSRv6EgressPolicy, and an error, if there is any.
 func (c *FakeIsovalentSRv6EgressPolicies) Update(ctx context.Context, isovalentSRv6EgressPolicy *v1alpha1.IsovalentSRv6EgressPolicy, opts v1.UpdateOptions) (result *v1alpha1.IsovalentSRv6EgressPolicy, err error) {
+	emptyResult := &v1alpha1.IsovalentSRv6EgressPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentsrv6egresspoliciesResource, isovalentSRv6EgressPolicy), &v1alpha1.IsovalentSRv6EgressPolicy{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentsrv6egresspoliciesResource, isovalentSRv6EgressPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentSRv6EgressPolicy), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentSRv6EgressPolicies) Delete(ctx context.Context, name strin
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentSRv6EgressPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentsrv6egresspoliciesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentsrv6egresspoliciesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentSRv6EgressPolicyList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentSRv6EgressPolicies) DeleteCollection(ctx context.Context, 
 
 // Patch applies the patch and returns the patched isovalentSRv6EgressPolicy.
 func (c *FakeIsovalentSRv6EgressPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentSRv6EgressPolicy, err error) {
+	emptyResult := &v1alpha1.IsovalentSRv6EgressPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentsrv6egresspoliciesResource, name, pt, data, subresources...), &v1alpha1.IsovalentSRv6EgressPolicy{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentsrv6egresspoliciesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentSRv6EgressPolicy), err
 }

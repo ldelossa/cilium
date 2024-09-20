@@ -27,20 +27,22 @@ var isovalentbgpnodeconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("Isovalen
 
 // Get takes name of the isovalentBGPNodeConfig, and returns the corresponding isovalentBGPNodeConfig object, and an error if there is any.
 func (c *FakeIsovalentBGPNodeConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBGPNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbgpnodeconfigsResource, name), &v1alpha1.IsovalentBGPNodeConfig{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbgpnodeconfigsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfig), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBGPNodeConfigs that match those selectors.
 func (c *FakeIsovalentBGPNodeConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBGPNodeConfigList, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfigList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbgpnodeconfigsResource, isovalentbgpnodeconfigsKind, opts), &v1alpha1.IsovalentBGPNodeConfigList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbgpnodeconfigsResource, isovalentbgpnodeconfigsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,36 +61,39 @@ func (c *FakeIsovalentBGPNodeConfigs) List(ctx context.Context, opts v1.ListOpti
 // Watch returns a watch.Interface that watches the requested isovalentBGPNodeConfigs.
 func (c *FakeIsovalentBGPNodeConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbgpnodeconfigsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbgpnodeconfigsResource, opts))
 }
 
 // Create takes the representation of a isovalentBGPNodeConfig and creates it.  Returns the server's representation of the isovalentBGPNodeConfig, and an error, if there is any.
 func (c *FakeIsovalentBGPNodeConfigs) Create(ctx context.Context, isovalentBGPNodeConfig *v1alpha1.IsovalentBGPNodeConfig, opts v1.CreateOptions) (result *v1alpha1.IsovalentBGPNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbgpnodeconfigsResource, isovalentBGPNodeConfig), &v1alpha1.IsovalentBGPNodeConfig{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbgpnodeconfigsResource, isovalentBGPNodeConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfig), err
 }
 
 // Update takes the representation of a isovalentBGPNodeConfig and updates it. Returns the server's representation of the isovalentBGPNodeConfig, and an error, if there is any.
 func (c *FakeIsovalentBGPNodeConfigs) Update(ctx context.Context, isovalentBGPNodeConfig *v1alpha1.IsovalentBGPNodeConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBGPNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbgpnodeconfigsResource, isovalentBGPNodeConfig), &v1alpha1.IsovalentBGPNodeConfig{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbgpnodeconfigsResource, isovalentBGPNodeConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfig), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeIsovalentBGPNodeConfigs) UpdateStatus(ctx context.Context, isovalentBGPNodeConfig *v1alpha1.IsovalentBGPNodeConfig, opts v1.UpdateOptions) (*v1alpha1.IsovalentBGPNodeConfig, error) {
+func (c *FakeIsovalentBGPNodeConfigs) UpdateStatus(ctx context.Context, isovalentBGPNodeConfig *v1alpha1.IsovalentBGPNodeConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBGPNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(isovalentbgpnodeconfigsResource, "status", isovalentBGPNodeConfig), &v1alpha1.IsovalentBGPNodeConfig{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(isovalentbgpnodeconfigsResource, "status", isovalentBGPNodeConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfig), err
 }
@@ -102,7 +107,7 @@ func (c *FakeIsovalentBGPNodeConfigs) Delete(ctx context.Context, name string, o
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBGPNodeConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbgpnodeconfigsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbgpnodeconfigsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBGPNodeConfigList{})
 	return err
@@ -110,10 +115,11 @@ func (c *FakeIsovalentBGPNodeConfigs) DeleteCollection(ctx context.Context, opts
 
 // Patch applies the patch and returns the patched isovalentBGPNodeConfig.
 func (c *FakeIsovalentBGPNodeConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBGPNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbgpnodeconfigsResource, name, pt, data, subresources...), &v1alpha1.IsovalentBGPNodeConfig{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbgpnodeconfigsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfig), err
 }

@@ -20,9 +20,9 @@ on:
   push:
     branches:
       - 'renovate/main-**'
-  # Run every 6 hours
+  # Run every 8 hours
   schedule:
-    - cron:  '0 5/6 * * *'
+    - cron:  '0 5/8 * * *'
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
@@ -78,7 +78,23 @@ jobs:
         with:
           sha: ${{ inputs.SHA || github.sha }}
 
+  wait-for-images:
+    name: Wait for images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout context ref (trusted)
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+      - name: Wait for images
+        uses: ./.github/actions/wait-for-images
+        with:
+          SHA: ${{ inputs.SHA }}
+
   setup-and-test:
+    needs: [wait-for-images]
     runs-on: ${{ vars.GH_RUNNER_EXTRA_POWER }}
     name: 'Setup & Test'
     env:
@@ -88,10 +104,6 @@ jobs:
       max-parallel: 22
       matrix:
         include:
-          # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-          # ! NOTE: keep conformance-e2e.yaml config in sync !
-          # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
           - name: '1'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
             kernel: 'rhel8-20240404.144247'
@@ -146,14 +158,13 @@ jobs:
             kernel: '6.1-20240710.064909'
             kube-proxy: 'none'
             kpr: 'true'
+            devices: '{eth0,eth1}'
             tunnel: 'vxlan'
             lb-mode: 'snat'
             egress-gateway: 'true'
             host-fw: 'true'
             lb-acceleration: 'testing-only'
-            # Disable until https://github.com/cilium/cilium/issues/30717
-            # has been resolved.
-            # ingress-controller: 'true'
+            ingress-controller: 'true'
             bgp-control-plane: 'true'
 
           - name: '7'
@@ -167,9 +178,7 @@ jobs:
             lb-mode: 'snat'
             egress-gateway: 'true'
             lb-acceleration: 'testing-only'
-            # Disable until https://github.com/cilium/cilium/issues/30717
-            # has been resolved.
-            # ingress-controller: 'true'
+            ingress-controller: 'true'
             local-redirect-policy: 'true'
             node-local-dns: 'true'
 
@@ -180,6 +189,7 @@ jobs:
             kpr: 'false'
             tunnel: 'geneve'
             endpoint-routes: 'true'
+            misc: 'socketLB.enabled=false,nodePort.enabled=true,bpf.masquerade=true'
 
           - name: '9'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -216,9 +226,7 @@ jobs:
             encryption-node: 'true'
             lb-mode: 'snat'
             egress-gateway: 'true'
-            # Disable until https://github.com/cilium/cilium/issues/30717
-            # has been resolved.
-            # ingress-controller: 'true'
+            ingress-controller: 'true'
 
           - name: '12'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -233,6 +241,14 @@ jobs:
             lb-mode: 'snat'
             egress-gateway: 'true'
             ingress-controller: 'true'
+
+          - name: '13'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'rhel8-20240404.144247'
+            kube-proxy: 'iptables'
+            kpr: 'false'
+            tunnel: 'vxlan'
+            misc: 'policyCIDRMatchMode=nodes'
 
           - name: '14'
             # Switch to 5.15 until https://github.com/cilium/cilium/issues/27642
@@ -249,6 +265,7 @@ jobs:
             lb-mode: 'snat'
             egress-gateway: 'true'
             lb-acceleration: 'testing-only'
+            ingress-controller: 'true'
 
           - name: '15'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -258,9 +275,7 @@ jobs:
             devices: '{eth0,eth1}'
             secondary-network: 'true'
             tunnel: 'disabled'
-            # Disable until https://github.com/cilium/cilium/issues/30717
-            # has been resolved.
-            # ingress-controller: 'true'
+            ingress-controller: 'true'
             # Disable bpf.tproxy=true until https://github.com/cilium/cilium/issues/31918
             # has been resolved.
             misc: 'bpfClockProbe=false,cni.uninstall=false'
@@ -279,70 +294,83 @@ jobs:
             encryption-node: 'false'
             host-fw: 'true'
             ciliumendpointslice: 'true'
+            ingress-controller: 'true'
 
-          # Disable until 1.17 has been released, so that 1.16 to 1.17 upgrade
-          # can be tested with netkit.
-          # - name: '17'
-          #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240711.013133'
-          #  misc: 'bpf.datapathMode=netkit,bpf.masquerade=true,enableIPv4BIGTCP=true,enableIPv6BIGTCP=true'
-          #  kube-proxy: 'none'
-          #  kpr: 'true'
-          #  ipv6: 'true'
-          #  tunnel: 'disabled'
-          #  devices: '{eth0,eth1}'
-          #  secondary-network: 'true'
-          #
-          # - name: '18'
-          #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240711.013133'
-          #  misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true,enableIPv4BIGTCP=true,enableIPv6BIGTCP=true'
-          #  kube-proxy: 'none'
-          #  kpr: 'true'
-          #  ipv6: 'true'
-          #  tunnel: 'disabled'
-          #  devices: '{eth0,eth1}'
-          #  secondary-network: 'true'
-          #
-          # - name: '19'
-          #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240711.013133'
-          #  misc: 'bpf.datapathMode=netkit,bpf.masquerade=true'
-          #  kube-proxy: 'none'
-          #  kpr: 'true'
-          #  tunnel: 'vxlan'
-          #  devices: '{eth0,eth1}'
-          #  secondary-network: 'true'
-          #
-          # - name: '20'
-          #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240711.013133'
-          #  misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
-          #  kube-proxy: 'none'
-          #  kpr: 'true'
-          #  tunnel: 'vxlan'
-          #  devices: '{eth0,eth1}'
-          #  secondary-network: 'true'
-          #
-          # - name: '21'
-          #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240711.013133'
-          #  misc: 'bpf.datapathMode=netkit,bpf.masquerade=true'
-          #  kube-proxy: 'none'
-          #  kpr: 'true'
-          #  tunnel: 'geneve'
-          #  devices: '{eth0,eth1}'
-          #  secondary-network: 'true'
-          #
-          # - name: '22'
-          #  # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          #  kernel: 'bpf-20240711.013133'
-          #  misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
-          #  kube-proxy: 'none'
-          #  kpr: 'true'
-          #  tunnel: 'geneve'
-          #  devices: '{eth0,eth1}'
-          #  secondary-network: 'true'
+          - name: '17'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-20240711.013133'
+            misc: 'bpf.datapathMode=netkit,bpf.masquerade=true,enableIPv4BIGTCP=true,enableIPv6BIGTCP=true'
+            kube-proxy: 'none'
+            kpr: 'true'
+            ipv6: 'true'
+            tunnel: 'disabled'
+            devices: '{eth0,eth1}'
+            secondary-network: 'true'
+            ingress-controller: 'true'
+
+          - name: '18'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-20240711.013133'
+            misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true,enableIPv4BIGTCP=true,enableIPv6BIGTCP=true'
+            kube-proxy: 'none'
+            kpr: 'true'
+            ipv6: 'true'
+            tunnel: 'disabled'
+            devices: '{eth0,eth1}'
+            secondary-network: 'true'
+            ingress-controller: 'true'
+
+          - name: '19'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-20240711.013133'
+            misc: 'bpf.datapathMode=netkit,bpf.masquerade=true'
+            kube-proxy: 'none'
+            kpr: 'true'
+            tunnel: 'vxlan'
+            devices: '{eth0,eth1}'
+            secondary-network: 'true'
+            ingress-controller: 'true'
+
+          - name: '20'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-20240711.013133'
+            misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
+            kube-proxy: 'none'
+            kpr: 'true'
+            tunnel: 'vxlan'
+            devices: '{eth0,eth1}'
+            secondary-network: 'true'
+            ingress-controller: 'true'
+
+          - name: '21'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-20240711.013133'
+            misc: 'bpf.datapathMode=netkit,bpf.masquerade=true'
+            kube-proxy: 'none'
+            kpr: 'true'
+            tunnel: 'geneve'
+            devices: '{eth0,eth1}'
+            secondary-network: 'true'
+            ingress-controller: 'true'
+
+          - name: '22'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: 'bpf-20240711.013133'
+            misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
+            kube-proxy: 'none'
+            kpr: 'true'
+            tunnel: 'geneve'
+            devices: '{eth0,eth1}'
+            secondary-network: 'true'
+            ingress-controller: 'true'
+
+          # Example of a feature that is being introduced, and we want to test
+          # it without performing an upgrade, we use skip-upgrade: 'true'
+          # - name: '23'
+          #   # renovate: datasource=docker depName=quay.io/lvh-images/kind
+          #   kernel: 'bpf-20240711.013133'
+          #   misc: 'bpf.datapathMode=netkit-l2,bpf.masquerade=true'
+          #   skip-upgrade: 'true'
 
     timeout-minutes: 90
     steps:
@@ -358,6 +386,7 @@ jobs:
           persist-credentials: false
 
       - name: Cleanup Disk space in runner
+        if: runner.name == 'ubuntu-latest'
         uses: ./.github/actions/disk-cleanup
 
       - name: Set Environment Variables
@@ -376,6 +405,7 @@ jobs:
           echo downgrade_version=${CILIUM_DOWNGRADE_VERSION} >> $GITHUB_OUTPUT
 
       - name: Derive stable Cilium installation config
+        if: ${{ matrix.skip-upgrade != 'true' }}
         id: cilium-stable-config
         uses: ./.github/actions/cilium-config
         with:
@@ -442,7 +472,7 @@ jobs:
           kind-image: ${{ env.KIND_K8S_IMAGE }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@62bd4511031211b50a4623870955a5ad27b43e3b # v0.16.16
+        uses: cilium/cilium-cli@fff38e882846c03f1720dad476e459323275ab9c # v0.16.17
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
@@ -461,6 +491,7 @@ jobs:
             examples
 
       - name: Checkout ${{ steps.vars.outputs.downgrade_version }} branch to get the Helm chart
+        if: ${{ matrix.skip-upgrade != 'true' }}
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ steps.vars.outputs.downgrade_version }}
@@ -469,21 +500,16 @@ jobs:
           sparse-checkout: |
             install/kubernetes/cilium
 
-      - name: Wait for images to be available
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          for image in cilium-ci operator-generic-ci hubble-relay-ci ; do
-          until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
-          done
-
-      - name: Install Cilium ${{ env.cilium_stable_version }}
+      - name: Install Cilium ${{ matrix.skip-upgrade == 'true' && 'from main' || steps.vars.outputs.downgrade_version }}
         shell: bash
         run: |
           kubectl patch node kind-worker3 --type=json -p='[{"op":"add","path":"/metadata/labels/cilium.io~1no-schedule","value":"true"}]'
 
-          cilium install \
-            ${{ steps.cilium-stable-config.outputs.config }}
+          if ${{ matrix.skip-upgrade != 'true' }}; then
+            cilium install ${{ steps.cilium-stable-config.outputs.config }}
+          else
+            cilium install ${{ steps.cilium-newest-config.outputs.config }}
+          fi
 
           cilium status --wait
           kubectl get pods --all-namespaces -o wide
@@ -511,6 +537,7 @@ jobs:
             --conn-disrupt-dispatch-interval 0ms
 
       - name: Upgrade Cilium
+        if: ${{ matrix.skip-upgrade != 'true' }}
         shell: bash
         run: |
           cilium upgrade \
@@ -520,7 +547,7 @@ jobs:
           kubectl get pods --all-namespaces -o wide
           kubectl -n kube-system exec daemonset/cilium -- cilium status
 
-      - name: Test Cilium after upgrade
+      - name: Test Cilium ${{ matrix.skip-upgrade != 'true' && 'after upgrade' }}
         shell: bash
         run: |
           EXTRA=()
@@ -550,7 +577,8 @@ jobs:
             --conn-disrupt-test-restarts-path "./cilium-conn-disrupt-restarts" \
             --conn-disrupt-dispatch-interval 0ms
 
-      - name: Downgrade Cilium ${{ env.cilium_stable_version }}
+      - name: Downgrade Cilium ${{ steps.vars.outputs.downgrade_version }}
+        if: ${{ matrix.skip-upgrade != 'true' }}
         shell: bash
         run: |
           cilium upgrade \
@@ -560,7 +588,8 @@ jobs:
           kubectl get pods --all-namespaces -o wide
           kubectl -n kube-system exec daemonset/cilium -- cilium status
 
-      - name: Test Cilium after downgrade to ${{ env.cilium_stable_version }}
+      - name: Test Cilium after downgrade to ${{ steps.vars.outputs.downgrade_version }}
+        if: ${{ matrix.skip-upgrade != 'true' }}
         shell: bash
         run: |
           EXTRA=()
@@ -596,14 +625,14 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: cilium-sysdumps-${{ matrix.name }}
           path: cilium-sysdump-*.zip
 
       - name: Upload JUnits [junit]
         if: ${{ always() }}
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: cilium-junits-${{ matrix.name }}
           path: cilium-junits/*.xml
@@ -622,7 +651,7 @@ jobs:
     steps:
       - name: Merge Sysdumps
         if: ${{ needs.setup-and-test.result == 'failure' }}
-        uses: actions/upload-artifact/merge@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
+        uses: actions/upload-artifact/merge@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: cilium-sysdumps
           pattern: cilium-sysdumps-*
@@ -630,7 +659,7 @@ jobs:
           delete-merged: true
         continue-on-error: true
       - name: Merge JUnits
-        uses: actions/upload-artifact/merge@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
+        uses: actions/upload-artifact/merge@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: cilium-junits
           pattern: cilium-junits-*

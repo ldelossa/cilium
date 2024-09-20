@@ -27,20 +27,22 @@ var isovalentbgpnodeconfigoverridesKind = v1alpha1.SchemeGroupVersion.WithKind("
 
 // Get takes name of the isovalentBGPNodeConfigOverride, and returns the corresponding isovalentBGPNodeConfigOverride object, and an error if there is any.
 func (c *FakeIsovalentBGPNodeConfigOverrides) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBGPNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbgpnodeconfigoverridesResource, name), &v1alpha1.IsovalentBGPNodeConfigOverride{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbgpnodeconfigoverridesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfigOverride), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBGPNodeConfigOverrides that match those selectors.
 func (c *FakeIsovalentBGPNodeConfigOverrides) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBGPNodeConfigOverrideList, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfigOverrideList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbgpnodeconfigoverridesResource, isovalentbgpnodeconfigoverridesKind, opts), &v1alpha1.IsovalentBGPNodeConfigOverrideList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbgpnodeconfigoverridesResource, isovalentbgpnodeconfigoverridesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentBGPNodeConfigOverrides) List(ctx context.Context, opts v1.
 // Watch returns a watch.Interface that watches the requested isovalentBGPNodeConfigOverrides.
 func (c *FakeIsovalentBGPNodeConfigOverrides) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbgpnodeconfigoverridesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbgpnodeconfigoverridesResource, opts))
 }
 
 // Create takes the representation of a isovalentBGPNodeConfigOverride and creates it.  Returns the server's representation of the isovalentBGPNodeConfigOverride, and an error, if there is any.
 func (c *FakeIsovalentBGPNodeConfigOverrides) Create(ctx context.Context, isovalentBGPNodeConfigOverride *v1alpha1.IsovalentBGPNodeConfigOverride, opts v1.CreateOptions) (result *v1alpha1.IsovalentBGPNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbgpnodeconfigoverridesResource, isovalentBGPNodeConfigOverride), &v1alpha1.IsovalentBGPNodeConfigOverride{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbgpnodeconfigoverridesResource, isovalentBGPNodeConfigOverride, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfigOverride), err
 }
 
 // Update takes the representation of a isovalentBGPNodeConfigOverride and updates it. Returns the server's representation of the isovalentBGPNodeConfigOverride, and an error, if there is any.
 func (c *FakeIsovalentBGPNodeConfigOverrides) Update(ctx context.Context, isovalentBGPNodeConfigOverride *v1alpha1.IsovalentBGPNodeConfigOverride, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBGPNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbgpnodeconfigoverridesResource, isovalentBGPNodeConfigOverride), &v1alpha1.IsovalentBGPNodeConfigOverride{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbgpnodeconfigoverridesResource, isovalentBGPNodeConfigOverride, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfigOverride), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentBGPNodeConfigOverrides) Delete(ctx context.Context, name s
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBGPNodeConfigOverrides) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbgpnodeconfigoverridesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbgpnodeconfigoverridesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBGPNodeConfigOverrideList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentBGPNodeConfigOverrides) DeleteCollection(ctx context.Conte
 
 // Patch applies the patch and returns the patched isovalentBGPNodeConfigOverride.
 func (c *FakeIsovalentBGPNodeConfigOverrides) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBGPNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbgpnodeconfigoverridesResource, name, pt, data, subresources...), &v1alpha1.IsovalentBGPNodeConfigOverride{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbgpnodeconfigoverridesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPNodeConfigOverride), err
 }

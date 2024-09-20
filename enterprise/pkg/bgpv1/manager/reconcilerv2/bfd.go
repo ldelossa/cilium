@@ -144,11 +144,7 @@ func (r *BFDStateReconciler) Reconcile(ctx context.Context, p reconcilerv2.Recon
 	}
 	txn := r.db.ReadTxn()
 	iter := r.bfdPeersTable.LowerBound(txn, statedb.ByRevision[*types.BFDPeerStatus](startRev))
-	for {
-		peer, rev, ok := iter.Next()
-		if !ok {
-			break
-		}
+	for peer, rev := range iter {
 		metadata.lastRevision = rev
 		peerLogger := logger.WithField(bgptypes.PeerLogField, peer.PeerAddress)
 
@@ -202,12 +198,7 @@ func (r *BFDStateReconciler) Reconcile(ctx context.Context, p reconcilerv2.Recon
 
 	// refresh lastPeerState map
 	metadata.lastPeerState = make(map[netip.Addr]types.BFDState)
-	iter = r.bfdPeersTable.All(txn)
-	for {
-		peer, _, ok := iter.Next()
-		if !ok {
-			break
-		}
+	for peer := range r.bfdPeersTable.All(txn) {
 		metadata.lastPeerState[peer.PeerAddress] = peer.Local.State
 	}
 

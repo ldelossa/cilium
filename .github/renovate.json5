@@ -30,7 +30,6 @@
     "go.mod",
     "go.sum",
     "Makefile.defs",
-    "test/kubernetes-test.sh",
     "test/packet/scripts/install.sh",
     "install/kubernetes/cilium/templates/spire/**",
     "install/kubernetes/cilium/values.yaml.tmpl",
@@ -84,7 +83,8 @@
     "^make -C install/kubernetes$",
     "^make -C Documentation update-helm-values$",
     "^make generate-k8s-api$",
-    "^make manifests$"
+    "^make manifests$",
+    "^make generate-apis$"
   ],
   "assignAutomerge": true,
   "packageRules": [
@@ -561,10 +561,21 @@
       }
     },
     {
+      matchPackageNames: [
+        "protocolbuffers/protobuf"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "make generate-apis"
+        ],
+        "executionMode": "update"
+      }
+    },
+    {
       "matchDepNames": [
         "quay.io/cilium/cilium-envoy"
       ],
-      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+).*$",
+      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)-.*$",
       "allowedVersions": "<1.29",
       "matchBaseBranches": [
         "v1.15",
@@ -575,7 +586,7 @@
       "matchDepNames": [
         "quay.io/cilium/cilium-envoy"
       ],
-      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+).*$",
+      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)-.*$",
       "allowedVersions": "<1.30",
       "matchBaseBranches": [
         "v1.16",
@@ -585,7 +596,7 @@
       "matchDepNames": [
         "quay.io/cilium/cilium-envoy"
       ],
-      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+).*$",
+      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)-.*$",
       "allowedVersions": "<1.31",
       "matchBaseBranches": [
         "main",
@@ -703,8 +714,6 @@
     },
     {
       "fileMatch": [
-        "^test/kubernetes-test\\.sh$",
-        "^test/packet/scripts/install\\.sh$",
         "^.github/actions/set-env-variables/action\\.yml$"
       ],
       "matchStrings": [
@@ -747,6 +756,20 @@
       "matchStrings": [
         "\/\/ renovate: datasource=(?<datasource>.*?)\\s+.+Image = \"(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)\"",
         "\/\/ renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+Version = \"(?<currentValue>.*)\""
+      ]
+    },
+    {
+      "fileMatch": [
+        ".github/actions/lvh-kind/action.yaml",
+        ".github/workflows/conformance-ginkgo.yaml",
+        ".github/workflows/conformance-runtime.yaml",
+        ".github/workflows/tests-datapath-verifier.yaml",
+      ],
+      // These regexes manage version and digest strings in shell scripts,
+      // similar to the examples shown here:
+      //   https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+lvh-version: \"(?<currentValue>.*)\""
       ]
     }
   ]

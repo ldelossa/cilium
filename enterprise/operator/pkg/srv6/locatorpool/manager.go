@@ -95,7 +95,7 @@ func newLocPoolManager(p LocatorPoolManagerParams) (*LocatorPoolManager, error) 
 	}
 
 	p.JobGroup.Add(
-		job.OneShot("locatorpool main", func(ctx context.Context, health cell.Health) error {
+		job.OneShot("locatorpool-main", func(ctx context.Context, health cell.Health) error {
 			lpm.Run(ctx)
 			return nil
 		}),

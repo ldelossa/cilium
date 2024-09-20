@@ -27,20 +27,22 @@ var isovalentfqdngroupsKind = v1alpha1.SchemeGroupVersion.WithKind("IsovalentFQD
 
 // Get takes name of the isovalentFQDNGroup, and returns the corresponding isovalentFQDNGroup object, and an error if there is any.
 func (c *FakeIsovalentFQDNGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentFQDNGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentFQDNGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentfqdngroupsResource, name), &v1alpha1.IsovalentFQDNGroup{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentfqdngroupsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentFQDNGroup), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentFQDNGroups that match those selectors.
 func (c *FakeIsovalentFQDNGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentFQDNGroupList, err error) {
+	emptyResult := &v1alpha1.IsovalentFQDNGroupList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentfqdngroupsResource, isovalentfqdngroupsKind, opts), &v1alpha1.IsovalentFQDNGroupList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentfqdngroupsResource, isovalentfqdngroupsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentFQDNGroups) List(ctx context.Context, opts v1.ListOptions)
 // Watch returns a watch.Interface that watches the requested isovalentFQDNGroups.
 func (c *FakeIsovalentFQDNGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentfqdngroupsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentfqdngroupsResource, opts))
 }
 
 // Create takes the representation of a isovalentFQDNGroup and creates it.  Returns the server's representation of the isovalentFQDNGroup, and an error, if there is any.
 func (c *FakeIsovalentFQDNGroups) Create(ctx context.Context, isovalentFQDNGroup *v1alpha1.IsovalentFQDNGroup, opts v1.CreateOptions) (result *v1alpha1.IsovalentFQDNGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentFQDNGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentfqdngroupsResource, isovalentFQDNGroup), &v1alpha1.IsovalentFQDNGroup{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentfqdngroupsResource, isovalentFQDNGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentFQDNGroup), err
 }
 
 // Update takes the representation of a isovalentFQDNGroup and updates it. Returns the server's representation of the isovalentFQDNGroup, and an error, if there is any.
 func (c *FakeIsovalentFQDNGroups) Update(ctx context.Context, isovalentFQDNGroup *v1alpha1.IsovalentFQDNGroup, opts v1.UpdateOptions) (result *v1alpha1.IsovalentFQDNGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentFQDNGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentfqdngroupsResource, isovalentFQDNGroup), &v1alpha1.IsovalentFQDNGroup{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentfqdngroupsResource, isovalentFQDNGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentFQDNGroup), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentFQDNGroups) Delete(ctx context.Context, name string, opts 
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentFQDNGroups) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentfqdngroupsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentfqdngroupsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentFQDNGroupList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentFQDNGroups) DeleteCollection(ctx context.Context, opts v1.
 
 // Patch applies the patch and returns the patched isovalentFQDNGroup.
 func (c *FakeIsovalentFQDNGroups) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentFQDNGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentFQDNGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentfqdngroupsResource, name, pt, data, subresources...), &v1alpha1.IsovalentFQDNGroup{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentfqdngroupsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentFQDNGroup), err
 }

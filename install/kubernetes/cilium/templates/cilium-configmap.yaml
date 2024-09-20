@@ -89,7 +89,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cilium-config
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "cilium.namespace" . }}
 data:
 {{- include "enterprise.cilium-config" . | indent 2 }}
 
@@ -411,6 +411,9 @@ data:
 {{- if $bpfCtAnyMax }}
   bpf-ct-global-any-max: {{ $bpfCtAnyMax | quote }}
 {{- end }}
+{{- end }}
+{{- if .Values.bpf.ctAccounting }}
+  bpf-conntrack-accounting-enabled: "{{ .Values.bpf.ctAccounting }}"
 {{- end }}
 {{- if .Values.bpf.natMax }}
   # bpf-nat-global-max specified the maximum number of entries in the
@@ -976,8 +979,8 @@ data:
 {{- if .Values.hubble.export.static.enabled }}
   hubble-export-file-path: {{ .Values.hubble.export.static.filePath | quote }}
   hubble-export-fieldmask: {{ .Values.hubble.export.static.fieldMask | join " " | quote }}
-  hubble-export-allowlist: {{ .Values.hubble.export.static.allowList | join "," | quote }}
-  hubble-export-denylist: {{ .Values.hubble.export.static.denyList | join "," | quote }}
+  hubble-export-allowlist: {{ .Values.hubble.export.static.allowList | join " " | quote }}
+  hubble-export-denylist: {{ .Values.hubble.export.static.denyList | join " " | quote }}
 {{- end }}
 {{- if .Values.hubble.export.dynamic.enabled }}
   hubble-flowlogs-config-path: /flowlog-config/flowlogs.yaml
@@ -1320,6 +1323,9 @@ data:
 {{- if .Values.envoy.log.path }}
   envoy-log: {{ .Values.envoy.log.path | quote }}
 {{- end }}
+{{- if .Values.envoy.log.defaultLevel }}
+  envoy-default-log-level: {{ .Values.envoy.log.defaultLevel | quote }}
+{{- end }}
 
   envoy-keep-cap-netbindservice: {{ .Values.envoy.securityContext.capabilities.keepCapNetBindService | quote }}
 
@@ -1331,6 +1337,7 @@ data:
 
   nat-map-stats-entries: {{ .Values.nat.mapStatsEntries | quote }}
   nat-map-stats-interval: {{ .Values.nat.mapStatsInterval | quote }}
+  enable-internal-traffic-policy: {{ .Values.enableInternalTrafficPolicy | quote }}
 
 # Extra config allows adding arbitrary properties to the cilium config.
 # By putting it at the end of the ConfigMap, it's also possible to override existing properties.
@@ -1345,7 +1352,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ip-masq-agent
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "cilium.namespace" . }}
 data:
   config: |-
 {{ toJson .Values.ipMasqAgent.config | indent 4 }}

@@ -27,20 +27,22 @@ var isovalentpodnetworksKind = v1alpha1.SchemeGroupVersion.WithKind("IsovalentPo
 
 // Get takes name of the isovalentPodNetwork, and returns the corresponding isovalentPodNetwork object, and an error if there is any.
 func (c *FakeIsovalentPodNetworks) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentPodNetwork, err error) {
+	emptyResult := &v1alpha1.IsovalentPodNetwork{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentpodnetworksResource, name), &v1alpha1.IsovalentPodNetwork{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentpodnetworksResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentPodNetwork), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentPodNetworks that match those selectors.
 func (c *FakeIsovalentPodNetworks) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentPodNetworkList, err error) {
+	emptyResult := &v1alpha1.IsovalentPodNetworkList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentpodnetworksResource, isovalentpodnetworksKind, opts), &v1alpha1.IsovalentPodNetworkList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentpodnetworksResource, isovalentpodnetworksKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentPodNetworks) List(ctx context.Context, opts v1.ListOptions
 // Watch returns a watch.Interface that watches the requested isovalentPodNetworks.
 func (c *FakeIsovalentPodNetworks) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentpodnetworksResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentpodnetworksResource, opts))
 }
 
 // Create takes the representation of a isovalentPodNetwork and creates it.  Returns the server's representation of the isovalentPodNetwork, and an error, if there is any.
 func (c *FakeIsovalentPodNetworks) Create(ctx context.Context, isovalentPodNetwork *v1alpha1.IsovalentPodNetwork, opts v1.CreateOptions) (result *v1alpha1.IsovalentPodNetwork, err error) {
+	emptyResult := &v1alpha1.IsovalentPodNetwork{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentpodnetworksResource, isovalentPodNetwork), &v1alpha1.IsovalentPodNetwork{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentpodnetworksResource, isovalentPodNetwork, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentPodNetwork), err
 }
 
 // Update takes the representation of a isovalentPodNetwork and updates it. Returns the server's representation of the isovalentPodNetwork, and an error, if there is any.
 func (c *FakeIsovalentPodNetworks) Update(ctx context.Context, isovalentPodNetwork *v1alpha1.IsovalentPodNetwork, opts v1.UpdateOptions) (result *v1alpha1.IsovalentPodNetwork, err error) {
+	emptyResult := &v1alpha1.IsovalentPodNetwork{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentpodnetworksResource, isovalentPodNetwork), &v1alpha1.IsovalentPodNetwork{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentpodnetworksResource, isovalentPodNetwork, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentPodNetwork), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentPodNetworks) Delete(ctx context.Context, name string, opts
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentPodNetworks) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentpodnetworksResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentpodnetworksResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentPodNetworkList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentPodNetworks) DeleteCollection(ctx context.Context, opts v1
 
 // Patch applies the patch and returns the patched isovalentPodNetwork.
 func (c *FakeIsovalentPodNetworks) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentPodNetwork, err error) {
+	emptyResult := &v1alpha1.IsovalentPodNetwork{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentpodnetworksResource, name, pt, data, subresources...), &v1alpha1.IsovalentPodNetwork{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentpodnetworksResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentPodNetwork), err
 }

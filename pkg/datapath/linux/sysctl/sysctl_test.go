@@ -7,7 +7,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/cilium/hive/cell"
@@ -25,36 +24,40 @@ import (
 
 func TestFullPath(t *testing.T) {
 	testCases := []struct {
-		name        string
+		name        []string
 		expected    string
 		expectedErr bool
 	}{
 		{
-			name:     "net.ipv4.ip_forward",
+			name:     []string{"net", "ipv4", "ip_forward"},
 			expected: "/proc/sys/net/ipv4/ip_forward",
 		},
 		{
-			name:     "net.ipv4.conf.all.forwarding",
+			name:     []string{"net", "ipv4", "conf", "all", "forwarding"},
 			expected: "/proc/sys/net/ipv4/conf/all/forwarding",
 		},
 		{
-			name:     "net.ipv6.conf.all.forwarding",
+			name:     []string{"net", "ipv6", "conf", "all", "forwarding"},
 			expected: "/proc/sys/net/ipv6/conf/all/forwarding",
 		},
 		{
-			name:     "foo.bar",
+			name:     []string{"net", "ipv6", "conf", "eth0.100", "forwarding"},
+			expected: "/proc/sys/net/ipv6/conf/eth0.100/forwarding",
+		},
+		{
+			name:     []string{"foo", "bar"},
 			expected: "/proc/sys/foo/bar",
 		},
 		{
-			name:        "double..dot",
+			name:        []string{"double", "", "dot"},
 			expectedErr: true,
 		},
 		{
-			name:        "invalid.char$",
+			name:        []string{"invalid", "char$"},
 			expectedErr: true,
 		},
 		{
-			name:     "Foo.Bar",
+			name:     []string{"Foo", "Bar"},
 			expected: "/proc/sys/Foo/Bar",
 		},
 	}
@@ -106,10 +109,10 @@ func TestWaitForReconciliation(t *testing.T) {
 	t.Cleanup(func() { time.MaxInternalTimerDelay = 0 })
 
 	sysctl := &reconcilingSysctl{db, settings, nil, ""}
-	sysctl.Enable(paramName)
+	sysctl.Enable([]string{paramName})
 
 	// waitForReconciliation should timeout
-	assert.Error(t, sysctl.waitForReconciliation(paramName))
+	assert.Error(t, sysctl.waitForReconciliation([]string{paramName}))
 
 	// fake a successful reconciliation
 	txn := db.WriteTxn(settings)
@@ -123,7 +126,7 @@ func TestWaitForReconciliation(t *testing.T) {
 	assert.NoError(t, err)
 
 	// waitForReconciliation should return without error
-	assert.NoError(t, sysctl.waitForReconciliation(paramName))
+	assert.NoError(t, sysctl.waitForReconciliation([]string{paramName}))
 
 	assert.NoError(t, hive.Stop(tlog, context.Background()))
 }
@@ -131,10 +134,10 @@ func TestWaitForReconciliation(t *testing.T) {
 func TestSysctl(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	settings := []string{
-		"net.ipv4.ip_forward",
-		"net.ipv4.conf.all.forwarding",
-		"net.ipv6.conf.all.forwarding",
+	settings := [][]string{
+		{"net", "ipv4", "ip_forward"},
+		{"net", "ipv4", "conf", "all", "forwarding"},
+		{"net", "ipv6", "conf", "all", "forwarding"},
 	}
 
 	var sysctl Sysctl
@@ -234,7 +237,7 @@ func TestSysctl(t *testing.T) {
 func TestSysctlIgnoreErr(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	parameter := tables.Sysctl{Name: "net.core.bpf_jit_enable", Val: "1", IgnoreErr: true}
+	parameter := tables.Sysctl{Name: []string{"net", "core", "bpf_jit_enable"}, Val: "1", IgnoreErr: true}
 
 	var sysctl Sysctl
 
@@ -271,7 +274,6 @@ func TestSysctlIgnoreErr(t *testing.T) {
 	assert.NoError(t, hive.Stop(tlog, context.Background()))
 }
 
-func sysctlToPath(name string) string {
-	elems := strings.Split(name, ".")
-	return filepath.Join(append([]string{"/proc", "sys"}, elems...)...)
+func sysctlToPath(name []string) string {
+	return filepath.Join(append([]string{"/proc", "sys"}, name...)...)
 }

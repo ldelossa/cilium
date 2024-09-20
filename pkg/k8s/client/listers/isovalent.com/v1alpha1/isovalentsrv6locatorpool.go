@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -26,30 +26,10 @@ type IsovalentSRv6LocatorPoolLister interface {
 
 // isovalentSRv6LocatorPoolLister implements the IsovalentSRv6LocatorPoolLister interface.
 type isovalentSRv6LocatorPoolLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.IsovalentSRv6LocatorPool]
 }
 
 // NewIsovalentSRv6LocatorPoolLister returns a new IsovalentSRv6LocatorPoolLister.
 func NewIsovalentSRv6LocatorPoolLister(indexer cache.Indexer) IsovalentSRv6LocatorPoolLister {
-	return &isovalentSRv6LocatorPoolLister{indexer: indexer}
-}
-
-// List lists all IsovalentSRv6LocatorPools in the indexer.
-func (s *isovalentSRv6LocatorPoolLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentSRv6LocatorPool, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentSRv6LocatorPool))
-	})
-	return ret, err
-}
-
-// Get retrieves the IsovalentSRv6LocatorPool from the index for a given name.
-func (s *isovalentSRv6LocatorPoolLister) Get(name string) (*v1alpha1.IsovalentSRv6LocatorPool, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("isovalentsrv6locatorpool"), name)
-	}
-	return obj.(*v1alpha1.IsovalentSRv6LocatorPool), nil
+	return &isovalentSRv6LocatorPoolLister{listers.New[*v1alpha1.IsovalentSRv6LocatorPool](indexer, v1alpha1.Resource("isovalentsrv6locatorpool"))}
 }

@@ -6,7 +6,7 @@ package model
 import (
 	"crypto/sha256"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
@@ -77,7 +77,7 @@ func ComputeHosts(routeHostnames []string, listenerHostname *string, otherListen
 		}
 	}
 
-	sort.Strings(hostnames)
+	slices.Sort(hostnames)
 	return hostnames
 }
 
@@ -109,10 +109,6 @@ func hostnameMatchesWildcardHostname(hostname, wildcardHostname string) bool {
 
 	wildcardMatch := strings.TrimSuffix(hostname, strings.TrimPrefix(wildcardHostname, allHosts))
 	return len(wildcardMatch) > 0
-}
-
-func AddressOf[T any](v T) *T {
-	return &v
 }
 
 // Shorten shortens the string to 63 characters.

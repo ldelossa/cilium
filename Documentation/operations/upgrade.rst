@@ -332,9 +332,11 @@ Added Metrics
 ~~~~~~~~~~~~~
 * ``cilium_node_health_connectivity_status``
 * ``cilium_node_health_connectivity_latency_seconds``
+* ``cilium_operator_unmanaged_pods``
 
 Removed Metrics
 ~~~~~~~~~~~~~~~
+* ``cilium_cidrgroup_translation_time_stats_seconds`` has been removed, as the measured code path no longer exists.
 
 Changed Metrics
 ~~~~~~~~~~~~~~~

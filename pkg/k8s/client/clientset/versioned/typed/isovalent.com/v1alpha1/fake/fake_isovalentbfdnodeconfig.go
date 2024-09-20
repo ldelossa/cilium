@@ -27,20 +27,22 @@ var isovalentbfdnodeconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("Isovalen
 
 // Get takes name of the isovalentBFDNodeConfig, and returns the corresponding isovalentBFDNodeConfig object, and an error if there is any.
 func (c *FakeIsovalentBFDNodeConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbfdnodeconfigsResource, name), &v1alpha1.IsovalentBFDNodeConfig{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbfdnodeconfigsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfig), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBFDNodeConfigs that match those selectors.
 func (c *FakeIsovalentBFDNodeConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBFDNodeConfigList, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfigList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbfdnodeconfigsResource, isovalentbfdnodeconfigsKind, opts), &v1alpha1.IsovalentBFDNodeConfigList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbfdnodeconfigsResource, isovalentbfdnodeconfigsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,36 +61,39 @@ func (c *FakeIsovalentBFDNodeConfigs) List(ctx context.Context, opts v1.ListOpti
 // Watch returns a watch.Interface that watches the requested isovalentBFDNodeConfigs.
 func (c *FakeIsovalentBFDNodeConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbfdnodeconfigsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbfdnodeconfigsResource, opts))
 }
 
 // Create takes the representation of a isovalentBFDNodeConfig and creates it.  Returns the server's representation of the isovalentBFDNodeConfig, and an error, if there is any.
 func (c *FakeIsovalentBFDNodeConfigs) Create(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.CreateOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbfdnodeconfigsResource, isovalentBFDNodeConfig), &v1alpha1.IsovalentBFDNodeConfig{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbfdnodeconfigsResource, isovalentBFDNodeConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfig), err
 }
 
 // Update takes the representation of a isovalentBFDNodeConfig and updates it. Returns the server's representation of the isovalentBFDNodeConfig, and an error, if there is any.
 func (c *FakeIsovalentBFDNodeConfigs) Update(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbfdnodeconfigsResource, isovalentBFDNodeConfig), &v1alpha1.IsovalentBFDNodeConfig{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbfdnodeconfigsResource, isovalentBFDNodeConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfig), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeIsovalentBFDNodeConfigs) UpdateStatus(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (*v1alpha1.IsovalentBFDNodeConfig, error) {
+func (c *FakeIsovalentBFDNodeConfigs) UpdateStatus(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(isovalentbfdnodeconfigsResource, "status", isovalentBFDNodeConfig), &v1alpha1.IsovalentBFDNodeConfig{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(isovalentbfdnodeconfigsResource, "status", isovalentBFDNodeConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfig), err
 }
@@ -102,7 +107,7 @@ func (c *FakeIsovalentBFDNodeConfigs) Delete(ctx context.Context, name string, o
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBFDNodeConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbfdnodeconfigsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbfdnodeconfigsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBFDNodeConfigList{})
 	return err
@@ -110,10 +115,11 @@ func (c *FakeIsovalentBFDNodeConfigs) DeleteCollection(ctx context.Context, opts
 
 // Patch applies the patch and returns the patched isovalentBFDNodeConfig.
 func (c *FakeIsovalentBFDNodeConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbfdnodeconfigsResource, name, pt, data, subresources...), &v1alpha1.IsovalentBFDNodeConfig{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbfdnodeconfigsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfig), err
 }

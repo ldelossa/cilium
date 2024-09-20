@@ -27,20 +27,22 @@ var isovalentbgppeerconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("Isovalen
 
 // Get takes name of the isovalentBGPPeerConfig, and returns the corresponding isovalentBGPPeerConfig object, and an error if there is any.
 func (c *FakeIsovalentBGPPeerConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBGPPeerConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPPeerConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbgppeerconfigsResource, name), &v1alpha1.IsovalentBGPPeerConfig{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbgppeerconfigsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPPeerConfig), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBGPPeerConfigs that match those selectors.
 func (c *FakeIsovalentBGPPeerConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBGPPeerConfigList, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPPeerConfigList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbgppeerconfigsResource, isovalentbgppeerconfigsKind, opts), &v1alpha1.IsovalentBGPPeerConfigList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbgppeerconfigsResource, isovalentbgppeerconfigsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentBGPPeerConfigs) List(ctx context.Context, opts v1.ListOpti
 // Watch returns a watch.Interface that watches the requested isovalentBGPPeerConfigs.
 func (c *FakeIsovalentBGPPeerConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbgppeerconfigsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbgppeerconfigsResource, opts))
 }
 
 // Create takes the representation of a isovalentBGPPeerConfig and creates it.  Returns the server's representation of the isovalentBGPPeerConfig, and an error, if there is any.
 func (c *FakeIsovalentBGPPeerConfigs) Create(ctx context.Context, isovalentBGPPeerConfig *v1alpha1.IsovalentBGPPeerConfig, opts v1.CreateOptions) (result *v1alpha1.IsovalentBGPPeerConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPPeerConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbgppeerconfigsResource, isovalentBGPPeerConfig), &v1alpha1.IsovalentBGPPeerConfig{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbgppeerconfigsResource, isovalentBGPPeerConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPPeerConfig), err
 }
 
 // Update takes the representation of a isovalentBGPPeerConfig and updates it. Returns the server's representation of the isovalentBGPPeerConfig, and an error, if there is any.
 func (c *FakeIsovalentBGPPeerConfigs) Update(ctx context.Context, isovalentBGPPeerConfig *v1alpha1.IsovalentBGPPeerConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBGPPeerConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPPeerConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbgppeerconfigsResource, isovalentBGPPeerConfig), &v1alpha1.IsovalentBGPPeerConfig{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbgppeerconfigsResource, isovalentBGPPeerConfig, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPPeerConfig), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentBGPPeerConfigs) Delete(ctx context.Context, name string, o
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBGPPeerConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbgppeerconfigsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbgppeerconfigsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBGPPeerConfigList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentBGPPeerConfigs) DeleteCollection(ctx context.Context, opts
 
 // Patch applies the patch and returns the patched isovalentBGPPeerConfig.
 func (c *FakeIsovalentBGPPeerConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBGPPeerConfig, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPPeerConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbgppeerconfigsResource, name, pt, data, subresources...), &v1alpha1.IsovalentBGPPeerConfig{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbgppeerconfigsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPPeerConfig), err
 }

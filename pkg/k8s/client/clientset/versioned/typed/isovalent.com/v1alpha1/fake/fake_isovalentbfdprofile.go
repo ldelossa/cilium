@@ -27,20 +27,22 @@ var isovalentbfdprofilesKind = v1alpha1.SchemeGroupVersion.WithKind("IsovalentBF
 
 // Get takes name of the isovalentBFDProfile, and returns the corresponding isovalentBFDProfile object, and an error if there is any.
 func (c *FakeIsovalentBFDProfiles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBFDProfile, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDProfile{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbfdprofilesResource, name), &v1alpha1.IsovalentBFDProfile{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbfdprofilesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDProfile), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBFDProfiles that match those selectors.
 func (c *FakeIsovalentBFDProfiles) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBFDProfileList, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDProfileList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbfdprofilesResource, isovalentbfdprofilesKind, opts), &v1alpha1.IsovalentBFDProfileList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbfdprofilesResource, isovalentbfdprofilesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentBFDProfiles) List(ctx context.Context, opts v1.ListOptions
 // Watch returns a watch.Interface that watches the requested isovalentBFDProfiles.
 func (c *FakeIsovalentBFDProfiles) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbfdprofilesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbfdprofilesResource, opts))
 }
 
 // Create takes the representation of a isovalentBFDProfile and creates it.  Returns the server's representation of the isovalentBFDProfile, and an error, if there is any.
 func (c *FakeIsovalentBFDProfiles) Create(ctx context.Context, isovalentBFDProfile *v1alpha1.IsovalentBFDProfile, opts v1.CreateOptions) (result *v1alpha1.IsovalentBFDProfile, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDProfile{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbfdprofilesResource, isovalentBFDProfile), &v1alpha1.IsovalentBFDProfile{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbfdprofilesResource, isovalentBFDProfile, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDProfile), err
 }
 
 // Update takes the representation of a isovalentBFDProfile and updates it. Returns the server's representation of the isovalentBFDProfile, and an error, if there is any.
 func (c *FakeIsovalentBFDProfiles) Update(ctx context.Context, isovalentBFDProfile *v1alpha1.IsovalentBFDProfile, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBFDProfile, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDProfile{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbfdprofilesResource, isovalentBFDProfile), &v1alpha1.IsovalentBFDProfile{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbfdprofilesResource, isovalentBFDProfile, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDProfile), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentBFDProfiles) Delete(ctx context.Context, name string, opts
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBFDProfiles) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbfdprofilesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbfdprofilesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBFDProfileList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentBFDProfiles) DeleteCollection(ctx context.Context, opts v1
 
 // Patch applies the patch and returns the patched isovalentBFDProfile.
 func (c *FakeIsovalentBFDProfiles) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBFDProfile, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDProfile{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbfdprofilesResource, name, pt, data, subresources...), &v1alpha1.IsovalentBFDProfile{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbfdprofilesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDProfile), err
 }

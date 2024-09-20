@@ -7,14 +7,13 @@ package v1alpha1
 
 import (
 	"context"
-	"time"
 
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	scheme "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // IsovalentBFDNodeConfigsGetter has a method to return a IsovalentBFDNodeConfigInterface.
@@ -27,6 +26,7 @@ type IsovalentBFDNodeConfigsGetter interface {
 type IsovalentBFDNodeConfigInterface interface {
 	Create(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.CreateOptions) (*v1alpha1.IsovalentBFDNodeConfig, error)
 	Update(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (*v1alpha1.IsovalentBFDNodeConfig, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 	UpdateStatus(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (*v1alpha1.IsovalentBFDNodeConfig, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
@@ -39,133 +39,18 @@ type IsovalentBFDNodeConfigInterface interface {
 
 // isovalentBFDNodeConfigs implements IsovalentBFDNodeConfigInterface
 type isovalentBFDNodeConfigs struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v1alpha1.IsovalentBFDNodeConfig, *v1alpha1.IsovalentBFDNodeConfigList]
 }
 
 // newIsovalentBFDNodeConfigs returns a IsovalentBFDNodeConfigs
 func newIsovalentBFDNodeConfigs(c *IsovalentV1alpha1Client) *isovalentBFDNodeConfigs {
 	return &isovalentBFDNodeConfigs{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v1alpha1.IsovalentBFDNodeConfig, *v1alpha1.IsovalentBFDNodeConfigList](
+			"isovalentbfdnodeconfigs",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v1alpha1.IsovalentBFDNodeConfig { return &v1alpha1.IsovalentBFDNodeConfig{} },
+			func() *v1alpha1.IsovalentBFDNodeConfigList { return &v1alpha1.IsovalentBFDNodeConfigList{} }),
 	}
-}
-
-// Get takes name of the isovalentBFDNodeConfig, and returns the corresponding isovalentBFDNodeConfig object, and an error if there is any.
-func (c *isovalentBFDNodeConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
-	result = &v1alpha1.IsovalentBFDNodeConfig{}
-	err = c.client.Get().
-		Resource("isovalentbfdnodeconfigs").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of IsovalentBFDNodeConfigs that match those selectors.
-func (c *isovalentBFDNodeConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBFDNodeConfigList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1alpha1.IsovalentBFDNodeConfigList{}
-	err = c.client.Get().
-		Resource("isovalentbfdnodeconfigs").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested isovalentBFDNodeConfigs.
-func (c *isovalentBFDNodeConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("isovalentbfdnodeconfigs").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a isovalentBFDNodeConfig and creates it.  Returns the server's representation of the isovalentBFDNodeConfig, and an error, if there is any.
-func (c *isovalentBFDNodeConfigs) Create(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.CreateOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
-	result = &v1alpha1.IsovalentBFDNodeConfig{}
-	err = c.client.Post().
-		Resource("isovalentbfdnodeconfigs").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(isovalentBFDNodeConfig).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a isovalentBFDNodeConfig and updates it. Returns the server's representation of the isovalentBFDNodeConfig, and an error, if there is any.
-func (c *isovalentBFDNodeConfigs) Update(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
-	result = &v1alpha1.IsovalentBFDNodeConfig{}
-	err = c.client.Put().
-		Resource("isovalentbfdnodeconfigs").
-		Name(isovalentBFDNodeConfig.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(isovalentBFDNodeConfig).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *isovalentBFDNodeConfigs) UpdateStatus(ctx context.Context, isovalentBFDNodeConfig *v1alpha1.IsovalentBFDNodeConfig, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
-	result = &v1alpha1.IsovalentBFDNodeConfig{}
-	err = c.client.Put().
-		Resource("isovalentbfdnodeconfigs").
-		Name(isovalentBFDNodeConfig.Name).
-		SubResource("status").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(isovalentBFDNodeConfig).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the isovalentBFDNodeConfig and deletes it. Returns an error if one occurs.
-func (c *isovalentBFDNodeConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("isovalentbfdnodeconfigs").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *isovalentBFDNodeConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("isovalentbfdnodeconfigs").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched isovalentBFDNodeConfig.
-func (c *isovalentBFDNodeConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBFDNodeConfig, err error) {
-	result = &v1alpha1.IsovalentBFDNodeConfig{}
-	err = c.client.Patch(pt).
-		Resource("isovalentbfdnodeconfigs").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

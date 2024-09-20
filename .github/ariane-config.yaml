@@ -4,16 +4,13 @@ allowed-teams:
 triggers:
   /test:
     workflows:
-    - conformance-aks.yaml
     - conformance-aws-cni.yaml
     - conformance-clustermesh.yaml
-    - conformance-e2e.yaml
+    - conformance-delegated-ipam.yaml
     - conformance-ipsec-e2e.yaml
     - conformance-eks.yaml
     - conformance-externalworkloads.yaml
-    - conformance-gateway-api.yaml
     - conformance-ginkgo.yaml
-    - conformance-gke.yaml
     - conformance-ingress.yaml
     - conformance-multi-pool.yaml
     - conformance-runtime.yaml
@@ -34,9 +31,9 @@ triggers:
     workflows:
     - conformance-clustermesh.yaml
     - tests-clustermesh-upgrade.yaml
-  /ci-e2e:
+  /ci-delegated-ipam:
     workflows:
-    - conformance-e2e.yaml
+    - conformance-delegated-ipam.yaml
   /ci-e2e-upgrade:
     workflows:
     - tests-e2e-upgrade.yaml
@@ -94,45 +91,48 @@ triggers:
   /ci-hubble-cli:
     workflows:
     - hubble-cli-integration-test.yaml
+  /ci-ces-migrate:
+    workflows:
+    - tests-ces-migrate.yaml
 
 workflows:
   conformance-aks.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-aws-cni.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-clustermesh.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
-  conformance-e2e.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
+  conformance-delegated-ipam.yaml:
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-ipsec-e2e.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-eks.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-externalworkloads.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-gateway-api.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-ginkgo.yaml:
-    paths-ignore-regex: (cilium-cli|Documentation)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|cilium-cli|Documentation|CODEOWNERS|USERS.md)/
   conformance-gke.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-ingress.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-multi-pool.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   conformance-runtime.yaml:
-    paths-ignore-regex: (cilium-cli|Documentation|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|cilium-cli|Documentation|CODEOWNERS|USERS.md)/
   integration-test.yaml:
-    paths-ignore-regex: (Documentation|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|Documentation|CODEOWNERS|USERS.md)/
   tests-clustermesh-upgrade.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   tests-datapath-verifier.yaml:
     paths-regex: (bpf|test/verifier|vendor|images)/
   tests-l4lb.yaml:
-    paths-regex: (bpf|daemon|images|pkg|test/l4lb|test/nat46x64|vendor|USERS.md)/
+    paths-regex: (bpf|daemon|images|pkg|test/l4lb|test/nat46x64|vendor)/
   tests-e2e-upgrade.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   tests-ipsec-upgrade.yaml:
-    paths-ignore-regex: (test|Documentation|hubble|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|hubble|CODEOWNERS|USERS.md)/
   hubble-cli-integration-test.yaml:
-    paths-ignore-regex: (test|Documentation|USERS.md)/
+    paths-ignore-regex: (bpf/complexity-tests|bpf/tests|test|Documentation|CODEOWNERS|USERS.md)/

@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: isovalentsrv6locatorpools.isovalent.com
 spec:
   group: isovalent.com
@@ -23,19 +22,25 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: IsovalentSRv6LocatorPool is a custom resource which is used to
-          define a SID prefix and format which will be used to allocate SID address
-          blocks per node.
+        description: |-
+          IsovalentSRv6LocatorPool is a custom resource which is used to
+          define a SID prefix and format which will be used to allocate
+          SID address blocks per node.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -44,19 +49,22 @@ spec:
             properties:
               behaviorType:
                 default: Base
-                description: BehaviorType specifies the type of the behavior of SID
-                  allocated from this locator. At the moment, only "Base" and "uSID"
-                  are supported. "Base" flavor binds allocated SIDs to base behaviors
+                description: |-
+                  BehaviorType specifies the type of the behavior of SID allocated
+                  from this locator. At the moment, only "Base" and "uSID" are
+                  supported. "Base" flavor binds allocated SIDs to base behaviors
                   (like End.DT4). "uSID" flavor binds allocated SIDs to the behaviors
-                  for uSID (like uDT4) as described in the draft-filsfils-spring-net-pgm-extension-srv6-usid
+                  for uSID (like uDT4) as described in the
+                  draft-filsfils-spring-net-pgm-extension-srv6-usid
                 enum:
                 - Base
                 - uSID
                 type: string
               locatorLenBits:
-                description: LocatorLenBits is a prefix length of the locator allocated
-                  from this pool. When omitted, the locator length is calculated based
-                  on the structure.
+                description: |-
+                  LocatorLenBits is a prefix length of the locator allocated from this
+                  pool. When omitted, the locator length is calculated based on the
+                  structure.
                 maximum: 128
                 minimum: 0
                 type: integer
@@ -103,9 +111,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

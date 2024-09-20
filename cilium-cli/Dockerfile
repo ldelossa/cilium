@@ -1,15 +1,15 @@
-# syntax=docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+# syntax=docker/dockerfile:1.10@sha256:865e5dd094beca432e8c0a1d5e1c465db5f998dca4e439981029b3b81fb39ed5
 
 # Copyright Authors of Cilium
 # SPDX-License-Identifier: Apache-2.0
 
-FROM docker.io/library/golang:1.22.5-alpine3.19@sha256:48aac60d4f50477055967586f60391fb1f3cbdc2e176e36f1f7f3fd0f5380ef7 AS builder
+FROM docker.io/library/golang:1.23.1-alpine3.19@sha256:e0ea2a119ae0939a6d449ea18b2b1ba30b44986ec48dbb88f3a93371b4bf8750 AS builder
 WORKDIR /go/src/github.com/cilium/cilium
 RUN apk add --no-cache git make ca-certificates
 COPY . .
 RUN make -C cilium-cli
 
-FROM ubuntu:24.04@sha256:2e863c44b718727c860746568e1d54afd13b2fa71b160f5cd9058fc436217b30 AS release
+FROM ubuntu:24.04@sha256:8a37d68f4f73ebf3d4efafbcf66379bf3728902a8038616808f04e34a9ab63ee AS release
 LABEL maintainer="maintainer@cilium.io"
 WORKDIR /root/app
 COPY --from=builder /go/src/github.com/cilium/cilium/cilium-cli/cilium /usr/local/bin/cilium

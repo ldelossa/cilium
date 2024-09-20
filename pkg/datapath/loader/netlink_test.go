@@ -6,7 +6,6 @@
 package loader
 
 import (
-	"fmt"
 	"net"
 	"testing"
 
@@ -79,14 +78,14 @@ func TestSetupDev(t *testing.T) {
 		err = enableForwarding(sysctl, dummy)
 		require.NoError(t, err)
 
-		enabledSettings := []string{
-			fmt.Sprintf("net.ipv6.conf.%s.forwarding", ifName),
-			fmt.Sprintf("net.ipv4.conf.%s.forwarding", ifName),
-			fmt.Sprintf("net.ipv4.conf.%s.accept_local", ifName),
+		enabledSettings := [][]string{
+			{"net", "ipv6", "conf", ifName, "forwarding"},
+			{"net", "ipv4", "conf", ifName, "forwarding"},
+			{"net", "ipv4", "conf", ifName, "accept_local"},
 		}
-		disabledSettings := []string{
-			fmt.Sprintf("net.ipv4.conf.%s.rp_filter", ifName),
-			fmt.Sprintf("net.ipv4.conf.%s.send_redirects", ifName),
+		disabledSettings := [][]string{
+			{"net", "ipv4", "conf", ifName, "rp_filter"},
+			{"net", "ipv4", "conf", ifName, "send_redirects"},
 		}
 		for _, setting := range enabledSettings {
 			s, err := sysctl.Read(setting)

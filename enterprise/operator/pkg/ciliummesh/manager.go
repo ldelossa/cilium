@@ -52,7 +52,7 @@ func newCiliumMeshManager(p CiliumMeshManagerParams) (*CiliumMeshManager, error)
 	}
 
 	p.JobGroup.Add(
-		job.OneShot("cilium-mesh main", func(ctx context.Context, _ cell.Health) error {
+		job.OneShot("cilium-mesh-main", func(ctx context.Context, _ cell.Health) error {
 			cmm.Run(ctx)
 			return nil
 		}),

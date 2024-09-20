@@ -100,6 +100,7 @@ Pepelnjak
 Pfaff
 PodCIDR
 Polytechnique
+Portworx
 QCon
 QLogic
 RuleParser
@@ -262,6 +263,7 @@ ctf
 customConf
 daemonset
 datacenter
+datagram
 datagrams
 datapath
 datastore
@@ -543,6 +545,7 @@ myCA
 mysql
 nameError
 namespace
+namespaceOverride
 namespaced
 namespaces
 nat
