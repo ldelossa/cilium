@@ -27,6 +27,7 @@ cilium-agent [flags]
       --bgp-announce-pod-cidr                                        Announces the node's pod CIDR via BGP
       --bgp-config-path string                                       Path to file containing the BGP configuration (default "/var/lib/cilium/bgp/config.yaml")
       --bpf-auth-map-max int                                         Maximum number of entries in auth map (default 524288)
+      --bpf-conntrack-accounting-enabled                             Enable CT accounting for packets and bytes
       --bpf-ct-global-any-max int                                    Maximum number of entries in non-TCP CT table (default 262144)
       --bpf-ct-global-tcp-max int                                    Maximum number of entries in TCP CT table (default 524288)
       --bpf-ct-timeout-regular-any duration                          Timeout for entries in non-TCP CT table (default 1m0s)
@@ -139,6 +140,7 @@ cilium-agent [flags]
       --enable-identity-mark                                         Enable setting identity mark for local traffic (default true)
       --enable-ingress-controller                                    Enables Envoy secret sync for Ingress controller related TLS secrets
       --enable-inter-cluster-snat                                    Enable inter-cluster SNAT, to support overlapping PodCIDRs
+      --enable-internal-traffic-policy                               Enable internal traffic policy (default true)
       --enable-ip-masq-agent                                         Enable BPF ip-masq-agent
       --enable-ipip-termination                                      Enable plain IPIP/IP6IP6 termination
       --enable-ipsec                                                 Enable IPsec support
@@ -195,6 +197,7 @@ cilium-agent [flags]
       --envoy-base-id uint                                           Envoy base ID
       --envoy-config-retry-interval duration                         Interval in which an attempt is made to reconcile failed EnvoyConfigs. If the duration is zero, the retry is deactivated. (default 15s)
       --envoy-config-timeout duration                                Timeout that determines how long to wait for Envoy to N/ACK CiliumEnvoyConfig resources (default 2m0s)
+      --envoy-default-log-level string                               Default log level of Envoy application log that is configured if Cilium debug / verbose logging isn't enabled. If not defined, the default log level of the Cilium Agent is used.
       --envoy-keep-cap-netbindservice                                Keep capability NET_BIND_SERVICE for Envoy process
       --envoy-log string                                             Path to a separate Envoy log file, if any
       --envoy-secrets-namespace string                               EnvoySecretsNamespace is the namespace having secrets used by CEC

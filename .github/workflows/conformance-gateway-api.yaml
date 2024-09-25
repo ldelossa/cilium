@@ -81,8 +81,26 @@ jobs:
         with:
           sha: ${{ inputs.SHA || github.sha }}
 
+  wait-for-images:
+    name: Wait for images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout context ref (trusted)
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Wait for images
+        uses: ./.github/actions/wait-for-images
+        with:
+          SHA: ${{ inputs.SHA }}
+          images: cilium-ci operator-generic-ci
+
   gateway-api-conformance-test:
     name: Gateway API Conformance Test
+    needs: [wait-for-images]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -122,13 +140,13 @@ jobs:
         run: |
           echo sha=${{ steps.default_vars.outputs.sha }} >> $GITHUB_OUTPUT
 
-          EXEMPT_FEATURES="GatewayStaticAddresses,HTTPRouteParentRefPort,MeshConsumerRoute"
+          EXEMPT_FEATURES="HTTPRouteParentRefPort,MeshConsumerRoute"
           if [ ${{ matrix.crd-channel }} == "standard" ]; then
             EXEMPT_FEATURES+=",HTTPRouteDestinationPortMatching,HTTPRouteRequestTimeout,HTTPRouteBackendTimeout,GatewayInfrastructurePropagation"
           fi
 
           if [ ${{ matrix.conformance-profile }} == "true" ]; then
-            SKIPPED_TESTS+="GatewayStaticAddresses,MeshConsumerRoute,HTTPRouteListenerPortMatching"
+            SKIPPED_TESTS+="MeshConsumerRoute,HTTPRouteListenerPortMatching"
           fi
 
           CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
@@ -163,7 +181,7 @@ jobs:
           wait: 0 # The control-plane never becomes ready, since no CNI is present
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@62bd4511031211b50a4623870955a5ad27b43e3b # v0.16.16
+        uses: cilium/cilium-cli@fff38e882846c03f1720dad476e459323275ab9c # v0.16.17
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
@@ -173,20 +191,12 @@ jobs:
         uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.22.6
+          go-version: 1.23.1
 
       - name: Install tparse
         timeout-minutes: 15
         run: |
           go install github.com/mfridman/tparse@28967170dce4f9f13de77ec857f7aed4c4294a5f # v0.12.3 (main) with -progress
-
-      - name: Wait for images to be available
-        timeout-minutes: 30
-        shell: bash
-        run: |
-          for image in cilium-ci operator-generic-ci ; do
-            until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
-          done
 
       - name: Install Gateway API CRDs
         run: |
@@ -260,8 +270,17 @@ jobs:
       - name: Run Gateway API conformance test
         timeout-minutes: 30
         run: |
+          KIND_NET_CIDR=$(docker network inspect kind -f '{{json .IPAM.Config}}' | jq -r '.[] | select(.Subnet | test("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+")) | .Subnet')
+          echo "KIND_NET_CIDR: $KIND_NET_CIDR"
+          GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES=$(echo ${KIND_NET_CIDR} | sed "s@0.0/16@255.206@")
+          GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES=$(echo ${KIND_NET_CIDR} | sed "s@0.0/16@255.216@")
+          echo "GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES: $GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES"
+          echo "GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES: $GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES"
           if [ ${{ matrix.conformance-profile }} == "true" ]; then
-            GATEWAY_API_CONFORMANCE_TESTS=1 go test \
+            GATEWAY_API_CONFORMANCE_TESTS=1 \
+            GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES=$GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES  \
+            GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES=$GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES \
+            go test \
               -p 4 \
               -v ./operator/pkg/gateway-api \
               --gateway-class cilium \
@@ -279,7 +298,10 @@ jobs:
               -json \
             | tparse -progress
           else
-            GATEWAY_API_CONFORMANCE_TESTS=1 go test \
+            GATEWAY_API_CONFORMANCE_TESTS=1 \
+            GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES=$GATEWAY_API_CONFORMANCE_USABLE_NETWORK_ADDRESSES  \
+            GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES=$GATEWAY_API_CONFORMANCE_UNUSABLE_NETWORK_ADDRESSES \
+            go test \
               -p 4 \
               -v ./operator/pkg/gateway-api \
               --gateway-class cilium \
@@ -293,7 +315,7 @@ jobs:
           fi
 
       - name: Upload report artifacts
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: report-${{ matrix.conformance-profile }}-${{ matrix.crd-channel }}.yaml
           path: operator/pkg/gateway-api/report.yaml
@@ -310,7 +332,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ !success() }}
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: cilium-sysdump-out-${{ matrix.conformance-profile }}-${{ matrix.crd-channel }}
           path: cilium-sysdump-out-*.zip

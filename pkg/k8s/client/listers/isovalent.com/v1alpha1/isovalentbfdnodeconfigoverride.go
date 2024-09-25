@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -26,30 +26,10 @@ type IsovalentBFDNodeConfigOverrideLister interface {
 
 // isovalentBFDNodeConfigOverrideLister implements the IsovalentBFDNodeConfigOverrideLister interface.
 type isovalentBFDNodeConfigOverrideLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.IsovalentBFDNodeConfigOverride]
 }
 
 // NewIsovalentBFDNodeConfigOverrideLister returns a new IsovalentBFDNodeConfigOverrideLister.
 func NewIsovalentBFDNodeConfigOverrideLister(indexer cache.Indexer) IsovalentBFDNodeConfigOverrideLister {
-	return &isovalentBFDNodeConfigOverrideLister{indexer: indexer}
-}
-
-// List lists all IsovalentBFDNodeConfigOverrides in the indexer.
-func (s *isovalentBFDNodeConfigOverrideLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentBFDNodeConfigOverride, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentBFDNodeConfigOverride))
-	})
-	return ret, err
-}
-
-// Get retrieves the IsovalentBFDNodeConfigOverride from the index for a given name.
-func (s *isovalentBFDNodeConfigOverrideLister) Get(name string) (*v1alpha1.IsovalentBFDNodeConfigOverride, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("isovalentbfdnodeconfigoverride"), name)
-	}
-	return obj.(*v1alpha1.IsovalentBFDNodeConfigOverride), nil
+	return &isovalentBFDNodeConfigOverrideLister{listers.New[*v1alpha1.IsovalentBFDNodeConfigOverride](indexer, v1alpha1.Resource("isovalentbfdnodeconfigoverride"))}
 }

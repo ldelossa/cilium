@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -155,7 +156,7 @@ func (ops *ops) Delete(ctx context.Context, _ statedb.ReadTxn, entry *tables.Egr
 	return nil
 }
 
-func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter statedb.Iterator[*tables.EgressIPEntry]) error {
+func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter iter.Seq2[*tables.EgressIPEntry, statedb.Revision]) error {
 	rulesFilter, rulesMask := rulesFilter()
 	rules, err := netlink.RuleListFiltered(netlink.FAMILY_V4, rulesFilter, rulesMask)
 	if err != nil {
@@ -170,10 +171,9 @@ func (ops *ops) Prune(ctx context.Context, txn statedb.ReadTxn, iter statedb.Ite
 
 	// build a map of in-use egressIP -> destinations:
 	egressRoutes := make(map[netip.Addr][]netip.Prefix)
-	statedb.ProcessEach(iter, func(entry *tables.EgressIPEntry, _ uint64) error {
+	for entry := range iter {
 		egressRoutes[entry.Addr] = append(egressRoutes[entry.Addr], entry.Destinations...)
-		return nil
-	})
+	}
 
 	// prune rules and routes that are not part of the desired state (that is,
 	// the stateDB current snapshot).

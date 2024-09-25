@@ -27,20 +27,22 @@ var isovalentmulticastnodesKind = v1alpha1.SchemeGroupVersion.WithKind("Isovalen
 
 // Get takes name of the isovalentMulticastNode, and returns the corresponding isovalentMulticastNode object, and an error if there is any.
 func (c *FakeIsovalentMulticastNodes) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentMulticastNode, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastNode{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentmulticastnodesResource, name), &v1alpha1.IsovalentMulticastNode{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentmulticastnodesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastNode), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentMulticastNodes that match those selectors.
 func (c *FakeIsovalentMulticastNodes) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentMulticastNodeList, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastNodeList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentmulticastnodesResource, isovalentmulticastnodesKind, opts), &v1alpha1.IsovalentMulticastNodeList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentmulticastnodesResource, isovalentmulticastnodesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,36 +61,39 @@ func (c *FakeIsovalentMulticastNodes) List(ctx context.Context, opts v1.ListOpti
 // Watch returns a watch.Interface that watches the requested isovalentMulticastNodes.
 func (c *FakeIsovalentMulticastNodes) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentmulticastnodesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentmulticastnodesResource, opts))
 }
 
 // Create takes the representation of a isovalentMulticastNode and creates it.  Returns the server's representation of the isovalentMulticastNode, and an error, if there is any.
 func (c *FakeIsovalentMulticastNodes) Create(ctx context.Context, isovalentMulticastNode *v1alpha1.IsovalentMulticastNode, opts v1.CreateOptions) (result *v1alpha1.IsovalentMulticastNode, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastNode{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentmulticastnodesResource, isovalentMulticastNode), &v1alpha1.IsovalentMulticastNode{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentmulticastnodesResource, isovalentMulticastNode, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastNode), err
 }
 
 // Update takes the representation of a isovalentMulticastNode and updates it. Returns the server's representation of the isovalentMulticastNode, and an error, if there is any.
 func (c *FakeIsovalentMulticastNodes) Update(ctx context.Context, isovalentMulticastNode *v1alpha1.IsovalentMulticastNode, opts v1.UpdateOptions) (result *v1alpha1.IsovalentMulticastNode, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastNode{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentmulticastnodesResource, isovalentMulticastNode), &v1alpha1.IsovalentMulticastNode{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentmulticastnodesResource, isovalentMulticastNode, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastNode), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeIsovalentMulticastNodes) UpdateStatus(ctx context.Context, isovalentMulticastNode *v1alpha1.IsovalentMulticastNode, opts v1.UpdateOptions) (*v1alpha1.IsovalentMulticastNode, error) {
+func (c *FakeIsovalentMulticastNodes) UpdateStatus(ctx context.Context, isovalentMulticastNode *v1alpha1.IsovalentMulticastNode, opts v1.UpdateOptions) (result *v1alpha1.IsovalentMulticastNode, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastNode{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(isovalentmulticastnodesResource, "status", isovalentMulticastNode), &v1alpha1.IsovalentMulticastNode{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(isovalentmulticastnodesResource, "status", isovalentMulticastNode, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastNode), err
 }
@@ -102,7 +107,7 @@ func (c *FakeIsovalentMulticastNodes) Delete(ctx context.Context, name string, o
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentMulticastNodes) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentmulticastnodesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentmulticastnodesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentMulticastNodeList{})
 	return err
@@ -110,10 +115,11 @@ func (c *FakeIsovalentMulticastNodes) DeleteCollection(ctx context.Context, opts
 
 // Patch applies the patch and returns the patched isovalentMulticastNode.
 func (c *FakeIsovalentMulticastNodes) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentMulticastNode, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastNode{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentmulticastnodesResource, name, pt, data, subresources...), &v1alpha1.IsovalentMulticastNode{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentmulticastnodesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastNode), err
 }

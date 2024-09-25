@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,25 +25,17 @@ type IsovalentMeshEndpointLister interface {
 
 // isovalentMeshEndpointLister implements the IsovalentMeshEndpointLister interface.
 type isovalentMeshEndpointLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.IsovalentMeshEndpoint]
 }
 
 // NewIsovalentMeshEndpointLister returns a new IsovalentMeshEndpointLister.
 func NewIsovalentMeshEndpointLister(indexer cache.Indexer) IsovalentMeshEndpointLister {
-	return &isovalentMeshEndpointLister{indexer: indexer}
-}
-
-// List lists all IsovalentMeshEndpoints in the indexer.
-func (s *isovalentMeshEndpointLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentMeshEndpoint, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentMeshEndpoint))
-	})
-	return ret, err
+	return &isovalentMeshEndpointLister{listers.New[*v1alpha1.IsovalentMeshEndpoint](indexer, v1alpha1.Resource("isovalentmeshendpoint"))}
 }
 
 // IsovalentMeshEndpoints returns an object that can list and get IsovalentMeshEndpoints.
 func (s *isovalentMeshEndpointLister) IsovalentMeshEndpoints(namespace string) IsovalentMeshEndpointNamespaceLister {
-	return isovalentMeshEndpointNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return isovalentMeshEndpointNamespaceLister{listers.NewNamespaced[*v1alpha1.IsovalentMeshEndpoint](s.ResourceIndexer, namespace)}
 }
 
 // IsovalentMeshEndpointNamespaceLister helps list and get IsovalentMeshEndpoints.
@@ -61,26 +53,5 @@ type IsovalentMeshEndpointNamespaceLister interface {
 // isovalentMeshEndpointNamespaceLister implements the IsovalentMeshEndpointNamespaceLister
 // interface.
 type isovalentMeshEndpointNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all IsovalentMeshEndpoints in the indexer for a given namespace.
-func (s isovalentMeshEndpointNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentMeshEndpoint, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentMeshEndpoint))
-	})
-	return ret, err
-}
-
-// Get retrieves the IsovalentMeshEndpoint from the indexer for a given namespace and name.
-func (s isovalentMeshEndpointNamespaceLister) Get(name string) (*v1alpha1.IsovalentMeshEndpoint, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("isovalentmeshendpoint"), name)
-	}
-	return obj.(*v1alpha1.IsovalentMeshEndpoint), nil
+	listers.ResourceIndexer[*v1alpha1.IsovalentMeshEndpoint]
 }

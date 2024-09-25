@@ -84,13 +84,16 @@ const (
 	dummyHostDeviceName     = "dummy_host"
 	dummyExternalDeviceName = "dummy_external"
 
-	baseIPv4Time = "net.ipv4.neigh.default.base_reachable_time_ms"
-	baseIPv6Time = "net.ipv6.neigh.default.base_reachable_time_ms"
-	baseTime     = 2500
+	baseTime = 2500
+	mcastNum = 6
+)
 
-	mcastNumIPv4 = "net.ipv4.neigh.default.mcast_solicit"
-	mcastNumIPv6 = "net.ipv6.neigh.default.mcast_solicit"
-	mcastNum     = 6
+var (
+	baseIPv4Time = []string{"net", "ipv4", "neigh", "default", "base_reachable_time_ms"}
+	baseIPv6Time = []string{"net", "ipv6", "neigh", "default", "base_reachable_time_ms"}
+
+	mcastNumIPv4 = []string{"net", "ipv4", "neigh", "default", "mcast_solicit"}
+	mcastNumIPv6 = []string{"net", "ipv6", "neigh", "default", "mcast_solicit"}
 )
 
 func setupLinuxPrivilegedBaseTestSuite(tb testing.TB, addressing datapath.NodeAddressing, enableIPv6, enableIPv4 bool) *linuxPrivilegedBaseTestSuite {

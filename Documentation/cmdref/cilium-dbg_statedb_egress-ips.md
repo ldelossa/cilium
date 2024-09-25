@@ -11,9 +11,9 @@ cilium-dbg statedb egress-ips [flags]
 ### Options
 
 ```
-  -h, --help             help for egress-ips
-  -o, --output string    Output format, one of: table, json or yaml (default "table")
-  -w, --watch duration   Watch for new changes with the given interval (e.g. --watch=100ms)
+  -h, --help            help for egress-ips
+  -o, --output string   Output format, one of: table, json or yaml (default "table")
+  -w, --watch           Watch for changes
 ```
 
 ### Options inherited from parent commands

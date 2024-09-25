@@ -5,6 +5,12 @@
 # @schema
 # type: [null, string]
 # @schema
+# -- namespaceOverride allows to override the destination namespace for Cilium resources.
+# This property allows to use Cilium as part of an Umbrella Chart with different targets.
+namespaceOverride: ""
+# @schema
+# type: [null, string]
+# @schema
 # -- upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This flag is not required for new installations.
@@ -461,6 +467,8 @@ bpf:
   # -- (int) Configure the maximum number of entries in auth map.
   # @default -- `524288`
   authMapMax: ~
+  # -- Enable CT accounting for packets and bytes
+  ctAccounting: false
   # @schema
   # type: [null, integer]
   # @schema
@@ -2273,6 +2281,16 @@ envoy:
     format: "[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"
     # -- Path to a separate Envoy log file, if any. Defaults to /dev/stdout.
     path: ""
+    # @schema
+    # oneOf:
+    # - type: [null]
+    # - enum: [trace,debug,info,warning,error,critical,off]
+    # @schema
+    # -- Default log level of Envoy application log that is configured if Cilium debug / verbose logging isn't enabled.
+    # This option allows to have a different log level than the Cilium Agent - e.g. lower it to `critical`.
+    # Possible values: trace, debug, info, warning, error, critical, off
+    # @default -- Defaults to the default log level of the Cilium Agent - `info`
+    defaultLevel: ~
   # -- Time in seconds after which a TCP connection attempt times out
   connectTimeoutSeconds: 2
   # -- ProxyMaxRequestsPerConnection specifies the max_requests_per_connection setting for Envoy
@@ -2293,9 +2311,9 @@ envoy:
     # @schema
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.30.4-1723547155-0cb6b7d34a032ee945a80495681ecf2ea109a54c"
+    tag: "v1.30.4-1725856146-ae435a5bef3856f4de98fa360ecfa6a0f5b0f7a1"
     pullPolicy: "Always"
-    digest: "sha256:47bf8d5324241e37da93e995fa23c5b11ac83c430fa54b492c6547b85b3d4f72"
+    digest: "sha256:f9c2a725a702d9fe4a4e038588a79e72955cf46c789914f940d906d65e92527e"
     useDigest: true
   # -- Additional containers added to the cilium Envoy DaemonSet.
   extraContainers: []
@@ -3549,7 +3567,7 @@ authentication:
           override: ~
           repository: "docker.io/library/busybox"
           tag: "1.36.1"
-          digest: "sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87b2b85a32def253c7"
+          digest: "sha256:c230832bd3b0be59a6c47ed64294f9ce71e91b327957920b6929a0caa8353140"
           useDigest: true
           pullPolicy: "Always"
         # SPIRE agent configuration
@@ -3692,6 +3710,8 @@ authentication:
       agentSocketPath: /run/spire/sockets/agent/agent.sock
       # -- SPIRE connection timeout
       connectionTimeout: 30s
+# -- Enable Internal Traffic Policy
+enableInternalTrafficPolicy: true
 # Enterprise-only settings
 enterprise:
   # featureGates is a list of feature IDs that are allowed to be enabled.

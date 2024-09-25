@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -343,9 +343,6 @@ const (
 
 	// LogOpt sets log driver options for cilium
 	LogOpt = "log-opt"
-
-	// Logstash enables logstash integration
-	Logstash = "logstash"
 
 	// EnableIPv4Masquerade masquerades IPv4 packets from endpoints leaving the host.
 	EnableIPv4Masquerade = "enable-ipv4-masquerade"
@@ -1261,6 +1258,12 @@ const (
 
 	// BPFEventsTraceEnabled defines the TraceNotification setting for any endpoint
 	BPFEventsTraceEnabled = "bpf-events-trace-enabled"
+
+	// BPFConntrackAccountingEnabled controls whether CT accounting for packets and bytes is enabled
+	BPFConntrackAccountingEnabled = "bpf-conntrack-accounting-enabled"
+
+	// EnableInternalTrafficPolicy enables handling routing for services with internalTrafficPolicy configured
+	EnableInternalTrafficPolicy = "enable-internal-traffic-policy"
 )
 
 // Default string arguments
@@ -1411,7 +1414,7 @@ func BindEnvWithLegacyEnvFallback(vp *viper.Viper, optName, legacyEnvName string
 // LogRegisteredOptions logs all options that where bound to viper.
 func LogRegisteredOptions(vp *viper.Viper, entry *logrus.Entry) {
 	keys := vp.AllKeys()
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, k := range keys {
 		ss := vp.GetStringSlice(k)
 		if len(ss) == 0 {
@@ -1759,7 +1762,6 @@ type DaemonConfig struct {
 	Labels                        []string
 	LogDriver                     []string
 	LogOpt                        map[string]string
-	Logstash                      bool
 	LogSystemLoadConfig           bool
 
 	// Masquerade specifies whether or not to masquerade packets from endpoints
@@ -2450,6 +2452,9 @@ type DaemonConfig struct {
 	// BPFEventsTraceEnabled  controls whether the Cilium datapath exposes "trace" events to Cilium monitor and Hubble.
 	BPFEventsTraceEnabled bool
 
+	// BPFConntrackAccountingEnabled controls whether CT accounting for packets and bytes is enabled.
+	BPFConntrackAccountingEnabled bool
+
 	// IPAMCiliumNodeUpdateRate is the maximum rate at which the CiliumNode custom
 	// resource is updated.
 	IPAMCiliumNodeUpdateRate time.Duration
@@ -2486,6 +2491,9 @@ type DaemonConfig struct {
 	// EnableSocketLBPodConnectionTermination enables the termination of connections from pods
 	// to deleted service backends when socket-LB is enabled
 	EnableSocketLBPodConnectionTermination bool
+
+	// EnableInternalTrafficPolicy enables handling routing for services with internalTrafficPolicy configured
+	EnableInternalTrafficPolicy bool
 }
 
 var (
@@ -2539,7 +2547,9 @@ var (
 		BPFEventsDropEnabled:          defaults.BPFEventsDropEnabled,
 		BPFEventsPolicyVerdictEnabled: defaults.BPFEventsPolicyVerdictEnabled,
 		BPFEventsTraceEnabled:         defaults.BPFEventsTraceEnabled,
+		BPFConntrackAccountingEnabled: defaults.BPFConntrackAccountingEnabled,
 		EnableEnvoyConfig:             defaults.EnableEnvoyConfig,
+		EnableInternalTrafficPolicy:   defaults.EnableInternalTrafficPolicy,
 	}
 )
 
@@ -3107,7 +3117,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.LibDir = vp.GetString(LibDir)
 	c.LogDriver = vp.GetStringSlice(LogDriver)
 	c.LogSystemLoadConfig = vp.GetBool(LogSystemLoadConfigName)
-	c.Logstash = vp.GetBool(Logstash)
 	c.LoopbackIPv4 = vp.GetString(LoopbackIPv4)
 	c.LocalRouterIPv4 = vp.GetString(LocalRouterIPv4)
 	c.LocalRouterIPv6 = vp.GetString(LocalRouterIPv6)
@@ -3170,6 +3179,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.BPFEventsDropEnabled = vp.GetBool(BPFEventsDropEnabled)
 	c.BPFEventsPolicyVerdictEnabled = vp.GetBool(BPFEventsPolicyVerdictEnabled)
 	c.BPFEventsTraceEnabled = vp.GetBool(BPFEventsTraceEnabled)
+	c.BPFConntrackAccountingEnabled = vp.GetBool(BPFConntrackAccountingEnabled)
 	c.EnableIPSecEncryptedOverlay = vp.GetBool(EnableIPSecEncryptedOverlay)
 
 	c.ServiceNoBackendResponse = vp.GetString(ServiceNoBackendResponse)
@@ -3597,6 +3607,8 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	}
 
 	c.LoadBalancerProtocolDifferentiation = vp.GetBool(LoadBalancerProtocolDifferentiation)
+
+	c.EnableInternalTrafficPolicy = vp.GetBool(EnableInternalTrafficPolicy)
 }
 
 func (c *DaemonConfig) populateLoadBalancerSettings(vp *viper.Viper) {
@@ -4307,7 +4319,7 @@ func InitConfig(cmd *cobra.Command, programName, configName string, vp *viper.Vi
 			log.WithField(logfields.Path, vp.ConfigFileUsed()).
 				Info("Using config from file")
 		} else if Config.ConfigFile != "" {
-			log.WithField(logfields.Path, Config.ConfigFile).
+			log.WithField(logfields.Path, Config.ConfigFile).WithError(err).
 				Fatal("Error reading config file")
 		} else {
 			log.WithError(err).Debug("Skipped reading configuration file")

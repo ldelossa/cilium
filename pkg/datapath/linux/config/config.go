@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/netip"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -810,7 +809,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	for key := range cDefinesMap {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	for _, key := range keys {
 		fmt.Fprintf(fw, "#define %s %s\n", key, cDefinesMap[key])
@@ -837,7 +836,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 }
 
 func getEphemeralPortRangeMin(sysctl sysctl.Sysctl) (int, error) {
-	ephemeralPortRangeStr, err := sysctl.Read("net.ipv4.ip_local_port_range")
+	ephemeralPortRangeStr, err := sysctl.Read([]string{"net", "ipv4", "ip_local_port_range"})
 	if err != nil {
 		return 0, fmt.Errorf("unable to read net.ipv4.ip_local_port_range: %w", err)
 	}
@@ -891,7 +890,7 @@ func vlanFilterMacros(nativeDevices []*tables.Device) (string, error) {
 	vlansCount := 0
 	for _, v := range vlansByIfIndex {
 		vlansCount += len(v)
-		sort.Ints(v) // sort Vlanids in-place since netlink.LinkList() may return them in any order
+		slices.Sort(v) // sort Vlanids in-place since netlink.LinkList() may return them in any order
 	}
 
 	if vlansCount == 0 {

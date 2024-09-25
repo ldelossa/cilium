@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: isovalentbfdnodeconfigoverrides.isovalent.com
 spec:
   group: isovalent.com
@@ -23,22 +22,26 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: IsovalentBFDNodeConfigOverride specifies node-specific configuration
-          overrides for the BFD agent. It allows configuring node-specific BFD parameters
-          that would be otherwise detected / derived automatically. The content of
-          this resource is consumed by the BFD operator when generating IsovalentBFDNodeConfig
-          resources. The name of the object should be a node name to which this override
-          applies.
+        description: |-
+          IsovalentBFDNodeConfigOverride specifies node-specific configuration overrides for the BFD agent.
+          It allows configuring node-specific BFD parameters that would be otherwise detected / derived automatically.
+          The content of this resource is consumed by the BFD operator when generating IsovalentBFDNodeConfig resources.
+          The name of the object should be a node name to which this override applies.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -54,11 +57,10 @@ spec:
                     override configuration for a BFD peer.
                   properties:
                     echoSourceAddress:
-                      description: EchoSourceAddress defines the IP address used as
-                        the source address when sending Echo packets for the BFD peering.
-                        If not configured, the LocalAddress will be used if configured,
-                        or the auto-detected IP address of the egress interface will
-                        be used.
+                      description: |-
+                        EchoSourceAddress defines the IP address used as the source address when sending Echo packets for the BFD peering.
+                        If not configured, the LocalAddress will be used if configured, or the auto-detected IP address
+                        of the egress interface will be used.
                       format: ip
                       type: string
                     interface:
@@ -66,16 +68,15 @@ spec:
                         which this session is bound to.
                       type: string
                     localAddress:
-                      description: LocalAddress is the local IP address used for the
-                        BFD peering. It must match the IP address configured for this
-                        node on the remote peer.
+                      description: |-
+                        LocalAddress is the local IP address used for the BFD peering.
+                        It must match the IP address configured for this node on the remote peer.
                       format: ip
                       type: string
                     peerAddress:
-                      description: PeerAddress is the IP address of the BFD peer to
-                        which this override configuration applies. Supports IPv4 and
-                        IPv6 addresses. If a link-local IPv6 address is used, Interface
-                        must be specified.
+                      description: |-
+                        PeerAddress is the IP address of the BFD peer to which this override configuration applies.
+                        Supports IPv4 and IPv6 addresses. If a link-local IPv6 address is used, Interface must be specified.
                       format: ip
                       type: string
                   required:
@@ -91,9 +92,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

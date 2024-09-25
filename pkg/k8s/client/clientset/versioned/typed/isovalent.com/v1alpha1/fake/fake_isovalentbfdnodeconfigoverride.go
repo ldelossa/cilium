@@ -27,20 +27,22 @@ var isovalentbfdnodeconfigoverridesKind = v1alpha1.SchemeGroupVersion.WithKind("
 
 // Get takes name of the isovalentBFDNodeConfigOverride, and returns the corresponding isovalentBFDNodeConfigOverride object, and an error if there is any.
 func (c *FakeIsovalentBFDNodeConfigOverrides) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBFDNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbfdnodeconfigoverridesResource, name), &v1alpha1.IsovalentBFDNodeConfigOverride{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbfdnodeconfigoverridesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfigOverride), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBFDNodeConfigOverrides that match those selectors.
 func (c *FakeIsovalentBFDNodeConfigOverrides) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBFDNodeConfigOverrideList, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfigOverrideList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbfdnodeconfigoverridesResource, isovalentbfdnodeconfigoverridesKind, opts), &v1alpha1.IsovalentBFDNodeConfigOverrideList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbfdnodeconfigoverridesResource, isovalentbfdnodeconfigoverridesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentBFDNodeConfigOverrides) List(ctx context.Context, opts v1.
 // Watch returns a watch.Interface that watches the requested isovalentBFDNodeConfigOverrides.
 func (c *FakeIsovalentBFDNodeConfigOverrides) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbfdnodeconfigoverridesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbfdnodeconfigoverridesResource, opts))
 }
 
 // Create takes the representation of a isovalentBFDNodeConfigOverride and creates it.  Returns the server's representation of the isovalentBFDNodeConfigOverride, and an error, if there is any.
 func (c *FakeIsovalentBFDNodeConfigOverrides) Create(ctx context.Context, isovalentBFDNodeConfigOverride *v1alpha1.IsovalentBFDNodeConfigOverride, opts v1.CreateOptions) (result *v1alpha1.IsovalentBFDNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbfdnodeconfigoverridesResource, isovalentBFDNodeConfigOverride), &v1alpha1.IsovalentBFDNodeConfigOverride{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbfdnodeconfigoverridesResource, isovalentBFDNodeConfigOverride, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfigOverride), err
 }
 
 // Update takes the representation of a isovalentBFDNodeConfigOverride and updates it. Returns the server's representation of the isovalentBFDNodeConfigOverride, and an error, if there is any.
 func (c *FakeIsovalentBFDNodeConfigOverrides) Update(ctx context.Context, isovalentBFDNodeConfigOverride *v1alpha1.IsovalentBFDNodeConfigOverride, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBFDNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbfdnodeconfigoverridesResource, isovalentBFDNodeConfigOverride), &v1alpha1.IsovalentBFDNodeConfigOverride{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbfdnodeconfigoverridesResource, isovalentBFDNodeConfigOverride, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfigOverride), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentBFDNodeConfigOverrides) Delete(ctx context.Context, name s
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBFDNodeConfigOverrides) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbfdnodeconfigoverridesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbfdnodeconfigoverridesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBFDNodeConfigOverrideList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentBFDNodeConfigOverrides) DeleteCollection(ctx context.Conte
 
 // Patch applies the patch and returns the patched isovalentBFDNodeConfigOverride.
 func (c *FakeIsovalentBFDNodeConfigOverrides) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBFDNodeConfigOverride, err error) {
+	emptyResult := &v1alpha1.IsovalentBFDNodeConfigOverride{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbfdnodeconfigoverridesResource, name, pt, data, subresources...), &v1alpha1.IsovalentBFDNodeConfigOverride{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbfdnodeconfigoverridesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBFDNodeConfigOverride), err
 }

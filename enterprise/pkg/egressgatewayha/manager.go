@@ -724,7 +724,7 @@ func (manager *Manager) relaxRPFilter() error {
 		if _, ok := ifSet[ifaceName]; !ok {
 			ifSet[ifaceName] = struct{}{}
 			sysSettings = append(sysSettings, tables.Sysctl{
-				Name:      fmt.Sprintf("net.ipv4.conf.%s.rp_filter", ifaceName),
+				Name:      []string{"net", "ipv4", "conf", ifaceName, "rp_filter"},
 				Val:       "2",
 				IgnoreErr: false,
 			})
@@ -888,7 +888,7 @@ func (manager *Manager) finishInitializer(initializer func(txn statedb.WriteTxn)
 	txn.Commit()
 	// This works around a StateDB bug (see https://github.com/cilium/statedb/pull/47)
 	// where the reconciler does not fire on an empty (but initialized) table.
-	if manager.egressIPTable.Initialized(manager.db.ReadTxn()) {
+	if initialized, _ := manager.egressIPTable.Initialized(manager.db.ReadTxn()); initialized {
 		log.Debug("Pruning IPAM related rules and routes")
 		manager.egressIPReconciler.Prune()
 	}

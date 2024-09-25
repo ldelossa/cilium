@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -26,30 +26,10 @@ type IsovalentBGPNodeConfigLister interface {
 
 // isovalentBGPNodeConfigLister implements the IsovalentBGPNodeConfigLister interface.
 type isovalentBGPNodeConfigLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.IsovalentBGPNodeConfig]
 }
 
 // NewIsovalentBGPNodeConfigLister returns a new IsovalentBGPNodeConfigLister.
 func NewIsovalentBGPNodeConfigLister(indexer cache.Indexer) IsovalentBGPNodeConfigLister {
-	return &isovalentBGPNodeConfigLister{indexer: indexer}
-}
-
-// List lists all IsovalentBGPNodeConfigs in the indexer.
-func (s *isovalentBGPNodeConfigLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentBGPNodeConfig, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentBGPNodeConfig))
-	})
-	return ret, err
-}
-
-// Get retrieves the IsovalentBGPNodeConfig from the index for a given name.
-func (s *isovalentBGPNodeConfigLister) Get(name string) (*v1alpha1.IsovalentBGPNodeConfig, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("isovalentbgpnodeconfig"), name)
-	}
-	return obj.(*v1alpha1.IsovalentBGPNodeConfig), nil
+	return &isovalentBGPNodeConfigLister{listers.New[*v1alpha1.IsovalentBGPNodeConfig](indexer, v1alpha1.Resource("isovalentbgpnodeconfig"))}
 }

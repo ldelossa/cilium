@@ -70,8 +70,6 @@ var log = logging.DefaultLogger.WithField(logfields.LogSubsys, subsystem)
 // loader is a wrapper structure around operations related to compiling,
 // loading, and reloading datapath programs.
 type loader struct {
-	cfg Config
-
 	// templateCache is the cache of pre-compiled datapaths. Only set after
 	// a call to Reinitialize.
 	templateCache *objectCache
@@ -91,7 +89,6 @@ type loader struct {
 type Params struct {
 	cell.In
 
-	Config          Config
 	Sysctl          sysctl.Sysctl
 	Prefilter       datapath.PreFilter
 	CompilationLock datapath.CompilationLock
@@ -106,7 +103,6 @@ type Params struct {
 // newLoader returns a new loader.
 func newLoader(p Params) *loader {
 	return &loader{
-		cfg:               p.Config,
 		templateCache:     newObjectCache(p.ConfigWriter, filepath.Join(option.Config.StateDir, defaults.TemplatesDir)),
 		sysctl:            p.Sysctl,
 		hostDpInitialized: make(chan struct{}),
@@ -136,9 +132,9 @@ func removeEndpointRoute(ep datapath.Endpoint, ip net.IPNet) error {
 	})
 }
 
-func (l *loader) bpfMasqAddrs(ifName string, cfg *datapath.LocalNodeConfiguration) (masq4, masq6 netip.Addr) {
-	if l.cfg.DeriveMasqIPAddrFromDevice != "" {
-		ifName = l.cfg.DeriveMasqIPAddrFromDevice
+func bpfMasqAddrs(ifName string, cfg *datapath.LocalNodeConfiguration) (masq4, masq6 netip.Addr) {
+	if cfg.DeriveMasqIPAddrFromDevice != "" {
+		ifName = cfg.DeriveMasqIPAddrFromDevice
 	}
 
 	find := func(devName string) bool {
@@ -175,7 +171,7 @@ func (l *loader) bpfMasqAddrs(ifName string, cfg *datapath.LocalNodeConfiguratio
 
 // hostRewrites calculates the changes necessary to attach the host endpoint
 // programs to different interfaces.
-func (l *loader) hostRewrites(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, ifName string) (map[string]uint64, map[string]string, error) {
+func hostRewrites(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, ifName string) (map[string]uint64, map[string]string, error) {
 	opts := ELFVariableSubstitutions(ep)
 	strings := ELFMapSubstitutions(ep)
 
@@ -205,7 +201,7 @@ func (l *loader) hostRewrites(cfg *datapath.LocalNodeConfiguration, ep datapath.
 	opts["NATIVE_DEV_IFINDEX"] = uint64(ifIndex)
 
 	if option.Config.EnableBPFMasquerade && ifName != defaults.SecondHostDevice {
-		ipv4, ipv6 := l.bpfMasqAddrs(ifName, cfg)
+		ipv4, ipv6 := bpfMasqAddrs(ifName, cfg)
 
 		if option.Config.EnableIPv4Masquerade && ipv4.IsValid() {
 			opts["IPV4_MASQUERADE"] = uint64(byteorder.NetIPv4ToHost32(ipv4.AsSlice()))
@@ -316,24 +312,19 @@ func removeObsoleteNetdevPrograms(devices []string) error {
 
 // reloadHostEndpoint (re)attaches programs from bpf_host.c to cilium_host,
 // cilium_net and external (native) devices.
-func (l *loader) reloadHostEndpoint(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
+func reloadHostEndpoint(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
 	// Replace programs on cilium_host.
 	if err := attachCiliumHost(ep, spec); err != nil {
 		return fmt.Errorf("attaching cilium_host: %w", err)
 	}
 
-	if err := l.attachCiliumNet(cfg, ep, spec); err != nil {
+	if err := attachCiliumNet(cfg, ep, spec); err != nil {
 		return fmt.Errorf("attaching cilium_host: %w", err)
 	}
 
-	if err := l.attachNetworkDevices(cfg, ep, spec); err != nil {
+	if err := attachNetworkDevices(cfg, ep, spec); err != nil {
 		return fmt.Errorf("attaching cilium_host: %w", err)
 	}
-
-	l.hostDpInitializedOnce.Do(func() {
-		log.Debug("Initialized host datapath")
-		close(l.hostDpInitialized)
-	})
 
 	return nil
 }
@@ -383,13 +374,13 @@ func attachCiliumHost(ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
 }
 
 // attachCiliumNet attaches programs from bpf_host.c to cilium_net.
-func (l *loader) attachCiliumNet(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
+func attachCiliumNet(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
 	net, err := netlink.LinkByName(defaults.SecondHostDevice)
 	if err != nil {
 		return fmt.Errorf("retrieving device %s: %w", defaults.SecondHostDevice, err)
 	}
 
-	consts, renames, err := l.hostRewrites(cfg, ep, defaults.SecondHostDevice)
+	consts, renames, err := hostRewrites(cfg, ep, defaults.SecondHostDevice)
 	if err != nil {
 		return err
 	}
@@ -423,7 +414,7 @@ func (l *loader) attachCiliumNet(cfg *datapath.LocalNodeConfiguration, ep datapa
 // attachNetworkDevices attaches programs from bpf_host.c to externally-facing
 // devices and the wireguard device. Attaches cil_from_netdev to ingress and
 // optionally cil_to_netdev to egress if enabled features require it.
-func (l *loader) attachNetworkDevices(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
+func attachNetworkDevices(cfg *datapath.LocalNodeConfiguration, ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
 	devices := cfg.DeviceNames()
 
 	// Selectively attach bpf_host to cilium_wg0.
@@ -441,7 +432,7 @@ func (l *loader) attachNetworkDevices(cfg *datapath.LocalNodeConfiguration, ep d
 
 		linkDir := bpffsDeviceLinksDir(bpf.CiliumPath(), iface)
 
-		consts, renames, err := l.hostRewrites(cfg, ep, device)
+		consts, renames, err := hostRewrites(cfg, ep, device)
 		if err != nil {
 			return err
 		}
@@ -502,7 +493,7 @@ func (l *loader) attachNetworkDevices(cfg *datapath.LocalNodeConfiguration, ep d
 //
 // spec is modified by the method and it is the callers responsibility to copy
 // it if necessary.
-func (l *loader) reloadEndpoint(ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
+func reloadEndpoint(ep datapath.Endpoint, spec *ebpf.CollectionSpec) error {
 	device := ep.InterfaceName()
 
 	var obj lxcObjects
@@ -577,14 +568,9 @@ func (l *loader) reloadEndpoint(ep datapath.Endpoint, spec *ebpf.CollectionSpec)
 	return nil
 }
 
-func (l *loader) replaceOverlayDatapath(ctx context.Context, cArgs []string, iface string) error {
+func replaceOverlayDatapath(ctx context.Context, cArgs []string, device netlink.Link) error {
 	if err := compileOverlay(ctx, cArgs); err != nil {
 		return fmt.Errorf("compiling overlay program: %w", err)
-	}
-
-	device, err := netlink.LinkByName(iface)
-	if err != nil {
-		return fmt.Errorf("retrieving device %s: %w", iface, err)
 	}
 
 	spec, err := bpf.LoadCollectionSpec(overlayObj)
@@ -620,13 +606,9 @@ func (l *loader) replaceOverlayDatapath(ctx context.Context, cArgs []string, ifa
 	return nil
 }
 
-func (l *loader) replaceWireguardDatapath(ctx context.Context, cArgs []string, iface string) (err error) {
+func replaceWireguardDatapath(ctx context.Context, cArgs []string, device netlink.Link) (err error) {
 	if err := compileWireguard(ctx, cArgs); err != nil {
 		return fmt.Errorf("compiling wireguard program: %w", err)
-	}
-	device, err := netlink.LinkByName(iface)
-	if err != nil {
-		return fmt.Errorf("retrieving device %s: %w", iface, err)
 	}
 
 	spec, err := bpf.LoadCollectionSpec(wireguardObj)
@@ -685,14 +667,20 @@ func (l *loader) ReloadDatapath(ctx context.Context, ep datapath.Endpoint, cfg *
 	if ep.IsHost() {
 		// Reload bpf programs on cilium_host and cilium_net.
 		stats.BpfLoadProg.Start()
-		err = l.reloadHostEndpoint(cfg, ep, spec)
+		err = reloadHostEndpoint(cfg, ep, spec)
 		stats.BpfLoadProg.End(err == nil)
+
+		l.hostDpInitializedOnce.Do(func() {
+			log.Debug("Initialized host datapath")
+			close(l.hostDpInitialized)
+		})
+
 		return hash, err
 	}
 
 	// Reload an lxc endpoint program.
 	stats.BpfLoadProg.Start()
-	err = l.reloadEndpoint(ep, spec)
+	err = reloadEndpoint(ep, spec)
 	stats.BpfLoadProg.End(err == nil)
 	return hash, err
 }

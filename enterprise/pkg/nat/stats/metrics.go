@@ -12,6 +12,7 @@ package stats
 
 import (
 	"context"
+	"iter"
 	"strconv"
 
 	"github.com/cilium/cilium/pkg/logging"
@@ -168,10 +169,10 @@ func newTopkMetrics(p params) *topkMetrics {
 	return m
 }
 
-func (m *topkMetrics) update(iter statedb.Iterator[stats.NatMapStats]) error {
+func (m *topkMetrics) update(iter iter.Seq2[stats.NatMapStats, statedb.Revision]) error {
 	currEntriesIpv4 := sets.New[stats.NatMapStats]()
 	currEntriesIpv6 := sets.New[stats.NatMapStats]()
-	for entry, _, ok := iter.Next(); ok; entry, _, ok = iter.Next() {
+	for entry := range iter {
 		// By zeroing of the nth value, we make the entry something we can
 		// perform set operations on which will be useful for managing metrics.
 		entry.Nth = 0

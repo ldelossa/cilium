@@ -27,20 +27,22 @@ var isovalentvrfsKind = v1alpha1.SchemeGroupVersion.WithKind("IsovalentVRF")
 
 // Get takes name of the isovalentVRF, and returns the corresponding isovalentVRF object, and an error if there is any.
 func (c *FakeIsovalentVRFs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentVRF, err error) {
+	emptyResult := &v1alpha1.IsovalentVRF{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentvrfsResource, name), &v1alpha1.IsovalentVRF{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentvrfsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentVRF), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentVRFs that match those selectors.
 func (c *FakeIsovalentVRFs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentVRFList, err error) {
+	emptyResult := &v1alpha1.IsovalentVRFList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentvrfsResource, isovalentvrfsKind, opts), &v1alpha1.IsovalentVRFList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentvrfsResource, isovalentvrfsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentVRFs) List(ctx context.Context, opts v1.ListOptions) (resu
 // Watch returns a watch.Interface that watches the requested isovalentVRFs.
 func (c *FakeIsovalentVRFs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentvrfsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentvrfsResource, opts))
 }
 
 // Create takes the representation of a isovalentVRF and creates it.  Returns the server's representation of the isovalentVRF, and an error, if there is any.
 func (c *FakeIsovalentVRFs) Create(ctx context.Context, isovalentVRF *v1alpha1.IsovalentVRF, opts v1.CreateOptions) (result *v1alpha1.IsovalentVRF, err error) {
+	emptyResult := &v1alpha1.IsovalentVRF{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentvrfsResource, isovalentVRF), &v1alpha1.IsovalentVRF{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentvrfsResource, isovalentVRF, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentVRF), err
 }
 
 // Update takes the representation of a isovalentVRF and updates it. Returns the server's representation of the isovalentVRF, and an error, if there is any.
 func (c *FakeIsovalentVRFs) Update(ctx context.Context, isovalentVRF *v1alpha1.IsovalentVRF, opts v1.UpdateOptions) (result *v1alpha1.IsovalentVRF, err error) {
+	emptyResult := &v1alpha1.IsovalentVRF{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentvrfsResource, isovalentVRF), &v1alpha1.IsovalentVRF{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentvrfsResource, isovalentVRF, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentVRF), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentVRFs) Delete(ctx context.Context, name string, opts v1.Del
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentVRFs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentvrfsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentvrfsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentVRFList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentVRFs) DeleteCollection(ctx context.Context, opts v1.Delete
 
 // Patch applies the patch and returns the patched isovalentVRF.
 func (c *FakeIsovalentVRFs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentVRF, err error) {
+	emptyResult := &v1alpha1.IsovalentVRF{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentvrfsResource, name, pt, data, subresources...), &v1alpha1.IsovalentVRF{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentvrfsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentVRF), err
 }

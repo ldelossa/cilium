@@ -74,6 +74,10 @@ type LocalNodeConfiguration struct {
 	// Mutable at runtime.
 	NodeAddresses []tables.NodeAddress
 
+	// DeriveMasqIPAddrFromDevice overrides the interface name to use for deriving
+	// the masquerading IP address for the node.
+	DeriveMasqIPAddrFromDevice string
+
 	// HostEndpointID is the endpoint ID assigned to the host endpoint.
 	// Immutable at runtime.
 	HostEndpointID uint64
@@ -154,7 +158,7 @@ type LocalNodeConfiguration struct {
 	// EnableIPSecEncryptedOverlay enables IPSec routes for overlay traffic
 	EnableIPSecEncryptedOverlay bool
 
-	// EncryptNode enables encrypting NodeIP traffic requires EnableIPSec
+	// EncryptNode enables encrypting NodeIP traffic
 	EncryptNode bool
 
 	// IPv4PodSubnets is a list of IPv4 subnets that pod IPs are assigned from

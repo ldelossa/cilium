@@ -127,7 +127,7 @@ func addENIRules(sysSettings []tables.Sysctl) ([]tables.Sysctl, error) {
 	}
 
 	retSettings := append(sysSettings, tables.Sysctl{
-		Name:      fmt.Sprintf("net.ipv4.conf.%s.rp_filter", iface.Attrs().Name),
+		Name:      []string{"net", "ipv4", "conf", iface.Attrs().Name, "rp_filter"},
 		Val:       "2",
 		IgnoreErr: false,
 	})
@@ -277,7 +277,7 @@ func (l *loader) reinitializeIPSec() error {
 	return nil
 }
 
-func (l *loader) reinitializeOverlay(ctx context.Context, tunnelConfig tunnel.Config) error {
+func reinitializeOverlay(ctx context.Context, tunnelConfig tunnel.Config) error {
 	// tunnelConfig.Protocol() can be one of tunnel.[Disabled, VXLAN, Geneve]
 	// if it is disabled, the overlay network programs don't have to be (re)initialized
 	if tunnelConfig.Protocol() == tunnel.Disabled {
@@ -308,14 +308,14 @@ func (l *loader) reinitializeOverlay(ctx context.Context, tunnelConfig tunnel.Co
 		opts = append(opts, fmt.Sprintf("-DSECLABEL_IPV6=%d", identity.ReservedIdentityWorld))
 	}
 
-	if err := l.replaceOverlayDatapath(ctx, opts, iface); err != nil {
+	if err := replaceOverlayDatapath(ctx, opts, link); err != nil {
 		return fmt.Errorf("failed to load overlay programs: %w", err)
 	}
 
 	return nil
 }
 
-func (l *loader) reinitializeWireguard(ctx context.Context) (err error) {
+func reinitializeWireguard(ctx context.Context) (err error) {
 	// to-wireguard bpf is only used for rev-DNAT, which is only needed when NodePort, KPR, native routing and L7 proxy are enabled together
 	if !option.Config.EnableWireguard ||
 		!option.Config.EnableNodePort ||
@@ -337,14 +337,14 @@ func (l *loader) reinitializeWireguard(ctx context.Context) (err error) {
 		fmt.Sprintf("-DCALLS_MAP=cilium_calls_wireguard_%d", identity.ReservedIdentityWorld),
 	}
 
-	if err := l.replaceWireguardDatapath(ctx, opts, wgTypes.IfaceName); err != nil {
+	if err := replaceWireguardDatapath(ctx, opts, link); err != nil {
 		return fmt.Errorf("failed to load wireguard programs: %w", err)
 	}
 	return
 }
 
-func (l *loader) reinitializeXDPLocked(ctx context.Context, extraCArgs []string, devices []string, xdpConfig xdp.Config) error {
-	l.maybeUnloadObsoleteXDPPrograms(devices, xdpConfig.Mode(), bpf.CiliumPath())
+func reinitializeXDPLocked(ctx context.Context, extraCArgs []string, devices []string, xdpConfig xdp.Config) error {
+	maybeUnloadObsoleteXDPPrograms(devices, xdpConfig.Mode(), bpf.CiliumPath())
 	if xdpConfig.Disabled() {
 		return nil
 	}
@@ -380,7 +380,8 @@ func (l *loader) ReinitializeXDP(ctx context.Context, cfg *datapath.LocalNodeCon
 	l.compilationLock.Lock()
 	defer l.compilationLock.Unlock()
 	devices := cfg.DeviceNames()
-	return l.reinitializeXDPLocked(ctx, extraCArgs, devices, cfg.XDPConfig)
+
+	return reinitializeXDPLocked(ctx, extraCArgs, devices, cfg.XDPConfig)
 }
 
 func (l *loader) ReinitializeHostDev(ctx context.Context, mtu int) error {
@@ -398,11 +399,11 @@ func (l *loader) ReinitializeHostDev(ctx context.Context, mtu int) error {
 // restore from a previous Cilium run, or during regular Cilium operation.
 func (l *loader) Reinitialize(ctx context.Context, cfg *datapath.LocalNodeConfiguration, tunnelConfig tunnel.Config, iptMgr datapath.IptablesManager, p datapath.Proxy) error {
 	sysSettings := []tables.Sysctl{
-		{Name: "net.core.bpf_jit_enable", Val: "1", IgnoreErr: true, Warn: "Unable to ensure that BPF JIT compilation is enabled. This can be ignored when Cilium is running inside non-host network namespace (e.g. with kind or minikube)"},
-		{Name: "net.ipv4.conf.all.rp_filter", Val: "0", IgnoreErr: false},
-		{Name: "net.ipv4.fib_multipath_use_neigh", Val: "1", IgnoreErr: true},
-		{Name: "kernel.unprivileged_bpf_disabled", Val: "1", IgnoreErr: true},
-		{Name: "kernel.timer_migration", Val: "0", IgnoreErr: true},
+		{Name: []string{"net", "core", "bpf_jit_enable"}, Val: "1", IgnoreErr: true, Warn: "Unable to ensure that BPF JIT compilation is enabled. This can be ignored when Cilium is running inside non-host network namespace (e.g. with kind or minikube)"},
+		{Name: []string{"net", "ipv4", "conf", "all", "rp_filter"}, Val: "0", IgnoreErr: false},
+		{Name: []string{"net", "ipv4", "fib_multipath_use_neigh"}, Val: "1", IgnoreErr: true},
+		{Name: []string{"kernel", "unprivileged_bpf_disabled"}, Val: "1", IgnoreErr: true},
+		{Name: []string{"kernel", "timer_migration"}, Val: "0", IgnoreErr: true},
 	}
 
 	// Lock so that endpoints cannot be built while we are compile base programs.
@@ -423,7 +424,7 @@ func (l *loader) Reinitialize(ctx context.Context, cfg *datapath.LocalNodeConfig
 		// interface (https://github.com/docker/libnetwork/issues/1720)
 		// Enable IPv6 for now
 		sysSettings = append(sysSettings,
-			tables.Sysctl{Name: "net.ipv6.conf.all.disable_ipv6", Val: "0", IgnoreErr: false})
+			tables.Sysctl{Name: []string{"net", "ipv6", "conf", "all", "disable_ipv6"}, Val: "0", IgnoreErr: false})
 	}
 
 	// BPF file system setup.
@@ -441,7 +442,7 @@ func (l *loader) Reinitialize(ctx context.Context, cfg *datapath.LocalNodeConfig
 		sysSettings = append(
 			sysSettings,
 			tables.Sysctl{
-				Name: "net.core.fb_tunnels_only_for_init_net", Val: "2", IgnoreErr: true,
+				Name: []string{"net", "core", "fb_tunnels_only_for_init_net"}, Val: "2", IgnoreErr: true,
 			},
 		)
 		if err := setupIPIPDevices(l.sysctl, option.Config.IPv4Enabled(), option.Config.IPv6Enabled()); err != nil {
@@ -514,7 +515,7 @@ func (l *loader) Reinitialize(ctx context.Context, cfg *datapath.LocalNodeConfig
 	}
 
 	extraArgs := []string{"-Dcapture_enabled=0"}
-	if err := l.reinitializeXDPLocked(ctx, extraArgs, devices, cfg.XDPConfig); err != nil {
+	if err := reinitializeXDPLocked(ctx, extraArgs, devices, cfg.XDPConfig); err != nil {
 		log.WithError(err).Fatal("Failed to compile XDP program")
 	}
 
@@ -537,11 +538,11 @@ func (l *loader) Reinitialize(ctx context.Context, cfg *datapath.LocalNodeConfig
 		}
 	}
 
-	if err := l.reinitializeOverlay(ctx, tunnelConfig); err != nil {
+	if err := reinitializeOverlay(ctx, tunnelConfig); err != nil {
 		return err
 	}
 
-	if err := l.reinitializeWireguard(ctx); err != nil {
+	if err := reinitializeWireguard(ctx); err != nil {
 		return err
 	}
 

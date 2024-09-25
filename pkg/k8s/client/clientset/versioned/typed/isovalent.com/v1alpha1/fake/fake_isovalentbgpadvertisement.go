@@ -27,20 +27,22 @@ var isovalentbgpadvertisementsKind = v1alpha1.SchemeGroupVersion.WithKind("Isova
 
 // Get takes name of the isovalentBGPAdvertisement, and returns the corresponding isovalentBGPAdvertisement object, and an error if there is any.
 func (c *FakeIsovalentBGPAdvertisements) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentBGPAdvertisement, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPAdvertisement{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentbgpadvertisementsResource, name), &v1alpha1.IsovalentBGPAdvertisement{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentbgpadvertisementsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPAdvertisement), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentBGPAdvertisements that match those selectors.
 func (c *FakeIsovalentBGPAdvertisements) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentBGPAdvertisementList, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPAdvertisementList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentbgpadvertisementsResource, isovalentbgpadvertisementsKind, opts), &v1alpha1.IsovalentBGPAdvertisementList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentbgpadvertisementsResource, isovalentbgpadvertisementsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentBGPAdvertisements) List(ctx context.Context, opts v1.ListO
 // Watch returns a watch.Interface that watches the requested isovalentBGPAdvertisements.
 func (c *FakeIsovalentBGPAdvertisements) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentbgpadvertisementsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentbgpadvertisementsResource, opts))
 }
 
 // Create takes the representation of a isovalentBGPAdvertisement and creates it.  Returns the server's representation of the isovalentBGPAdvertisement, and an error, if there is any.
 func (c *FakeIsovalentBGPAdvertisements) Create(ctx context.Context, isovalentBGPAdvertisement *v1alpha1.IsovalentBGPAdvertisement, opts v1.CreateOptions) (result *v1alpha1.IsovalentBGPAdvertisement, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPAdvertisement{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentbgpadvertisementsResource, isovalentBGPAdvertisement), &v1alpha1.IsovalentBGPAdvertisement{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentbgpadvertisementsResource, isovalentBGPAdvertisement, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPAdvertisement), err
 }
 
 // Update takes the representation of a isovalentBGPAdvertisement and updates it. Returns the server's representation of the isovalentBGPAdvertisement, and an error, if there is any.
 func (c *FakeIsovalentBGPAdvertisements) Update(ctx context.Context, isovalentBGPAdvertisement *v1alpha1.IsovalentBGPAdvertisement, opts v1.UpdateOptions) (result *v1alpha1.IsovalentBGPAdvertisement, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPAdvertisement{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentbgpadvertisementsResource, isovalentBGPAdvertisement), &v1alpha1.IsovalentBGPAdvertisement{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentbgpadvertisementsResource, isovalentBGPAdvertisement, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPAdvertisement), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentBGPAdvertisements) Delete(ctx context.Context, name string
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentBGPAdvertisements) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentbgpadvertisementsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentbgpadvertisementsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentBGPAdvertisementList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentBGPAdvertisements) DeleteCollection(ctx context.Context, o
 
 // Patch applies the patch and returns the patched isovalentBGPAdvertisement.
 func (c *FakeIsovalentBGPAdvertisements) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentBGPAdvertisement, err error) {
+	emptyResult := &v1alpha1.IsovalentBGPAdvertisement{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentbgpadvertisementsResource, name, pt, data, subresources...), &v1alpha1.IsovalentBGPAdvertisement{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentbgpadvertisementsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentBGPAdvertisement), err
 }

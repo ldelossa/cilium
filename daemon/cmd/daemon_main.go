@@ -387,6 +387,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableTracing, false, "Enable tracing while determining policy (debugging)")
 	option.BindEnv(vp, option.EnableTracing)
 
+	flags.Bool(option.BPFConntrackAccountingEnabled, defaults.BPFConntrackAccountingEnabled, "Enable CT accounting for packets and bytes")
+	option.BindEnv(vp, option.BPFConntrackAccountingEnabled)
+
 	flags.Bool(option.EnableUnreachableRoutes, false, "Add unreachable routes on pod deletion")
 	option.BindEnv(vp, option.EnableUnreachableRoutes)
 
@@ -1145,6 +1148,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.StringSlice(option.NodeLabels, []string{}, "List of label prefixes used to determine identity of a node (used only when enable-node-selector-labels is enabled)")
 	option.BindEnv(vp, option.NodeLabels)
 
+	flags.Bool(option.EnableInternalTrafficPolicy, defaults.EnableInternalTrafficPolicy, "Enable internal traffic policy")
+	option.BindEnv(vp, option.EnableInternalTrafficPolicy)
+
 	if err := vp.BindPFlags(flags); err != nil {
 		log.Fatalf("BindPFlags failed: %s", err)
 	}
@@ -1343,7 +1349,7 @@ func initEnv(vp *viper.Viper) {
 	option.Config.Opts.SetBool(option.PolicyVerdictNotify, option.Config.BPFEventsPolicyVerdictEnabled)
 	option.Config.Opts.SetBool(option.TraceNotify, option.Config.BPFEventsTraceEnabled)
 	option.Config.Opts.SetBool(option.PolicyTracing, option.Config.EnableTracing)
-	option.Config.Opts.SetBool(option.ConntrackAccounting, false)
+	option.Config.Opts.SetBool(option.ConntrackAccounting, option.Config.BPFConntrackAccountingEnabled)
 	option.Config.Opts.SetBool(option.ConntrackLocal, false)
 	option.Config.Opts.SetBool(option.PolicyAuditMode, option.Config.PolicyAuditMode)
 	option.Config.Opts.SetBool(option.PolicyAccounting, option.Config.PolicyAccounting)
@@ -1528,6 +1534,10 @@ func initEnv(vp *viper.Viper) {
 				"Connectivity is not affected.",
 			option.EgressMultiHomeIPRuleCompat,
 		)
+	}
+
+	if option.Config.IPAM == ipamOption.IPAMENI && option.Config.TunnelingEnabled() {
+		log.Fatalf("Cannot specify IPAM mode %s in tunnel mode.", option.Config.IPAM)
 	}
 
 	if option.Config.IPAM == ipamOption.IPAMMultiPool {
@@ -1847,6 +1857,14 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 				// Registered channel is immediately closed in CRD mode.
 			case <-d.ctx.Done():
 				return
+			}
+
+			// When running in KVStore mode, we need to additionally wait until
+			// we have discovered all remote IP addresses, to prevent triggering
+			// the collection of stale AllowedIPs entries too early, leading to
+			// the disruption of otherwise valid long running connections.
+			if option.Config.KVStore != "" {
+				ipcache.WaitForKVStoreSync()
 			}
 
 			if err := params.WGAgent.RestoreFinished(d.clustermesh); err != nil {

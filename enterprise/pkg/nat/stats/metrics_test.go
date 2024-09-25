@@ -55,8 +55,7 @@ func TestTopkMetrics(t *testing.T) {
 			setTable := func(family string, from, to int) {
 				tx := tk.db.WriteTxn(rwt)
 				defer tx.Abort()
-				iter := rwt.All(tx)
-				for entry, _, ok := iter.Next(); ok; entry, _, ok = iter.Next() {
+				for entry := range rwt.All(tx) {
 					if entry.Type == family {
 						_, _, err := rwt.Delete(tx, entry)
 						assert.NoError(t, err)

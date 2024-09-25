@@ -505,6 +505,9 @@
           },
           "type": "object"
         },
+        "ctAccounting": {
+          "type": "boolean"
+        },
         "ctAnyMax": {
           "type": [
             "null",
@@ -1617,6 +1620,9 @@
     "enableIPv6Masquerade": {
       "type": "boolean"
     },
+    "enableInternalTrafficPolicy": {
+      "type": "boolean"
+    },
     "enableK8sTerminatingEndpoint": {
       "type": "boolean"
     },
@@ -2100,6 +2106,24 @@
         },
         "log": {
           "properties": {
+            "defaultLevel": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "enum": [
+                    "trace",
+                    "debug",
+                    "info",
+                    "warning",
+                    "error",
+                    "critical",
+                    "off"
+                  ]
+                }
+              ]
+            },
             "format": {
               "type": "string"
             },
@@ -4169,6 +4193,12 @@
     },
     "name": {
       "type": "string"
+    },
+    "namespaceOverride": {
+      "type": [
+        "null",
+        "string"
+      ]
     },
     "nat": {
       "properties": {

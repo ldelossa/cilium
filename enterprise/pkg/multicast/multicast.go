@@ -198,7 +198,7 @@ func newMulticastManager(p MulticastManagerParams) (*MulticastManager, error) {
 		job.OneShot("multicast-sysctl-config", func(ctx context.Context, health cell.Health) error {
 			if p.Config.EnableIPSecEncryptedOverlay {
 				// set sysctl values
-				err := p.Sysctl.Enable("net.ipv4.conf.all.accept_local")
+				err := p.Sysctl.Enable([]string{"net", "ipv4", "conf", "all", "accept_local"})
 				if err != nil {
 					return fmt.Errorf("failed to set accept_local sysctl: %w", err)
 				}

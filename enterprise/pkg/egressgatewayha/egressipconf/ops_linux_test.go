@@ -14,6 +14,7 @@ package egressipconf
 
 import (
 	"context"
+	"iter"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -512,19 +513,12 @@ func TestPrune(t *testing.T) {
 	require.Empty(t, routes)
 }
 
-type fakeIterator struct {
-	objs []*tables.EgressIPEntry
-}
-
-func newFakeIterator(objs ...*tables.EgressIPEntry) *fakeIterator {
-	return &fakeIterator{objs: objs}
-}
-
-func (i *fakeIterator) Next() (*tables.EgressIPEntry, statedb.Revision, bool) {
-	if len(i.objs) == 0 {
-		return nil, 0, false
+func newFakeIterator(objs ...*tables.EgressIPEntry) iter.Seq2[*tables.EgressIPEntry, statedb.Revision] {
+	return func(yield func(*tables.EgressIPEntry, statedb.Revision) bool) {
+		for _, obj := range objs {
+			if !yield(obj, 0) {
+				return
+			}
+		}
 	}
-	obj := i.objs[0]
-	i.objs = i.objs[1:]
-	return obj, 0, true
 }

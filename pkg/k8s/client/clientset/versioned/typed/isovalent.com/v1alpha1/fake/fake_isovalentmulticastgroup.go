@@ -27,20 +27,22 @@ var isovalentmulticastgroupsKind = v1alpha1.SchemeGroupVersion.WithKind("Isovale
 
 // Get takes name of the isovalentMulticastGroup, and returns the corresponding isovalentMulticastGroup object, and an error if there is any.
 func (c *FakeIsovalentMulticastGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentMulticastGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentmulticastgroupsResource, name), &v1alpha1.IsovalentMulticastGroup{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentmulticastgroupsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastGroup), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentMulticastGroups that match those selectors.
 func (c *FakeIsovalentMulticastGroups) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentMulticastGroupList, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastGroupList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentmulticastgroupsResource, isovalentmulticastgroupsKind, opts), &v1alpha1.IsovalentMulticastGroupList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentmulticastgroupsResource, isovalentmulticastgroupsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,25 +61,27 @@ func (c *FakeIsovalentMulticastGroups) List(ctx context.Context, opts v1.ListOpt
 // Watch returns a watch.Interface that watches the requested isovalentMulticastGroups.
 func (c *FakeIsovalentMulticastGroups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentmulticastgroupsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentmulticastgroupsResource, opts))
 }
 
 // Create takes the representation of a isovalentMulticastGroup and creates it.  Returns the server's representation of the isovalentMulticastGroup, and an error, if there is any.
 func (c *FakeIsovalentMulticastGroups) Create(ctx context.Context, isovalentMulticastGroup *v1alpha1.IsovalentMulticastGroup, opts v1.CreateOptions) (result *v1alpha1.IsovalentMulticastGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentmulticastgroupsResource, isovalentMulticastGroup), &v1alpha1.IsovalentMulticastGroup{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentmulticastgroupsResource, isovalentMulticastGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastGroup), err
 }
 
 // Update takes the representation of a isovalentMulticastGroup and updates it. Returns the server's representation of the isovalentMulticastGroup, and an error, if there is any.
 func (c *FakeIsovalentMulticastGroups) Update(ctx context.Context, isovalentMulticastGroup *v1alpha1.IsovalentMulticastGroup, opts v1.UpdateOptions) (result *v1alpha1.IsovalentMulticastGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentmulticastgroupsResource, isovalentMulticastGroup), &v1alpha1.IsovalentMulticastGroup{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentmulticastgroupsResource, isovalentMulticastGroup, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastGroup), err
 }
@@ -91,7 +95,7 @@ func (c *FakeIsovalentMulticastGroups) Delete(ctx context.Context, name string, 
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentMulticastGroups) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentmulticastgroupsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentmulticastgroupsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentMulticastGroupList{})
 	return err
@@ -99,10 +103,11 @@ func (c *FakeIsovalentMulticastGroups) DeleteCollection(ctx context.Context, opt
 
 // Patch applies the patch and returns the patched isovalentMulticastGroup.
 func (c *FakeIsovalentMulticastGroups) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentMulticastGroup, err error) {
+	emptyResult := &v1alpha1.IsovalentMulticastGroup{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentmulticastgroupsResource, name, pt, data, subresources...), &v1alpha1.IsovalentMulticastGroup{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentmulticastgroupsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMulticastGroup), err
 }

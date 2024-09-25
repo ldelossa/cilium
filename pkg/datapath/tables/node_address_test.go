@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/netip"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 
@@ -628,7 +627,7 @@ func TestNodeAddressWhitelist(t *testing.T) {
 			local := []string{}
 			nodePort := []string{}
 			fallback := []string{}
-			for addr, _, ok := iter.Next(); ok; addr, _, ok = iter.Next() {
+			for addr := range iter {
 				if addr.DeviceName == WildcardDeviceName {
 					fallback = append(fallback, addr.Addr.String())
 					continue
@@ -853,7 +852,7 @@ func ipStrings(ips []net.IP) (ss []string) {
 	for i := range ips {
 		ss = append(ss, ips[i].String())
 	}
-	sort.Strings(ss)
+	slices.Sort(ss)
 	return
 }
 

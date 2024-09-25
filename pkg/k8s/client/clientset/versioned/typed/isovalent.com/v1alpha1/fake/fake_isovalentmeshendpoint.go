@@ -28,22 +28,24 @@ var isovalentmeshendpointsKind = v1alpha1.SchemeGroupVersion.WithKind("Isovalent
 
 // Get takes name of the isovalentMeshEndpoint, and returns the corresponding isovalentMeshEndpoint object, and an error if there is any.
 func (c *FakeIsovalentMeshEndpoints) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IsovalentMeshEndpoint, err error) {
+	emptyResult := &v1alpha1.IsovalentMeshEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(isovalentmeshendpointsResource, c.ns, name), &v1alpha1.IsovalentMeshEndpoint{})
+		Invokes(testing.NewGetActionWithOptions(isovalentmeshendpointsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMeshEndpoint), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentMeshEndpoints that match those selectors.
 func (c *FakeIsovalentMeshEndpoints) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IsovalentMeshEndpointList, err error) {
+	emptyResult := &v1alpha1.IsovalentMeshEndpointList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(isovalentmeshendpointsResource, isovalentmeshendpointsKind, c.ns, opts), &v1alpha1.IsovalentMeshEndpointList{})
+		Invokes(testing.NewListActionWithOptions(isovalentmeshendpointsResource, isovalentmeshendpointsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -62,28 +64,30 @@ func (c *FakeIsovalentMeshEndpoints) List(ctx context.Context, opts v1.ListOptio
 // Watch returns a watch.Interface that watches the requested isovalentMeshEndpoints.
 func (c *FakeIsovalentMeshEndpoints) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(isovalentmeshendpointsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(isovalentmeshendpointsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a isovalentMeshEndpoint and creates it.  Returns the server's representation of the isovalentMeshEndpoint, and an error, if there is any.
 func (c *FakeIsovalentMeshEndpoints) Create(ctx context.Context, isovalentMeshEndpoint *v1alpha1.IsovalentMeshEndpoint, opts v1.CreateOptions) (result *v1alpha1.IsovalentMeshEndpoint, err error) {
+	emptyResult := &v1alpha1.IsovalentMeshEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(isovalentmeshendpointsResource, c.ns, isovalentMeshEndpoint), &v1alpha1.IsovalentMeshEndpoint{})
+		Invokes(testing.NewCreateActionWithOptions(isovalentmeshendpointsResource, c.ns, isovalentMeshEndpoint, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMeshEndpoint), err
 }
 
 // Update takes the representation of a isovalentMeshEndpoint and updates it. Returns the server's representation of the isovalentMeshEndpoint, and an error, if there is any.
 func (c *FakeIsovalentMeshEndpoints) Update(ctx context.Context, isovalentMeshEndpoint *v1alpha1.IsovalentMeshEndpoint, opts v1.UpdateOptions) (result *v1alpha1.IsovalentMeshEndpoint, err error) {
+	emptyResult := &v1alpha1.IsovalentMeshEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(isovalentmeshendpointsResource, c.ns, isovalentMeshEndpoint), &v1alpha1.IsovalentMeshEndpoint{})
+		Invokes(testing.NewUpdateActionWithOptions(isovalentmeshendpointsResource, c.ns, isovalentMeshEndpoint, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMeshEndpoint), err
 }
@@ -98,7 +102,7 @@ func (c *FakeIsovalentMeshEndpoints) Delete(ctx context.Context, name string, op
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentMeshEndpoints) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(isovalentmeshendpointsResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(isovalentmeshendpointsResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IsovalentMeshEndpointList{})
 	return err
@@ -106,11 +110,12 @@ func (c *FakeIsovalentMeshEndpoints) DeleteCollection(ctx context.Context, opts 
 
 // Patch applies the patch and returns the patched isovalentMeshEndpoint.
 func (c *FakeIsovalentMeshEndpoints) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IsovalentMeshEndpoint, err error) {
+	emptyResult := &v1alpha1.IsovalentMeshEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(isovalentmeshendpointsResource, c.ns, name, pt, data, subresources...), &v1alpha1.IsovalentMeshEndpoint{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(isovalentmeshendpointsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IsovalentMeshEndpoint), err
 }

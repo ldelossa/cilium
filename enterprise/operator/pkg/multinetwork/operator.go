@@ -81,7 +81,7 @@ func newMultiNetworkOperator(params operatorParams) *Operator {
 
 	if params.Config.AutoCreateDefaultPodNetwork {
 		params.JobGroup.Add(
-			job.OneShot("create default network",
+			job.OneShot("create-default-network",
 				operator.Run, job.WithRetry(3, &job.ExponentialBackoff{Min: 100 * time.Millisecond, Max: time.Second})),
 		)
 	}

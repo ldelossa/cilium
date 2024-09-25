@@ -2,6 +2,13 @@
 # @schema
 # type: [null, string]
 # @schema
+# -- namespaceOverride allows to override the destination namespace for Cilium resources.
+# This property allows to use Cilium as part of an Umbrella Chart with different targets.
+namespaceOverride: ""
+
+# @schema
+# type: [null, string]
+# @schema
 # -- upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This flag is not required for new installations.
@@ -460,6 +467,8 @@ bpf:
   # -- (int) Configure the maximum number of entries in auth map.
   # @default -- `524288`
   authMapMax: ~
+  # -- Enable CT accounting for packets and bytes
+  ctAccounting: false
   # @schema
   # type: [null, integer]
   # @schema
@@ -2211,6 +2220,16 @@ envoy:
     format: "[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"
     # -- Path to a separate Envoy log file, if any. Defaults to /dev/stdout.
     path: ""
+    # @schema
+    # oneOf:
+    # - type: [null]
+    # - enum: [trace,debug,info,warning,error,critical,off]
+    # @schema
+    # -- Default log level of Envoy application log that is configured if Cilium debug / verbose logging isn't enabled.
+    # This option allows to have a different log level than the Cilium Agent - e.g. lower it to `critical`.
+    # Possible values: trace, debug, info, warning, error, critical, off
+    # @default -- Defaults to the default log level of the Cilium Agent - `info`
+    defaultLevel: ~
   # -- Time in seconds after which a TCP connection attempt times out
   connectTimeoutSeconds: 2
   # -- ProxyMaxRequestsPerConnection specifies the max_requests_per_connection setting for Envoy
@@ -3639,3 +3658,5 @@ authentication:
       agentSocketPath: /run/spire/sockets/agent/agent.sock
       # -- SPIRE connection timeout
       connectionTimeout: 30s
+# -- Enable Internal Traffic Policy
+enableInternalTrafficPolicy: true

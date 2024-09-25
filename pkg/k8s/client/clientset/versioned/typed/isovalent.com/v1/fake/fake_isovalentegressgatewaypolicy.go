@@ -27,20 +27,22 @@ var isovalentegressgatewaypoliciesKind = v1.SchemeGroupVersion.WithKind("Isovale
 
 // Get takes name of the isovalentEgressGatewayPolicy, and returns the corresponding isovalentEgressGatewayPolicy object, and an error if there is any.
 func (c *FakeIsovalentEgressGatewayPolicies) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.IsovalentEgressGatewayPolicy, err error) {
+	emptyResult := &v1.IsovalentEgressGatewayPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(isovalentegressgatewaypoliciesResource, name), &v1.IsovalentEgressGatewayPolicy{})
+		Invokes(testing.NewRootGetActionWithOptions(isovalentegressgatewaypoliciesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.IsovalentEgressGatewayPolicy), err
 }
 
 // List takes label and field selectors, and returns the list of IsovalentEgressGatewayPolicies that match those selectors.
 func (c *FakeIsovalentEgressGatewayPolicies) List(ctx context.Context, opts metav1.ListOptions) (result *v1.IsovalentEgressGatewayPolicyList, err error) {
+	emptyResult := &v1.IsovalentEgressGatewayPolicyList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(isovalentegressgatewaypoliciesResource, isovalentegressgatewaypoliciesKind, opts), &v1.IsovalentEgressGatewayPolicyList{})
+		Invokes(testing.NewRootListActionWithOptions(isovalentegressgatewaypoliciesResource, isovalentegressgatewaypoliciesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,36 +61,39 @@ func (c *FakeIsovalentEgressGatewayPolicies) List(ctx context.Context, opts meta
 // Watch returns a watch.Interface that watches the requested isovalentEgressGatewayPolicies.
 func (c *FakeIsovalentEgressGatewayPolicies) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(isovalentegressgatewaypoliciesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(isovalentegressgatewaypoliciesResource, opts))
 }
 
 // Create takes the representation of a isovalentEgressGatewayPolicy and creates it.  Returns the server's representation of the isovalentEgressGatewayPolicy, and an error, if there is any.
 func (c *FakeIsovalentEgressGatewayPolicies) Create(ctx context.Context, isovalentEgressGatewayPolicy *v1.IsovalentEgressGatewayPolicy, opts metav1.CreateOptions) (result *v1.IsovalentEgressGatewayPolicy, err error) {
+	emptyResult := &v1.IsovalentEgressGatewayPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(isovalentegressgatewaypoliciesResource, isovalentEgressGatewayPolicy), &v1.IsovalentEgressGatewayPolicy{})
+		Invokes(testing.NewRootCreateActionWithOptions(isovalentegressgatewaypoliciesResource, isovalentEgressGatewayPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.IsovalentEgressGatewayPolicy), err
 }
 
 // Update takes the representation of a isovalentEgressGatewayPolicy and updates it. Returns the server's representation of the isovalentEgressGatewayPolicy, and an error, if there is any.
 func (c *FakeIsovalentEgressGatewayPolicies) Update(ctx context.Context, isovalentEgressGatewayPolicy *v1.IsovalentEgressGatewayPolicy, opts metav1.UpdateOptions) (result *v1.IsovalentEgressGatewayPolicy, err error) {
+	emptyResult := &v1.IsovalentEgressGatewayPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(isovalentegressgatewaypoliciesResource, isovalentEgressGatewayPolicy), &v1.IsovalentEgressGatewayPolicy{})
+		Invokes(testing.NewRootUpdateActionWithOptions(isovalentegressgatewaypoliciesResource, isovalentEgressGatewayPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.IsovalentEgressGatewayPolicy), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeIsovalentEgressGatewayPolicies) UpdateStatus(ctx context.Context, isovalentEgressGatewayPolicy *v1.IsovalentEgressGatewayPolicy, opts metav1.UpdateOptions) (*v1.IsovalentEgressGatewayPolicy, error) {
+func (c *FakeIsovalentEgressGatewayPolicies) UpdateStatus(ctx context.Context, isovalentEgressGatewayPolicy *v1.IsovalentEgressGatewayPolicy, opts metav1.UpdateOptions) (result *v1.IsovalentEgressGatewayPolicy, err error) {
+	emptyResult := &v1.IsovalentEgressGatewayPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(isovalentegressgatewaypoliciesResource, "status", isovalentEgressGatewayPolicy), &v1.IsovalentEgressGatewayPolicy{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(isovalentegressgatewaypoliciesResource, "status", isovalentEgressGatewayPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.IsovalentEgressGatewayPolicy), err
 }
@@ -102,7 +107,7 @@ func (c *FakeIsovalentEgressGatewayPolicies) Delete(ctx context.Context, name st
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIsovalentEgressGatewayPolicies) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(isovalentegressgatewaypoliciesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(isovalentegressgatewaypoliciesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1.IsovalentEgressGatewayPolicyList{})
 	return err
@@ -110,10 +115,11 @@ func (c *FakeIsovalentEgressGatewayPolicies) DeleteCollection(ctx context.Contex
 
 // Patch applies the patch and returns the patched isovalentEgressGatewayPolicy.
 func (c *FakeIsovalentEgressGatewayPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.IsovalentEgressGatewayPolicy, err error) {
+	emptyResult := &v1.IsovalentEgressGatewayPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(isovalentegressgatewaypoliciesResource, name, pt, data, subresources...), &v1.IsovalentEgressGatewayPolicy{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(isovalentegressgatewaypoliciesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.IsovalentEgressGatewayPolicy), err
 }

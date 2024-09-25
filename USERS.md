@@ -361,6 +361,13 @@ Users (Alphabetically)
        L: https://isovalent.com/product/
        Q: @BillMulligan
 
+    * N: Jar
+       D: Cilium is used as Jar's CNI on all prod and pre production environments.
+       U: Networking, network policy, observability, cluster mesh, kube-proxy replacement, security, egress gateway, service load balancing, CNI
+       L: https://myjar.app/blog/engineering/
+       Q: @rohan-changejar @rohangrge
+       
+
     * N: JUMO
       D: JUMO is using Cilium as their CNI plugin for all of their AWS-hosted EKS clusters
       U: Networking, network policy, network visibility, cluster mesh
@@ -501,6 +508,12 @@ Users (Alphabetically)
       U: Networking, network policy, hubble, packet monitoring and network visibility
       L: https://northflank.com
       Q: @NorthflankWill, @Champgoblem
+
+    * N: Nutanix
+      D: Nutanix uses Cilium as the default CNI plugin for NKP (Nutanix Kubernetes Platform) when deployed on AHV
+      U: Networking, NetworkPolicy, Services
+      L: https://www.nutanix.com/products/kubernetes-management-platform
+      Q: @tuxtof
 
     * N: Overstock Inc.
       D: Overstock is using Cilium as the main CNI plugin on bare-metal clusters (self hosted k8s).

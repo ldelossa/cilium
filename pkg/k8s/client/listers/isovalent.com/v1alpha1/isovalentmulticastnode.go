@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -26,30 +26,10 @@ type IsovalentMulticastNodeLister interface {
 
 // isovalentMulticastNodeLister implements the IsovalentMulticastNodeLister interface.
 type isovalentMulticastNodeLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.IsovalentMulticastNode]
 }
 
 // NewIsovalentMulticastNodeLister returns a new IsovalentMulticastNodeLister.
 func NewIsovalentMulticastNodeLister(indexer cache.Indexer) IsovalentMulticastNodeLister {
-	return &isovalentMulticastNodeLister{indexer: indexer}
-}
-
-// List lists all IsovalentMulticastNodes in the indexer.
-func (s *isovalentMulticastNodeLister) List(selector labels.Selector) (ret []*v1alpha1.IsovalentMulticastNode, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.IsovalentMulticastNode))
-	})
-	return ret, err
-}
-
-// Get retrieves the IsovalentMulticastNode from the index for a given name.
-func (s *isovalentMulticastNodeLister) Get(name string) (*v1alpha1.IsovalentMulticastNode, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("isovalentmulticastnode"), name)
-	}
-	return obj.(*v1alpha1.IsovalentMulticastNode), nil
+	return &isovalentMulticastNodeLister{listers.New[*v1alpha1.IsovalentMulticastNode](indexer, v1alpha1.Resource("isovalentmulticastnode"))}
 }
