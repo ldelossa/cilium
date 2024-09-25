@@ -160,6 +160,9 @@
                         "podSecurityContext": {
                           "type": "object"
                         },
+                        "resources": {
+                          "type": "object"
+                        },
                         "securityContext": {
                           "type": "object"
                         },
@@ -362,6 +365,9 @@
                           "type": "object"
                         },
                         "podSecurityContext": {
+                          "type": "object"
+                        },
+                        "resources": {
                           "type": "object"
                         },
                         "securityContext": {
@@ -1626,7 +1632,13 @@
     "enableK8sTerminatingEndpoint": {
       "type": "boolean"
     },
+    "enableLBIPAM": {
+      "type": "boolean"
+    },
     "enableMasqueradeRouteSource": {
+      "type": "boolean"
+    },
+    "enableNonDefaultDenyPolicies": {
       "type": "boolean"
     },
     "enableRuntimeDeviceDetection": {
