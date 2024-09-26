@@ -1,14 +1,8 @@
 ignore:
   - vex-status: not_affected
-  # clustermesh-apiserver - there is no newer etcd version to upgrade to
-  - vulnerability: CVE-2024-24789
+  # cilium-agent - the reported issue has not been fixed upstream
+  # see https://isovalent.slack.com/archives/C036D1MNKNG/p1727171204828469
+  # for more context
+  - vulnerability: GHSA-6rqv-5cg7-m4x3
     package:
-      location: /usr/bin/etcd
-  # clustermesh-apiserver - there is no newer etcd version to upgrade to
-  - vulnerability: CVE-2024-24790
-    package:
-      location: /usr/bin/etcd
-  # clustermesh-apiserver - there is no newer etcd version to upgrade to
-  - vulnerability: GHSA-4v7x-pqxf-cx7m
-    package:
-      location: /usr/bin/etcd
+      location: /usr/bin/cilium-agent
