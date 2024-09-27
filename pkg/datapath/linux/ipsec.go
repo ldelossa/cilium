@@ -259,37 +259,42 @@ func (n *linuxNodeHandler) enableIPSecIPv4Do(newNode *nodeTypes.Node, nodeID uin
 		statesUpdated = false
 	}
 
-	// In Encrypt Overlay mode, outermost header is ESP tunnel.
-	// Packet format : [IP|ESP|IP|VxLAN|<payload>]
-	// ESP tunnel src/dst addresses are underlay IPs of the node (NodeInternalIP).
-	// VxLAN tunnel src/dst addresses are also underlay IPs of the node (NodeInternalIP).
-	if n.nodeConfig.EnableIPSecEncryptedOverlay {
-		localUnderlayIP := n.nodeConfig.NodeIPv4
-		if localUnderlayIP == nil {
-			n.log.Warn("unable to enable encrypted overlay IPsec, nil local internal IP")
-			return false, errs
-		}
-		remoteUnderlayIP := newNode.GetNodeIP(false)
-		if remoteUnderlayIP == nil {
-			n.log.Warn("unable to enable encrypted overlay IPsec, nil remote internal IP for node", logfields.Node, newNode.Name)
-			return false, errs
-		}
-
-		localOverlayIPExactMatch := &net.IPNet{IP: localUnderlayIP, Mask: exactMatchMask}
-		remoteOverlayIPExactMatch := &net.IPNet{IP: remoteUnderlayIP, Mask: exactMatchMask}
-
-		spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.EncryptedOverlayReqID)
-		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay out IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
-		if err != nil {
-			statesUpdated = false
-		}
-
-		spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.EncryptedOverlayReqID)
-		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay in IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
-		if err != nil {
-			statesUpdated = false
-		}
+	// As of v1.17 Cilium will unconditionally create XFRM states and policies
+	// to encrypt/decrypt VXLAN-in-ESP traffic.
+	//
+	// This will allow a given node to handle both pre-egress-hook encrypted
+	// traffic (ESP-in-VXLAN) and post-egress-hook encrypted traffic (VXLAN-in-ESP)
+	// when in tunnel mode.
+	if n.datapathConfig.TunnelDevice == "" {
+		return statesUpdated, errs
 	}
+
+	localUnderlayIP := n.nodeConfig.NodeIPv4
+	if localUnderlayIP == nil {
+		n.log.Warn("unable to enable encrypted overlay IPsec, nil local internal IP")
+		return false, errs
+	}
+	remoteUnderlayIP := newNode.GetNodeIP(false)
+	if remoteUnderlayIP == nil {
+		n.log.Warn("unable to enable encrypted overlay IPsec, nil remote internal IP for node", logfields.Node, newNode.Name)
+		return false, errs
+	}
+
+	localOverlayIPExactMatch := &net.IPNet{IP: localUnderlayIP, Mask: exactMatchMask}
+	remoteOverlayIPExactMatch := &net.IPNet{IP: remoteUnderlayIP, Mask: exactMatchMask}
+
+	spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.DefaultReqID)
+	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay out IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
+	if err != nil {
+		statesUpdated = false
+	}
+
+	spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.DefaultReqID)
+	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay in IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
+	if err != nil {
+		statesUpdated = false
+	}
+
 	return statesUpdated, errs
 }
 
@@ -331,7 +336,7 @@ func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, nodeID uint1
 	if n.subnetEncryption() {
 		return n.enableIPSecIPv4DoSubnetEncryption(newNode, nodeID, zeroMark, updateExisting, errs)
 	}
-	return n.enableIPSecIPv4Do(newNode, nodeID, zeroMark, updateExisting, errs)
+	return n.enableIPSecIPv4Do(newNode, nodeID, updateExisting, errs)
 }
 
 // func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, nodeID uint16, zeroMark, updateExisting bool) (bool, error) {
