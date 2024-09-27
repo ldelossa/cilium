@@ -24,6 +24,8 @@ import (
 
 var (
 	exactMatchMask = net.IPv4Mask(255, 255, 255, 255)
+	wildcardIP     = net.ParseIP(wildcardIPv4)
+	wildcardCIDR   = &net.IPNet{IP: wildcardIP, Mask: net.IPv4Mask(0, 0, 0, 0)}
 )
 
 // getDefaultEncryptionInterface() is needed to find the interface used when
@@ -163,140 +165,311 @@ func (n *linuxNodeHandler) enableIPsec(oldNode, newNode *nodeTypes.Node, nodeID 
 	return errs
 }
 
-func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, nodeID uint16, zeroMark, updateExisting bool) (bool, error) {
+// enableIPSecIPv4DoSubnetEncryption is used to configure IPSec for a node that
+// hosts multiple PodCIDR subnets.
+func (n *linuxNodeHandler) enableIPSecIPv4DoSubnetEncryption(newNode *nodeTypes.Node, nodeID uint16, zeroMark, updateExisting bool, errs error) (bool, error) {
 	statesUpdated := true
 	var spi uint8
-	var errs error
 
-	wildcardIP := net.ParseIP(wildcardIPv4)
-	wildcardCIDR := &net.IPNet{IP: wildcardIP, Mask: net.IPv4Mask(0, 0, 0, 0)}
+	remoteCiliumInternalIP := newNode.GetCiliumInternalIP(false)
+	if remoteCiliumInternalIP == nil {
+		return false, errs
+	}
+	remoteIP := remoteCiliumInternalIP
 
-	err := ipsec.IPsecDefaultDropPolicy(n.log, false)
-	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "default-drop IPv4", wildcardCIDR, wildcardCIDR, spi, 0))
+	localCiliumInternalIP := n.nodeConfig.CiliumInternalIPv4
+	localIP := localCiliumInternalIP
 
-	if newNode.IsLocal() {
-		if !n.subnetEncryption() {
-			localCIDR := n.nodeConfig.AllocCIDRIPv4.IPNet
-			errs = errors.Join(errs, n.replaceNodeIPSecInRoute(localCIDR))
+	localNodeInternalIP, err := n.getV4LinkLocalIP()
+	if err != nil {
+		n.log.Error("Failed to get local IPv4 for IPsec configuration", logfields.Error, err)
+		errs = errors.Join(errs, fmt.Errorf("failed to get local ipv4 for ipsec link: %w", err))
+	}
+	remoteNodeInternalIP := newNode.GetNodeIP(false)
+
+	// Check if we should use the NodeInternalIPs instead of the
+	// CiliumInternalIPs for the IPsec encapsulation.
+	if !option.Config.UseCiliumInternalIPForIPsec {
+		localIP = localNodeInternalIP
+		remoteIP = remoteNodeInternalIP
+	}
+
+	for _, cidr := range n.nodeConfig.GetIPv4PodSubnets() {
+		spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, zeroMark, updateExisting, ipsec.DefaultReqID)
+		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "out IPv4", wildcardCIDR, cidr, spi, nodeID))
+		if err != nil {
+			statesUpdated = false
 		}
-	} else {
-		// A node update that doesn't contain a BootID will cause the creation
-		// of non-matching XFRM IN and OUT states across the cluster as the
-		// BootID is used to generate per-node key pairs. Non-matching XFRM
-		// states will result in XfrmInStateProtoError, causing packet drops.
-		// An empty BootID should thus be treated as an error, and Cilium
-		// should not attempt to derive per-node keys from it.
-		if newNode.BootID == "" {
-			n.log.Debug("Unable to enable IPsec for node with empty BootID", logfields.Node, newNode.Name)
-			return false, errs
+
+		/* Insert wildcard policy rules for traffic skipping back through host */
+		if err = ipsec.IpSecReplacePolicyFwd(cidr, localIP, ipsec.DefaultReqID); err != nil {
+			n.log.Warn("egress unable to replace policy fwd", logfields.Error, err)
 		}
 
-		remoteCiliumInternalIP := newNode.GetCiliumInternalIP(false)
-		if remoteCiliumInternalIP == nil {
-			return false, errs
+		spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localCiliumInternalIP, remoteCiliumInternalIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, zeroMark, updateExisting, ipsec.DefaultReqID)
+		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in CiliumInternalIPv4", wildcardCIDR, cidr, spi, nodeID))
+		if err != nil {
+			statesUpdated = false
 		}
-		remoteIP := remoteCiliumInternalIP
 
-		localCiliumInternalIP := n.nodeConfig.CiliumInternalIPv4
-		localIP := localCiliumInternalIP
-
-		if n.subnetEncryption() {
-			localNodeInternalIP, err := n.getV4LinkLocalIP()
-			if err != nil {
-				n.log.Error("Failed to get local IPv4 for IPsec configuration", logfields.Error, err)
-				errs = errors.Join(errs, fmt.Errorf("failed to get local ipv4 for ipsec link: %w", err))
-			}
-			remoteNodeInternalIP := newNode.GetNodeIP(false)
-
-			// Check if we should use the NodeInternalIPs instead of the
-			// CiliumInternalIPs for the IPsec encapsulation.
-			if !option.Config.UseCiliumInternalIPForIPsec {
-				localIP = localNodeInternalIP
-				remoteIP = remoteNodeInternalIP
-			}
-
-			for _, cidr := range n.nodeConfig.GetIPv4PodSubnets() {
-				spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, zeroMark, updateExisting, ipsec.DefaultReqID)
-				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "out IPv4", wildcardCIDR, cidr, spi, nodeID))
-				if err != nil {
-					statesUpdated = false
-				}
-
-				/* Insert wildcard policy rules for traffic skipping back through host */
-				if err = ipsec.IpSecReplacePolicyFwd(cidr, localIP, ipsec.DefaultReqID); err != nil {
-					n.log.Warn("egress unable to replace policy fwd", logfields.Error, err)
-				}
-
-				spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localCiliumInternalIP, remoteCiliumInternalIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, zeroMark, updateExisting, ipsec.DefaultReqID)
-				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in CiliumInternalIPv4", wildcardCIDR, cidr, spi, nodeID))
-				if err != nil {
-					statesUpdated = false
-				}
-
-				spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localNodeInternalIP, remoteNodeInternalIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, zeroMark, updateExisting, ipsec.DefaultReqID)
-				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in NodeInternalIPv4", wildcardCIDR, cidr, spi, nodeID))
-				if err != nil {
-					statesUpdated = false
-				}
-			}
-		} else {
-			localCIDR := n.nodeConfig.AllocCIDRIPv4.IPNet
-			remoteCIDR := newNode.IPv4AllocCIDR.IPNet
-			if err := n.replaceNodeIPSecOutRoute(remoteCIDR); err != nil {
-				errs = errors.Join(errs, fmt.Errorf("failed to replace ipsec OUT (%q): %w", remoteCIDR.IP, err))
-			}
-			spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, remoteCIDR, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.DefaultReqID)
-			errs = errors.Join(errs, upsertIPsecLog(n.log, err, "out IPv4", wildcardCIDR, remoteCIDR, spi, nodeID))
-			if err != nil {
-				statesUpdated = false
-			}
-
-			/* Insert wildcard policy rules for traffic skipping back through host */
-			if err = ipsec.IpSecReplacePolicyFwd(wildcardCIDR, localIP, ipsec.DefaultReqID); err != nil {
-				n.log.Warn("egress unable to replace policy fwd", logfields.Error, err)
-			}
-
-			spi, err = ipsec.UpsertIPsecEndpoint(n.log, localCIDR, wildcardCIDR, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.DefaultReqID)
-			errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in IPv4", localCIDR, wildcardCIDR, spi, nodeID))
-			if err != nil {
-				statesUpdated = false
-			}
-
-			// In Encrypt Overlay mode, outermost header is ESP tunnel.
-			// Packet format : [IP|ESP|IP|VxLAN|<payload>]
-			// ESP tunnel src/dst addresses are underlay IPs of the node (NodeInternalIP).
-			// VxLAN tunnel src/dst addresses are also underlay IPs of the node (NodeInternalIP).
-			if n.nodeConfig.EnableIPSecEncryptedOverlay {
-				localUnderlayIP := n.nodeConfig.NodeIPv4
-				if localUnderlayIP == nil {
-					n.log.Warn("unable to enable encrypted overlay IPsec, nil local internal IP")
-					return false, errs
-				}
-				remoteUnderlayIP := newNode.GetNodeIP(false)
-				if remoteUnderlayIP == nil {
-					n.log.Warn("unable to enable encrypted overlay IPsec, nil remote internal IP for node", logfields.Node, newNode.Name)
-					return false, errs
-				}
-
-				localOverlayIPExactMatch := &net.IPNet{IP: localUnderlayIP, Mask: exactMatchMask}
-				remoteOverlayIPExactMatch := &net.IPNet{IP: remoteUnderlayIP, Mask: exactMatchMask}
-
-				spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.EncryptedOverlayReqID)
-				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay out IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
-				if err != nil {
-					statesUpdated = false
-				}
-
-				spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.EncryptedOverlayReqID)
-				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay in IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
-				if err != nil {
-					statesUpdated = false
-				}
-			}
+		spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localNodeInternalIP, remoteNodeInternalIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, zeroMark, updateExisting, ipsec.DefaultReqID)
+		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in NodeInternalIPv4", wildcardCIDR, cidr, spi, nodeID))
+		if err != nil {
+			statesUpdated = false
 		}
 	}
 	return statesUpdated, errs
 }
+
+// enableIPSecIPv4Do is used to configure IPSec for a node that hosts
+// a single PodCIDR subnets.
+func (n *linuxNodeHandler) enableIPSecIPv4Do(newNode *nodeTypes.Node, nodeID uint16, updateExisting bool, errs error) (bool, error) {
+	var err error
+	statesUpdated := true
+	var spi uint8
+
+	remoteCiliumInternalIP := newNode.GetCiliumInternalIP(false)
+	if remoteCiliumInternalIP == nil {
+		return false, errs
+	}
+	remoteIP := remoteCiliumInternalIP
+
+	localCiliumInternalIP := n.nodeConfig.CiliumInternalIPv4
+	localIP := localCiliumInternalIP
+
+	localCIDR := n.nodeConfig.AllocCIDRIPv4.IPNet
+	remoteCIDR := newNode.IPv4AllocCIDR.IPNet
+	if err := n.replaceNodeIPSecOutRoute(remoteCIDR); err != nil {
+		errs = errors.Join(errs, fmt.Errorf("failed to replace ipsec OUT (%q): %w", remoteCIDR.IP, err))
+	}
+	spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, remoteCIDR, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.DefaultReqID)
+	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "out IPv4", wildcardCIDR, remoteCIDR, spi, nodeID))
+	if err != nil {
+		statesUpdated = false
+	}
+
+	/* Insert wildcard policy rules for traffic skipping back through host */
+	if err = ipsec.IpSecReplacePolicyFwd(wildcardCIDR, localIP, ipsec.DefaultReqID); err != nil {
+		n.log.Warn("egress unable to replace policy fwd", logfields.Error, err)
+	}
+
+	spi, err = ipsec.UpsertIPsecEndpoint(n.log, localCIDR, wildcardCIDR, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.DefaultReqID)
+	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in IPv4", localCIDR, wildcardCIDR, spi, nodeID))
+	if err != nil {
+		statesUpdated = false
+	}
+
+	// In Encrypt Overlay mode, outermost header is ESP tunnel.
+	// Packet format : [IP|ESP|IP|VxLAN|<payload>]
+	// ESP tunnel src/dst addresses are underlay IPs of the node (NodeInternalIP).
+	// VxLAN tunnel src/dst addresses are also underlay IPs of the node (NodeInternalIP).
+	if n.nodeConfig.EnableIPSecEncryptedOverlay {
+		localUnderlayIP := n.nodeConfig.NodeIPv4
+		if localUnderlayIP == nil {
+			n.log.Warn("unable to enable encrypted overlay IPsec, nil local internal IP")
+			return false, errs
+		}
+		remoteUnderlayIP := newNode.GetNodeIP(false)
+		if remoteUnderlayIP == nil {
+			n.log.Warn("unable to enable encrypted overlay IPsec, nil remote internal IP for node", logfields.Node, newNode.Name)
+			return false, errs
+		}
+
+		localOverlayIPExactMatch := &net.IPNet{IP: localUnderlayIP, Mask: exactMatchMask}
+		remoteOverlayIPExactMatch := &net.IPNet{IP: remoteUnderlayIP, Mask: exactMatchMask}
+
+		spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.EncryptedOverlayReqID)
+		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay out IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
+		if err != nil {
+			statesUpdated = false
+		}
+
+		spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.EncryptedOverlayReqID)
+		errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay in IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
+		if err != nil {
+			statesUpdated = false
+		}
+	}
+	return statesUpdated, errs
+}
+
+func (n *linuxNodeHandler) enableIPSecIPv4DoLocalHost(newNode *nodeTypes.Node, errs error) (bool, error) {
+	if newNode.IsLocal() {
+		if !n.subnetEncryption() {
+			localCIDR := n.nodeConfig.AllocCIDRIPv4.IPNet
+			return true, errors.Join(errs, n.replaceNodeIPSecInRoute(localCIDR))
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, nodeID uint16, zeroMark, updateExisting bool) (bool, error) {
+	var spi uint8
+	var errs error
+
+	err := ipsec.IPsecDefaultDropPolicy(n.log, false)
+	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "default-drop IPv4", wildcardCIDR, wildcardCIDR, spi, 0))
+
+	// If we are the local node, we have much less work to do, handle this first.
+	var isLocal bool
+	if isLocal, errs = n.enableIPSecIPv4DoLocalHost(newNode, errs); isLocal {
+		return isLocal, errs
+	}
+
+	// A node update that doesn't contain a BootID will cause the creation
+	// of non-matching XFRM IN and OUT states across the cluster as the
+	// BootID is used to generate per-node key pairs. Non-matching XFRM
+	// states will result in XfrmInStateProtoError, causing packet drops.
+	// An empty BootID should thus be treated as an error, and Cilium
+	// should not attempt to derive per-node keys from it.
+	if newNode.BootID == "" {
+		n.log.Debug("Unable to enable IPsec for node with empty BootID", logfields.Node, newNode.Name)
+		return false, errs
+	}
+
+	if n.subnetEncryption() {
+		return n.enableIPSecIPv4DoSubnetEncryption(newNode, nodeID, zeroMark, updateExisting, errs)
+	}
+	return n.enableIPSecIPv4Do(newNode, nodeID, zeroMark, updateExisting, errs)
+}
+
+// func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, nodeID uint16, zeroMark, updateExisting bool) (bool, error) {
+// 	statesUpdated := true
+// 	var spi uint8
+// 	var errs error
+//
+// 	err := ipsec.IPsecDefaultDropPolicy(n.log, false)
+// 	errs = errors.Join(errs, upsertIPsecLog(n.log, err, "default-drop IPv4", wildcardCIDR, wildcardCIDR, spi, 0))
+//
+// 	var ok bool
+// 	if ok, errs = n.enableIPSecIPv4DoLocalHost(newNode, errs); ok {
+// 		return ok, errs
+// 	}
+//
+// 	if newNode.IsLocal() {
+// 		if !n.subnetEncryption() {
+// 			localCIDR := n.nodeConfig.AllocCIDRIPv4.IPNet
+// 			errs = errors.Join(errs, n.replaceNodeIPSecInRoute(localCIDR))
+// 		}
+// 	} else {
+// 		// A node update that doesn't contain a BootID will cause the creation
+// 		// of non-matching XFRM IN and OUT states across the cluster as the
+// 		// BootID is used to generate per-node key pairs. Non-matching XFRM
+// 		// states will result in XfrmInStateProtoError, causing packet drops.
+// 		// An empty BootID should thus be treated as an error, and Cilium
+// 		// should not attempt to derive per-node keys from it.
+// 		if newNode.BootID == "" {
+// 			n.log.Debug("Unable to enable IPsec for node with empty BootID", logfields.Node, newNode.Name)
+// 			return false, errs
+// 		}
+//
+// 		remoteCiliumInternalIP := newNode.GetCiliumInternalIP(false)
+// 		if remoteCiliumInternalIP == nil {
+// 			return false, errs
+// 		}
+// 		remoteIP := remoteCiliumInternalIP
+//
+// 		localCiliumInternalIP := n.nodeConfig.CiliumInternalIPv4
+// 		localIP := localCiliumInternalIP
+//
+// 		if n.subnetEncryption() {
+// 			localNodeInternalIP, err := n.getV4LinkLocalIP()
+// 			if err != nil {
+// 				n.log.Error("Failed to get local IPv4 for IPsec configuration", logfields.Error, err)
+// 				errs = errors.Join(errs, fmt.Errorf("failed to get local ipv4 for ipsec link: %w", err))
+// 			}
+// 			remoteNodeInternalIP := newNode.GetNodeIP(false)
+//
+// 			// Check if we should use the NodeInternalIPs instead of the
+// 			// CiliumInternalIPs for the IPsec encapsulation.
+// 			if !option.Config.UseCiliumInternalIPForIPsec {
+// 				localIP = localNodeInternalIP
+// 				remoteIP = remoteNodeInternalIP
+// 			}
+//
+// 			for _, cidr := range n.nodeConfig.GetIPv4PodSubnets() {
+// 				spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, zeroMark, updateExisting, ipsec.DefaultReqID)
+// 				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "out IPv4", wildcardCIDR, cidr, spi, nodeID))
+// 				if err != nil {
+// 					statesUpdated = false
+// 				}
+//
+// 				/* Insert wildcard policy rules for traffic skipping back through host */
+// 				if err = ipsec.IpSecReplacePolicyFwd(cidr, localIP, ipsec.DefaultReqID); err != nil {
+// 					n.log.Warn("egress unable to replace policy fwd", logfields.Error, err)
+// 				}
+//
+// 				spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localCiliumInternalIP, remoteCiliumInternalIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, zeroMark, updateExisting, ipsec.DefaultReqID)
+// 				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in CiliumInternalIPv4", wildcardCIDR, cidr, spi, nodeID))
+// 				if err != nil {
+// 					statesUpdated = false
+// 				}
+//
+// 				spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, cidr, localNodeInternalIP, remoteNodeInternalIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, zeroMark, updateExisting, ipsec.DefaultReqID)
+// 				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in NodeInternalIPv4", wildcardCIDR, cidr, spi, nodeID))
+// 				if err != nil {
+// 					statesUpdated = false
+// 				}
+// 			}
+// 		} else {
+// 			localCIDR := n.nodeConfig.AllocCIDRIPv4.IPNet
+// 			remoteCIDR := newNode.IPv4AllocCIDR.IPNet
+// 			if err := n.replaceNodeIPSecOutRoute(remoteCIDR); err != nil {
+// 				errs = errors.Join(errs, fmt.Errorf("failed to replace ipsec OUT (%q): %w", remoteCIDR.IP, err))
+// 			}
+// 			spi, err = ipsec.UpsertIPsecEndpoint(n.log, wildcardCIDR, remoteCIDR, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.DefaultReqID)
+// 			errs = errors.Join(errs, upsertIPsecLog(n.log, err, "out IPv4", wildcardCIDR, remoteCIDR, spi, nodeID))
+// 			if err != nil {
+// 				statesUpdated = false
+// 			}
+//
+// 			/* Insert wildcard policy rules for traffic skipping back through host */
+// 			if err = ipsec.IpSecReplacePolicyFwd(wildcardCIDR, localIP, ipsec.DefaultReqID); err != nil {
+// 				n.log.Warn("egress unable to replace policy fwd", logfields.Error, err)
+// 			}
+//
+// 			spi, err = ipsec.UpsertIPsecEndpoint(n.log, localCIDR, wildcardCIDR, localIP, remoteIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.DefaultReqID)
+// 			errs = errors.Join(errs, upsertIPsecLog(n.log, err, "in IPv4", localCIDR, wildcardCIDR, spi, nodeID))
+// 			if err != nil {
+// 				statesUpdated = false
+// 			}
+//
+// 			// In Encrypt Overlay mode, outermost header is ESP tunnel.
+// 			// Packet format : [IP|ESP|IP|VxLAN|<payload>]
+// 			// ESP tunnel src/dst addresses are underlay IPs of the node (NodeInternalIP).
+// 			// VxLAN tunnel src/dst addresses are also underlay IPs of the node (NodeInternalIP).
+// 			if n.nodeConfig.EnableIPSecEncryptedOverlay {
+// 				localUnderlayIP := n.nodeConfig.NodeIPv4
+// 				if localUnderlayIP == nil {
+// 					n.log.Warn("unable to enable encrypted overlay IPsec, nil local internal IP")
+// 					return false, errs
+// 				}
+// 				remoteUnderlayIP := newNode.GetNodeIP(false)
+// 				if remoteUnderlayIP == nil {
+// 					n.log.Warn("unable to enable encrypted overlay IPsec, nil remote internal IP for node", logfields.Node, newNode.Name)
+// 					return false, errs
+// 				}
+//
+// 				localOverlayIPExactMatch := &net.IPNet{IP: localUnderlayIP, Mask: exactMatchMask}
+// 				remoteOverlayIPExactMatch := &net.IPNet{IP: remoteUnderlayIP, Mask: exactMatchMask}
+//
+// 				spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirOut, false, updateExisting, ipsec.EncryptedOverlayReqID)
+// 				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay out IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
+// 				if err != nil {
+// 					statesUpdated = false
+// 				}
+//
+// 				spi, err = ipsec.UpsertIPsecEndpoint(n.log, localOverlayIPExactMatch, remoteOverlayIPExactMatch, localUnderlayIP, remoteUnderlayIP, nodeID, newNode.BootID, ipsec.IPSecDirIn, false, updateExisting, ipsec.EncryptedOverlayReqID)
+// 				errs = errors.Join(errs, upsertIPsecLog(n.log, err, "overlay in IPv4", localOverlayIPExactMatch, remoteOverlayIPExactMatch, spi, nodeID))
+// 				if err != nil {
+// 					statesUpdated = false
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return statesUpdated, errs
+// }
 
 func (n *linuxNodeHandler) enableIPsecIPv6(newNode *nodeTypes.Node, nodeID uint16, zeroMark, updateExisting bool) (bool, error) {
 	statesUpdated := true
