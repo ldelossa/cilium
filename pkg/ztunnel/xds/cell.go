@@ -22,7 +22,7 @@ type xdsServerParams struct {
 
 	Lifecycle cell.Lifecycle
 	Logger    *slog.Logger
-	EPLookup  endpointmanager.EndpointsLookup
+	EPManager endpointmanager.EndpointManager
 	Config    config.Config
 }
 
@@ -31,7 +31,7 @@ func NewServer(params xdsServerParams) (*Server, error) {
 		return nil, nil
 	}
 
-	server, err := newServer(params.Logger, params.EPLookup)
+	server, err := newServer(params.Logger, params.EPManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ztunnel gRPC server: %w", err)
 	}
