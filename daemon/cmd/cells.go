@@ -83,6 +83,7 @@ import (
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/svcrouteconfig"
+	"github.com/cilium/cilium/pkg/vrf"
 	"github.com/cilium/cilium/pkg/ztunnel"
 )
 
@@ -352,6 +353,9 @@ var (
 
 		// Instantiates an xDS server used for zTunnel integration.
 		ztunnel.Cell,
+
+		// Instantiates the VRF subsystem if configured
+		vrf.Cell,
 	)
 )
 
